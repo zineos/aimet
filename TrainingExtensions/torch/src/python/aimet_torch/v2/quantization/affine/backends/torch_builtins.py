@@ -36,7 +36,7 @@
 # =============================================================================
 """ Default quantization backend for quantizing weights and activations """
 import functools
-from typing import Optional, List
+from typing import Callable, Optional, List
 import torch
 from aimet_torch.v2.utils import _is_expandable, _ContextManager
 import aimet_torch.v2.experimental.onnx._export as _onnx
@@ -139,6 +139,11 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
         msg = f"{tensor.dtype} is unable to represent quantized output of range [{qmin}, {qmax}]."
         raise RuntimeError(msg)
 
+    if not _is_numerically_stable(internal_dtype, qmin, qmax):
+        internal_dtype = torch.float32
+        if not _is_numerically_stable(internal_dtype, qmin, qmax):
+            internal_dtype = torch.float64
+
     orig_tensor_shape = tensor.shape
     tensor = reshape_tensor_for_blocks(tensor, scale.shape, block_size)
     scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size))
@@ -210,6 +215,17 @@ def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, 
                                 offset.to(internal_dtype)).to(output_dtype).view(orig_tensor_shape)
 
 
+_round_fn = torch.round
+_round_fn_inplace = torch.round_
+
+
+def _set_round_fn(round_fn: Callable[[torch.Tensor], torch.Tensor],
+                  round_fn_inplace: Callable[[torch.Tensor], torch.Tensor]):
+    global _round_fn, _round_fn_inplace # pylint: disable=global-statement
+    _round_fn = round_fn
+    _round_fn_inplace = round_fn_inplace
+
+
 # pylint: disable=abstract-method
 class QuantizeFunc(torch.autograd.Function):
     """
@@ -226,7 +242,8 @@ class QuantizeFunc(torch.autograd.Function):
 
     @staticmethod
     def _forward_impl(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
-        x_round = (tensor.to(scale.dtype) / scale).round_().sub_(offset)
+        x_round = _round_fn_inplace(tensor.to(scale.dtype) / scale).sub_(offset)
+
         if tensor.requires_grad or scale.requires_grad or offset.requires_grad:
             mask = (x_round >= qmin) * (x_round <= qmax)
         else:
@@ -308,7 +325,7 @@ class QuantDequantFunc(torch.autograd.Function):
 
     @staticmethod
     def _forward_impl(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
-        x_round = (tensor.to(scale.dtype) / scale).round_().sub_(offset)
+        x_round = _round_fn_inplace(tensor.to(scale.dtype) / scale).sub_(offset)
 
         if tensor.requires_grad or scale.requires_grad or offset.requires_grad:
             mask = (qmin <= x_round) & (x_round <= qmax)
@@ -339,7 +356,7 @@ class QuantDequantFunc(torch.autograd.Function):
 
         if ctx.scale_requires_grad:
             tensor = tensor.to(scale.dtype) / scale
-            scale_grad = grad * (torch.round(tensor).clamp(offset + qmin, offset + qmax) - (tensor * mask))
+            scale_grad = grad * (_round_fn(tensor).clamp(offset + qmin, offset + qmax) - (tensor * mask))
         else:
             scale_grad = None
 
