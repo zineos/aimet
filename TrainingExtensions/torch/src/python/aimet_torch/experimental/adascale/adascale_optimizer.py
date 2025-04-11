@@ -37,16 +37,15 @@
 # =============================================================================
 """ AdaScale implementation """
 
-import contextlib
-from typing import Callable, List
+from typing import Callable, List, Any
 
 import torch
 from torch.utils.data import DataLoader
 
 from aimet_common.utils import AimetLogger
 from aimet_torch import QuantizationSimModel
-from aimet_torch.v2.nn import QuantizedLinear, BaseQuantizationMixin, compute_param_encodings
-from aimet_torch.v2.utils import default_forward_fn, remove_all_quantizers
+from aimet_torch.v2.nn import QuantizedLinear, compute_param_encodings
+from aimet_torch.v2.utils import default_forward_fn, remove_all_quantizers, remove_activation_quantizers
 from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
 from aimet_torch.blockwise_sampler import BlockwiseSampler
 
@@ -71,12 +70,16 @@ class AdaScale:
 
     A block is defined as a non-leaf module which takes in one activation input tensor and outputs one activation tensor
     Currently only Linear layers are supported, and all the linears in a block are optimized at the same time.
+
+    While performing the optimization, the activation quantizers are disabled, linear modules' weight quantizers are
+    changed to specialized QDQ (with learnable parameters introduced) and rest of the param's are left quantized with
+    default QuantizeDequantize.
     """
 
     @classmethod
     def apply_adascale(cls, qsim: QuantizationSimModel,
                        data_loader: DataLoader,
-                       forward_fn: Callable = None,
+                       forward_fn: Callable[[torch.nn.Module, Any], Any] = None,
                        num_batches: int = 1,
                        num_epochs: int = 1):
         """
@@ -108,14 +111,15 @@ class AdaScale:
             trainable_params = cls._get_adascale_trainable_params(block)
             optimizer = torch.optim.Adam(trainable_params)
             cls._set_requires_grad(trainable_params, True)
-            fp_out = []
+
+            fp_out = [] # save fp batchwise block outputs to use across epochs
             for batch_idx in range(num_batches):
                 with remove_all_quantizers(block):
                     fp_out.append(block(fp_block_inputs[batch_idx][0]))
 
             for epoch in range(num_epochs):
                 for batch_idx in range(num_batches):
-                    with cls._remove_act_quantizers_in_block(block) and torch.set_grad_enabled(True):
+                    with remove_activation_quantizers(block) and torch.set_grad_enabled(True):
                         quant_out = block(qt_block_inputs[batch_idx][0])
                         loss = loss_fn(quant_out, fp_out[batch_idx])
                         loss.backward()
@@ -131,7 +135,7 @@ class AdaScale:
         target_type = model_to_block_mapping.get(type(qsim.model))
         target_modules = []
         if target_type is not None:
-            target_modules = [m for m in qsim.model.modules() if type(m) == target_type] #pylint: disable=unidiomatic-typecheck
+            target_modules = [m for m in qsim.model.modules() if isinstance(m, target_type)]
         return target_modules
 
     @staticmethod
@@ -154,21 +158,11 @@ class AdaScale:
                     layer.param_quantizers['weight'] = layer.param_quantizers['weight'].get_qdq()
 
     @staticmethod
-    def _remove_act_quantizers_in_block(non_leaf_module: torch.nn.Module):
-        """ Remove all quantizers in the given block """
-        exit_stack = contextlib.ExitStack()
-        for module in non_leaf_module.modules():
-            if isinstance(module, BaseQuantizationMixin):
-                exit_stack.enter_context(module._remove_activation_quantizers())  # pylint: disable=protected-access
-        return exit_stack
-
-    @staticmethod
     def _get_adascale_trainable_params(non_leaf_module: torch.nn.Module) -> List:
         """ Get all the adascale scale params present in the non-leaf module """
         trainable_params = []
         for module in non_leaf_module.modules():
-            if isinstance(module, tuple(supported_modules)) and type(
-                    module.param_quantizers['weight'] == AdaScaleQuantizeDequantize):
+            if isinstance(module, tuple(supported_modules)) and isinstance(module.param_quantizers['weight'], AdaScaleQuantizeDequantize):
                 trainable_params.extend(module.param_quantizers['weight'].get_adascale_trainable_parameters())
         return trainable_params
 
