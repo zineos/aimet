@@ -6,6 +6,25 @@
 Release notes
 #############
 
+2.4.0
+=====
+
+* New Features
+    * ONNX
+        * Introduced option to export only encodings
+    * Common
+        * Added RMSNormalization in default AIMET config
+
+* Bug Fixes
+    * ONNX
+        * Removed cublas dependency from the libpymo executable
+        * Represent y_zero_point as int
+        * Represent per-block scale as int
+    * PyTorch
+        * SeqMSE optimizes nested modules once improving turn-around time
+        * CrossLayerEqualization does not replaces ReLU6 with ReLU automatically
+        * AMP creates distict quantizer groups for model inputs
+
 2.3.0
 =====
 
