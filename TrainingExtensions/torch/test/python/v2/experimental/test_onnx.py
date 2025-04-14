@@ -324,13 +324,19 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool):
         encodings_path = os.path.join(dirname, "torchvision_model.encodings")
 
         with set_encoding_version(encoding_version):
-            sim.onnx.export(x, onnx_path)
+            sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"])
 
         """
         Then: The saved onnx model should pass onnx model checker
         """
         onnx_model = onnx.load_model(onnx_path)
         onnx.checker.check_model(onnx_model)
+
+        """
+        Then: Input/Output names should be strictly honored
+        """
+        assert list(x.name for x in onnx_model.graph.input) == ["input"]
+        assert list(y.name for y in onnx_model.graph.output) == ["output"]
 
         with open(encodings_path) as f:
             onnx_encodings = json.load(f)
