@@ -719,13 +719,17 @@ def create_quantizable_transformer_encoder_layer(
     :param transformerEncoderLayer: Existing torch.nn.TransformerEncoderLayer module
     :return: Newly created QuantizableTransformerEncoderLayer module
     """
-    # pylint: disable=isinstance-second-argument-not-valid-type
-    if isinstance(transformerEncoderLayer.activation, (torch.nn.modules.activation.ReLU, torch.nn.functional.relu)):
+    activation = transformerEncoderLayer.activation
+
+    if activation is nnF.relu or isinstance(activation, torch.nn.ReLU):
         activation = 'relu'
-    elif isinstance(transformerEncoderLayer.activation, (torch.nn.modules.activation.GELU, torch.nn.functional.gelu)):
+    elif activation is nnF.gelu or isinstance(activation, torch.nn.GELU):
         activation = 'gelu'
     else:
-        assert False
+        raise RuntimeError(
+            "Invalid activation type. Expected one of nn.ReLU or nn.GELU, "
+            f"but got {activation}"
+        )
 
     quantizable_encoder = QuantizableTransformerEncoderLayer(d_model=transformerEncoderLayer.linear1.in_features,
                                                              nhead=transformerEncoderLayer.self_attn.num_heads,
@@ -747,13 +751,17 @@ def create_quantizable_transformer_decoder_layer(
     :param transformerDecoderLayer: Existing torch.nn.TransformerDecoderLayer module
     :return: Newly created QuantizableTransformerDecoderLayer module
     """
-    # pylint: disable=isinstance-second-argument-not-valid-type
-    if isinstance(transformerDecoderLayer.activation, (torch.nn.modules.activation.ReLU, torch.nn.functional.relu)):
+    activation = transformerDecoderLayer.activation
+
+    if activation is nnF.relu or isinstance(activation, torch.nn.ReLU):
         activation = 'relu'
-    elif isinstance(transformerDecoderLayer.activation, (torch.nn.modules.activation.GELU, torch.nn.functional.gelu)):
+    elif activation is nnF.gelu or isinstance(activation, torch.nn.GELU):
         activation = 'gelu'
     else:
-        assert False
+        raise RuntimeError(
+            "Invalid activation type. Expected one of nn.ReLU or nn.GELU, "
+            f"but got {activation}"
+        )
 
     quantizable_decoder = QuantizableTransformerDecoderLayer(d_model=transformerDecoderLayer.linear1.in_features,
                                                              nhead=transformerDecoderLayer.self_attn.num_heads,
