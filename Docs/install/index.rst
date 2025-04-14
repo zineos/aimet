@@ -101,13 +101,13 @@ Use one of the following commands to install AIMET based on your choice of frame
     .. tab-item:: ONNX
         :sync: onnx
 
-        **ONNX 1.16 GPU**
+        **onnxruntime 1.19 GPU**
 
-        With CUDA 11.x:
+        With CUDA 12.x:
 
         .. parsed-literal::
 
-            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cu118\ |whl_suffix| -f |torch_pkg_url|
+            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cu121\ |whl_suffix| -f |torch_pkg_url|
 
         With CPU only:
 
