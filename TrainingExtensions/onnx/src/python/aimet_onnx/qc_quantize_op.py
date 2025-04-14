@@ -180,9 +180,13 @@ class QcQuantizeOp:
                 in enumerate(input_shape)
             )
 
-        return libpymo.BlockTensorQuantizer(shape,
-                                            self.bitwidth,
-                                            MAP_QUANT_SCHEME_TO_PYMO[self.quant_scheme])
+        quantizer = libpymo.BlockTensorQuantizer(shape,
+                                                 self.bitwidth,
+                                                 MAP_QUANT_SCHEME_TO_PYMO[self.quant_scheme])
+        quantizer.setUnsignedSymmetric(self.use_unsigned_symmetric)
+        quantizer.setStrictSymmetric(self.use_strict_symmetric)
+
+        return quantizer
 
     @property
     def _tensor_quantizer(self):

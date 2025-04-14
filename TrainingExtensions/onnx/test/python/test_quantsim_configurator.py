@@ -285,7 +285,8 @@ class TestQuantSimConfig:
                                                quantsim_param_bw=8, quantsim_data_type=QuantizationDataType.int)
             assert qsim_config._get_supergroup_pass_list() == ["LayerNormalization"]
 
-    def test_parse_config_file_symmetric_modes(self):
+    @pytest.mark.parametrize("strict, unsigned", ((True, False), (False, True)))
+    def test_parse_config_file_symmetric_modes(self, strict, unsigned):
         """ Test that model output quantization parameters are set correctly when using json config file """
         model = models_for_tests.build_dummy_model()
 
@@ -297,8 +298,9 @@ class TestQuantSimConfig:
                 {
                     "is_symmetric": "True"
                 },
-                "strict_symmetric": "True",
-                "unsigned_symmetric": "False"
+                "per_channel_quantization": "True",
+                "strict_symmetric": str(strict),
+                "unsigned_symmetric": str(unsigned)
             },
             "params": {},
             "op_type": {},
@@ -314,8 +316,8 @@ class TestQuantSimConfig:
         sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', use_cuda=False)
 
         for quantizer in sim.qc_quantize_op_dict.values():
-            assert quantizer.use_strict_symmetric == True
-            assert quantizer.use_unsigned_symmetric == False
+            assert quantizer.use_strict_symmetric == strict
+            assert quantizer.use_unsigned_symmetric == unsigned
 
     def test_generate_and_apply_op_level_config(self):
         model = models_for_tests.build_dummy_model()
