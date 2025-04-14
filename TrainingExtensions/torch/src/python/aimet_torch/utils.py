@@ -37,7 +37,7 @@
 """ Utilities that are used for different AIMET PyTorch features """
 
 import itertools
-from typing import List, Tuple, Union, Dict, Callable, Any, Iterable, Optional, TextIO, Literal, Mapping
+from typing import List, Tuple, Union, Dict, Callable, Any, Iterable, Optional, TextIO, Mapping
 import contextlib
 import os
 import pickle
@@ -61,7 +61,7 @@ except ImportError:
 from torchvision import datasets, transforms
 
 from aimet_common.utils import AimetLogger, Handle
-from aimet_common.utils import profile as _profile, deprecated, _red # pylint:disable = unused-import
+from aimet_common.utils import profile as _profile, _red
 from aimet_torch._base.nn.modules.custom import CustomSparseConv3DLayer
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
@@ -940,16 +940,6 @@ def place_model(model: torch.nn.Module, device: torch.device):
         model.to(device=original_device)
 
 
-def _get_default_api() -> Union[Literal["v1"], Literal["v2"]]:
-    default_api = os.getenv("AIMET_DEFAULT_API", "v2").lower()
-
-    if default_api not in ("v1", "v2"):
-        raise RuntimeError("Invalid value specified for environment variable AIMET_DEFAULT_API. "
-                           f"Expected either 'v1' or 'v2', but got '{default_api}'")
-
-    return default_api
-
-
 __migrated__ = {
     'compute_encoding_for_given_bitwidth',
     'compute_partial_encoding',
@@ -966,10 +956,11 @@ def __getattr__(name: str):
     try:
         return globals()[name]
     except KeyError as e:
-        if _get_default_api() == "v2" and name in __migrated__:
+        if name in __migrated__:
             msg = f'"{name}" has been moved to aimet_torch.v1.utils since aimet-torch==2.0.0'
-        else:
-            msg = f"module '{__name__}' has no attribute '{name}'"
+            raise NameError(msg) from e
+
+        msg = f"module '{__name__}' has no attribute '{name}'"
         raise AttributeError(msg) from e
 
 

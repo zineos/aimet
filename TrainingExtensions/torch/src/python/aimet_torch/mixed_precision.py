@@ -34,29 +34,5 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to v1/v2 mixed_precision """
-
-from .utils import _get_default_api
-
-if _get_default_api() == "v1":
-    from .v1.mixed_precision import choose_mixed_precision
-
-    from .utils import _warn_replaced_in_v2
-    from .v1 import mixed_precision as _v1_api
-    from .v2 import mixed_precision as _v2_api
-
-    _warn_replaced_in_v2(__name__,
-                         v2_new_api=_v2_api.__name__,
-                         v1_legacy_api=_v1_api.__name__)
-else:
-    from .v2.mixed_precision import choose_mixed_precision
-
-
-__all__ = [
-    'choose_mixed_precision',
-]
-
-undefined = set(__all__) - set(globals())
-assert not undefined, \
-       f"The following attributes are undefined: {list(undefined)}"
-del undefined
+# pylint: disable=missing-module-docstring, unused-import
+from .v2.mixed_precision import choose_mixed_precision

@@ -34,10 +34,10 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to v1/v2 adaround """
-from ..utils import _get_default_api
-
-if _get_default_api() == "v1":
-    from ..v1.adaround import * # pylint: disable=wildcard-import, unused-wildcard-import
-else:
-    from ..v2.adaround import * # pylint: disable=wildcard-import, unused-wildcard-import
+# pylint: disable=missing-module-docstring
+from ..v2.adaround import (
+    adaround_weight,
+    Adaround,
+    AdaroundWrapper,
+    AdaroundParameters,
+)

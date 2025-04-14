@@ -34,29 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to v1/v2 auto_quant """
-from .utils import _get_default_api
-
-if _get_default_api() == "v1":
-    from .v1.auto_quant import AutoQuant, AutoQuantWithAutoMixedPrecision
-
-    from .utils import _warn_replaced_in_v2
-    from .v1 import auto_quant as _v1_api
-    from .v2 import auto_quant as _v2_api
-
-    _warn_replaced_in_v2(__name__,
-                         v2_new_api=_v2_api.__name__,
-                         v1_legacy_api=_v1_api.__name__)
-else:
-    from .v2.auto_quant import AutoQuant, AutoQuantWithAutoMixedPrecision
-
-
-__all__ = [
-    'AutoQuant',
-    'AutoQuantWithAutoMixedPrecision',
-]
-
-undefined = set(__all__) - set(globals())
-assert not undefined, \
-       f"The following attributes are undefined: {list(undefined)}"
-del undefined
+# pylint: disable=missing-module-docstring, unused-import
+from .v2.auto_quant import (
+    AutoQuant,
+    AutoQuantWithAutoMixedPrecision,
+)

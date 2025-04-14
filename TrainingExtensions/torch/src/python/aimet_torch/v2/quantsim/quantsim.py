@@ -51,6 +51,7 @@ import onnx
 from aimet_common import quantsim
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_common.quantsim_config.quantsim_config import _config_file_aliases
+from aimet_common.utils import deprecated, _red
 from aimet_torch._base.quantsim import (
     _QuantizationSimModelBase,
     logger,
@@ -71,7 +72,6 @@ from aimet_torch.v2.quantization.affine import AffineQuantizerBase
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch import utils
-from aimet_torch.utils import deprecated, _red
 from aimet_torch.v2.deepspeed_utils import _register_zero3_forward_hooks
 from aimet_torch.v2.experimental.onnx._export import remove_quantization_nodes_from_onnx_graph, export
 

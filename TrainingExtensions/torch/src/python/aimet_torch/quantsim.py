@@ -34,53 +34,14 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to v1/v2 quantsim """
-from .utils import _get_default_api
-
-if _get_default_api() == "v1":
-    from .v1.quantsim import (
-        QuantizationSimModel,
-        QuantParams,
-        ExportableQuantModule,
-        save_checkpoint,
-        load_checkpoint,
-        check_accumulator_overflow,
-        load_encodings_to_sim,
-        compute_encodings_for_sims,
-    )
-
-    from .utils import _warn_replaced_in_v2
-    from .v1 import quantsim as _v1_quantsim
-    from .v2 import quantsim as _v2_quantsim
-
-    _warn_replaced_in_v2(__name__,
-                         v2_new_api=_v2_quantsim.__name__,
-                         v1_legacy_api=_v1_quantsim.__name__)
-else:
-    from .v2.quantsim import (
-        QuantizationSimModel,
-        QuantParams,
-        ExportableQuantModule,
-        save_checkpoint,
-        load_checkpoint,
-        check_accumulator_overflow,
-        load_encodings_to_sim,
-        compute_encodings_for_sims,
-    )
-
-
-__all__ = [
-    'QuantizationSimModel',
-    'QuantParams',
-    'ExportableQuantModule',
-    'save_checkpoint',
-    'load_checkpoint',
-    'check_accumulator_overflow',
-    'load_encodings_to_sim',
-    'compute_encodings_for_sims',
-]
-
-undefined = set(__all__) - set(globals())
-assert not undefined, \
-       f"The following attributes are undefined: {list(undefined)}"
-del undefined
+# pylint: disable=missing-module-docstring, unused-import
+from .v2.quantsim import (
+    QuantizationSimModel,
+    QuantParams,
+    ExportableQuantModule,
+    save_checkpoint,
+    load_checkpoint,
+    check_accumulator_overflow,
+    load_encodings_to_sim,
+    compute_encodings_for_sims,
+)

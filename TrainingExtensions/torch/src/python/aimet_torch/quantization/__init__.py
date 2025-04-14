@@ -35,10 +35,4 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=all
-from ..utils import _get_default_api
-
-if _get_default_api() == "v1":
-    raise ImportError(f"{__name__} package cannot be imported if v1 is the default API. "
-                      "Import aimet_torch.v2.quantization instead")
-else:
-    from ..v2.quantization import *
+from ..v2.quantization import *
