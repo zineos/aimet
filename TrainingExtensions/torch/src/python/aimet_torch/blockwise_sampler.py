@@ -38,9 +38,10 @@
 """Blockwise sampling utilty"""
 import itertools
 from dataclasses import dataclass
-from typing import List, Union, Tuple, Generator
+from typing import List, Union, Tuple, Generator, Callable
 import torch
 from torch.utils.data import DataLoader
+from aimet_torch.v2.utils import default_forward_fn
 
 from aimet_torch import QuantizationSimModel, utils
 
@@ -58,11 +59,14 @@ class BlockwiseSampler:
                  sim: QuantizationSimModel,
                  blocks: List[torch.nn.Module],
                  dataloader: DataLoader,
-                 num_samples: int):
+                 num_samples: int,
+                 forward_fn: Callable = default_forward_fn
+                 ):
         self.sim = sim
         self.blocks = blocks
         self.dataloader = dataloader
         self.num_samples = num_samples
+        self.forward_fn = forward_fn
 
     def run_inference(self, sample) -> Generator[torch.Tensor, None, None]:
         """
@@ -87,7 +91,7 @@ class BlockwiseSampler:
         with torch.no_grad():
             try:
                 hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
-                self.sim.model(sample)
+                self.forward_fn(self.sim.model, sample)
             except StopForwardExceptionWithInput as e:
                 # pylint: disable=used-before-assignment
                 hook.remove()
