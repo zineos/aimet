@@ -221,6 +221,8 @@ set(CUDA_VER_STRING "cpu")
 if (ENABLE_CUDA)
     enable_language(CUDA)
     find_package(CUDAToolkit REQUIRED)
+    # Include CUDA directories
+    include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
     # Truncate the string for use in version string ex. 11.6.124 --> cu116
     string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.*[0-9]*" "cu\\1\\2" CUDA_VER_STRING ${CUDAToolkit_VERSION})

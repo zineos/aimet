@@ -40,6 +40,7 @@
 #ifndef QUANTIZATION_HPP
 #define QUANTIZATION_HPP
 #include <cstddef>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 
@@ -173,6 +174,31 @@ void quantizeDequantizeBroadcast(const T* inTensor,
                                  ComputationMode mode,
                                  void* stream = nullptr);
 
+class CpuAllocator : public IAllocator
+{
+public:
+    void* allocateRaw(size_t bytes) override
+    {
+        void* ptr;
+        ptr = malloc(bytes);
+        return ptr;
+    }
+
+    void deleteRaw(void* ptr) override
+    {
+        free(ptr);
+    }
+};
+
+class CudaAllocator : public IAllocator
+{
+public:
+    void* allocateRaw(size_t bytes) override;
+    void deleteRaw(void* ptr) override;
+};
+
+template <typename T>
+void copyTensorsCuda(T* outTensor, const T* inTensor, size_t count, void* stream);
 
 }   // End of namespace DlQuantization.
 

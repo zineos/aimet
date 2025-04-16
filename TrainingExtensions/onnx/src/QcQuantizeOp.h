@@ -48,7 +48,6 @@
 #ifdef ONNX_CUDA
 // IMPORTANT: cuda_context.h needs to be included before onnxruntime_lite_custom_op.h
 #include "core/providers/cuda/cuda_context.h"
-#include <cuda_runtime_api.h>
 #endif
 
 #include "onnxruntime_lite_custom_op.h"

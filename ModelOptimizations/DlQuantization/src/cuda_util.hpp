@@ -39,6 +39,8 @@
 #ifndef UTIL_CUDA_UTIL_H_
 #define UTIL_CUDA_UTIL_H_
 
+#include "DlQuantization/Quantization.hpp"
+
 namespace DlQuantization
 {
 enum class CudaMemcpyDirection : char

@@ -50,43 +50,7 @@
 
 #include <cstdint>
 #include <stdexcept>
-#ifdef ONNX_CUDA
-#include <cuda_runtime_api.h>
-#endif
 
-#ifdef ONNX_CUDA
-class OnnxCudaAllocator : public DlQuantization::IAllocator
-{
-public:
-    void* allocateRaw(size_t bytes) override
-    {
-        void* ptr;
-        cudaMalloc(&ptr, bytes);
-        return ptr;
-    }
-
-    void deleteRaw(void* ptr) override
-    {
-        cudaFree(ptr);
-    }
-};
-#endif
-
-class OnnxCpuAllocator : public DlQuantization::IAllocator
-{
-public:
-    void* allocateRaw(size_t bytes) override
-    {
-        void* ptr;
-        ptr = malloc(bytes);
-        return ptr;
-    }
-
-    void deleteRaw(void* ptr) override
-    {
-        free(ptr);
-    }
-};
 
 template <typename T>
 void copyInputTensorsToOutputTensors(const T* inTensor, size_t count, T* outTensor, bool useCuda, void* stream);

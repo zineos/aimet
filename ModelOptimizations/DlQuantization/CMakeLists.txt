@@ -120,6 +120,11 @@ if (ENABLE_CUDA)
       src/tensor_utils.cu
       )
 
+    target_include_directories(MoDlQuantizationCuda PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
     target_compile_options(MoDlQuantizationCuda
             PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
             --generate-line-info

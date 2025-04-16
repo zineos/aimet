@@ -39,15 +39,14 @@
 #include "QcQuantizeOp.h"
 #include "AimetOpUtils.h"
 
-
 #include <vector>
 #include <iostream>
 
 
 #ifdef ONNX_CUDA
-static OnnxCudaAllocator cudaAllocator;
+static DlQuantization::CudaAllocator cudaAllocator;
 #endif
-static OnnxCpuAllocator cpuAllocator;
+static DlQuantization::CpuAllocator cpuAllocator;
 
 
 QcQuantizeOp::QcQuantizeOp(const OrtApi* api, const OrtKernelInfo* info) : api_(*api), info_(info)

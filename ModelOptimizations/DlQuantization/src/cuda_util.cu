@@ -36,6 +36,7 @@
 //
 //==============================================================================
 
+#include <stdexcept>
 #include "cuda_util.hpp"
 
 namespace DlQuantization
@@ -70,5 +71,30 @@ bool CudaSynchronize()
 {
     return cudaSuccess == cudaDeviceSynchronize();
 }
+
+void* CudaAllocator::allocateRaw(size_t bytes)
+{
+    void* ptr;
+    cudaMalloc(&ptr, bytes);
+    return ptr;
+}
+
+void CudaAllocator::deleteRaw(void* ptr)
+{
+    cudaFree(ptr);
+}
+
+template <typename T>
+void copyTensorsCuda(T* outTensor, const T* inTensor, size_t count, void* stream)
+{
+    cudaError_t e = cudaMemcpyAsync(outTensor, inTensor, count * sizeof(T), cudaMemcpyDeviceToDevice, reinterpret_cast<cudaStream_t>(stream));
+    if (e != cudaSuccess)
+    {
+        throw std::runtime_error("CUDA memcpy failed");
+    }
+}
+
+// Explicit template instantiation for float
+template void copyTensorsCuda<float>(float* outTensor, const float* inTensor, size_t count, void* stream);
 
 }   // End of namespace DlQuantization

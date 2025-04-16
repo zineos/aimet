@@ -45,8 +45,7 @@ void copyInputTensorsToOutputTensors(const T* inTensor, size_t count, T* outTens
     if (useCuda)
     {
 #ifdef ONNX_CUDA
-        cudaMemcpyAsync(outTensor, inTensor, count * sizeof(float), cudaMemcpyDeviceToDevice,
-                        reinterpret_cast<cudaStream_t>(stream));
+        DlQuantization::copyTensorsCuda(outTensor, inTensor, count, stream);
 #else
         throw std::runtime_error("Not compiled for GPU mode.");
 #endif
