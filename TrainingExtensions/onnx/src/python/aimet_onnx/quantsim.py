@@ -208,8 +208,8 @@ class QuantizationSimModel:
         self.input_quantizers_name = []
         self.activation_names = []
         self.activation_dtypes = {}
-        self._path = path if path else tempfile.mkdtemp()
-        if not os.path.exists(self._path):
+        self._path = path
+        if self._path:
             os.makedirs(self._path, exist_ok=True)
 
         # Get names of parameters and activations to quantize
@@ -543,23 +543,24 @@ class QuantizationSimModel:
 
         # Convert and save ONNX model to external data if larger than 2GB.
         # External data will be saved under same directory.
-        path = path if path else tempfile.mkdtemp()
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
-        model_size = model.ByteSize()
-        save_as_external_data = model_size >= onnx.checker.MAXIMUM_PROTOBUF
-        output_path = os.path.join(path, 'model.onnx')
-        if save_as_external_data:
-            # Note: Saving as external data mutates the saved model, removing all initializer data
-            save_model_with_external_weights(model, output_path, location=Path(output_path).name + ".data")
+        if model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
+            with tempfile.TemporaryDirectory() as tempdir:
+                save_dir = path or tempdir
+                output_path = os.path.join(save_dir, 'model.onnx')
 
-        path_or_bytes = output_path if save_as_external_data else model.SerializeToString()
-        session = InferenceSession(
-            path_or_bytes=path_or_bytes,
+                # Note: Saving as external data mutates the saved model, removing all initializer data
+                save_model_with_external_weights(model, output_path, location=Path(output_path).name + ".data")
+                return InferenceSession(
+                    path_or_bytes=output_path,
+                    sess_options=sess_options,
+                    providers=providers,
+                )
+
+        return InferenceSession(
+            path_or_bytes=model.SerializeToString(),
             sess_options=sess_options,
             providers=providers,
         )
-        return session
 
     def get_qc_quantize_op(self):
         """
