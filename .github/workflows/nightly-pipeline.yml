@@ -210,6 +210,7 @@ jobs:
   notify_failure:
     if: ${{ failure() && github.event_name == 'schedule' }}
     name: Notify failure on slack
+    needs: [ call-build-wheels, call-run-unit-tests, call-run-acceptance-tests ]
     runs-on: ubuntu-latest
     steps:
     - uses: slackapi/slack-github-action@v1.25.0
