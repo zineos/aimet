@@ -387,7 +387,8 @@ def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc, amp_final_acc,
             patch("aimet_onnx.auto_quant_v2.fold_all_batch_norms_to_weight", side_effect=bn_folding) as mock_bn_folding,\
             patch("aimet_onnx.auto_quant_v2.equalize_model", side_effect=cle) as mock_cle,\
             patch("aimet_onnx.auto_quant_v2.Adaround._apply_adaround", side_effect=adaround) as mock_adaround,\
-            patch("aimet_onnx.auto_quant_v2.GreedyMixedPrecisionAlgo", side_effect=_GreedyMixedPrecisionAlgo) as mock_amp:
+            patch("aimet_onnx.auto_quant_v2.GreedyMixedPrecisionAlgo", side_effect=_GreedyMixedPrecisionAlgo) as mock_amp,\
+            patch("aimet_onnx.auto_quant_v2.Spinner"):
         try:
             yield Mocks(
                 eval_callback=mock_eval_callback,
