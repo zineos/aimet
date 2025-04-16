@@ -38,6 +38,7 @@
 """Blockwise sampling utilty"""
 import itertools
 from dataclasses import dataclass
+from tqdm import tqdm
 from typing import List, Union, Tuple, Generator, Callable
 import torch
 from torch.utils.data import DataLoader
@@ -96,13 +97,13 @@ class BlockwiseSampler:
                 # pylint: disable=used-before-assignment
                 hook.remove()
                 next_block_input = e.captured_input
-                yield next_block_input.args
+                yield next_block_input.args, next_block_input.kwargs
 
             for block in self.blocks:
                 next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
                 if not isinstance(next_block_input.args, tuple):
                     next_block_input.args = (next_block_input.args,)
-                yield next_block_input.args
+                yield next_block_input.args, next_block_input.kwargs
 
 
     def sample(self) -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
@@ -120,17 +121,20 @@ class BlockwiseSampler:
 
         blocks = iter(self.blocks)
 
-        while True:
-            try:
-                block = next(blocks)
+        with tqdm(total=len(self.blocks), desc="Blocks processed") as pbar:
+            while True:
+                try:
+                    block = next(blocks)
 
-                # Quantizers must be ENABLED when calculating quantized block inputs
-                qt_block_inputs = [next(block_input) for block_input in qt_inferences]
+                    # Quantizers must be ENABLED when calculating quantized block inputs
+                    qt_block_inputs = [next(block_input) for block_input in qt_inferences]
 
-                # Quantizers must be DISABLED when calculating FP block inputs
-                with utils.disable_all_quantizers(self.sim.model):
-                    fp_block_inputs = [next(block_input) for block_input in fp_inferences]
+                    # Quantizers must be DISABLED when calculating FP block inputs
+                    with utils.disable_all_quantizers(self.sim.model):
+                        fp_block_inputs = [next(block_input) for block_input in fp_inferences]
 
-                yield block, fp_block_inputs, qt_block_inputs
-            except StopIteration:
-                break
+                    yield block, fp_block_inputs, qt_block_inputs
+
+                    pbar.update(1)
+                except StopIteration:
+                    break

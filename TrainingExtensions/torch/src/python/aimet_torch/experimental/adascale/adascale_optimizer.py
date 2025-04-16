@@ -42,19 +42,25 @@ from typing import Callable, List, Any
 import torch
 from torch.utils.data import DataLoader
 
+from transformers.models.llama.modeling_llama import LlamaModel, LlamaDecoderLayer
+from transformers.cache_utils import Cache
+
 from aimet_common.utils import AimetLogger
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.nn import QuantizedLinear, compute_param_encodings
 from aimet_torch.v2.utils import default_forward_fn, remove_all_quantizers, remove_activation_quantizers
 from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
 from aimet_torch.blockwise_sampler import BlockwiseSampler
+from aimet_torch.utils import get_device
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.AdaScale)
 
 loss_fn = torch.nn.MSELoss()
 
 # mapping of model and the corresponding adascale blocks type
-model_to_block_mapping = {}
+model_to_block_mapping = {
+    LlamaModel: LlamaDecoderLayer,
+}
 
 supported_modules: List = [QuantizedLinear]
 
@@ -99,9 +105,11 @@ class AdaScale:
         adascale_blocks = cls._get_blocks(qsim)
 
         # replace with adascale weight quantizer which introduces trainable params - beta, gamma, s2, s3
+        device = get_device(qsim.model)
         cls._replace_with_adascale_weight_quantizers(adascale_blocks)
+        qsim.model.to(device)
 
-        sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, num_batches)
+        sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, num_batches, forward_fn)
         qsim.model.requires_grad_(False)
         for block, fp_block_inputs, qt_block_inputs in sampler.sample():
             assert num_batches == len(qt_block_inputs)
@@ -115,24 +123,35 @@ class AdaScale:
             fp_out = [] # save fp batchwise block outputs to use across epochs
             for batch_idx in range(num_batches):
                 with remove_all_quantizers(block):
-                    fp_out.append(block(fp_block_inputs[batch_idx][0]))
+                    fp_out.append(block(*fp_block_inputs[batch_idx][0], **fp_block_inputs[batch_idx][1]))
 
             for epoch in range(num_epochs):
                 for batch_idx in range(num_batches):
                     with remove_activation_quantizers(block) and torch.set_grad_enabled(True):
-                        quant_out = block(qt_block_inputs[batch_idx][0])
-                        loss = loss_fn(quant_out, fp_out[batch_idx])
+                        quant_out = block(*qt_block_inputs[batch_idx][0], **qt_block_inputs[batch_idx][1])
+                        loss = loss_fn(quant_out[0], fp_out[batch_idx][0])
                         loss.backward()
                         optimizer.step()
                         optimizer.zero_grad()
 
             cls._set_requires_grad(trainable_params, False)
         cls._fold_weights_and_replace_with_qdq(adascale_blocks)
+        qsim.model.to(device)
 
     @staticmethod
     def _get_blocks(qsim: QuantizationSimModel):
         """ helper to get all the blocks in the model represented by model_to_block_mapping """
-        target_type = model_to_block_mapping.get(type(qsim.model))
+
+        def screen_for_target_type(model):
+            for module in model.modules():
+                for target_type in model_to_block_mapping.keys():
+                    if isinstance(module, target_type):
+                        return target_type
+            # No target types found in provided model
+            return None
+
+        target_type = screen_for_target_type(qsim.model)
+        target_type = model_to_block_mapping.get(target_type)
         target_modules = []
         if target_type is not None:
             target_modules = [m for m in qsim.model.modules() if isinstance(m, target_type)]

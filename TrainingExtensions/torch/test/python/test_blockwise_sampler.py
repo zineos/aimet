@@ -129,9 +129,12 @@ def test_blockwise_sampler():
             for tensor1, tensor2 in zip(tuple1, tuple2):
                 assert torch.equal(tensor1, tensor2)
 
+        fp_block_inputs_args = (inputs[0] for inputs in fp_block_inputs)
+        qt_block_inputs_args = (inputs[0] for inputs in qt_block_inputs)
+
         assert block in sim.model.blocks
-        for cached_tensors, uncached_tensors in zip(fp_block_inputs, fp_block_inputs_without_caching):
+        for cached_tensors, uncached_tensors in zip(fp_block_inputs_args, fp_block_inputs_without_caching):
             _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
-        for cached_tensors, uncached_tensors in zip(qt_block_inputs, qt_block_inputs_without_caching):
+        for cached_tensors, uncached_tensors in zip(qt_block_inputs_args, qt_block_inputs_without_caching):
             _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
 
