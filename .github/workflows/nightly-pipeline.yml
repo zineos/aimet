@@ -2,7 +2,8 @@ name: Fast Release Nightly CI/CD Pipeline
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    # 11 PM PDT -- (since GitHub Actions run in UTC)
+    - cron: '0 6 * * *'
 
   # Run the workflow manually from the Actions tab
   workflow_dispatch:
