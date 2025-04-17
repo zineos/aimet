@@ -43,6 +43,7 @@ import torch
 import numpy as np
 import warnings
 from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
+from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.float import FloatQuantizeDequantize, FloatEncoding
 from aimet_torch.v2.quantization.float.quantizer import _ieee_float_max_representable_value
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
@@ -94,11 +95,31 @@ def test_qdq_output_standard_dtypes(x):
     """
     float16_qdq_1 = FloatQuantizeDequantize(dtype=torch.float16)
     float16_qdq_2 = FloatQuantizeDequantize(exponent_bits=5, mantissa_bits=10)
-    assert torch.equal(float16_qdq_1(x), float16_qdq_2(x))
+    float16_qdq_out_1 = float16_qdq_1(x)
+    float16_qdq_out_2 = float16_qdq_2(x)
+    assert torch.equal(float16_qdq_out_1, float16_qdq_out_2)
+    assert isinstance(float16_qdq_out_1, DequantizedTensor)
+    assert isinstance(float16_qdq_out_2, DequantizedTensor)
+    assert float16_qdq_out_1.encoding.exponent_bits == \
+           float16_qdq_out_2.encoding.exponent_bits ==  5
+    assert float16_qdq_out_1.encoding.mantissa_bits == \
+           float16_qdq_out_2.encoding.mantissa_bits ==  10
+    assert float16_qdq_out_1.dequantize() is float16_qdq_out_1
+    assert float16_qdq_out_2.dequantize() is float16_qdq_out_2
 
     bfloat16_qdq_1 = FloatQuantizeDequantize(dtype=torch.bfloat16)
     bfloat16_qdq_2 = FloatQuantizeDequantize(exponent_bits=8, mantissa_bits=7)
+    bfloat16_qdq_out_1 = bfloat16_qdq_1(x)
+    bfloat16_qdq_out_2 = bfloat16_qdq_2(x)
     assert torch.equal(bfloat16_qdq_1(x), bfloat16_qdq_2(x))
+    assert isinstance(bfloat16_qdq_out_1, DequantizedTensor)
+    assert isinstance(bfloat16_qdq_out_2, DequantizedTensor)
+    assert bfloat16_qdq_out_1.encoding.exponent_bits == \
+           bfloat16_qdq_out_2.encoding.exponent_bits ==  8
+    assert bfloat16_qdq_out_1.encoding.mantissa_bits == \
+           bfloat16_qdq_out_2.encoding.mantissa_bits ==  7
+    assert bfloat16_qdq_out_1.dequantize() is bfloat16_qdq_out_1
+    assert bfloat16_qdq_out_2.dequantize() is bfloat16_qdq_out_2
 
 
 @torch.no_grad()

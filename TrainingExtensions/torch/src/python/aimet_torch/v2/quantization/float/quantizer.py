@@ -46,6 +46,7 @@ import torch
 from aimet_torch.v2.quantization.encoding_analyzer import EncodingAnalyzer, _flag_extreme_min_max
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.quantization.float import FloatEncoding
+from aimet_torch.v2.quantization.tensor import DequantizedTensor
 from aimet_torch.v2.utils import StatisticsNotFoundError, patch_attr
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
 
@@ -302,23 +303,38 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         :param input: Input to quantize and dequantize
         :return: Quantize-dequantized output
         """
-        maxval = self.maxval
-        exponent_bits = self.exponent_bits
-        mantissa_bits = self.mantissa_bits
+        if not self.is_initialized():
+            raise RuntimeError(
+                'Failed to run FloatQuantizeDequantize since quantization parameters are not initialized.'
+                ' Please initialize the quantization parameters using `compute_encodings()`.'
+            )
 
-        if maxval is None:
-            if self.is_float16() or self.is_bfloat16():
-                # Fast forward using type casting
-                orig_dtype = input.dtype
-                dtype = torch.float16 if self.is_float16() else torch.bfloat16
-                return input.to(dtype).to(orig_dtype)
+        encoding = self.get_encodings()
+        assert encoding is not None
 
-            maxval = _ieee_float_max_representable_value(exponent_bits, mantissa_bits)
+        maxval = encoding.maxval
+        exponent_bits = encoding.exponent_bits
+        mantissa_bits = encoding.mantissa_bits
 
-        # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
-        # is known to introduce substantial CPU overhead.
-        # Cast types of the inputs to plain torch.Tensor for faster execution.
-        return fake_cast_to_ieee_float(input.as_subclass(torch.Tensor), maxval, exponent_bits, mantissa_bits)
+        if maxval is None and (self.is_float16() or self.is_bfloat16()):
+            # Fast forward using type casting
+            orig_dtype = input.dtype
+            dtype = torch.float16 if self.is_float16() else torch.bfloat16
+            output = input.to(dtype).to(orig_dtype)
+        else:
+            if maxval is None:
+                maxval = _ieee_float_max_representable_value(exponent_bits, mantissa_bits)
+
+            # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
+            # is known to introduce substantial CPU overhead.
+            # Cast types of the inputs to plain torch.Tensor for faster execution.
+            output = fake_cast_to_ieee_float(input.as_subclass(torch.Tensor),
+                                             maxval,
+                                             exponent_bits,
+                                             mantissa_bits)
+        output = output.as_subclass(DequantizedTensor)
+        output.encoding = encoding
+        return output
 
     def extra_repr(self):
         """
