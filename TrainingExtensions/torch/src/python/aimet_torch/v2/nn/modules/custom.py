@@ -120,6 +120,13 @@ class QuantizedDivide(_DispatchMixin, QuantizationMixin, Divide):
     _builtin_torch_fn = torch.div
 
 
+@QuantizationMixin.implements(Outer)
+class QuantizedOuter(_DispatchMixin, QuantizationMixin, Outer):
+    """ Quantized Outer """
+    __quant_init__ = QuantizationMixin.__binary__
+    _builtin_torch_fn = torch.outer
+
+
 @QuantizationMixin.implements(Concat)
 class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
     """ Quantized Concat """

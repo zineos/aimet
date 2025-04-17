@@ -76,6 +76,7 @@ from aimet_common import quantsim
 
 from aimet_torch import torchscript_utils, utils, onnx_utils
 from aimet_torch.meta.connectedgraph import ConnectedGraph, Op
+from aimet_torch._base.nn.modules.custom import Outer
 from aimet_torch.quantsim_config.quantsim_config import QuantSimConfigurator
 from aimet_torch._base.nn.modules.custom import MatMul, Cast
 from aimet_torch.onnx_utils import (
@@ -553,7 +554,7 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                         param_quantizer.bitwidth = output_quantizer.bitwidth
                         param_quantizer.use_symmetric_encodings = output_quantizer.use_symmetric_encodings
 
-            elif isinstance(original_module, MatMul):
+            elif isinstance(original_module, (MatMul, Outer)):
                 # Skip unused modules
                 if original_module not in self.connected_graph._module_to_op_dict:
                     continue

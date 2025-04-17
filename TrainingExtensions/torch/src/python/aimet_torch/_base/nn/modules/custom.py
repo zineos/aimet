@@ -130,6 +130,7 @@ Addmm = create_wrapper_module('Addmm', torch.addmm)
 RSqrt = create_wrapper_module('RSqrt', torch.rsqrt)
 Square = create_wrapper_module('Square', torch.square)
 Select = create_wrapper_module('Select', torch.select)
+Outer = create_wrapper_module('Outer', torch.outer)
 
 # modules for functional operations defined under torch.nn.functional package
 Interpolate = create_wrapper_module('Interpolate', torch.nn.functional.interpolate)

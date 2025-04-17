@@ -929,6 +929,7 @@ def _create_quantized_module(module):
     (lambda: custom.Subtract(),                       lambda: (randn(100), randn(100))),
     (lambda: custom.Divide(),                         lambda: (randn(100), randn(100))),
     (lambda: custom.Concat(),                         lambda: (randn(1, 100), randn(3, 100))),
+    (lambda: custom.Outer(),                          lambda: (randn(100), randn(50))),
     # (lambda: custom.FloorDivide(),                  lambda: ...),
     (lambda: custom.Norm(),                           lambda: randn(100)),
     (lambda: custom.Exponential(),                    lambda: randn(100)),

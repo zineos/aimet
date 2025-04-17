@@ -133,6 +133,7 @@ map_torch_types_to_onnx = {
     aimet_modules.Multiply: ['Mul'],
     aimet_modules.NonZero: ['NonZero'],
     aimet_modules.Pad: ['Pad'],
+    aimet_modules.Outer: ['MatMul'],
     aimet_modules.Permute: ['Transpose'],
     aimet_modules.Reshape: ['Reshape'],
     aimet_modules.RoiAlign: ['RoiAlign'],
