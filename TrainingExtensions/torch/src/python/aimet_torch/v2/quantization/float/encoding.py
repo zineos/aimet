@@ -37,7 +37,7 @@
 # pylint: disable=redefined-builtin
 """ Float encoding definition """
 
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Optional
 import torch
 from torch._C._nn import _parse_to as parse_to_args
 
@@ -52,7 +52,7 @@ class FloatEncoding(EncodingBase):
     """
     Encoding object for float quantization
     """
-    def __init__(self, mantissa_bits: int, exponent_bits: int, maxval: torch.Tensor):
+    def __init__(self, mantissa_bits: int, exponent_bits: int, maxval: Optional[torch.Tensor]):
         self._mantissa_bits = mantissa_bits
         self._exponent_bits = exponent_bits
         self._maxval = maxval
@@ -109,19 +109,27 @@ class FloatEncoding(EncodingBase):
         Changes dtype of data in quantizer encoding or device where the data is.
         Behaves similar to torch.Tensor.to
         """
-        to_args = parse_to_args(*args, **kwargs)
-        device, dtype, _, _ = to_args
-        dtype = dtype if dtype else self._maxval.dtype
-        device = device if device else self._maxval.device
-
-        if dtype is self._maxval.dtype and device is self._maxval.device:
+        if self._maxval is None:
             return self
 
-        if not dtype.is_floating_point:
+        current_dtype = self._maxval.dtype
+        current_device = self._maxval.device
+
+        to_args = parse_to_args(*args, **kwargs)
+        device, dtype, _, _ = to_args
+
+        dtype = dtype or current_dtype
+        device = device or current_device
+
+        if dtype == current_dtype and device == current_device:
+            return self
+
+        if dtype and not dtype.is_floating_point:
             raise RuntimeError(f"Cannot change encoding data dtype to {dtype}, "
                                "only floating point data types are supported")
 
         maxval = self._maxval.to(dtype=dtype, device=device)
+
         return type(self)(self._mantissa_bits, self._exponent_bits, maxval)
 
     def quantize(self, input: torch.Tensor) -> torch.Tensor:

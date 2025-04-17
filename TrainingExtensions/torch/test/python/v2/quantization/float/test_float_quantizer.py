@@ -43,7 +43,7 @@ import torch
 import numpy as np
 import warnings
 from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
-from aimet_torch.v2.quantization.float import FloatQuantizeDequantize
+from aimet_torch.v2.quantization.float import FloatQuantizeDequantize, FloatEncoding
 from aimet_torch.v2.quantization.float.quantizer import _ieee_float_max_representable_value
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
 
@@ -199,3 +199,39 @@ def test_onnx_export():
     qdq = FloatQuantizeDequantize(dtype=torch.float16)
     with tempfile.TemporaryFile() as f:
         torch.onnx.export(qdq, torch.randn(10, 10), f)
+
+
+def test_float_encoding_to():
+    """
+    Given: FloatEncoding with maxval=None
+    When: Call .to()
+    Then: Should return identical object
+    """
+    encoding = FloatEncoding(exponent_bits=5, mantissa_bits=10, maxval=None)
+    new_encoding = encoding.to(device="cpu", dtype=torch.float16)
+    assert new_encoding is encoding
+
+    """
+    Given: FloatEncoding with maxval=None
+    """
+    encoding = FloatEncoding(exponent_bits=5,
+                             mantissa_bits=10,
+                             maxval=torch.tensor(124.))
+    """
+    When: Call .to() with same dtype and device
+    Then: Should return identical object
+    """
+    new_encoding = encoding.to(device="cpu", dtype=torch.float32)
+    assert new_encoding is encoding
+
+    """
+    When: Call .to() with new dtype and device
+    Then: 1. New encoding object should be in proper dtype and device
+          2. Old encoding object should not be affected
+    """
+    new_encoding = encoding.to(device="cpu", dtype=torch.float16)
+    assert new_encoding.maxval.device == torch.device("cpu")
+    assert new_encoding.maxval.dtype == torch.float16
+
+    assert encoding.maxval.device == torch.device("cpu")
+    assert encoding.maxval.dtype == torch.float32
