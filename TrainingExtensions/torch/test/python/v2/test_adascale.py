@@ -37,12 +37,12 @@
 """Adascale tests"""
 from unittest.mock import patch
 
-import pytest
 import torch
 from torch.utils.data import Dataset, DataLoader
 
 
 from aimet_torch import QuantizationSimModel
+from aimet_torch.experimental.adascale import apply_adascale
 from aimet_torch.experimental.adascale.adascale_optimizer import AdaScale, model_to_block_mapping
 from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
@@ -140,7 +140,7 @@ class TestAdascale:
 
         with patch.dict(model_to_block_mapping,
                         {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
-            AdaScale.apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
+            apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
 
         for block in sim.model.linear_blocks:
             assert type(block.fc1.param_quantizers['weight']) == QuantizeDequantize
@@ -236,7 +236,7 @@ class TestAdascale:
 
         with patch.dict(model_to_block_mapping,
                         {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
-            AdaScale.apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
+            apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
 
         adascale_output = sim.model(dummy_input)
         loss_after_opt = torch.nn.functional.mse_loss(fp_output, adascale_output)

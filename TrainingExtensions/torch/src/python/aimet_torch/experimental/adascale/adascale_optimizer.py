@@ -80,6 +80,8 @@ class AdaScale:
     While performing the optimization, the activation quantizers are disabled, linear modules' weight quantizers are
     changed to specialized QDQ (with learnable parameters introduced) and rest of the param's are left quantized with
     default QuantizeDequantize.
+
+
     """
 
     @classmethod
@@ -93,8 +95,31 @@ class AdaScale:
         :param data_loader: DataLoader object to load the input data
         :param forward_fn: forward function to run the forward pass of the model
         :param num_batches: Number of batches
-        :param num_epochs: Number of epochs to perform the adascale training
+        :param num_epochs: Number of epochs to perform the AdaScale BKD
 
+        Note that the forward_fn should take exactly two arguments -
+        1) the model
+        2) The object returned from the dataloader irrespective of whether it's a tensor/tuple of tensors/dict/etc
+
+        The forward_fn should prepare the "input sample" as needed and call the forward pass in the very end. The forward_fn
+        should not be running any sort of eval, creating full dataloader inside the method, etc.
+
+        Example usage:
+            >>> model = DummyModel()
+            >>> dummy_input = ...
+            >>> data_set = DataSet(dummy_input)
+            >>> data_loader = DataLoader(data_set, ...)
+            >>> sim = QuantizationSimModel(model, dummy_input)
+            >>> apply_adascale(sim, data_loader, forward_fn=forward_fn, num_batches=1, num_epochs=10)
+            >>> sim.compute_encodings(...)
+            >>> sim.export(...)
+
+        .. note::
+        1. apply_adascale modifies the weights in-place in the model
+        2. compute encodings should not be called before the apply_adascale call
+        3. Activation quantizers will remain uninitialized throughout the feature, and so compute encodings needs to be called by the user afterwards. This is so activation encodings will be computed with updated weights taken into account.
+
+        Warning: This feature is currently considered experimental pending API changes
         """
         # pylint: disable=unused-variable, too-many-locals
         if not forward_fn:

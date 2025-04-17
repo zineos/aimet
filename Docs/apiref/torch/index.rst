@@ -13,6 +13,7 @@ aimet_torch API
     aimet_torch.nn <nn>
     aimet_torch.quantization <quantization>
     aimet_torch.seq_mse <seq_mse>
+    aimet_torch.adascale <adascale>
     aimet_torch.quantsim.config_utils <lpbq>
     aimet_torch.manual_mixed_precision <mmp>
     aimet_torch.batch_norm_fold <bnf>
@@ -43,6 +44,7 @@ aimet_torch
 - :ref:`aimet_torch.quantization <apiref-torch-quantization>`
 - :ref:`aimet_torch.adaround <apiref-torch-adaround>`
 - :ref:`aimet_torch.seq_mse <apiref-torch-seq-mse>`
+- :ref:`aimet_torch.adascale <apiref-torch-adascale>`
 - :ref:`aimet_torch.quantsim.config_utils <apiref-torch-lpbq>`
 - :ref:`aimet_torch.batch_norm_fold <apiref-torch-bnf>`
 - :ref:`aimet_torch.cross_layer_equalization <apiref-torch-cle>`

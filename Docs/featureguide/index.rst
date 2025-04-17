@@ -11,6 +11,7 @@ Optimization techniques
     Sequential MSE <seq_mse>
     Batch norm folding <bnf>
     Cross-layer equalization <cle>
+    AdaScale <adascale>
     Mixed precision <mixed precision/index>
     Automatic quantization <autoquant>
     Batch norm re-estimation <bn>
@@ -39,7 +40,11 @@ Folds BN layers into adjacent Convolution or Linear layers.
 :ref:`Cross-layer equalization <featureguide-cle>`
 ==================================================
 
-Scales the parameter ranges across different channels to increase the range for layers with low range and reduce range for layers with high range, enabling the same quantizaion parameters to be used across all channels.
+Scales the parameter ranges across different channels to increase the range for layers with low range and reduce range for layers with high range, enabling the same quantization parameters to be used across all channels.
+
+:ref:`AdaScale <featureguide-adascale>`
+==================================================
+AdaScale is a PTQ technique to improve accuracy of the quantized model by introducing learnable parameters in the weight quantizers and by performing BKD(Blockwise Knowledge Distillation) with respect to the corresponding FP output.
 
 
 :ref:`Mixed precision <featureguide-mp-index>`
