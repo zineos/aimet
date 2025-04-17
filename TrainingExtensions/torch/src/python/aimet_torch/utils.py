@@ -33,7 +33,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-# pylint: disable = too-many-lines
+# pylint: disable=too-many-lines
 """ Utilities that are used for different AIMET PyTorch features """
 
 import itertools
@@ -62,7 +62,6 @@ from torchvision import datasets, transforms
 
 from aimet_common.utils import AimetLogger, Handle
 from aimet_common.utils import profile as _profile, _red
-from aimet_torch._base.nn.modules.custom import CustomSparseConv3DLayer
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
@@ -426,6 +425,8 @@ def is_leaf_module(module):
     :return:
         True if the module is a leaf, False otherwise
     """
+    # pylint: disable=import-outside-toplevel
+    from aimet_torch._base.nn.modules._spconv import CustomSparseConv3DLayer
     try:
         _ = next(module.children())
     except StopIteration:
