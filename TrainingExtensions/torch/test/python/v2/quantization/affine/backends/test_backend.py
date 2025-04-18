@@ -737,3 +737,87 @@ class TestQuantizationBackends:
                                                block_size=[1, 3])
         backend_module._validate_arguments(torch.randn(1, 4), torch.randn(1, 2), torch.randn(1, 2),
                                            block_size=[1, 2])
+
+
+
+@pytest.mark.parametrize(
+    "qmin,   qmax,    offset", [
+    (-8,     7,       0),
+    (0,      15,      0),
+    (0,      15,      8),
+    (-128,   127,     0),
+    (0,      255,     0),
+    (0,      255,     128),
+    (-2**15, 2**15-1, 0),
+    (0,      2**16-1, 0),
+    (0,      2**16-1, 2**15),
+])
+@pytest.mark.parametrize("device", [
+    "cpu",
+    *(("cuda",) if torch.cuda.is_available() else ())
+])
+@pytest.mark.parametrize("dtype", [
+    torch.float32,
+    torch.float16,
+    torch.bfloat16,
+])
+def test_cross_validate_torch_fake_quantize(qmin, qmax, offset, dtype, device):
+    """
+    Given same inputs, the following three functions should always produce the same output
+      * quantize_dequantize
+      * QuantDequantFunc.apply
+      * _torch_fake_quantize
+    """
+    scale = torch.tensor([0.1], dtype=torch.float32, device=device)
+    offset = torch.tensor([offset], dtype=torch.float32, device=device)
+    tensor = scale * torch.tensor([
+        qmin - .5, qmin, qmin + .5, qmax - .5, qmax, qmax + .5
+    ], device=device)
+    tensor = tensor.to(dtype)
+
+    expected = tensor.to(torch.float32)\
+                     .div(scale)\
+                     .round()\
+                     .sub(offset)\
+                     .clamp(qmin, qmax)\
+                     .add(offset)\
+                     .mul(scale)\
+                     .to(dtype)
+
+    # Allow off-by-one error for float16 and bfloat16
+    atol = scale.item() if dtype in (torch.float16, torch.bfloat16) else 1e-8
+
+    out1 = torch_builtins.quantize_dequantize(tensor, scale, offset, qmin, qmax)
+    out2 = torch_builtins.QuantDequantFunc.apply(tensor, scale, offset, qmin, qmax).to(dtype)
+    out3 = torch_builtins._torch_fake_quantize(tensor, scale, offset, qmin, qmax)
+
+    assert torch.allclose(out1, expected, atol=atol)
+    assert torch.allclose(out2, expected, atol=atol)
+    if out3 is not None:
+        assert torch.allclose(out3, expected, atol=atol)
+
+    scale = torch.stack([
+        scale,
+        scale,
+    ])
+    offset = torch.stack([
+        offset,
+        offset,
+    ])
+    tensor = torch.stack([
+        tensor,
+        tensor
+    ])
+    expected = torch.stack([
+        expected,
+        expected,
+    ])
+
+    out1 = torch_builtins.quantize_dequantize(tensor, scale, offset, qmin, qmax)
+    out2 = torch_builtins.QuantDequantFunc.apply(tensor, scale, offset, qmin, qmax).to(dtype)
+    out3 = torch_builtins._torch_fake_quantize(tensor, scale, offset, qmin, qmax)
+
+    assert torch.allclose(out1, expected, atol=atol)
+    assert torch.allclose(out2, expected, atol=atol)
+    if out3 is not None:
+        assert torch.allclose(out3, expected, atol=atol)

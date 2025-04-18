@@ -36,14 +36,18 @@
 # =============================================================================
 """ Default quantization backend for quantizing weights and activations """
 import functools
-from typing import Callable, Optional, List
+from packaging import version
+from typing import Callable, Optional, List, Tuple
 import torch
 from aimet_torch.v2.utils import _is_expandable, _ContextManager
 import aimet_torch.v2.experimental.onnx._export as _onnx
-from packaging import version
 
 
-if version.parse(torch.__version__) >= version.parse("2.0.0"):
+_torch_version: Tuple[int, int, int] = (version.parse(torch.__version__).major,
+                                        version.parse(torch.__version__).minor,
+                                        version.parse(torch.__version__).micro)
+
+if _torch_version >= (2, 0, 0):
     _compile = torch.compile
 else:
     _compile = lambda fn: fn
@@ -155,6 +159,8 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
 
 
 
+_ALLOW_FAST_FORWARD = True # temporary flag for debugging
+
 @_onnx.register_symbolic(_onnx.quantize_dequantize_symbolic)
 def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
                         qmin: int, qmax: int, block_size: Optional[List] = None) -> torch.Tensor:
@@ -169,6 +175,26 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
     :param block_size: Block sizes per dimension
     """
     _validate_arguments(tensor, scale, qmin, qmax, block_size)
+
+    _fast_forward = _ALLOW_FAST_FORWARD
+
+    # torch.fake_quantize doesn't support blockwise quantization
+    _fast_forward &= block_size is None
+
+    # torch.fake_quantize doesn't support JIT tracing
+    _fast_forward &= not torch.jit.is_tracing()
+
+    # torch.fake_quantize doesn't compute gradients for scale/offset
+    _fast_forward &= (not scale.requires_grad and not offset.requires_grad) or (not torch.is_grad_enabled())
+
+    # if user explicitly designated specific rounding function, honor it strictly
+    _fast_forward &= (_round_fn == torch.round and _round_fn_inplace == torch.round_)
+
+    if _fast_forward:
+        ret = _torch_fake_quantize(tensor, scale, offset, qmin, qmax)
+
+        if ret is not None:
+            return ret
 
     output_dtype = internal_dtype = tensor.dtype
 
@@ -189,6 +215,60 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
                                   scale.to(internal_dtype),
                                   offset.to(internal_dtype),
                                   qmin, qmax).to(output_dtype).view(orig_tensor_shape)
+
+
+def _torch_fake_quantize(tensor: torch.Tensor,
+                         scale: torch.Tensor,
+                         offset: torch.Tensor,
+                         qmin: int,
+                         qmax: int) -> Optional[torch.Tensor]:
+    scale_internal_dtype = torch.float32
+    tensor_internal_dtype = tensor.dtype
+
+    if _torch_version < (2, 6, 0) and tensor_internal_dtype == torch.bfloat16:
+        # torch.fake_quantize only supports bfloat16 in >=2.6.0
+        tensor_internal_dtype = torch.float32
+
+    is_per_tensor = scale.numel() == offset.numel() == 1
+
+    if is_per_tensor:
+        return torch.fake_quantize_per_tensor_affine(tensor.to(tensor_internal_dtype),
+                                                     scale.view(()).to(scale_internal_dtype),
+                                                     -offset.to(torch.int32).view(()),
+                                                     qmin, qmax).to(tensor.dtype)
+
+    scale = scale.view(*(1 for _ in range(tensor.dim() - scale.dim())),
+                       *scale.shape)
+    offset = offset.view(*(1 for _ in range(tensor.dim() - offset.dim())),
+                         *offset.shape)
+
+    is_per_channel = scale.shape == offset.shape and all(
+        scale_dim in (1, tensor_dim)
+        for scale_dim, tensor_dim
+        in zip(scale.shape, tensor.shape)
+    )
+
+    if is_per_channel:
+        axes = [
+            axis for axis, scale_dim in enumerate(scale.shape) if scale_dim != 1
+        ]
+        assert axes
+
+        if len(axes) == 1:
+            axis, = axes
+            try:
+                return torch.fake_quantize_per_channel_affine(tensor.to(tensor_internal_dtype),
+                                                              scale.flatten().to(scale_internal_dtype),
+                                                              -offset.to(torch.int32).flatten(),
+                                                              axis, qmin, qmax).to(tensor.dtype)
+            except RuntimeError:
+                # NOTE: torch.fake_quantize_per_channel_affine throws runtime error
+                # if zero_point is not in [qmin, qmax]. In practice, this error will
+                # almost never occur because per-channel quantization always uses zero_point=0
+                return None
+
+    return None
+
 
 @_onnx.register_symbolic(_onnx.dequantize_symbolic)
 def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, block_size: Optional[List] = None) \
