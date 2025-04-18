@@ -37,14 +37,62 @@
 
 """Blockwise sampling utilty"""
 import itertools
+import sys
+from copy import deepcopy
 from dataclasses import dataclass
 from tqdm import tqdm
 from typing import List, Union, Tuple, Generator, Callable
+
 import torch
 from torch.utils.data import DataLoader
-from aimet_torch.v2.utils import default_forward_fn
 
+from aimet_torch.v2.utils import default_forward_fn
+from aimet_torch.utils import change_tensor_device_placement
 from aimet_torch import QuantizationSimModel, utils
+
+logger = utils.AimetLogger.get_area_logger(utils.AimetLogger.LogAreas.Utils)
+
+def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=None):
+    """ This function moves all tensors and huggingface Cache objects to the provided device"""
+
+    # Move all tensors to the provided device
+    moved_inputs = change_tensor_device_placement(inputs, device)
+    # At this point everything except the Cache objects should be placed on the correct device
+
+    # Helper function to find Cache objects in the provided inputs
+    def find_cache(inputs):
+        if 'transformers' not in sys.modules:
+            # If the transformers module has not been imported, then there cannot be any Cache objects present
+            # Since the base class is provided in transformers
+            return None
+        if isinstance(inputs, sys.modules['transformers'].cache_utils.Cache):
+            return inputs
+        if isinstance(inputs, (tuple, list, dict)):
+            recursive_results = (find_cache(inp) for inp in inputs) if isinstance(inputs, dict) else (find_cache(inp) for inp in inputs)
+            try:
+                return next(item for item in recursive_results if item is not None)
+            except StopIteration:
+                return None
+        return None
+
+    cache_obj = find_cache(moved_inputs)
+    if cache_obj:
+        if cache_movement_fn:
+            cache_movement_fn(cache_obj)
+        else:
+            try:
+                # Generally, this strategy should work in most cases. However, there is no guarantee from the base
+                # Cache class on this. So, if this fails we will ask users to provide a custom function for moving
+                # the contents of their Cache object between devices
+                cache_obj.key_cache = change_tensor_device_placement(cache_obj.key_cache, device)
+                cache_obj.value_cache = change_tensor_device_placement(cache_obj.value_cache, device)
+            except Exception as e:
+                logger.error("Please provide a cache_movement_fn to move contents of the Cache object used by the model"
+                               " between devices. Or, please modify your model to use a DynamicCache object.")
+                raise e
+
+    return moved_inputs
+
 
 class BlockwiseSampler:
     """
@@ -69,6 +117,7 @@ class BlockwiseSampler:
         self.num_samples = num_samples
         self.forward_fn = forward_fn
 
+    @torch.no_grad()
     def run_inference(self, sample) -> Generator[torch.Tensor, None, None]:
         """
         Helper function to run inference on the model using the given sample, pausing and yielding the results after
@@ -81,32 +130,50 @@ class BlockwiseSampler:
             args: tuple
             kwargs: dict
 
+            def to(self, device):
+                """ Moves the contents of InputHolder to the provided device """
+                self.args = change_tensor_and_cache_device_placement(self.args, device)
+                self.kwargs = change_tensor_and_cache_device_placement(self.kwargs, device)
+
+            def __deepcopy__(self, memo):
+                orig_deepcopy = torch.Tensor.__deepcopy__
+                torch.Tensor.__deepcopy__ = lambda self, memo: self.detach().clone()
+                result = InputHolder(deepcopy(self.args), deepcopy(self.kwargs))
+                torch.Tensor.__deepcopy__ = orig_deepcopy
+                return result
+
         class StopForwardExceptionWithInput(utils.StopForwardException):
             """Exception raised in order to stop forward execution through the model. Holds module input data."""
             def __init__(self, captured_input):
                 self.captured_input = captured_input
 
         def hook_fn(module, args, kwargs):
-            raise StopForwardExceptionWithInput(InputHolder(args, kwargs))
+            raise StopForwardExceptionWithInput(deepcopy(InputHolder(args, kwargs)))
 
-        with torch.no_grad():
-            try:
-                hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
-                self.forward_fn(self.sim.model, sample)
-            except StopForwardExceptionWithInput as e:
-                # pylint: disable=used-before-assignment
-                hook.remove()
-                next_block_input = e.captured_input
-                yield next_block_input.args, next_block_input.kwargs
+        try:
+            hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
+            self.forward_fn(self.sim.model, sample)
+        except StopForwardExceptionWithInput as e:
+            # pylint: disable=used-before-assignment
+            hook.remove()
+            next_block_input = e.captured_input
+            next_block_input.to("cpu")
+            e.captured_input = None
 
-            for block in self.blocks:
-                next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
-                if not isinstance(next_block_input.args, tuple):
-                    next_block_input.args = (next_block_input.args,)
-                yield next_block_input.args, next_block_input.kwargs
+            yield next_block_input.args, next_block_input.kwargs
+
+        for block in self.blocks:
+            next_block_input.to(utils.get_device(block))
+            next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
+            next_block_input.to("cpu")
+
+            if not isinstance(next_block_input.args, tuple):
+                next_block_input.args = (next_block_input.args,)
+
+            yield next_block_input.args, next_block_input.kwargs
 
 
-    def sample(self) -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
+    def sample(self, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
         """
         Main generator function for blockwise sampler. Each loop of this generator yields a tuple of
         (block, [list of FP inputs to block], [list of QT inputs to block]) based on the list of blocks provided during
@@ -121,7 +188,7 @@ class BlockwiseSampler:
 
         blocks = iter(self.blocks)
 
-        with tqdm(total=len(self.blocks), desc="Blocks processed") as pbar:
+        with tqdm(total=len(self.blocks), desc=desc) as pbar:
             while True:
                 try:
                     block = next(blocks)

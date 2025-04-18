@@ -42,8 +42,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 from aimet_torch import QuantizationSimModel
-from aimet_torch.experimental.adascale import apply_adascale
-from aimet_torch.experimental.adascale.adascale_optimizer import AdaScale, model_to_block_mapping
+from aimet_torch.experimental.adascale.adascale_optimizer import AdaScale, model_to_block_mapping, apply_adascale
 from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
 from aimet_torch.v2.utils import remove_all_quantizers, remove_activation_quantizers
