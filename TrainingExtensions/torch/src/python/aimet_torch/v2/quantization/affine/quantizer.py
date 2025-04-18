@@ -37,7 +37,6 @@
 # pylint: disable=redefined-builtin
 """ Affine quantizers """
 
-import abc
 from itertools import chain, repeat
 from typing import Optional, List, Dict, Tuple, overload
 import contextlib
@@ -160,67 +159,92 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             raise RuntimeError(f'Encoding analyzer of shape {self.encoding_analyzer.observer.shape} '
                                f'is incompatible with quantizer of shape {self.shape}.')
 
-    @abc.abstractmethod
-    def get_min(self, dtype=None) -> torch.Tensor:
+        self.register_quantization_parameter('min', nn.Parameter(-torch.ones(self.shape)))
+        self.register_quantization_parameter('max', nn.Parameter(torch.ones(self.shape)))
+
+    def get_min(self, dtype=None) -> Optional[torch.Tensor]:
         """
         Compute quantization min to be used for forward pass.
-        Return None f the quantizer is not initialized yet.
 
-        Args:
-            dtype (torch.dtype): dtype of the computed min
+        NOTE: self.min may not be equal to self.get_min().
+              self.get_min() returns slightly recalibrated version of self.min.
 
-        Returns:
-            Quantization min
-
+        :param dtype: dtype of the computed min. Use of self.min.dtype by default.
+        :return: Quantization min
         """
+        if not self.is_initialized():
+            return None
+        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmin)
 
-    @abc.abstractmethod
-    def get_max(self, dtype=None) -> torch.Tensor:
+    def get_max(self, dtype=None) -> Optional[torch.Tensor]:
         """
         Compute quantization max to be used for forward pass.
-        Return None f the quantizer is not initialized yet.
 
-        Args:
-            dtype (torch.dtype): dtype of the computed max
+        NOTE: self.max may not be equal to self.get_max()
+              self.get_max() returns slightly recalibrated version of self.max.
 
-        Returns:
-            Quantization max
-
+        :param dtype: dtype of the computed max. Use of self.min.dtype by default.
+        :return: Quantization max
         """
+        if not self.is_initialized():
+            return None
+        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmax)
 
-    @abc.abstractmethod
-    def get_scale(self, dtype=None) -> torch.Tensor:
+
+    def get_scale(self, dtype=None) -> Optional[torch.Tensor]:
         """
         Compute quantization scale to be used for forward pass.
-        Return None f the quantizer is not initialized yet.
+        Return None if the quantizer is not initialized yet.
 
         Args:
             dtype (torch.dtype): dtype of the computed scale
 
         Returns:
             Quantization scale
-
         """
+        if not self.is_initialized():
+            return None
 
-    @abc.abstractmethod
-    def get_offset(self, dtype=None) -> torch.Tensor:
+        dtype = dtype or torch.float32
+        num_steps = self.qmax - self.qmin
+
+        scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
+        return scale.to(dtype)
+
+    def get_offset(self, dtype=None) -> Optional[torch.Tensor]:
         """
         Compute quantization offset to be used for forward pass.
-        Return None f the quantizer is not initialized yet.
+        Return None if the quantizer is not initialized yet.
 
         Args:
             dtype (torch.dtype): dtype of the computed offset
 
         Returns:
             Quantization offset
-
         """
+        if not self.is_initialized():
+            return None
 
-    @abc.abstractmethod
+        dtype = dtype or torch.float32
+
+        if self.symmetric:
+            offset = torch.full_like(self.min,
+                                     fill_value=-round((self.qmin + self.qmax) / 2),
+                                     requires_grad=False,
+                                     dtype=dtype)
+        else:
+            offset = ste_round(self.min.to(dtype) / self.get_scale(dtype)) - self.qmin
+
+        return offset.to(dtype)
+
+    @torch.no_grad()
     def set_range(self, min: torch.Tensor, max: torch.Tensor):
         """
         Set quantization parameters to the given min-max range
         """
+        with SafeGatheredParameters(self.parameters(recurse=False), modifier_rank=0):
+            self.min.copy_(min)
+            self.max.copy_(max)
 
     def get_encodings(self) -> Optional[AffineEncoding]:
         """
@@ -333,21 +357,6 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
     def signed(self, signed: bool):
         self._set_signed(signed)
 
-
-class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
-    """
-    Affine quantizer with min-max as trainable parameters
-    """
-
-    min: torch.nn.Parameter
-    max: torch.nn.Parameter
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.register_quantization_parameter('min', nn.Parameter(-torch.ones(self.shape)))
-        self.register_quantization_parameter('max', nn.Parameter(torch.ones(self.shape)))
-
     @contextlib.contextmanager
     def compute_encodings(self):
         """
@@ -360,11 +369,17 @@ class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
             return
 
         original_forward = self.forward
+        shape = self.shape
+
+        try:
+            dtype, device = next((p.dtype, p.device) for p in self.parameters())
+        except StopIteration as e:
+            raise RuntimeError from e
 
         @functools.wraps(original_forward)
         def forward_wrapper(input):
             input = input.as_subclass(torch.Tensor)
-            expanded_input = torch_builtins.reshape_tensor_for_blocks(input, self.shape, self.block_size)
+            expanded_input = torch_builtins.reshape_tensor_for_blocks(input, shape, self.block_size)
             batch_statistics = self.encoding_analyzer.update_stats(expanded_input)
             num_steps = self.qmax - self.qmin
             dynamic_min, dynamic_max =\
@@ -372,12 +387,10 @@ class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
                                                                         num_steps,
                                                                         self.symmetric)
             if self.block_size is not None:
-                dynamic_min = dynamic_min.view(self.min.shape)
-                dynamic_max = dynamic_max.view(self.max.shape)
-            dynamic_min = dynamic_min.to(dtype=self.min.dtype,
-                                         device=self.min.device).expand_as(self.min)
-            dynamic_max = dynamic_max.to(dtype=self.max.dtype,
-                                         device=self.max.device).expand_as(self.max)
+                dynamic_min = dynamic_min.view(shape)
+                dynamic_max = dynamic_max.view(shape)
+            dynamic_min = dynamic_min.to(dtype=dtype, device=device).expand(shape)
+            dynamic_max = dynamic_max.to(dtype=dtype, device=device).expand(shape)
 
             with patch_attr(self, 'min', dynamic_min),\
                     patch_attr(self, 'max', dynamic_max):
@@ -395,8 +408,8 @@ class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
             num_steps = self.qmax - self.qmin
             enc_min, enc_max = self.encoding_analyzer.compute_encodings(num_steps, self.symmetric)
             if self.block_size is not None:
-                enc_min = enc_min.view(self.min.shape)
-                enc_max = enc_max.view(self.max.shape)
+                enc_min = enc_min.view(shape)
+                enc_max = enc_max.view(shape)
             _flag_extreme_min_max(enc_min, enc_max)
 
         except StatisticsNotFoundError:
@@ -407,79 +420,11 @@ class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
 
         self.set_range(enc_min, enc_max)
 
-    def get_min(self, dtype=None) -> Optional[torch.Tensor]:
-        """
-        Compute quantization min to be used for forward pass.
 
-        NOTE: self.min may not be equal to self.get_min().
-              self.get_min() returns slightly recalibrated version of self.min.
-
-        :param dtype: dtype of the computed min. Use of self.min.dtype by default.
-        :return: Quantization min
-        """
-        if not self.is_initialized():
-            return None
-        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmin)
-
-    def get_max(self, dtype=None) -> Optional[torch.Tensor]:
-        """
-        Compute quantization max to be used for forward pass.
-
-        NOTE: self.max may not be equal to self.get_max()
-              self.get_max() returns slightly recalibrated version of self.max.
-
-        :param dtype: dtype of the computed max. Use of self.min.dtype by default.
-        :return: Quantization max
-        """
-        if not self.is_initialized():
-            return None
-        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmax)
-
-    def get_scale(self, dtype=None) -> Optional[torch.Tensor]:
-        """
-        Compute quantization scale to be used for forward pass.
-
-        :param dtype: dtype of the computed scale. Use of self.min.dtype by default.
-        :return: Quantization scale
-        """
-        if not self.is_initialized():
-            return None
-
-        dtype = dtype or torch.float32
-        num_steps = self.qmax - self.qmin
-
-        scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
-        return scale.to(dtype)
-
-    def get_offset(self, dtype=None) -> Optional[torch.Tensor]:
-        """
-        Compute quantization offset to be used for forward pass.
-
-        :param dtype: dtype of the computed offset. Use of self.min.dtype by default.
-        :return: Quantization offset
-        """
-        if not self.is_initialized():
-            return None
-
-        dtype = dtype or torch.float32
-
-        if self.symmetric:
-            offset = torch.full_like(self.min,
-                                     fill_value=-round((self.qmin + self.qmax) / 2),
-                                     requires_grad=False,
-                                     dtype=dtype)
-        else:
-            offset = ste_round(self.min.to(dtype) / self.get_scale(dtype)) - self.qmin
-
-        return offset.to(dtype)
-
-    def set_range(self, min: torch.Tensor, max: torch.Tensor):
-        """
-        Set quantization parameters to the given min-max range
-        """
-        with torch.no_grad(), SafeGatheredParameters(self.parameters(recurse=False), modifier_rank=0):
-            self.min.copy_(min)
-            self.max.copy_(max)
+class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
+    """
+    Affine quantizer with min-max as trainable parameters
+    """
 
 
 class Quantize(MinMaxQuantizer):
