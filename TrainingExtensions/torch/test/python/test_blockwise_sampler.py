@@ -104,7 +104,7 @@ def test_blockwise_sampler():
             _ = sim.model(sample)
     sim.compute_encodings(forward_pass_callback)
 
-    sampler = BlockwiseSampler(sim=sim, blocks=sim.model.blocks, dataloader=DataLoader(dataset, batch_size=1, shuffle=False), num_samples=10)
+    sampler = BlockwiseSampler(sim=sim, blocks=sim.model.blocks, dataloader=DataLoader(dataset, batch_size=1, shuffle=False))
     for block, fp_block_inputs, qt_block_inputs in sampler.sample():
         # put a hook on the block, grab fp_inputs, grab qt_inputs without using sampler. Check if they are the same
         hook = block.register_forward_pre_hook(hook_fn, with_kwargs=True)

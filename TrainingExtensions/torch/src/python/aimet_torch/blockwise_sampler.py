@@ -108,13 +108,11 @@ class BlockwiseSampler:
                  sim: QuantizationSimModel,
                  blocks: List[torch.nn.Module],
                  dataloader: DataLoader,
-                 num_samples: int,
                  forward_fn: Callable = default_forward_fn
                  ):
         self.sim = sim
         self.blocks = blocks
         self.dataloader = dataloader
-        self.num_samples = num_samples
         self.forward_fn = forward_fn
 
     @torch.no_grad()
@@ -182,7 +180,7 @@ class BlockwiseSampler:
         fp_inferences = []
         qt_inferences = []
 
-        for sample in itertools.islice(self.dataloader, self.num_samples):
+        for sample in itertools.islice(self.dataloader, len(self.dataloader)):
             fp_inferences.append(self.run_inference(sample))
             qt_inferences.append(self.run_inference(sample))
 

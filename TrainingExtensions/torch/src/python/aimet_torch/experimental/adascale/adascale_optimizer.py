@@ -87,13 +87,11 @@ class AdaScale:
     def apply_adascale(cls, qsim: QuantizationSimModel,
                        data_loader: DataLoader,
                        forward_fn: Callable[[torch.nn.Module, Any], Any] = None,
-                       num_batches: int = 1,
                        num_epochs: int = 1):
         """
         :param qsim: Quantization Sim model
         :param data_loader: DataLoader object to load the input data
         :param forward_fn: forward function to run the forward pass of the model
-        :param num_batches: Number of batches
         :param num_epochs: Number of epochs to perform the AdaScale BKD
 
         Note that the forward_fn should take exactly two arguments -
@@ -109,7 +107,7 @@ class AdaScale:
             >>> data_set = DataSet(dummy_input)
             >>> data_loader = DataLoader(data_set, ...)
             >>> sim = QuantizationSimModel(model, dummy_input)
-            >>> apply_adascale(sim, data_loader, forward_fn=forward_fn, num_batches=1, num_epochs=10)
+            >>> apply_adascale(sim, data_loader, forward_fn=forward_fn, num_epochs=10)
             >>> sim.compute_encodings(...)
             >>> sim.export(...)
 
@@ -133,20 +131,17 @@ class AdaScale:
         cls._replace_with_adascale_weight_quantizers(adascale_blocks)
         qsim.model.to(device)
 
-        sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, num_batches, forward_fn)
+        sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, forward_fn)
         qsim.model.requires_grad_(False)
 
         for block, fp_block_inputs, qt_block_inputs in sampler.sample(desc="AdaScale blocks processed"):
-            assert num_batches == len(qt_block_inputs)
-            assert num_batches == len(fp_block_inputs)
-
             # only set adascale params to train mode
             trainable_params = cls._get_adascale_trainable_params(block)
             optimizer = torch.optim.Adam(trainable_params)
             cls._set_requires_grad(trainable_params, True)
 
             fp_out = [] # save fp batchwise block outputs to use across epochs
-            for batch_idx in range(num_batches):
+            for batch_idx in range(len(data_loader)):
                 with remove_all_quantizers(block):
                     fp_args, fp_kwargs = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx]), device)
                     fp_block_results = change_tensor_and_cache_device_placement(block(*fp_args, **fp_kwargs), "cpu")
@@ -154,7 +149,7 @@ class AdaScale:
                     del fp_args, fp_kwargs
 
             for epoch in range(num_epochs):
-                for batch_idx in range(num_batches):
+                for batch_idx in range(len(data_loader)):
                     with remove_activation_quantizers(block) and torch.set_grad_enabled(True):
                         qt_args, qt_kwargs = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx]), device)
                         quant_out = block(*qt_args, **qt_kwargs)

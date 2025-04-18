@@ -139,7 +139,7 @@ class TestAdascale:
 
         with patch.dict(model_to_block_mapping,
                         {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
-            apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
+            apply_adascale(sim, data_loader, None, num_epochs)
 
         for block in sim.model.linear_blocks:
             assert type(block.fc1.param_quantizers['weight']) == QuantizeDequantize
@@ -235,7 +235,7 @@ class TestAdascale:
 
         with patch.dict(model_to_block_mapping,
                         {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
-            apply_adascale(sim, data_loader, None, int(num_samples / batch_size), num_epochs)
+            apply_adascale(sim, data_loader, None, num_epochs)
 
         adascale_output = sim.model(dummy_input)
         loss_after_opt = torch.nn.functional.mse_loss(fp_output, adascale_output)

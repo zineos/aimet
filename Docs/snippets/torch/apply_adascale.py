@@ -91,7 +91,6 @@ data_loader = DataLoader(data_set, batch_size=int(num_samples / num_batches), sh
 
 # [create-sim]
 from aimet_common.defs import QuantScheme
-from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_torch.quantsim import QuantizationSimModel
 
 sim = QuantizationSimModel(model,
@@ -109,7 +108,6 @@ from aimet_torch.v2.utils import default_forward_fn
 apply_adascale(qsim=sim,
                data_loader=data_loader,
                forward_fn=default_forward_fn,
-               num_batches=num_batches,
                num_epochs=10)
 
 # End of [apply-adascale]
