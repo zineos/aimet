@@ -124,6 +124,13 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
         """
         raise NotImplementedError
 
+    @classmethod
+    @abc.abstractmethod
+    def from_encodings(cls, encodings: EncodingBase) -> "QuantizerBase":
+        """
+        Create quantizer object from encoding object
+        """
+
     def register_quantization_parameter(self, name: str, param: nn.Parameter):
         """
         Register quantization parameter.

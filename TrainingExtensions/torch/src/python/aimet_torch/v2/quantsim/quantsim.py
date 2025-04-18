@@ -67,6 +67,7 @@ from aimet_torch.v2 import nn as aimet_nn
 from aimet_torch.v2.nn import BaseQuantizationMixin, QuantizationMixin, UnknownModuleError
 from aimet_torch.v2.nn.fake_quant import _legacy_impl
 from aimet_torch.v2._builder import _V2LazyQuantizeWrapper
+from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.quantization.affine import AffineQuantizerBase
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
@@ -628,6 +629,58 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             for qmodule, qtzr in orig_bias_quantizers.items():
                 qmodule.param_quantizers["bias"] = qtzr
 
+    def fold_param_quantizers(self):
+        """
+        Fold parameter quantizers into their associated parameters to accelerate inference.
+
+        Example:
+
+          >>> sim = QuantizationSimModel(...)
+          >>> type(sim.model[0].weight)
+          <class 'torch.nn.parameter.Parameter'>
+          >>> sim.model[0]
+          QuantizedLinear(
+            in_features=10, out_features=10, bias=True
+            (param_quantizers): ModuleDict(
+              (weight): QuantizeDequantize(shape=(), qmin=-128, qmax=127, symmetric=True)
+              (bias): None
+            )
+          )
+          >>> sim.fold_param_quantizers()
+          >>> type(sim.model[0].weight)
+          <class 'aimet_torch.v2.quantization.tensor.DequantizedTensor'>
+          >>> sim.model[0]
+          QuantizedLinear(
+            in_features=10, out_features=10, bias=True
+            (param_quantizers): ModuleDict(
+              (weight): None
+              (bias): None
+            )
+          )
+        """
+        for qmodule in self.qmodules():
+            qmodule.fold_param_quantizers()
+
+
+@contextlib.contextmanager
+def _temporarily_unfold_param_quantizers(sim: QuantizationSimModel):
+    # pylint: disable=protected-access
+    """
+    Temporarily re-instantiate param quantizers for ease of export
+    """
+    modules_with_folded_parameters = [
+        qmodule for qmodule in sim.qmodules()
+        if any(isinstance(param, DequantizedTensor) for param in qmodule.parameters())
+    ]
+
+    try:
+        for qmodule in modules_with_folded_parameters:
+            qmodule._unfold_param_quantizers()
+        yield
+    finally:
+        for qmodule in modules_with_folded_parameters:
+            qmodule._fold_param_quantizers()
+
 
 class _QuantizationSimOnnxExport:
     """
@@ -660,7 +713,8 @@ class _QuantizationSimOnnxExport:
                                "Other quantizer types are not supported.")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with self.sim._concretize_int32_bias_quantizers(args), \
+            with _temporarily_unfold_param_quantizers(self.sim), \
+                    self.sim._concretize_int32_bias_quantizers(args), \
                     self.sim._apply_qdq_to_model_parameters(self.sim.model):
                 tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
                 export(self.sim.model, args, tmp_onnx_path, *posargs, **kwargs)

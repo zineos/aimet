@@ -246,6 +246,19 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
             return FloatEncoding(self.mantissa_bits, self.exponent_bits, self.maxval)
         return None
 
+    @classmethod
+    def from_encodings(cls, encodings: FloatEncoding) -> "FloatQuantizeDequantize":
+        if not isinstance(encodings, FloatEncoding):
+            raise TypeError(f"Expected {FloatEncoding}; got {type(encodings)}")
+
+        qtzr = cls(exponent_bits=encodings.exponent_bits,
+                   mantissa_bits=encodings.mantissa_bits)
+
+        if encodings.maxval is not None:
+            qtzr.maxval.copy_(encodings.maxval)
+
+        return qtzr
+
     @contextlib.contextmanager
     def compute_encodings(self):
         """

@@ -232,6 +232,21 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
                                   self.qmin, self.qmax, self._symmetric, self.block_size)
         return None
 
+    @classmethod
+    def from_encodings(cls, encodings: AffineEncoding) -> "AffineQuantizerBase":
+        if not isinstance(encodings, AffineEncoding):
+            raise TypeError(f"Expected {AffineEncoding}; got {type(encodings)}")
+
+        qtzr = cls(shape=encodings.scale.shape,
+                   qmin=encodings.qmin,
+                   qmax=encodings.qmax,
+                   symmetric=encodings.symmetry,
+                   block_size=encodings.block_size)
+
+        qtzr.set_range(encodings.min, encodings.max)
+
+        return qtzr
+
     @torch.no_grad()
     def get_legacy_encodings(self) -> Optional[List[Dict]]:
         """
@@ -863,3 +878,19 @@ class GroupedBlockQuantizeDequantize(QuantizeDequantize): # pylint: disable=too-
                                         decompressed_bw=self.decompressed_bw,
                                         per_channel_scale=per_channel_scale)
         return None
+
+    @classmethod
+    def from_encodings(cls, encodings: GroupedBlockEncoding) -> "GroupedBlockQuantizeDequantize":
+        if not isinstance(encodings, GroupedBlockEncoding):
+            raise TypeError(f"Expected {GroupedBlockEncoding}; got {type(encodings)}")
+
+        qtzr = cls(shape=encodings.scale.shape,
+                   bitwidth=encodings.bitwidth,
+                   symmetric=encodings.symmetry,
+                   decompressed_bw=encodings.decompressed_bw,
+                   block_size=encodings.block_size,
+                   block_grouping=encodings.block_grouping)
+
+        qtzr.set_range(encodings.min, encodings.max)
+
+        return qtzr

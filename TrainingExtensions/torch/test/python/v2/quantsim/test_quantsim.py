@@ -46,6 +46,7 @@ from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_common.defs import QuantizationDataType, QuantScheme
 from aimet_torch import onnx_utils
 from aimet_torch.v2.quantsim import QuantizationSimModel, load_encodings_to_sim
+from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.quantization.affine import AffineQuantizerBase, GroupedBlockQuantizeDequantize, QuantizeDequantize
@@ -1241,6 +1242,41 @@ class TestQuantsim:
                 assert torch.equal(qtzr_a.get_offset(), qtzr_b.get_offset())
                 assert torch.equal(qtzr_a.get_min(), qtzr_b.get_min())
                 assert torch.equal(qtzr_a.get_max(), qtzr_b.get_max())
+
+    @pytest.mark.parametrize("data_type", [QuantizationDataType.int, QuantizationDataType.float])
+    def test_fold_param_quantizers(self, tmpdir, data_type):
+        model = torch.nn.Sequential(
+            torch.nn.Linear(10, 10),
+        )
+        x = torch.randn(10, 10)
+        sim = QuantizationSimModel(model, x,
+                                   default_param_bw=16,
+                                   default_output_bw=16,
+                                   default_data_type=data_type)
+        sim.compute_encodings(lambda model: model(x))
+
+        sim.export(tmpdir, "before_fold", x)
+
+        """
+        When: Call fold_param_quantizers()
+        Then: 1. All param quantizers should be folded to the parameter
+              2. Export artifact of sim.export() should not be affected
+        """
+        sim.fold_param_quantizers()
+        assert sim.model[0].param_quantizers["weight"] is None
+        assert isinstance(sim.model[0].weight, DequantizedTensor)
+
+        sim.export(tmpdir, "after_fold", x)
+
+        with open(os.path.join(tmpdir, "before_fold.encodings")) as f:
+            encodings_before_fold = json.load(f)
+        with open(os.path.join(tmpdir, "after_fold.encodings")) as f:
+            encodings_after_fold = json.load(f)
+
+        assert encodings_before_fold == encodings_after_fold
+
+        # trivial sanity check
+        assert [enc["name"] for enc in encodings_before_fold["param_encodings"]] == ["0.weight"]
 
 
 class TestQuantsimUtilities:

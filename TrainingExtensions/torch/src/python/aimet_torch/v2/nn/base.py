@@ -46,14 +46,19 @@ import torch
 from torch import nn
 
 from aimet_torch.utils import is_vector_encoding
-from aimet_torch.v2.quantization.affine.encoding import VectorEncoding, AffineEncoding
+from aimet_torch.v2.quantization.affine.encoding import (
+    AffineEncoding,
+    GroupedBlockEncoding,
+    VectorEncoding,
+)
 from aimet_torch.v2.quantization.affine import (
     AffineQuantizerBase,
     GroupedBlockQuantizeDequantize,
     QuantizeDequantize,
 )
+from aimet_torch.v2.quantization.float import FloatEncoding, FloatQuantizeDequantize
 
-from aimet_torch.v2.quantization.tensor import QuantizedTensorBase
+from aimet_torch.v2.quantization.tensor import QuantizedTensorBase, DequantizedTensor
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.utils import (
     patch_attr,
@@ -750,10 +755,39 @@ class BaseQuantizationMixin(abc.ABC):
     def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
         raise NotImplementedError
 
+    def fold_param_quantizers(self):
+        """
+        Fold parameter quantizers into their associated parameters to accelerate inference.
+
+        Example:
+
+          >>> qlinear = QuantizedLinear(10, 10)
+          >>> qlinear.param_quantizers["weight"] = QuantizeDequantize((), -128, 127, symmetric=True)
+          >>> type(qlinear.weight)
+          <class 'torch.nn.parameter.Parameter'>
+          >>> qlinear
+          QuantizedLinear(
+            in_features=10, out_features=10, bias=True
+            (param_quantizers): ModuleDict(
+              (weight): QuantizeDequantize(shape=(), qmin=-128, qmax=127, symmetric=True)
+              (bias): None
+            )
+          )
+          >>> qlinear.fold_param_quantizers()
+          >>> type(qlinear.weight)
+          <class 'aimet_torch.v2.quantization.tensor.DequantizedTensor'>
+          >>> qlinear
+          QuantizedLinear(
+            in_features=10, out_features=10, bias=True
+            (param_quantizers): ModuleDict(
+              (weight): None
+              (bias): None
+            )
+          )
+        """
+        return self._fold_param_quantizers()
+
     def _fold_param_quantizers(self):
-        """
-        Fold param quantizers into parameters to speed up inference.
-        """
         self._compute_param_encodings(overwrite=False)
 
         for param_name, param_qtzr in self.param_quantizers.items():
@@ -764,6 +798,33 @@ class BaseQuantizationMixin(abc.ABC):
             qdq_param = param_qtzr(param).dequantize()
             setattr(self, param_name, torch.nn.Parameter(qdq_param, requires_grad=param.requires_grad))
             self.param_quantizers[param_name] = None
+
+    def _unfold_param_quantizers(self):
+        """
+        Re-instantiate param quantizers for ease of export
+        """
+        for param_name, qdq_param in self.named_parameters():
+            if not isinstance(qdq_param, DequantizedTensor):
+                continue
+
+            if qdq_param.encoding is None:
+                continue
+
+            if isinstance(qdq_param.encoding, GroupedBlockEncoding):
+                param_qtzr = GroupedBlockQuantizeDequantize.from_encodings(qdq_param.encoding)
+            elif isinstance(qdq_param.encoding, AffineEncoding):
+                param_qtzr = QuantizeDequantize.from_encodings(qdq_param.encoding)
+            elif isinstance(qdq_param.encoding, FloatEncoding):
+                param_qtzr = FloatQuantizeDequantize.from_encodings(qdq_param.encoding)
+            else:
+                raise ValueError
+
+            if not param_qtzr:
+                continue
+
+            param = qdq_param.as_subclass(torch.Tensor)
+            setattr(self, param_name, torch.nn.Parameter(param, requires_grad=param.requires_grad))
+            self.param_quantizers[param_name] = param_qtzr
 
 
 def _remove_quantizers(quantizers, keys):

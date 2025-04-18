@@ -275,7 +275,8 @@ def test_export_torchvision_models(model_factory, input_shape):
 @torch.no_grad()
 @pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0"])
 @pytest.mark.parametrize("lpbq", (False, True))
-def test_quantsim_export_resnet18(encoding_version, lpbq: bool):
+@pytest.mark.parametrize("fold_param_quantizers", (False, True))
+def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quantizers: bool):
     """
     When: Export quantized torchvision model using quantsim.export
     """
@@ -318,6 +319,9 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool):
 
         with remove_activation_quantizers(sim.model):
             expected_out = sim.model(x)
+
+    if fold_param_quantizers:
+        sim.fold_param_quantizers()
 
     with tempfile.TemporaryDirectory() as dirname:
         onnx_path = os.path.join(dirname, "torchvision_model.onnx")
