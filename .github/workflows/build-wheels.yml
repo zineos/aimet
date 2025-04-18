@@ -96,6 +96,7 @@ jobs:
           ls -al wheelhouse/
       - name: Upload AIMET wheel file
         uses: actions/upload-artifact@v3
+        if: matrix.id != 'tf-torch-cpu'
         with:
           name: "${{ matrix.id }}"
           path: |
