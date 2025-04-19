@@ -78,18 +78,30 @@ class TransformerProcessor(ABC):
         pass
 
     @classmethod
-    def init_let_params(cls, let_pair_list: List[_LetPair]):
+    def init_let_params(cls, let_pair_list: List[_LetPair], num_repeats):
         """ Register let params to LET pairs. """
         for _let_pair in let_pair_list:
             prev_modules, foll_modules = _let_pair.prev, _let_pair.follow
             prev_out_ch = prev_modules[0].weight.shape[0]
             prev_scale = torch.nn.Parameter(torch.ones(prev_out_ch))
+            for module in foll_modules:
+                foll_in_ch = module.weight.shape[1]
 
-            for _module in prev_modules:
-                _module.register_let_params(prev_scale = prev_scale)
+                # For some pairs prev_layer out channel != foll_layer in channel. In such cases assert that
+                # foll_scale has the correct shape in let_modules. We will repeat the prev_scale num_repeats times to match the dimension.
+                # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
+                if prev_out_ch != foll_in_ch:
+                    assert foll_in_ch//prev_out_ch == num_repeats
+                    nr = num_repeats
+                else:
+                    nr = 1
+                module.register_let_params(foll_scale = prev_scale, num_repeats= nr)
 
-            for _module in foll_modules:
-                _module.register_let_params(foll_scale = prev_scale)
+
+            # Currently only one module is expected in prev_list
+            assert len(prev_modules) == 1
+            prev_modules[0].register_let_params(prev_scale)
+
 
 class LlamaProcessor(TransformerProcessor):
     """

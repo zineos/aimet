@@ -46,41 +46,25 @@ from aimet_torch.omniquant.module_defns import (
     QuantizedLlamaRMSNorm,
     QuantizedGemmaNorm,
 )
-from aimet_torch.omniquant.let_modules import (
-    LETModule,
-    LETQuantizedLinear,
-    LETQuantizedLlamaRMSNorm,
-    LETQuantizedLayerNorm,
-    LETQuantizedConv2d,
-    LETQuantizedGemmaNorm,
-)
+from aimet_torch.omniquant.let_modules import LETModule
+from aimet_torch.v2.quantsim import QuantizationSimModel
+from aimet_torch.v2.nn.true_quant import QuantizationMixin
+import torch
+import numpy as np
+import contextlib
 
-_SUPPORT_QUANTIZED_MODULES = (QuantizedLinear, QuantizedLayerNorm, QuantizedConv2d, QuantizedLlamaRMSNorm, QuantizedGemmaNorm)
-
-def get_let_module(mdl):
-    """ Return corresponding LETQuantized module for different QuantizedLinear """
-    match mdl:
-        case QuantizedLinear():
-            return LETQuantizedLinear
-        case QuantizedLayerNorm():
-            return LETQuantizedLayerNorm
-        case QuantizedConv2d():
-            return LETQuantizedConv2d
-        case QuantizedLlamaRMSNorm():
-            return LETQuantizedLlamaRMSNorm
-        case QuantizedGemmaNorm():
-            return LETQuantizedGemmaNorm
-        case _:
-            assert False, "Let Quantized module is not implemented"
+_SUPPORTED_QUANTIZED_MODULES = (QuantizedLinear, QuantizedLayerNorm, QuantizedConv2d, QuantizedLlamaRMSNorm, QuantizedGemmaNorm)
 
 def _convert_sim_to_letsim(sim):
-    """ Convert sim to sim model with LET quantizers inplace. """
+    """ Convert sim model with LET quantizers inplace. """
     for name, module in sim.model.named_modules():
-        if isinstance(module, _SUPPORT_QUANTIZED_MODULES):
-            let_module = get_let_module(module)(module)
-            parent_module = ".".join(name.split(".")[:-1])
+        # TODO: Adding this hardcoding check here for llama. Need to remove it
+        if isinstance(module, _SUPPORTED_QUANTIZED_MODULES) and name != "lm_head" and name != "model.norm":
+            let_module = LETModule.get_let_module(module)
+            parent_module_name = ".".join(name.split(".")[:-1])
             leaf_module_name = name.split(".")[-1]
-            setattr(sim.model.get_submodule(parent_module), leaf_module_name, let_module)
+            parent_module = sim.model.get_submodule(parent_module_name)
+            setattr(parent_module, leaf_module_name, let_module)
 
 def _convert_letsim_to_sim(sim):
     """ Convert LET sim to original sim model inplace. """
@@ -90,3 +74,61 @@ def _convert_letsim_to_sim(sim):
             parent_module = ".".join(name.split(".")[:-1])
             leaf_module_name = name.split(".")[-1]
             setattr(sim.model.get_submodule(parent_module), leaf_module_name, source_quant_module)
+
+#pylint: disable=no-else-return
+def _move_to_device(data, device):
+    """ Move resources from cpu to gpu """
+    if isinstance(data, torch.Tensor):
+        return data.to(device)
+    elif isinstance(data, list):
+        return [_move_to_device(item, device) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(_move_to_device(item, device) for item in data)
+    elif isinstance(data, dict):
+        return {key: _move_to_device(value, device) for key, value in data.items()}
+    else:
+        return data
+
+def get_sqnr(fp_out, qt_out, eps=1e-10):
+    """ Compute the sqnr for fp and qt blocks """
+    if isinstance(fp_out, torch.Tensor):
+        fp_out = fp_out.cpu().detach().numpy()
+    if isinstance(qt_out, torch.Tensor):
+        qt_out = qt_out.cpu().detach().numpy()
+    quant_error = fp_out - qt_out
+    exp_noise = (quant_error ** 2).mean() + eps
+    exp_signal = (fp_out ** 2).mean() + eps
+    sqnr = exp_signal / exp_noise
+    sqnr_db = 10 * np.log10(sqnr)
+    return sqnr_db
+
+# pylint:disable = protected-access
+def disable_quantizers_for_omq(sim: QuantizationSimModel) -> contextlib.ExitStack:
+    """
+    Get context managers to disable quantizers temporarily
+
+    :param sim: QuantizationSimModel object
+    :return: List of context managers to disable quantizers
+    """
+    exit_stack = contextlib.ExitStack()
+    for module in sim.model.modules():
+        if not isinstance(module, QuantizationMixin):
+            continue
+
+        if not isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+            exit_stack.enter_context(module._remove_all_quantizers())
+        else:
+            exit_stack.enter_context(module._remove_activation_quantizers())
+
+    return exit_stack
+
+def freeze_let_optimized_param_quantizers(sim: QuantizationSimModel):
+    """ Freeze the param quantizers from LET blockwise training """
+    def _freeze(module):
+        for param_quantizer in module.param_quantizers.values():
+            if param_quantizer:
+                param_quantizer._allow_overwrite = False
+                param_quantizer.requires_grad_(False)
+    for module in sim.modules():
+        if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+            _freeze(module)

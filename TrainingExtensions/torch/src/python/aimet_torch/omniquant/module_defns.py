@@ -34,8 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-
-# pylint: disable=missing-module-docstring
+""" Define llama and gemma rms norm """
 import torch
 from torch import nn
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
@@ -43,96 +42,68 @@ from aimet_torch.v2.nn.true_quant import QuantizationMixin
 try:
     from transformers.models.llama.modeling_llama import LlamaRMSNorm
 except ImportError:
-    class LlamaRMSNorm(torch.nn.Module):
-        '''
-        Define llama rms norm if import from transformers fails
-        '''
-        def __init__(self, dim: int, eps: float = 1e-6):
-            super().__init__()
-            self.eps = eps
-            self.weight = nn.Parameter(torch.ones(dim))
+    LlamaRMSNorm = None
 
-        def _norm(self, x):
-            return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        # pylint: disable=missing-function-docstring
-        def forward(self, x):
-            return self.weight * self._norm(x)
+if LlamaRMSNorm is not None:
+    @QuantizationMixin.implements(LlamaRMSNorm)
+    class QuantizedLlamaRMSNorm(QuantizationMixin, LlamaRMSNorm):
+        """ Define QuantizedLlamaRMSNorm """
 
-@QuantizationMixin.implements(LlamaRMSNorm)
-class QuantizedLlamaRMSNorm(QuantizationMixin, LlamaRMSNorm):
-    '''
-        Define QuantizedLlamaRMSNorm
-    '''
-    def __quant_init__(self):
-        super().__quant_init__()
+        def __quant_init__(self):
+            super().__quant_init__()
 
-        # Declare the number of input/output quantizers
-        self.input_quantizers = torch.nn.ModuleList([None])
-        self.output_quantizers = torch.nn.ModuleList([None])
+            # Declare the number of input/output quantizers
+            self.input_quantizers = torch.nn.ModuleList([None])
+            self.output_quantizers = torch.nn.ModuleList([None])
 
-    # pylint: disable=arguments-differ
-    def forward(self, hidden_states):
-        # Quantize input tensors
-        if self.input_quantizers[0]:
-            hidden_states = self.input_quantizers[0](hidden_states)
+        # pylint: disable=arguments-differ
+        def forward(self, hidden_states):
+            # Quantize input tensors
+            if self.input_quantizers[0]:
+                hidden_states = self.input_quantizers[0](hidden_states)
 
-        # Run forward with quantized inputs and parameters
-        with self._patch_quantized_parameters():
-            ret = super().forward(hidden_states)
+            # Run forward with quantized inputs and parameters
+            with self._patch_quantized_parameters():
+                ret = super().forward(hidden_states)
 
-        # Quantize output tensors
-        if self.output_quantizers[0]:
-            ret = self.output_quantizers[0](ret)
+            # Quantize output tensors
+            if self.output_quantizers[0]:
+                ret = self.output_quantizers[0](ret)
 
-        return ret
+            return ret
+else:
+    QuantizedLlamaRMSNorm = None
 
 try:
-    from transformers.models.gemma.modeling_gemma.py import GemmaRMSNorm
+    from transformers.models.gemma.modeling_gemma import GemmaRMSNorm
 except ImportError:
-    class GemmaRMSNorm(nn.Module):
-        '''
-        Define gemma rms norm if import from transformers fails
-        '''
-        def __init__(self, dim: int, eps: float = 1e-6):
-            super().__init__()
-            self.eps = eps
-            self.weight = nn.Parameter(torch.zeros(dim))
+    GemmaRMSNorm = None
 
-        def _norm(self, x):
-            return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+if GemmaRMSNorm is not None:
+    @QuantizationMixin.implements(GemmaRMSNorm)
+    class QuantizedGemmaNorm(QuantizationMixin, GemmaRMSNorm):
+        """ Define QuantizedGemmaNorm """
+        def __quant_init__(self):
+            super().__quant_init__()
+            self.input_quantizers = nn.ModuleList([None])
+            self.output_quantizers = nn.ModuleList([None])
+            self.bias = 1 # TODO bias is a bad name, change to something else
 
-        # pylint: disable=arguments-differ,missing-function-docstring
-        def forward(self, x):
-            output = self._norm(x.float())
-            # Llama does x.to(float16) * w whilst Gemma is (x * w).to(float16)
-            # See https://github.com/huggingface/transformers/pull/29402
-            output = output * (1.0 + self.weight.float())
-            return output.type_as(x)
+        # pylint: disable=arguments-differ
+        def forward(self, hidden_states):
+            weight = self.weight
+            bias = self.bias
+            if self.input_quantizers[0]:
+                hidden_states = self.input_quantizers[0](hidden_states)
 
-@QuantizationMixin.implements(GemmaRMSNorm)
-class QuantizedGemmaNorm(QuantizationMixin, GemmaRMSNorm):
-    '''
-        Define QuantizedGemmaNorm
-    '''
-    def __quant_init__(self):
-        super().__quant_init__()
-        self.input_quantizers = nn.ModuleList([None])
-        self.output_quantizers = nn.ModuleList([None])
-        self.bias = 1 # TODO bias is a bad name, change to something else
+            if self.param_quantizers.weight:
+                weight = self.param_quantizers.weight(weight)
 
-    # pylint: disable=arguments-differ
-    def forward(self, hidden_states):
-        weight = self.weight
-        bias = self.bias
-        if self.input_quantizers[0]:
-            hidden_states = self.input_quantizers[0](hidden_states)
+            ret = self._norm(hidden_states.float())
+            ret = ret * (bias+weight)
 
-        if self.param_quantizers.weight:
-            weight = self.param_quantizers.weight(weight)
-
-        ret = self._norm(hidden_states.float())
-        ret = ret * (bias+weight)
-
-        if self.output_quantizers[0]:
-            ret = self.output_quantizers[0](ret)
-        return ret
+            if self.output_quantizers[0]:
+                ret = self.output_quantizers[0](ret)
+            return ret
+else:
+    QuantizedGemmaNorm = None

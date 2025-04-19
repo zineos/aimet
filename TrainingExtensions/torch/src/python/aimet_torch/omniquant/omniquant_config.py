@@ -40,8 +40,9 @@ from dataclasses import dataclass
 @dataclass
 class OmniquantConfig:
     """ Omniquant training parameters. """
-    let_lr: float = 1e-3
-    num_epoch: int = 40
-    num_batch: int = 32
-    input_symmetry: str = "qtqt"
+    omq_lr: float = 5e-4
+    num_epoch: int = 20
+    num_batch: int = 40
+    input_symmetry: str = "fpfp"
     cache_on_cpu = True
+    compute_sqnr = True

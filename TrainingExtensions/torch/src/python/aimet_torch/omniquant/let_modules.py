@@ -34,8 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-
-# pylint: disable=missing-module-docstring
+""" LET Quantized Module """
 from aimet_torch.v2.nn import (
     QuantizedLinear,
     QuantizedLayerNorm,
@@ -44,8 +43,6 @@ from aimet_torch.v2.nn import (
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch.omniquant.module_defns import (
-    GemmaRMSNorm,
-    LlamaRMSNorm,
     QuantizedLlamaRMSNorm,
     QuantizedGemmaNorm,
 )
@@ -54,11 +51,10 @@ import torch
 import copy
 from abc import abstractmethod
 
-
-# TODO add docstring
-
-# pylint: disable=missing-module-docstring, missing-class-docstring
 class LETModule():
+    """
+    LET modules implementation for omniquant
+    """
     def __init__(self, source: QuantizationMixin):
         self._reset_let_params()
         # TODO in e2e integration decide what happens if some of the quantizers are None/missing
@@ -68,36 +64,33 @@ class LETModule():
             assert src_quant, f'{quantizers} should not be none for LETModule'
             setattr(self, quantizers, copy.deepcopy(src_quant))
 
-    # TODO : ananmukh check if prep func can be removed from here
     def _reset_let_params(self):
+        """ Set LET modules prev_scale/foll_scale to None"""
         self.prev_scale = None
-        self.prev_prep_fn = torch.nn.Identity()
         self.foll_scale = None
-        self.foll_prep_fn = torch.nn.Identity()
 
-    # pylint: disable=missing-function-docstring
     def get_let_params(self):
+        """ Query LET modules prev_scale/foll_scale """
         let_params = {
             "prev_scale": self.prev_scale,
-            "prev_prep_fn": self.prev_prep_fn,
             "foll_scale": self.foll_scale,
-            "foll_prep_fn": self.foll_prep_fn,
         }
         return let_params
 
-    # TODO ananmukh: scale is meant to be a nn.parameter shared between 2 nn.modules. Need to check
-    # during end-to-end integration whats the best way to initialize scale
-    # pylint: disable=missing-function-docstring, attribute-defined-outside-init
-    def register_let_params(self, prev_scale = None, foll_scale = None):
+    # pylint: disable=attribute-defined-outside-init
+    def register_let_params(self, prev_scale = None, foll_scale = None, num_repeats = 1):
+        """ Set prev_scale and foll_sclae to LET pairs. """
         if prev_scale is not None:
             self.prev_scale = prev_scale
         if foll_scale is not None:
             self.foll_scale = foll_scale
+        # For some pairs prev_layer out channel != foll_layer in channel. In such cases assert that
+        # foll_scale has the correct shape in let_modules. We will repeat the prev_scale num_repeats times to match the dimension.
+        # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
+        self.num_repeats = num_repeats
 
     def fold_let_params(self):
-        '''
-        Call (usually at the end) to fold the scales into the model params
-        '''
+        """ Call (usually at the end) to fold the scales into the model params. """
         self._fold()
         self._reset_let_params()
 
@@ -134,9 +127,24 @@ class LETModule():
     def _get_source_quant_module(self):
         assert False, "Override in child class"
 
-# pylint: disable=too-many-ancestors, missing-class-docstring
-@QuantizationMixin.implements(QuantizedLinear)
+    @staticmethod
+    def get_let_module(mdl):
+        """ Return corresponding LETQuantized module for different Quantized modules """
+        if isinstance(mdl, QuantizedLinear):
+            return LETQuantizedLinear(mdl)
+        if isinstance(mdl, QuantizedLayerNorm):
+            return LETQuantizedLayerNorm(mdl)
+        if isinstance(mdl, QuantizedConv2d):
+            return LETQuantizedConv2d(mdl)
+        if isinstance(mdl, QuantizedLlamaRMSNorm):
+            return LETQuantizedLlamaRMSNorm(mdl)
+        if isinstance(mdl, QuantizedGemmaNorm):
+            return LETQuantizedGemmaNorm(mdl)
+        assert False, "Let Quantized module is not implemented"
+
+# pylint: disable=too-many-ancestors
 class LETQuantizedLinear(QuantizedLinear, LETModule):
+    """ LET module implementation for QuantizedLinear """
     def __init__(self, module:QuantizationMixin):
         # TODO pass in all params to ctor
         super().__init__(module.weight.shape[1], module.weight.shape[0], bias=module.bias is not None)
@@ -144,19 +152,23 @@ class LETQuantizedLinear(QuantizedLinear, LETModule):
         self.load_state_dict(module.state_dict())
 
     def _update_parameters(self):
+        """
+        Update the LETQuantizedLinear params with prev_scale/foll_scale
+        """
         weight = self.weight
         bias = self.bias
 
-        #TODO: ananmukh check if unsqueeze is needed during end-to-end integration
-        # currently system's team has a non scaler activation scale for a linear-linear pair
         if self.prev_scale is not None:
-            prev_scale = self.prev_prep_fn(self.prev_scale)
+            prev_scale = self.prev_scale
             if bias is not None:
                 bias = bias / prev_scale
             weight = weight / prev_scale.reshape(-1, 1)
 
         if self.foll_scale is not None:
-            foll_scale = self.foll_prep_fn(self.foll_scale)
+            # For some pairs prev_layer out channel != foll_layer in channel. In such cases assert that
+            # foll_scale has the correct shape in let_modules. We will repeat the prev_scale num_repeats times to match the dimension.
+            # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
+            foll_scale = torch.repeat_interleave(self.foll_scale, dim=0, repeats=self.num_repeats)
             weight = weight * foll_scale
 
         return {'weight': weight, 'bias': bias}
@@ -168,14 +180,13 @@ class LETQuantizedLinear(QuantizedLinear, LETModule):
         params = self._update_parameters()
         with patch_attr(self, 'weight', params['weight']):
             with patch_attr(self, 'bias', params['bias']):
-                # TODO: ananmukh remove compute_param_encodings() from here
-                # call it explicitly in training loop in a later PR
-                super().compute_param_encodings()
+                # No need to call compute_encodings here as we don't want to calibrate
+                # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
-# pylint: disable=too-many-ancestors, missing-class-docstring
-@QuantizationMixin.implements(QuantizedConv2d)
+# pylint: disable=too-many-ancestors
 class LETQuantizedConv2d(QuantizedConv2d, LETModule):
+    """ LET module implementation for QuantizedConv2d """
     def __init__(self, module:QuantizationMixin):
         # TODO pass in all params to ctor
         super().__init__(module.weight.shape[1], module.weight.shape[0], module.kernel_size, module.stride, module.padding, bias=module.bias is not None)
@@ -183,19 +194,20 @@ class LETQuantizedConv2d(QuantizedConv2d, LETModule):
         self.load_state_dict(module.state_dict())
 
     def _update_parameters(self):
+        """
+        Update the LETQuantizedConv2d params with prev_scale/foll_scale
+        """
         weight = self.weight
         bias = self.bias
 
-        #TODO: ananmukh check if unsqueeze is needed during end-to-end interation
-        # currently system's team has a non scaler sctivation scale for a linear-linear pair
         if self.prev_scale is not None:
-            prev_scale = self.prev_prep_fn(self.prev_scale)
+            prev_scale = self.prev_scale
             if bias is not None:
                 bias = bias / prev_scale
             weight = weight / prev_scale.reshape(-1, 1, 1, 1)
 
         if self.foll_scale is not None:
-            foll_scale = self.foll_prep_fn(self.foll_scale)
+            foll_scale = self.foll_scale
             weight = weight * foll_scale.reshape(1, -1, 1, 1)
 
         return {'weight': weight, 'bias': bias}
@@ -207,24 +219,26 @@ class LETQuantizedConv2d(QuantizedConv2d, LETModule):
         params = self._update_parameters()
         with patch_attr(self, 'weight', params['weight']):
             with patch_attr(self, 'bias', params['bias']):
-                # TODO: ananmukh remove compute_param_encodings() from here
-                # call it explicitly in training loop in a later PR
-                super().compute_param_encodings()
+                # No need to call compute_encodings here as we don't want to calibrate
+                # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
-# pylint: disable=too-many-ancestors, missing-class-docstring
-@QuantizationMixin.implements(QuantizedLayerNorm)
+# pylint: disable=too-many-ancestors
 class LETQuantizedLayerNorm(QuantizedLayerNorm, LETModule):
+    """ LET module implementation for QuantizedLayerNorm """
     def __init__(self, module:QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
 
     def _update_parameters(self):
+        """
+        Update the LETQuantizedLayerNorm params with prev_scale/foll_scale
+        """
         weight = self.weight
         bias = self.bias
         if self.prev_scale is not None:
-            prev_scale = self.prev_prep_fn(self.prev_scale)
+            prev_scale = self.prev_scale
             weight = weight / prev_scale
             if bias is not None:
                 bias = bias / prev_scale
@@ -235,24 +249,26 @@ class LETQuantizedLayerNorm(QuantizedLayerNorm, LETModule):
         params = self._update_parameters()
         with patch_attr(self, 'weight', params['weight']):
             with patch_attr(self, 'bias', params['bias']):
-                # TODO: ananmukh remove compute_param_encodings() from here
-                # call it explicitly in training loop in a later PR
-                super().compute_param_encodings()
+                # No need to call compute_encodings here as we don't want to calibrate
+                # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
-# pylint: disable=missing-class-docstring
-QuantizedLlamaRMSNorm = QuantizationMixin.implements(LlamaRMSNorm)(QuantizedLlamaRMSNorm)
-@QuantizationMixin.implements(QuantizedLlamaRMSNorm)
+# pylint: disable=too-many-ancestors
 class LETQuantizedLlamaRMSNorm(QuantizedLlamaRMSNorm, LETModule):
+    """ LET module implementation for QuantizedLlamaRMSNorm """
     def __init__(self, module:QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
+        self.variance_epsilon = module.variance_epsilon
         self.load_state_dict(module.state_dict())
 
     def _update_parameters(self):
+        """
+        Update the LETQuantizedLlamaRMSNorm params with prev_scale/foll_scale
+        """
         weight = self.weight
         if self.prev_scale is not None:
-            prev_scale = self.prev_prep_fn(self.prev_scale)
+            prev_scale = self.prev_scale
             weight = weight / prev_scale
 
         return {'weight': weight}
@@ -263,25 +279,26 @@ class LETQuantizedLlamaRMSNorm(QuantizedLlamaRMSNorm, LETModule):
     def __call__(self, *args, **kwargs):
         params = self._update_parameters()
         with patch_attr(self, 'weight', params['weight']):
-            # TODO: ananmukh remove compute_param_encodings() from here
-            # call it explicitly in training loop in a later PR
-            super().compute_param_encodings()
+            # No need to call compute_encodings here as we don't want to calibrate
+            # min-max when doing LET blockwise training.
             return super().__call__(*args, **kwargs)
 
-# pylint: disable=missing-class-docstring
-QuantizedGemmaNorm = QuantizationMixin.implements(GemmaRMSNorm)(QuantizedGemmaNorm)
-@QuantizationMixin.implements(QuantizedGemmaNorm)
+# pylint: disable=too-many-ancestors
 class LETQuantizedGemmaNorm(QuantizedGemmaNorm, LETModule):
+    """ LET module implementation for QuantizedGemmaNorm """
     def __init__(self, module:QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
 
     def _update_parameters(self):
+        """
+        Update the LETQuantizedGemmaNorm params with prev_scale/foll_scale
+        """
         weight = self.weight
         bias = self.bias
         if self.prev_scale is not None:
-            prev_scale = self.prev_prep_fn(self.prev_scale)
+            prev_scale = self.prev_scale
             weight = weight / prev_scale
             bias = bias / prev_scale
 
@@ -294,7 +311,8 @@ class LETQuantizedGemmaNorm(QuantizedGemmaNorm, LETModule):
         params = self._update_parameters()
         with patch_attr(self, 'weight', params['weight']):
             with patch_attr(self, 'bias', params['bias']):
-                super().compute_param_encodings()
+                # No need to call compute_encodings here as we don't want to calibrate
+                # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
     def _fold(self):

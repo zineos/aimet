@@ -37,61 +37,31 @@
 """Test Let modules"""
 import pytest
 import torch
-
-from aimet_torch.omniquant.let_modules import (
-    LETQuantizedLinear,
-    LETQuantizedLlamaRMSNorm,
-    LETQuantizedLayerNorm,
-    LETQuantizedConv2d,
-    LETQuantizedGemmaNorm,
-)
+import copy
+from torch import nn
 
 from aimet_torch.omniquant.module_defns import (
     GemmaRMSNorm,
     LlamaRMSNorm,
-    QuantizedLlamaRMSNorm,
-    QuantizedGemmaNorm,
 )
 
-from aimet_torch.v2.nn import (
-    QuantizedLinear,
-    QuantizedLayerNorm,
-    QuantizedConv2d,
+from aimet_torch.omniquant._utils import _convert_sim_to_letsim
+from aimet_torch.omniquant.let_modules import (
+    LETQuantizedLlamaRMSNorm,
+    LETQuantizedGemmaNorm,
 )
 
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.quantsim import QuantizationSimModel
-from torch import nn
 
-# TODO: ananmukh add doc string comments
 
-# pylint: disable=missing-function-docstring
-## TODO replace with actual map
-def get_let_module(mdl):
-    if isinstance(mdl, QuantizedLinear):
-        return LETQuantizedLinear
-    if isinstance(mdl, QuantizedLayerNorm):
-        return LETQuantizedLayerNorm
-    if isinstance(mdl, QuantizedConv2d):
-        return LETQuantizedConv2d
-    if isinstance(mdl, QuantizedLlamaRMSNorm):
-        return LETQuantizedLlamaRMSNorm
-    if isinstance(mdl, QuantizedGemmaNorm):
-        return LETQuantizedGemmaNorm
-    assert False, "Let Quantized module is not implemented"
-
-# pylint: disable=missing-function-docstring
-def covert_sim_to_letsim(sim):
-    for idx, mdl in enumerate(sim.model):
-        sim.model[idx] = get_let_module(mdl)(mdl)
-    return sim
-
-# pylint: disable=missing-function-docstring
-def fold_test(sim):
-    # Test fold
-    # On folding the LET scale to weights we update the original model weights
-    # l1.w = w/s
-    # l2.w = w*s
+def fold_test(sim: QuantizationSimModel):
+    """
+    Test fold
+    On folding the LET scale to weights we update the original model weights
+    l1.w = w/s
+    l2.w = w*s
+    """
     for _, module in enumerate(sim.model):
         let_params = module.get_let_params()
         orig_wt = module.weight.cpu().detach().clone()
@@ -103,8 +73,11 @@ def fold_test(sim):
             factor = let_params['prev_scale']
         assert torch.equal(orig_wt, scale_folded_wts * factor)
 
-# pylint: disable=missing-function-docstring
 def get_conv_conv(bias):
+    """
+    2 layer sequential model for conv conv pair test
+    """
+
     def conv_conv():
         input_dim = 10
         hidden_dim = 20
@@ -117,8 +90,10 @@ def get_conv_conv(bias):
         return model, inp
     return conv_conv
 
-# pylint: disable=missing-function-docstring
 def get_lin_lin(bias):
+    """
+    2 layer sequential model for linear linear pair test
+    """
     def lin_lin():
         input_dim = 10
         hidden_dim = 20
@@ -131,8 +106,10 @@ def get_lin_lin(bias):
         return model, inp
     return lin_lin
 
-# pylint: disable=missing-function-docstring
 def get_norm_lin(NormLayer):
+    """
+    2 layer sequential model for Norm and Linear pair test
+    """
     def norm_lin():
         input_dim = 3
         output_dim = 2
@@ -145,26 +122,81 @@ def get_norm_lin(NormLayer):
         return model,inp
     return norm_lin
 
-# pylint: disable=missing-function-docstring
+def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
+    """
+    :param sim: QuantizationSimModel 
+    :param prev_scale: prev_scale set to the QuantizationSimModel model with let_quantized modules
+    :param foll_scale: foll_scale set to the QuantizationSimModel model with let_quantized modules
+    This sim let-quantized model has prev and foll scale set to None
+    
+    Apply prev_scale and foll_scale to sim manually
+    Clamp the scale multiplied weight to the param_quantizers max already recorded by compute encodings
+    Copy the scale multiplied wts and bias to sim model
+
+    compute_encodings is not computed for weight update during the LET blockwise training,
+    So the min, max stays the same during the training. 
+    Clamping the scale multiplied weight to the recorded max will reflect a similiar behaviour that is expected in omniquant
+    """
+    assert len(sim.model) == 2, "Only 2 layer sequential model is supported for LETModule unit test"
+
+    for idx, module in enumerate(sim.model):
+        wt = module.weight
+        wt_s = wt * ((1/prev_scale) if idx == 0 else foll_scale)
+        wt_s = torch.clamp(wt_s, max =module.param_quantizers['weight'].max)
+        with torch.no_grad():
+            sim.model[idx].weight.copy_(wt_s)
+
+        if isinstance(module, LETQuantizedLlamaRMSNorm) or module.bias is None:
+            continue
+
+        bias_s = module.bias
+        if idx == 0:
+            bias_s = bias_s*(1/prev_scale)
+
+        with torch.no_grad():
+            if isinstance(module, LETQuantizedGemmaNorm): # Gemma's bias is an integer, not a tensor
+                module.bias = bias_s
+            else:
+                module.bias.copy_(bias_s)
+
 @pytest.mark.parametrize("inp_fn", [get_conv_conv(True), get_conv_conv(False), get_lin_lin(True), get_lin_lin(False), \
                                     get_norm_lin(GemmaRMSNorm), get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
 def test_pair(inp_fn):
+    """
+    Test the LET modules and LET pairs:
+        1. Let modules are getting replaced as expected in QuantizationSimModel
+        2. Scales are applied correctly LET modules 
+        3. Scales are folded back to LET modules
+    """
     model, inp = inp_fn()
 
     out_fp = model(inp)
 
     sim = QuantizationSimModel(model, inp, config_file="htp_v81")
+
+    # Disable activation quantizers
+    #pylint: disable=protected-access
+    for _, module in sim.model.named_modules():
+        if isinstance(module, QuantizationMixin):
+            module._remove_activation_quantizers()
+
     sim.compute_encodings(lambda model, _: model(inp), None)
     sim_out = sim.model(inp) #Quantized toy model
 
-    sim = covert_sim_to_letsim(sim)
+    # Replace the quantized modules with let_quantized modules
+    _convert_sim_to_letsim(sim)
 
-    # forward pass through toy model with let module
+    #forward pass through toy model with let_quantized module
     sim_out_with_no_scale = sim.model(inp)
 
     # sim_out_with_no_scale  and sim_out is expected to be similar.
     # No scale has been set, hence no modifications to params
     assert torch.equal(sim_out, sim_out_with_no_scale)
+
+    # Copy of let_quantized model with no scale
+    # This is used as a reference to compare the output for a let-quantized model with
+    # non-zero prev and foll
+    ref_let_sim_model = copy.deepcopy(sim)
 
     # Setting different prev and foll scale to test if all params/quantizers are getting updated
     prev_scale = torch.nn.Parameter(torch.tensor([2], dtype = torch.float32))
@@ -186,11 +218,16 @@ def test_pair(inp_fn):
     sim.model[1].register_let_params(foll_scale = foll_scale)
     sim.compute_encodings(lambda model, _: model(inp), None)
     out_with_scale_2 = sim.model(inp)
-    # sim_out and out_with_scale_2 should be close enough
-    assert  torch.allclose(sim_out, out_with_scale_2, atol=1e-05)
+
+    # Reference model with updated wts and bias with prev_scale & foll_scale
+    update_ref_model(ref_let_sim_model, prev_scale, foll_scale)
+    ref_out = ref_let_sim_model.model(inp)
+
+    # Output of out_with_scale_2 and ref_out should match
+    assert torch.allclose(out_with_scale_2, ref_out, atol=1e-05)
 
     #pylint: disable=protected-access
-    #remove the qunatizers
+    #remove all qunatizers
     for _, module in sim.model.named_modules():
         if isinstance(module, QuantizationMixin):
             module._remove_all_quantizers()
