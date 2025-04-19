@@ -34,11 +34,11 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-# pylint: disable=redefined-builtin
+# pylint: disable=redefined-builtin, too-many-lines
 """ Affine quantizers """
 
 from itertools import chain, repeat
-from typing import Optional, List, Dict, Tuple, overload
+from typing import Dict, List, Optional, overload, Protocol, runtime_checkable, Tuple
 import contextlib
 import functools
 
@@ -69,11 +69,11 @@ __all__ = [
     'MinMaxQuantizer',
     'Quantize',
     'QuantizeDequantize',
+    'ScaleOffsetQuantizer',
 ]
 
 
-
-class AffineQuantizerBase(QuantizerBase, _GridMixin):
+class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many-instance-attributes
     """
     Base class for linear quantization modules.
 
@@ -159,8 +159,74 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             raise RuntimeError(f'Encoding analyzer of shape {self.encoding_analyzer.observer.shape} '
                                f'is incompatible with quantizer of shape {self.shape}.')
 
-        self.register_quantization_parameter('min', nn.Parameter(-torch.ones(self.shape)))
-        self.register_quantization_parameter('max', nn.Parameter(torch.ones(self.shape)))
+        self._reparametrize_to_min_max()
+
+    def _is_scale_offset_quantizer(self):
+        return "scale" in self._parameters and "offset" in self._parameters
+
+    def _is_min_max_quantizer(self):
+        return "min" in self._parameters and "max" in self._parameters
+
+    def __getattr__(self, name: str):
+        if (name in ("min", "max") and self._is_scale_offset_quantizer()) or \
+                (name in ("scale", "offset") and self._is_min_max_quantizer()):
+            param_names = "/".join(self._parameters.keys())
+            msg = (
+                f"'{type(self).__qualname__}' object has no attribute '{name}' "
+                f"because it's parametrized with {param_names}. "
+                f"To get '{name}' of this quantizer, use qtzr.get_{name}() instead. "
+                "To assign a new input range to this quantizer, use qtzr.set_range() instead"
+            )
+            raise AttributeError(msg)
+
+        return super().__getattr__(name)
+
+    def _reparametrize_to_scale_offset(self):
+        # pylint: disable=attribute-defined-outside-init
+        if self._is_scale_offset_quantizer():
+            return
+
+        is_initialized = self.is_initialized()
+
+        self.register_quantization_parameter("scale", nn.Parameter(torch.ones(self.shape)))
+        self.register_quantization_parameter(
+            "offset",
+            None if self.symmetric else
+            torch.nn.Parameter(
+                _get_symmetric_offset(self.qmin, self.qmax, self.shape, torch.float32, "cpu")
+            )
+        )
+
+        if self._is_min_max_quantizer():
+            min = self._parameters.pop("min")
+            max = self._parameters.pop("max")
+            self.requires_grad_(min.requires_grad or max.requires_grad)
+            # NOTE: Only follow the device, but NOT the dtype of min & max.
+            #       Scale & offset should be always kept in float32 for numerical stability
+            self.to(device=min.device, dtype=torch.float32)
+
+            if is_initialized:
+                self.set_range(min, max)
+
+    def _reparametrize_to_min_max(self):
+        # pylint: disable=attribute-defined-outside-init
+        if self._is_min_max_quantizer():
+            return
+
+        is_initialized = self.is_initialized()
+
+        self.register_quantization_parameter("min", nn.Parameter(-torch.ones(self.shape)))
+        self.register_quantization_parameter("max", nn.Parameter(torch.ones(self.shape)))
+
+        if self._is_scale_offset_quantizer():
+            scale = self._parameters.pop("scale")
+            offset = self._parameters.pop("offset")
+            self.requires_grad_(scale.requires_grad or getattr(offset, "requires_grad", False))
+            self.to(device=scale.device, dtype=scale.dtype)
+
+            if is_initialized:
+                min, max = _get_min_max(scale, offset, self.qmin, self.qmax)
+                self.set_range(min, max)
 
     def get_min(self, dtype=None) -> Optional[torch.Tensor]:
         """
@@ -190,7 +256,6 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             return None
         return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmax)
 
-
     def get_scale(self, dtype=None) -> Optional[torch.Tensor]:
         """
         Compute quantization scale to be used for forward pass.
@@ -206,9 +271,13 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             return None
 
         dtype = dtype or torch.float32
-        num_steps = self.qmax - self.qmin
 
-        scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
+        if self._is_scale_offset_quantizer():
+            scale = self.scale
+        else:
+            num_steps = self.qmax - self.qmin
+            scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
+
         return scale.to(dtype)
 
     def get_offset(self, dtype=None) -> Optional[torch.Tensor]:
@@ -226,12 +295,13 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             return None
 
         dtype = dtype or torch.float32
+        device = next(p.device for p in self.parameters())
 
         if self.symmetric:
-            offset = torch.full_like(self.min,
-                                     fill_value=-round((self.qmin + self.qmax) / 2),
-                                     requires_grad=False,
-                                     dtype=dtype)
+            offset = _get_symmetric_offset(self.qmin, self.qmax,
+                                           self.shape, dtype, device)
+        elif self._is_scale_offset_quantizer():
+            offset = ste_round(self.offset)
         else:
             offset = ste_round(self.min.to(dtype) / self.get_scale(dtype)) - self.qmin
 
@@ -242,9 +312,22 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
         """
         Set quantization parameters to the given min-max range
         """
-        with SafeGatheredParameters(self.parameters(recurse=False), modifier_rank=0):
-            self.min.copy_(min)
-            self.max.copy_(max)
+        if self._is_min_max_quantizer():
+            with SafeGatheredParameters(self.parameters(recurse=False), modifier_rank=0):
+                self.min.copy_(min)
+                self.max.copy_(max)
+        else:
+            # Compute scale/offset with float32 for numerical stability
+            scale, offset = _get_scale_offset(min.to(torch.float32),
+                                              max.to(torch.float32),
+                                              qmin=self.qmin,
+                                              qmax=self.qmax,
+                                              symmetric=self.symmetric)
+
+            with SafeGatheredParameters(self.parameters(recurse=False), modifier_rank=0):
+                self.scale.copy_(scale)
+                if not self.symmetric:
+                    self.offset.copy_(offset)
 
     def get_encodings(self) -> Optional[AffineEncoding]:
         """
@@ -328,7 +411,10 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
         """
         Indicates whether this quantizer uses symmetric quantization
         """
-        return self._symmetric
+        if self._is_min_max_quantizer():
+            return self._symmetric
+
+        return self.offset is None
 
     @symmetric.setter
     def symmetric(self, symmetric: bool):
@@ -337,7 +423,20 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
 
         :param symmetric: If True, use symmetric encodings. Else, use asymmetric encodings
         """
-        self._symmetric = symmetric
+        if self._is_min_max_quantizer():
+            self._symmetric = symmetric
+            return
+
+        if symmetric and not self.symmetric:
+            self.offset = None
+            return
+
+        if not symmetric and self.symmetric:
+            offset = _get_symmetric_offset(self.qmin, self.qmax,
+                                           self.shape,
+                                           self.scale.dtype,
+                                           self.scale.device)
+            self.offset = torch.nn.Parameter(offset, requires_grad=self.scale.requires_grad)
 
     @property
     @docstring(_GridMixin._get_bitwidth.__doc__)
@@ -392,9 +491,22 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
             dynamic_min = dynamic_min.to(dtype=dtype, device=device).expand(shape)
             dynamic_max = dynamic_max.to(dtype=dtype, device=device).expand(shape)
 
-            with patch_attr(self, 'min', dynamic_min),\
-                    patch_attr(self, 'max', dynamic_max):
-                return original_forward(input)
+            if self._is_min_max_quantizer():
+                with patch_attr(self, 'min', dynamic_min),\
+                        patch_attr(self, 'max', dynamic_max):
+                    ret = original_forward(input)
+            else:
+                # Compute scale/offset with float32 for numerical stability
+                dynamic_scale, dynamic_offset = _get_scale_offset(dynamic_min.to(torch.float32),
+                                                                  dynamic_max.to(torch.float32),
+                                                                  qmin=self.qmin,
+                                                                  qmax=self.qmax,
+                                                                  symmetric=self.symmetric)
+                with patch_attr(self, 'scale', dynamic_scale),\
+                        patch_attr(self, 'offset', dynamic_offset):
+                    ret = original_forward(input)
+
+            return ret
 
         self.encoding_analyzer.reset_stats()
 
@@ -421,13 +533,92 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):
         self.set_range(enc_min, enc_max)
 
 
-class MinMaxQuantizer(AffineQuantizerBase): # pylint: disable=abstract-method
-    """
-    Affine quantizer with min-max as trainable parameters
-    """
+def _get_symmetric_offset(qmin, qmax, shape, dtype, device):
+    return torch.full(shape,
+                      fill_value=-round((qmin + qmax) / 2),
+                      requires_grad=False,
+                      dtype=dtype,
+                      device=device)
+
+def _get_min_max(scale: torch.Tensor,
+                 offset: Optional[torch.Tensor],
+                 qmin: int, qmax: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    if offset is None:
+        offset = _get_symmetric_offset(qmin, qmax,
+                                       scale.shape, torch.int32, scale.device)
+
+    if not isinstance(scale, torch.Tensor):
+        scale = torch.tensor(scale, dtype=torch.float32)
+
+    if not isinstance(offset, torch.Tensor):
+        offset = torch.tensor(offset, dtype=torch.int32)
+
+    out_dtype = scale.dtype
+    scale = scale.to(torch.float32)
+    offset = offset.to(torch.int32)
+
+    min = scale * (offset + qmin)
+    max = scale * (offset + qmax)
+    return min.to(out_dtype), max.to(out_dtype)
 
 
-class Quantize(MinMaxQuantizer):
+def _get_scale_offset(min: torch.Tensor,
+                      max: torch.Tensor,
+                      qmin: int, qmax: int,
+                      symmetric: bool) -> Tuple[torch.Tensor, torch.Tensor]:
+    num_steps = qmax - qmin
+
+    if not isinstance(min, torch.Tensor):
+        min = torch.tensor(min, dtype=torch.float32)
+
+    if not isinstance(max, torch.Tensor):
+        max = torch.tensor(max, dtype=torch.float32)
+
+    out_dtype = min.dtype
+    min = min.to(torch.float32)
+    max = max.to(torch.float32)
+
+    scale = (max - min).div_(num_steps)
+
+    if symmetric:
+        offset = torch.full_like(min,
+                                 fill_value=-round((qmin + qmax) / 2),
+                                 requires_grad=False)
+    else:
+        offset = ste_round(min / scale) - qmin
+
+    return scale.to(out_dtype), offset.to(out_dtype)
+
+
+@runtime_checkable
+class MinMaxQuantizer(Protocol):
+    """
+    Affine quantizer protocol parametrized with min and max
+    """
+    min: torch.nn.Parameter
+    max: torch.nn.Parameter
+
+    shape: Tuple[int, ...]
+    qmin: int
+    qmax: int
+    symmetric: bool
+
+
+@runtime_checkable
+class ScaleOffsetQuantizer(Protocol):
+    """
+    Affine quantizer protocol parametrized with scale and offset
+    """
+    scale: torch.nn.Parameter
+    offset: Optional[torch.nn.Parameter]
+
+    shape: Tuple[int, ...]
+    qmin: int
+    qmax: int
+    symmetric: bool
+
+
+class Quantize(AffineQuantizerBase):
     r"""Applies quantization to the input.
 
     Precisely,
@@ -545,7 +736,7 @@ class Quantize(MinMaxQuantizer):
         return output
 
 
-class QuantizeDequantize(MinMaxQuantizer):
+class QuantizeDequantize(AffineQuantizerBase):
     r"""Applies fake-quantization by quantizing and dequantizing the input.
 
     Precisely,
@@ -679,7 +870,7 @@ class QuantizeDequantize(MinMaxQuantizer):
         return output
 
 
-class Dequantize(MinMaxQuantizer): # pylint: disable=missing-class-docstring
+class Dequantize(AffineQuantizerBase): # pylint: disable=missing-class-docstring
     def forward(self, input):
         if not self.is_initialized():
             raise RuntimeError(

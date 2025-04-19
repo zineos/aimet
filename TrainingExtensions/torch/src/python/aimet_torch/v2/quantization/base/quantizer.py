@@ -131,15 +131,15 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
         Create quantizer object from encoding object
         """
 
-    def register_quantization_parameter(self, name: str, param: nn.Parameter):
+    def register_quantization_parameter(self, name: str, param: Optional[nn.Parameter]):
         """
         Register quantization parameter.
         """
         # pylint: disable=protected-access
 
         self.register_parameter(name, param)
-        param = getattr(self, name)
-        self._initial_parameters[name] = (weakref.ref(param), param._version)
+        if param is not None:
+            self._initial_parameters[name] = (weakref.ref(param), param._version)
 
     def is_initialized(self) -> bool:
         """
