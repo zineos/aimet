@@ -236,7 +236,8 @@ class QuantizationSimModel:
         self._op_to_supported_kernel = quantsim_configurator.get_op_to_supported_kernels()
         self.quant_args = extract_global_quantizer_args(quant_scheme, quantsim_configurator)
         self._apply_exception_rules()
-        self._tie_quantizers()
+        if _tie_qtzrs:
+            self._tie_quantizers_for_op_types(op_types_to_tie_qtzrs)
 
         # Build onnxruntime inference session
         self.session = QuantizationSimModel.build_session(self.model.model, self.providers,
@@ -1026,45 +1027,69 @@ class QuantizationSimModel:
 
         return param_quantizers, activation_quantizers
 
-    def _tie_quantizers(self):
+    def _rebuild_session(self):
+        """
+        Rebuilds `self.session` object to reflect any changes in the source model.
+        """
+        self.session = self.build_session(self.model.model, self.providers,
+                                          user_onnx_libs=self._user_onnx_libs, path=self._path)
+
+    def set_quantizers(self, quantizer_dict: Dict[str, QcQuantizeOp]):
+        """
+        Updates `self.qc_quantize_op_dict` with the entries in `quantizer_dict`
+
+        :param quantizer_dict: Dictionary mapping tensor names to QcQuantizeOp objects
+        """
+        for tensor, quantizer in quantizer_dict.items():
+            self._set_quantizer(tensor, quantizer)
+
+        self._rebuild_session()
+
+    def _set_quantizer(self, tensor_name: str, quantizer: QcQuantizeOp):
+        """
+        Places `quantizer` at `tensor_name` and updates the onnx graph.
+
+        :param tensor_name: Name of the tensor at which to place the source quantizer
+        :param quantizer: Quantizer to place at tensor_name
+        """
+        if not isinstance(quantizer, QcQuantizeOp):
+            raise TypeError(f"Quantizer object {quantizer} is not of type {QcQuantizeOp.__qualname__}")
+        if tensor_name not in self.qc_quantize_op_dict:
+            raise ValueError(f"Tensor {tensor_name} is not an input to a quantize node")
+
+        self._set_quant_info(tensor_name, quantizer)
+        self.qc_quantize_op_dict[tensor_name] = quantizer
+
+    def _set_quant_info(self, dst_qtzr_tensor_name: str, src_qtzr: QcQuantizeOp):
+        """
+        Set quant_info attribute (pointer to the libquant_info object)
+
+        :param dst_qtzr_tensor_name: destination quantizer node name in graph.
+        :param src_qtzr: source quantizer.
+        """
+        for node in self.model.graph().node:
+            if node.op_type == 'QcQuantizeOp' and node.input[0] == dst_qtzr_tensor_name:
+                for atr in node.attribute:
+                    if atr.name == "quant_info":
+                        atr.i = libpymo.PtrToInt64(src_qtzr.quant_info)
+                        # Session is now invalid and must be rebuilt
+                        self.session = None
+                        return
+
+        raise RuntimeError(f"Did not find quantizer for tensor {dst_qtzr_tensor_name}")
+
+    def _tie_quantizers_for_op_types(self, op_types_to_tie: List[str]):
         """
         Tie the input and output quantizers for given op types.
+
+        :param op_types_to_tie: List of onnx ops for which to tie quantizers
         """
-        if not _tie_qtzrs:
-            return
 
         cg = self.connected_graph
 
-        def _set_quant_info(dst_qtzr_node_name: str, src_qtzr: QcQuantizeOp):
-            """
-            Set quant_info attribute (pointer to the libquant_info object)
-
-            :param dst_qtzr_node_name: destination quantizer node name in graph.
-            :param src_qtzr: source quantizer.
-            """
-            for node in self.model.graph().node:
-                if node.op_type == 'QcQuantizeOp' and node.input[0] == dst_qtzr_node_name:
-                    for atr in node.attribute:
-                        if atr.name == "quant_info":
-                            atr.i = libpymo.PtrToInt64(src_qtzr.quant_info)
-                            return
-
-            raise RuntimeError(f"Did not find quantizer for tensor {dst_qtzr_node_name}")
-
-        def _set_qtzr(tensor_name: str, src_qtzr: QcQuantizeOp):
-            """
-            Set the dst quantizer by src quantizer and update quant_info attribute (pointer to the libquant_info object)
-             in the graph node.
-
-            :param tensor_name: destination of quantizer.
-            :param src_qtzr: source quantizer
-            """
-            self.qc_quantize_op_dict[tensor_name] = src_qtzr
-            _set_quant_info(tensor_name, src_qtzr)
-
         def _set_src_qtzr(x: Product, src_qtzr):
             if x.name in self.qc_quantize_op_dict:
-                _set_qtzr(x.name, src_qtzr)
+                self._set_quantizer(x.name, src_qtzr)
 
             else:
                 producer = x.producer
@@ -1076,22 +1101,25 @@ class QuantizationSimModel:
                     _set_src_qtzr(producer.inputs[0], src_qtzr=src_qtzr)
 
         for op in reversed(cg.ordered_ops):
-            if op.type not in op_types_to_tie_qtzrs:
+            if op.type not in op_types_to_tie:
                 continue
 
-            _, out_qtzr, __ = self.get_op_quantizers(op)
-
-            if not out_qtzr:
+            if not op.outputs:
                 continue
 
-            if len(out_qtzr) != 1:
+            output_name = op.outputs[0].name
+
+            if output_name not in self.qc_quantize_op_dict:
+                continue
+
+            if len(op.outputs) != 1:
                 msg = 'Encoding propagation is only supported for ops with exactly ' \
-                      f'1 output quantizer, but found {len(out_qtzr)} ' \
+                      f'1 output quantizer, but found {len(op.outputs)} ' \
                       'output quantizers'
                 raise RuntimeError(msg)
 
             for inp in op.inputs:
-                _set_src_qtzr(inp, src_qtzr=out_qtzr[0])
+                _set_src_qtzr(inp, src_qtzr=self.qc_quantize_op_dict[output_name])
 
     def _to_onnx_qdq(self) -> onnx.ModelProto:
         """

@@ -1881,6 +1881,9 @@ class TestEncodingPropagation:
         with _apply_constraints(True):
             sim = QuantizationSimModel(model)
 
+        with pytest.raises(ValueError):
+            sim.set_quantizers({"out_shape": sim.qc_quantize_op_dict["model_input"]})
+
     def test_gather_concat(self):
         model = models_for_tests.gather_concat_model()
         with _apply_constraints(True):
@@ -1895,6 +1898,46 @@ class TestEncodingPropagation:
         assert not sim.qc_quantize_op_dict["z"].get_encodings()[0].delta == concat_out_scale
         # Encoding should not propagate through Mul
         assert not sim.qc_quantize_op_dict["x"].get_encodings()[0].delta == concat_out_scale
+
+    def test_set_quantizers(self):
+        model = models_for_tests.gather_concat_model()
+        sim = QuantizationSimModel(model)
+
+        assert sim.qc_quantize_op_dict["x"] is not sim.qc_quantize_op_dict["out"]
+        assert sim.qc_quantize_op_dict["y"] is not sim.qc_quantize_op_dict["out"]
+
+        """
+        When: Tie quantizers for two tensors together
+        Then: sim.qc_quantize_op_dict points to the same object for both tensors
+        """
+        quantizer = sim.qc_quantize_op_dict["out"]
+        sim.set_quantizers({"x": quantizer, "y": quantizer})
+
+        assert sim.qc_quantize_op_dict["x"] is sim.qc_quantize_op_dict["out"]
+        assert sim.qc_quantize_op_dict["y"] is sim.qc_quantize_op_dict["out"]
+
+        """
+        When: An tensor name passed to sim.set_quantizers does not exist in sim.qc_quantize_op_dict
+        Then: raise ValueError
+        """
+        with pytest.raises(ValueError):
+            sim.set_quantizers({"z_int": quantizer})
+        with pytest.raises(ValueError):
+            sim.set_quantizers({"x_updated": quantizer})
+
+        """
+        When: quantizer is not of type QcQuantizeOp
+        Then: raise TypeError
+        """
+        with pytest.raises(TypeError):
+            sim.set_quantizers({"out": "x"})
+        
+        quantizer.set_bitwidth(4)
+        sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(model)))
+
+        out_delta = sim.qc_quantize_op_dict["out"].get_encodings()[0].delta
+        assert sim.qc_quantize_op_dict["x"].get_encodings()[0].delta == out_delta
+        assert sim.qc_quantize_op_dict["y"].get_encodings()[0].delta == out_delta
 
     def test_clamp_activation_encodings(self):
         model = models_for_tests.matmul_add_model()
