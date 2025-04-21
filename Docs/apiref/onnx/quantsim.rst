@@ -13,6 +13,8 @@ aimet_onnx.quantsim
 .. autoclass:: aimet_onnx.QuantizationSimModel
    :members: compute_encodings, export
 
+.. autofunction:: aimet_onnx.compute_encodings
+
 **Quant Scheme Enum**
 
 .. autoclass:: aimet_common.defs.QuantScheme

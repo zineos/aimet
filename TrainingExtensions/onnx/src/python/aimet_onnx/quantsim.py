@@ -121,8 +121,19 @@ class _NOT_SPECIFIED:
 
 @contextlib.contextmanager
 def compute_encodings(sim: "QuantizationSimModel"):
-    """
+    r"""
     Computes encodings for all quantizers in the model.
+
+    Under this context manager, :class:`QuantizationSimModel` will
+    observe all inputs that run through the model to calibrate
+    the quantization encoding of each quantizer.
+
+    Example:
+
+        >>> sim = QuantizationSimModel(...)
+        >>> with compute_encodings(sim):
+        ...     for input in dataset:
+        ...         _ = sim.session.run(None, {"input": input})
     """
     for op_name, qc_op in sim.qc_quantize_op_dict.items():
         qc_op.reset_encoding_stats()
