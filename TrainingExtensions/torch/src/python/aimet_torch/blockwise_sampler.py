@@ -46,7 +46,7 @@ from typing import List, Union, Tuple, Generator, Callable
 import torch
 from torch.utils.data import DataLoader
 
-from aimet_torch.v2.utils import default_forward_fn
+from aimet_torch.v2.utils import default_forward_fn, patch_attr
 from aimet_torch.utils import change_tensor_device_placement
 from aimet_torch import QuantizationSimModel, utils
 
@@ -68,7 +68,7 @@ def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=N
         if isinstance(inputs, sys.modules['transformers'].cache_utils.Cache):
             return inputs
         if isinstance(inputs, (tuple, list, dict)):
-            recursive_results = (find_cache(inp) for inp in inputs) if isinstance(inputs, dict) else (find_cache(inp) for inp in inputs)
+            recursive_results = (find_cache(inp) for inp in inputs.values()) if isinstance(inputs, dict) else (find_cache(inp) for inp in inputs)
             try:
                 return next(item for item in recursive_results if item is not None)
             except StopIteration:
@@ -134,18 +134,15 @@ class BlockwiseSampler:
                 self.kwargs = change_tensor_and_cache_device_placement(self.kwargs, device)
 
             def __deepcopy__(self, memo):
-                orig_deepcopy = torch.Tensor.__deepcopy__
-                torch.Tensor.__deepcopy__ = lambda self, memo: self.detach().clone()
-                result = InputHolder(deepcopy(self.args), deepcopy(self.kwargs))
-                torch.Tensor.__deepcopy__ = orig_deepcopy
-                return result
+                with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
+                    return InputHolder(deepcopy(self.args), deepcopy(self.kwargs))
 
         class StopForwardExceptionWithInput(utils.StopForwardException):
             """Exception raised in order to stop forward execution through the model. Holds module input data."""
             def __init__(self, captured_input):
                 self.captured_input = captured_input
 
-        def hook_fn(module, args, kwargs):
+        def hook_fn(_, args, kwargs):
             raise StopForwardExceptionWithInput(deepcopy(InputHolder(args, kwargs)))
 
         try:
@@ -160,7 +157,7 @@ class BlockwiseSampler:
 
             yield next_block_input.args, next_block_input.kwargs
 
-        for block in self.blocks:
+        for block in self.blocks[:-1]:
             next_block_input.to(utils.get_device(block))
             next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
             next_block_input.to("cpu")
@@ -171,12 +168,14 @@ class BlockwiseSampler:
             yield next_block_input.args, next_block_input.kwargs
 
 
-    def sample(self, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
+    def sample(self, keep_unused_blocks_on_cpu:bool=True, device=None, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
         """
         Main generator function for blockwise sampler. Each loop of this generator yields a tuple of
         (block, [list of FP inputs to block], [list of QT inputs to block]) based on the list of blocks provided during
         initialization.
         """
+        device = device if device else utils.get_device(self.sim.model)
+
         fp_inferences = []
         qt_inferences = []
 
@@ -184,12 +183,18 @@ class BlockwiseSampler:
             fp_inferences.append(self.run_inference(sample))
             qt_inferences.append(self.run_inference(sample))
 
-        blocks = iter(self.blocks)
+        if keep_unused_blocks_on_cpu:
+            self.sim.model.to("cpu")
 
+        blocks = iter(self.blocks)
+        prev_block = self.blocks[0]
         with tqdm(total=len(self.blocks), desc=desc) as pbar:
             while True:
                 try:
                     block = next(blocks)
+
+                    if keep_unused_blocks_on_cpu:
+                        prev_block.to(device)
 
                     # Quantizers must be ENABLED when calculating quantized block inputs
                     qt_block_inputs = [next(block_input) for block_input in qt_inferences]
@@ -198,8 +203,16 @@ class BlockwiseSampler:
                     with utils.disable_all_quantizers(self.sim.model):
                         fp_block_inputs = [next(block_input) for block_input in fp_inferences]
 
+                    if keep_unused_blocks_on_cpu:
+                        prev_block.to("cpu")
+                        block.to(device)
+
                     yield block, fp_block_inputs, qt_block_inputs
 
                     pbar.update(1)
+                    prev_block = block
                 except StopIteration:
                     break
+
+            if keep_unused_blocks_on_cpu:
+                block.to("cpu")

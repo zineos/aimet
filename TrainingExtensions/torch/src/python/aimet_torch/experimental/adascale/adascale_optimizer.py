@@ -47,7 +47,7 @@ from transformers.models.llama.modeling_llama import LlamaModel, LlamaDecoderLay
 from aimet_common.utils import AimetLogger
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.nn import QuantizedLinear, compute_param_encodings
-from aimet_torch.v2.utils import default_forward_fn, remove_all_quantizers, remove_activation_quantizers
+from aimet_torch.v2.utils import default_forward_fn, remove_all_quantizers, remove_activation_quantizers, patch_attr
 from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
 from aimet_torch.blockwise_sampler import BlockwiseSampler, change_tensor_and_cache_device_placement
 from aimet_torch.utils import get_device
@@ -129,42 +129,47 @@ class AdaScale:
         # replace with adascale weight quantizer which introduces trainable params - beta, gamma, s2, s3
         device = get_device(qsim.model)
         cls._replace_with_adascale_weight_quantizers(adascale_blocks)
-        qsim.model.to(device)
+        qsim.model.to("cpu")
 
         sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, forward_fn)
         qsim.model.requires_grad_(False)
 
-        for block, fp_block_inputs, qt_block_inputs in sampler.sample(desc="AdaScale blocks processed"):
-            # only set adascale params to train mode
-            trainable_params = cls._get_adascale_trainable_params(block)
-            optimizer = torch.optim.Adam(trainable_params)
-            cls._set_requires_grad(trainable_params, True)
+        with remove_activation_quantizers(adascale_blocks):
+            for block, fp_block_inputs, qt_block_inputs in sampler.sample(keep_unused_blocks_on_cpu=True, device=device, desc="AdaScale blocks processed"):
 
-            fp_out = [] # save fp batchwise block outputs to use across epochs
-            for batch_idx in range(len(data_loader)):
-                with remove_all_quantizers(block):
-                    fp_args, fp_kwargs = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx]), device)
-                    fp_block_results = change_tensor_and_cache_device_placement(block(*fp_args, **fp_kwargs), "cpu")
-                    fp_out.append(fp_block_results)
-                    del fp_args, fp_kwargs
+                # only set adascale params to train mode
+                trainable_params = cls._get_adascale_trainable_params(block)
+                optimizer = torch.optim.Adam(trainable_params)
+                cls._set_requires_grad(trainable_params, True)
 
-            for epoch in range(num_epochs):
+                fp_out = [] # save fp batchwise block outputs to use across epochs
                 for batch_idx in range(len(data_loader)):
-                    with remove_activation_quantizers(block) and torch.set_grad_enabled(True):
-                        qt_args, qt_kwargs = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx]), device)
-                        quant_out = block(*qt_args, **qt_kwargs)
-                        del qt_args, qt_kwargs
+                    with remove_all_quantizers(block):
+                        with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
+                            fp_args, fp_kwargs = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx]), device)
+                        fp_block_results = change_tensor_and_cache_device_placement(block(*fp_args, **fp_kwargs), "cpu")
+                        fp_out.append(fp_block_results)
+                        del fp_args, fp_kwargs
 
-                        batch_fp_out = change_tensor_and_cache_device_placement(deepcopy(fp_out[batch_idx][0]), device)
-                        loss = loss_fn(quant_out[0], batch_fp_out)
+                for epoch in range(num_epochs):
+                    for batch_idx in range(len(data_loader)):
+                        with torch.set_grad_enabled(True):
+                            with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
+                                qt_args, qt_kwargs = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx]), device)
+                            quant_out = block(*qt_args, **qt_kwargs)
+                            del qt_args, qt_kwargs
 
-                        loss.backward()
-                        optimizer.step()
-                        optimizer.zero_grad()
+                            batch_fp_out = change_tensor_and_cache_device_placement(deepcopy(fp_out[batch_idx][0]), device)
+                            loss = loss_fn(quant_out[0], batch_fp_out)
 
-                        del quant_out, batch_fp_out, loss
+                            loss.backward()
+                            optimizer.step()
+                            optimizer.zero_grad()
 
-            cls._set_requires_grad(trainable_params, False)
+                            del quant_out, batch_fp_out, loss
+
+        del sampler
+
         cls._fold_weights_and_replace_with_qdq(adascale_blocks)
         qsim.model.to(device)
 
@@ -197,7 +202,8 @@ class AdaScale:
                                                                                   layer.weight.shape)
 
     @classmethod
-    def _fold_weights_and_replace_with_qdq(cls, adascale_blocks: List):
+    @torch.no_grad()
+    def _fold_weights_and_replace_with_qdq(cls, adascale_blocks: List, allow_overwrite: bool = False):
         """Replace adascale weight quantizers back with QDQ, and fold the params s2, s3 into weight"""
         for block in adascale_blocks:
             for layer in block.modules():
@@ -205,6 +211,8 @@ class AdaScale:
                     layer.weight.copy_(layer.weight / (torch.exp(layer.param_quantizers['weight'].s2) *
                                     torch.exp(layer.param_quantizers['weight'].s3)))
                     layer.param_quantizers['weight'] = layer.param_quantizers['weight'].get_qdq()
+                    layer.param_quantizers['weight'].allow_overwrite(allow_overwrite)
+                    layer.requires_grad_(False)
 
     @staticmethod
     def _get_adascale_trainable_params(non_leaf_module: torch.nn.Module) -> List:
