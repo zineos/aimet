@@ -124,7 +124,7 @@ def eval_func(model, args):
     # quantizer group 1
     input_quantizer = sim.qc_quantize_op_dict['input']
 
-    conv0_param_quantizer = list(sim.qc_quantize_op_dict.values())[0]
+    conv0_param_quantizer = sim.qc_quantize_op_dict[sim.connected_graph.ordered_ops[0].inputs[1].name]
     if input_quantizer.enabled and conv0_param_quantizer.enabled:
         quantizer_1 = (
             (input_quantizer.bitwidth, QuantizationDataType.int),
@@ -268,7 +268,8 @@ class TestAMPv1:
                                         results_dir, True, forward_pass_callback)
         algo.set_baseline()
 
-        candidate = algo.quantizer_groups[0].get_candidate(algo._module_name_dict)
+        input_group = [qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers][0]
+        candidate = input_group.get_candidate(algo._module_name_dict)
         # Check if quantizer group is set to maximum bitwidth
         assert algo.baseline_candidate == candidate
 
@@ -400,13 +401,14 @@ class TestAMPv1:
         algo.min_candidate = W16A8
         fp32_acc = 1.0
 
+        input_group = [qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers][0]
+        fc_group = [qg for qg in algo.quantizer_groups if "fc.weight" in qg.parameter_quantizers][0]
         accuracy_list = [
-            (algo.quantizer_groups[0], W8A16, phase1_eval_score_lookup_table[(W8A16, "fp32")], 100),
-            (algo.quantizer_groups[0], W16A8, phase1_eval_score_lookup_table[(W16A8, "fp32")], 90),
-            (algo.quantizer_groups[8], W8A16, phase1_eval_score_lookup_table[("fp32", W8A16)], 80),
-            (algo.quantizer_groups[8], W16A8, phase1_eval_score_lookup_table[("fp32", W16A8)], 70),
+            (input_group, W8A16, phase1_eval_score_lookup_table[(W8A16, "fp32")], 100),
+            (input_group, W16A8, phase1_eval_score_lookup_table[(W16A8, "fp32")], 90),
+            (fc_group, W8A16, phase1_eval_score_lookup_table[("fp32", W8A16)], 80),
+            (fc_group, W16A8, phase1_eval_score_lookup_table[("fp32", W16A8)], 70),
         ]
-
         return algo._create_pareto_front_list(allowed_accuracy_drop, accuracy_list, fp32_acc,
                                               algo.baseline_candidate, algo.min_candidate, search_algo, phase2_reverse = False)
 

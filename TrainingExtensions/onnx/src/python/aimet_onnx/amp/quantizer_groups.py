@@ -42,16 +42,14 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from aimet_common.connected_graph.operation import Op
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_output_ops
 
 from aimet_common.amp.utils import CANDIDATE_WITH_DTYPE
 
-from aimet_common.connected_graph.connectedgraph import get_ordered_ops
 from aimet_common.amp.quantizer_groups import QuantizerGroupBase, get_supported_candidates_for_quantizers, \
-    compute_baseline_candidate_options, find_valid_ops
+    compute_baseline_candidate_options
 from aimet_common.utils import AimetLogger
 
-from aimet_onnx.meta.connectedgraph import ConnectedGraph
+from aimet_onnx.meta.connectedgraph import ConnectedGraph, Product
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import QcQuantizeOp
 
@@ -163,208 +161,107 @@ op_types_to_ignore = ['Reshape', 'branch', 'Gather', 'Unsqueeze', 'Pad', 'Transp
 ops_not_to_traverse = ['Shape']
 
 
-def find_op_groups(connected_graph: ConnectedGraph) -> Dict:
+def find_quantizer_group(sim: QuantizationSimModel):
     """
-    Finds parent child groups based on following rules.
-    1) If there is a direct connection between two ops, op1 and op2, then op1 is parent of op2 and they form a group
-    2) If the input to an op (op1) is shared with another op (op2), the op producing the input (op0) is the parent,
-    and op1 and op2 are the children
+    Create quantizer groups following these rules:
 
-    :param connected_graph: Connected graph
-    :return: Dict of parent (key) and children (value) groups
+    1) All quantized tensors exist in exactly 1 quantizer group
+    2) A parameter's quantizer group contains all other tensors which feed into all ops that the parameter feeds into
+    3) Any quantizer group must not be decomposable into multiple quantizer groups that still follow rules 1 and 2
+
+    Note that two activations feeding into the same binary op would not fall into the same quantizer group using the above
+    definition, while an activation and parameter feeding into a binary op would be in the same group
     """
-    # Get ordered ops in Connected graph
-    ordered_ops = get_ordered_ops(connected_graph.starting_ops)
-    valid_ops = find_valid_ops(connected_graph, ops_not_to_traverse)
-
-    parent_child_op_groups = defaultdict(list)
-    map_for_skipped_ops = {}
-
-    for op in ordered_ops:
-        if op.dotted_name not in valid_ops or op.type in op_types_to_ignore:
-            continue
-        _find_parent_child_op_groups(op, parent_child_op_groups, map_for_skipped_ops)
-
-    return parent_child_op_groups
-
-
-def _find_parent_child_op_groups(op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict):
-    """
-    Finds op groups along the parent to child flow
-    :param op: Op
-    :param parent_child_op_groups: parent child op groups dict
-    :param map_for_skipped_ops: map to find first skipped parents of skipped ops
-    """
-    if op.outputs:
-        consumers = op.output_ops
-        for consumer in consumers:
-            dotted_name = op.dotted_name
-            if consumer.type in ops_not_to_traverse:
-                continue
-            if op.dotted_name in map_for_skipped_ops:
-                dotted_name = map_for_skipped_ops[op.dotted_name]
-
-            if consumer.type in op_types_to_ignore:
-                map_for_skipped_ops[consumer.dotted_name] = dotted_name
-                _find_parent_child_op_groups(consumer, parent_child_op_groups, map_for_skipped_ops)
-            else:
-                if consumer.dotted_name not in parent_child_op_groups[dotted_name]:
-                    parent_child_op_groups[dotted_name].append(consumer.dotted_name)
-        if not consumers and op.dotted_name in map_for_skipped_ops and \
-                map_for_skipped_ops[op.dotted_name] not in parent_child_op_groups:
-            parent_child_op_groups[map_for_skipped_ops[op.dotted_name]] = []
-    else:
-        dotted_name = op.dotted_name
-        parent_child_op_groups[dotted_name].append(None)
-
-
-def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[QuantizerGroup]]:
-    """
-    Finds quantizer groups in a quantization sim
-    :param sim: Quantization sim
-    :return: Dictionary of quantized op name to sim.quantizer_config object, List of quantizer groups
-    """
-    # Get connected graph from quantsim
-    connected_graph = sim.connected_graph
-
-    if connected_graph is None:
-        raise AssertionError('Aborting Auto Mixed Precision, connected graph needs to exist for Auto Mixed precision')
-
-    # Find parent to children mapping for connected graph ops
-    parent_child_op_groups = find_op_groups(connected_graph)
-
-    # Find mapping of quantized op name to quantizer info
-    op_name_to_quantizer_dict = _get_op_name_to_act_quantizer_name_dicts(sim)
-    op_to_param_dict = _get_op_to_param_name_dict(sim)
-
+    quantized_tensors = {name for name, quantizer in sim.qc_quantize_op_dict.items() if quantizer.enabled}
+    visited_tensors = set()
     quantizer_groups = []
 
-    _add_input_quantizer_group(op_to_param_dict, sim, quantizer_groups)
+    for tensor_name in quantized_tensors:
+        # Avoid re-creating duplicate quantizer groups
+        if tensor_name in visited_tensors:
+            continue
 
-    for parent, children in parent_child_op_groups.items():
-        activation_quantizers = []
-        parameter_quantizers = []
-        if parent in op_name_to_quantizer_dict:
-            activation_quantizers.append(op_name_to_quantizer_dict[parent])
-        for child in children:
-            if child and child in op_to_param_dict:
-                parameter_quantizers.append(op_to_param_dict[child])
-            child_cg_op = connected_graph.get_op_from_module_name(child)
-            for inp_prod in child_cg_op.inputs:
-                if inp_prod.is_const and inp_prod.name in sim.qc_quantize_op_dict and \
-                        sim.qc_quantize_op_dict[inp_prod.name].enabled:
-                    activation_quantizers.append(inp_prod.name)
-        if activation_quantizers or parameter_quantizers:
-            _add_quantizer_group(quantizer_groups, tuple(activation_quantizers), tuple(parameter_quantizers))
+        # Get all tensors belonging to the same group
+        # TODO: Derive op_types_to_ignore from config file
+        related_tensors = _get_related_quantizers(tensor_name,
+                                                  quantized_tensors,
+                                                  sim.connected_graph,
+                                                  op_types_to_ignore)
 
-    _add_output_quantizer_group(op_name_to_quantizer_dict, sim, quantizer_groups)
+        visited_tensors |= related_tensors
+
+        # Use ConnectedGraph to determine which tensors are parameters vs. activations
+        parameters = {tensor for tensor in related_tensors if sim.connected_graph.get_all_products()[tensor].is_parm}
+        activations = related_tensors - parameters
+
+        quantizer_group = QuantizerGroup(tuple(parameters), tuple(activations))
+        logger.debug('Quantizer Group added: %s', quantizer_group)
+        quantizer_groups.append(quantizer_group)
 
     return sim.qc_quantize_op_dict, quantizer_groups
 
 
-def _add_quantizer_group(quantizer_groups: List[QuantizerGroup], activation_quantizers: Tuple,
-                         parameter_quantizers: Tuple):
+def _get_related_quantizers(tensor: str, quantized_tensors: set[str], connected_graph: ConnectedGraph, pass_through_op_types: List[str]):
     """
-    Adds quantizer group to the quantizer groups list
-    :param quantizer_groups: List of Quantizer groups
-    :param activation_quantizers: Tuple of activation quantizers
-    :param parameter_quantizers: Tuple of parameter quantizers
+    Get all tensors for which the valid configurations depend on the configuration of `tensor`.
+
+    Dependant tensors are all inputs to all ops that consume `tensor`, and all tensors which depend on these tensors.
     """
-    quantizer_group = QuantizerGroup(parameter_quantizers=parameter_quantizers,
-                                     activation_quantizers=activation_quantizers)
-    if quantizer_group not in quantizer_groups:
-        quantizer_groups.append(quantizer_group)
-        logger.info('Quantizer Group added: %s', quantizer_group)
+    tensor_queue = [tensor]
+    related_quantized_tensors = set()
+    visited_ops = set()
+
+    while tensor_queue:
+        name = tensor_queue.pop(0)
+        product: Product = connected_graph.get_all_products()[name]
+
+        # Find all ops that consume this tensor
+        consumers = _get_tensor_consumers(product, pass_through_op_types)
+
+        # Ignore already-visited ops
+        consumers -= visited_ops
+        visited_ops |= consumers
+
+        # For any consumer which has a quantized parameter, add all inputs to the quantizer group
+        input_tensors = {name}
+        for op in consumers:
+            if any(name in quantized_tensors for name in op.parameters.keys()):
+                input_tensors |= set(t.name for t in _get_op_input_tensors(op, pass_through_op_types))
+
+        # Only look at quantized tensors which we haven't visited
+        input_tensors = (input_tensors & quantized_tensors) - related_quantized_tensors
+        related_quantized_tensors |= input_tensors
+
+        # Add newly found tensors to tensor_queue
+        for item in input_tensors:
+            if item not in tensor_queue:
+                tensor_queue.append(item)
+
+    return related_quantized_tensors
 
 
-def _add_input_quantizer_group(op_to_param_dict: Dict, sim: QuantizationSimModel, quantizer_groups: List):
-    """
-    Adds input's (of the model) quantizer group
-    :param op_to_param_dict: Key: op_name Value: Weight name associated
-    :param sim: Quantization Sim
-    :param quantizer_groups: Quantizer Groups List
-    """
-    conn_graph_ops = get_all_input_ops(sim.connected_graph)
-    act_and_param_quants = []
-    for input_op in conn_graph_ops:
-        parent_child_op_groups = {input_op.dotted_name: [input_op.dotted_name]}
-        if input_op.type in op_types_to_ignore:
-            parent_child_op_groups, map_for_skipped_ops = {input_op.dotted_name: []}, {}
-            _find_parent_child_op_groups(input_op, parent_child_op_groups, map_for_skipped_ops)
-        parameter_quantizers = []
-        activation_quantizers = []
-        for child_name in parent_child_op_groups[input_op.dotted_name]:
-            if child_name in op_to_param_dict:
-                parameter_quantizers.append(op_to_param_dict[child_name])
-        for input_product in input_op.inputs:
-            activation_quantizer = input_product.tensor_dict[input_op]
-            if isinstance(activation_quantizer, str) and \
-                    activation_quantizer in sim.activation_names and \
-                    sim.qc_quantize_op_dict[activation_quantizer].enabled:
-                activation_quantizers.append(input_product.tensor_dict[input_op])
-        if activation_quantizers or parameter_quantizers:
-            for quant in act_and_param_quants:
-                if set(quant[0]).intersection(set(activation_quantizers)) or \
-                        set(quant[1]).intersection(set(parameter_quantizers)):
-                    quant[0].extend(activation_quantizers)
-                    quant[1].extend(parameter_quantizers)
-                    break
-            else:
-                act_and_param_quants.append([activation_quantizers, parameter_quantizers])
+def _get_op_input_tensors(op: Op, pass_through_op_types: List[str]) -> List[Product]:
+    """ Get all input tensors to `op`, traversing through ops of type `pass_through_op_types` """
+    inputs = []
+    for inp in op.inputs:
+        # Pass through ops which don't have output quantizers if necessary
+        while inp.producer and inp.producer.type in pass_through_op_types:
+            inp = inp.producer.inputs[0]
+        inputs.append(inp)
 
-    for quant in act_and_param_quants:
-        _add_quantizer_group(quantizer_groups, tuple(set(quant[0])), tuple(set(quant[1])))
+    return inputs
 
 
-def _add_output_quantizer_group(op_name_to_quantizer_dict: Dict, sim: QuantizationSimModel, quantizer_groups: List):
-    """
-    Adds output's (of the model) quantizer group
-    :param op_name_to_quantizer_dict: Key: op_name Value: quantizer associated with op name
-    :param sim: Quantization Sim
-    :param quantizer_groups: Quantizer Groups List
-    """
-    conn_graph_ops = get_all_output_ops(sim.connected_graph)
-    for output_op in conn_graph_ops:
-        activation_quantizers = []
-        if output_op.dotted_name in op_name_to_quantizer_dict:
-            activation_quantizers.append(op_name_to_quantizer_dict[output_op.dotted_name])
-        if activation_quantizers:
-            _add_quantizer_group(quantizer_groups, tuple(activation_quantizers), ())
+def _get_tensor_consumers(product: Product, pass_through_op_types: List[str]):
+    """ Get all consumers of `product`, traversing through ops of type `pass_through_op_types` """
+    consumers = set()
+    for consumer in product.consumers:
+        if consumer.type in pass_through_op_types:
+            consumers |= {op for output in consumer.outputs for op in _get_tensor_consumers(output, pass_through_op_types)}
+        else:
+            consumers.add(consumer)
 
-
-def _get_op_to_param_name_dict(sim: QuantizationSimModel) -> Dict:
-    """
-    Creates the dict where param name (weight) is mapped to op's name
-    :param sim: Quantization Sim
-    """
-    op_to_param_dict = {}
-    conn_graph_ops = sim.connected_graph.get_all_ops()
-    for op in conn_graph_ops.values():
-        for param_name in op.parameters:
-            _, param_type = op.parameters[param_name]
-            if param_type == 'weight' and sim.qc_quantize_op_dict[param_name].enabled:
-                op_to_param_dict[op.dotted_name] = param_name
-
-    return op_to_param_dict
-
-
-def _get_op_name_to_act_quantizer_name_dicts(sim: QuantizationSimModel) -> Dict:
-    """
-    Creates the dict where param quantizers if enabled are mapped to their param_names and activation
-    quantizer if enabled is mapped to it's inputs name
-    :param sim: Quantization Sim
-    :return op_name_to_activation_quantizer_name_dict
-    """
-    op_name_to_activation_quantizer_name_dict = {}
-    for node in sim.model.model.graph.node:
-        if 'QcQuantizeOp' in node.name:
-            continue
-        for output_product in node.output:
-            if output_product in sim.activation_names:
-                activation_quantizer_op = sim.qc_quantize_op_dict[output_product]
-                if activation_quantizer_op.enabled:
-                    op_name_to_activation_quantizer_name_dict[node.name] = output_product
-    return op_name_to_activation_quantizer_name_dict
+    return consumers
 
 
 def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
