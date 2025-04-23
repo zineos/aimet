@@ -761,15 +761,16 @@ class TestQuantizationBackends:
     torch.float16,
     torch.bfloat16,
 ])
-def test_cross_validate_torch_fake_quantize(qmin, qmax, offset, dtype, device):
+@pytest.mark.parametrize("requires_grad", [True, False])
+def test_cross_validate_torch_fake_quantize(qmin, qmax, offset, dtype, device, requires_grad):
     """
     Given same inputs, the following three functions should always produce the same output
       * quantize_dequantize
       * QuantDequantFunc.apply
       * _torch_fake_quantize
     """
-    scale = torch.tensor([0.1], dtype=torch.float32, device=device)
-    offset = torch.tensor([offset], dtype=torch.float32, device=device)
+    scale = torch.tensor([0.1], dtype=torch.float32, device=device, requires_grad=requires_grad)
+    offset = torch.tensor([offset], dtype=torch.float32, device=device, requires_grad=requires_grad)
     tensor = scale * torch.tensor([
         qmin - .5, qmin, qmin + .5, qmax - .5, qmax, qmax + .5
     ], device=device)
@@ -789,7 +790,7 @@ def test_cross_validate_torch_fake_quantize(qmin, qmax, offset, dtype, device):
 
     out1 = torch_builtins.quantize_dequantize(tensor, scale, offset, qmin, qmax)
     out2 = torch_builtins.QuantDequantFunc.apply(tensor, scale, offset, qmin, qmax).to(dtype)
-    out3 = torch_builtins._torch_fake_quantize(tensor, scale, offset, qmin, qmax)
+    out3 = torch_builtins._torch_fake_quantize(tensor, scale.detach(), offset.detach(), qmin, qmax)
 
     assert torch.allclose(out1, expected, atol=atol)
     assert torch.allclose(out2, expected, atol=atol)
@@ -815,7 +816,7 @@ def test_cross_validate_torch_fake_quantize(qmin, qmax, offset, dtype, device):
 
     out1 = torch_builtins.quantize_dequantize(tensor, scale, offset, qmin, qmax)
     out2 = torch_builtins.QuantDequantFunc.apply(tensor, scale, offset, qmin, qmax).to(dtype)
-    out3 = torch_builtins._torch_fake_quantize(tensor, scale, offset, qmin, qmax)
+    out3 = torch_builtins._torch_fake_quantize(tensor, scale.detach(), offset.detach(), qmin, qmax)
 
     assert torch.allclose(out1, expected, atol=atol)
     assert torch.allclose(out2, expected, atol=atol)
