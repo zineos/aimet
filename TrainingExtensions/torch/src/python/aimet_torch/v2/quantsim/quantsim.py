@@ -731,31 +731,51 @@ class _QuantizationSimOnnxExport:
         tensor_to_encoding_map = remove_quantization_nodes_from_onnx_graph(onnx_model)
         onnx.save(onnx_model, f)
 
-        param_encodings = {}
-        activation_encodings = {}
+        qnn_encodings = {
+            name: encoding.to_qnn_encoding_dict(quantsim.encoding_version)
+            for name, encoding in tensor_to_encoding_map.items()
+        }
 
-        for tensor, encoding in tensor_to_encoding_map.items():
-            qnn_encoding = encoding.to_qnn_encoding_dict(encoding_version=quantsim.encoding_version)
-            if tensor in param_names:
-                param_encodings[tensor] = qnn_encoding
+        encodings_dict = {
+            "version": quantsim.encoding_version,
+        }
+
+        if quantsim.encoding_version >= "2.0.0":
+            encodings_dict.update({
+                "encodings": [
+                    {"name": name, **qnn_encoding}
+                    for name, qnn_encoding in qnn_encodings.items()
+                ]
+            })
+        else:
+            if quantsim.encoding_version >= "1.0.0":
+                param_encodings = [
+                    {"name": name, **qnn_encoding}
+                    for name, qnn_encoding in qnn_encodings.items()
+                    if name in param_names
+                ]
+                activation_encodings = [
+                    {"name": name, **qnn_encoding}
+                    for name, qnn_encoding in qnn_encodings.items()
+                    if name not in param_names
+                ]
             else:
-                activation_encodings[tensor] = qnn_encoding
+                param_encodings = {
+                    name: qnn_encoding
+                    for name, qnn_encoding in qnn_encodings.items()
+                    if name in param_names
+                }
+                activation_encodings = {
+                    name: qnn_encoding
+                    for name, qnn_encoding in qnn_encodings.items()
+                    if name not in param_names
+                }
 
-        # Postprocessing for 1.0.0 export
-        if quantsim.encoding_version != "0.6.1":
-            param_encodings = [
-                {"name": tensor, **encoding} for tensor, encoding in param_encodings.items()
-            ]
-            activation_encodings = [
-                {"name": tensor, **encoding} for tensor, encoding in activation_encodings.items()
-            ]
-
-        encodings_dict = {'version': quantsim.encoding_version,
-                          'activation_encodings': activation_encodings,
-                          'param_encodings': param_encodings}
-
-        if quantsim.encoding_version < "2.0.0":
-            encodings_dict.update({"excluded_layers": self.sim._excluded_layer_names})
+            encodings_dict.update({
+                "activation_encodings": activation_encodings,
+                "param_encodings": param_encodings,
+                "excluded_layers": self.sim._excluded_layer_names,
+            })
 
             if self.sim.quant_args:
                 encodings_dict.update({'quantizer_args': self.sim.quant_args})

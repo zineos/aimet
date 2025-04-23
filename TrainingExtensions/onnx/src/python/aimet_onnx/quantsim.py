@@ -771,15 +771,25 @@ class QuantizationSimModel:
             raise NotImplementedError(f'Encoding version {enc_version} not in set of valid encoding '
                                       f'versions {VALID_ENCODING_VERSIONS}.')
 
-        param_encodings = self._get_encodings(self.param_names, enc_version)
-        activation_encodings = self._get_encodings(self.activation_names, enc_version)
+        encodings_dict = {
+            "version": enc_version
+        }
 
-        encodings_dict = {'version': enc_version,
-                          'activation_encodings': activation_encodings,
-                          'param_encodings': param_encodings}
+        if quantsim.encoding_version >= "2.0.0":
+            encodings = self._get_encodings(self.qc_quantize_op_dict.keys(), enc_version)
 
-        if quantsim.encoding_version < "2.0.0":
-            encodings_dict.update({'quantizer_args': self.quant_args})
+            encodings_dict.update({
+                "encodings": encodings,
+            })
+        else:
+            param_encodings = self._get_encodings(self.param_names, enc_version)
+            activation_encodings = self._get_encodings(self.activation_names, enc_version)
+
+            encodings_dict.update({
+                "activation_encodings": activation_encodings,
+                "param_encodings": param_encodings,
+                "quantizer_args": self.quant_args,
+            })
 
         save_json_yaml(encoding_file_path, encodings_dict)
 
