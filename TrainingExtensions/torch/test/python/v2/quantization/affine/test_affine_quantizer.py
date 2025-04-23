@@ -1863,14 +1863,20 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
     assert torch.allclose(torch.tensor(encoding["y_scale"]).view_as(scale), scale)
 
     if torch.all(offset == 0):
-        assert encoding["y_zero_point"] is None
+        assert "y_zero_point" not in encoding
     else:
         assert torch.equal(torch.tensor(encoding["y_zero_point"]).view_as(offset), -offset)
 
-    assert encoding["axis"] == axis
-    assert encoding["block_size"] == (
-         None if block_size is None else next(iter(blk for blk in block_size if blk != 1))
-    )
+    if axis is None:
+        assert "axis" not in encoding
+    else:
+        assert encoding["axis"] == axis
+
+    if block_size is None:
+        assert "block_size" not in encoding
+    else:
+        assert encoding["block_size"] == next(iter(blk for blk in block_size if blk != 1))
+
     assert encoding["output_dtype"] == output_dtype
 
 
@@ -1895,9 +1901,9 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
 
     onnx_QuantizeLinear = _onnx_QuantizeLinear(input_shape=tuple(x.shape),
                                                y_scale=encoding["y_scale"],
-                                               y_zero_point=encoding["y_zero_point"],
-                                               axis=encoding["axis"],
-                                               block_size=encoding["block_size"],
+                                               y_zero_point=encoding.get("y_zero_point", None),
+                                               axis=encoding.get("axis", None),
+                                               block_size=encoding.get("block_size", None),
                                                output_dtype=encoding["output_dtype"])
     with tempfile.TemporaryDirectory() as tmp_dir:
         full_path = os.path.join(tmp_dir, "model.onnx")
@@ -2032,7 +2038,7 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
             block_size=block_grouping
         )
     )
-    assert encoding["y_zero_point"] is None
+    assert "y_zero_point" not in encoding
     assert encoding["axis"] == axis
     assert encoding["block_size"] == next(iter(blk for blk in block_size if blk != 1))
     assert encoding["output_dtype"] == f"int{compressed_bw}"
@@ -2059,7 +2065,7 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
     onnx_LPBQ = _onnx_LPBQ(input_shape=tuple(x.shape),
                            per_block_int_scale=encoding["per_block_int_scale"],
                            per_channel_float_scale=encoding["per_channel_float_scale"],
-                           y_zero_point=encoding["y_zero_point"],
+                           y_zero_point=None,
                            axis=encoding["axis"],
                            block_size=encoding["block_size"],
                            output_dtype=encoding["output_dtype"])

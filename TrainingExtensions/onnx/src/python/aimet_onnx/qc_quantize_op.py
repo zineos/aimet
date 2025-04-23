@@ -679,13 +679,19 @@ class QcQuantizeOp:
         y_scale = y_scale.tolist()
         y_zero_point = None if np.all(y_zero_point == 0) else y_zero_point.tolist()
 
-        return {
-            "y_scale": y_scale,
-            "y_zero_point": y_zero_point,
-            "axis": axis,
-            "block_size": block_size,
+        ret = {
             "output_dtype": output_dtype,
+            "y_scale": y_scale,
         }
+        if y_zero_point is not None:
+            ret.update({"y_zero_point": y_zero_point})
+        if axis is not None:
+            ret.update({"axis": axis})
+        if block_size is not None:
+            ret.update({"block_size": block_size})
+
+        return ret
+
 
     def update_encoding_stats(self, tensor: np.ndarray):
         """
@@ -915,7 +921,7 @@ class GroupedBlockQuantizeDequantize(QcQuantizeOp):
             return None
 
         output_dtype = encodings.pop("output_dtype")
-        y_zero_point = encodings.pop("y_zero_point")
+        y_zero_point = encodings.pop("y_zero_point", None)
 
         if y_zero_point is not None and np.any(np.array(y_zero_point) != 0):
             raise RuntimeError(
@@ -934,7 +940,6 @@ class GroupedBlockQuantizeDequantize(QcQuantizeOp):
         return {
             "per_block_int_scale": per_block_int_scale.astype(np.uint32).tolist(),
             "per_channel_float_scale": per_channel_scale.tolist(),
-            "y_zero_point": None,
             **encodings,
             "output_dtype": f"int{compressed_bw}" if output_dtype.startswith("int") else f"uint{compressed_bw}"
         }

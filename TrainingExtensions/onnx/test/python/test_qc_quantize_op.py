@@ -1145,12 +1145,22 @@ def test_affine_encoding_schema_2_0_0(input_shape, channel_axis, block_axis, blo
         assert y_scale.shape == ()
 
     if symmetric:
-        assert encoding["y_zero_point"] is None
+        assert "y_zero_point" not in encoding
     else:
         assert np.array(encoding["y_zero_point"]).shape == y_scale.shape
 
-    assert encoding["axis"] == (channel_axis if block_axis is None else block_axis)
-    assert encoding["block_size"] == block_size
+    if block_axis is not None:
+        assert encoding["axis"] == block_axis
+    elif channel_axis is not None:
+        assert encoding["axis"] == channel_axis
+    else:
+        assert "axis" not in encoding
+
+    if block_size is None:
+        assert "block_size" not in encoding
+    else:
+        assert encoding["block_size"] == block_size
+
     assert encoding["output_dtype"] == (f"int{bitwidth}" if symmetric else f"uint{bitwidth}")
 
     """
@@ -1165,9 +1175,9 @@ def test_affine_encoding_schema_2_0_0(input_shape, channel_axis, block_axis, blo
 
     onnx_QuantizeLinear = _onnx_QuantizeDequantizeLinear(input_shape=input.shape,
                                                          y_scale=encoding["y_scale"],
-                                                         y_zero_point=encoding["y_zero_point"],
-                                                         axis=encoding["axis"],
-                                                         block_size=encoding["block_size"],
+                                                         y_zero_point=encoding.get("y_zero_point", None),
+                                                         axis=encoding.get("axis", None),
+                                                         block_size=encoding.get("block_size", None),
                                                          output_dtype=encoding["output_dtype"])
     with tempfile.TemporaryDirectory() as tmp_dir:
         full_path = os.path.join(tmp_dir, "model.onnx")
@@ -1314,7 +1324,7 @@ def test_lpbq_encoding_schema_2_0_0(input_shape, block_axis, block_size, compres
     assert per_channel_float_scale.shape[channel_axis] == input.shape[channel_axis]
     assert all(dim == 1 for axis, dim in enumerate(per_channel_float_scale.shape) if axis != channel_axis)
 
-    assert encoding["y_zero_point"] is None
+    assert "y_zero_point" not in encoding
     assert encoding["axis"] == block_axis
     assert encoding["block_size"] == block_size
     assert encoding["output_dtype"] == f"int{compressed_bw}"
@@ -1330,7 +1340,7 @@ def test_lpbq_encoding_schema_2_0_0(input_shape, block_axis, block_size, compres
     onnx_LPBQ = _onnx_LPBQ(input_shape=input.shape,
                            per_block_int_scale=encoding["per_block_int_scale"],
                            per_channel_float_scale=encoding["per_channel_float_scale"],
-                           y_zero_point=encoding["y_zero_point"],
+                           y_zero_point=None,
                            axis=encoding["axis"],
                            block_size=encoding["block_size"],
                            output_dtype=encoding["output_dtype"])

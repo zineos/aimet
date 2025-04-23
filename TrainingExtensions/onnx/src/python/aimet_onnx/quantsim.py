@@ -1229,11 +1229,11 @@ def _add_onnx_qdq_node(model: onnx.ModelProto,
     """
     # pylint: disable=too-many-branches
     output_dtype = encodings["output_dtype"]
-    axis = encodings["axis"]
-    block_size = encodings["block_size"]
+    axis = encodings.get("axis", None)
+    block_size = encodings.get("block_size", None)
 
     y_scale = np.array(encodings["y_scale"]).astype(np.float32)
-    if encodings["y_zero_point"]:
+    if encodings.get("y_zero_point", None):
         y_zero_point = np.array(encodings["y_zero_point"]).astype(output_dtype)
     else:
         y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)

@@ -401,13 +401,18 @@ class AffineEncoding(EncodingBase, _GridMixin):
             y_scale = y_scale.tolist()
             y_zero_point = None if torch.all(y_zero_point == 0) else y_zero_point.tolist()
 
-            return {
-                "y_scale": y_scale,
-                "y_zero_point": y_zero_point,
-                "axis": axis,
-                "block_size": block_size,
+            ret = {
                 "output_dtype": output_dtype,
+                "y_scale": y_scale,
             }
+            if y_zero_point is not None:
+                ret.update({"y_zero_point": y_zero_point})
+            if axis is not None:
+                ret.update({"axis": axis})
+            if block_size is not None:
+                ret.update({"block_size": block_size})
+
+            return ret
 
         raise AssertionError(f'Export encoding version {encoding_version} not supported.'
                              f'Expected one of: {VALID_ENCODING_VERSIONS}')
@@ -527,7 +532,7 @@ class GroupedBlockEncoding(AffineEncoding):
             del encoding_dict["output_dtype"]
 
             compressed_bw = self.bitwidth
-            y_zero_point = encoding_dict.pop("y_zero_point")
+            y_zero_point = encoding_dict.pop("y_zero_point", None)
 
             if y_zero_point is not None and torch.any(torch.tensor(y_zero_point) != 0):
                 raise RuntimeError(
@@ -537,7 +542,6 @@ class GroupedBlockEncoding(AffineEncoding):
             encoding_dict = {
                 "per_block_int_scale": self.per_block_int_scale.to(torch.int32).tolist(),
                 "per_channel_float_scale": self.per_channel_scale.tolist(),
-                "y_zero_point": None,
                 **encoding_dict,
                 "output_dtype": f"int{compressed_bw}" if self.signed else f"uint{compressed_bw}"
             }
