@@ -273,7 +273,7 @@ def test_export_torchvision_models(model_factory, input_shape):
 
 
 @torch.no_grad()
-@pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0"])
+@pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0", "2.0.0.beta"])
 @pytest.mark.parametrize("lpbq", (False, True))
 @pytest.mark.parametrize("fold_param_quantizers", (False, True))
 def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quantizers: bool):
@@ -349,8 +349,12 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
         Then: The onnx encodings should have the same number of encodings
               as the number of quantizers in the original pytorch model
         """
-        assert len(onnx_encodings['param_encodings']) == len(expected_param_encodings)
-        assert len(onnx_encodings['activation_encodings']) == len(expected_activation_encodings)
+        if encoding_version < "2.0.0":
+            assert len(onnx_encodings['param_encodings']) == len(expected_param_encodings)
+            assert len(onnx_encodings['activation_encodings']) == len(expected_activation_encodings)
+        else:
+            assert len(onnx_encodings["encodings"]) == len(expected_param_encodings) + \
+                                                       len(expected_activation_encodings)
 
         """
         Then: The onnx encodings should have the same scale and offset value
@@ -366,7 +370,7 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
                     e[0]["bitwidth"] == expected[0]["bitwidth"]
                     for expected in expected_activation_encodings.values()
                 )
-        else:
+        elif encoding_version == "1.0.0":
             for e in onnx_encodings['param_encodings']:
                 name = e.pop("name")
                 assert e == expected_param_encodings[name]
@@ -378,6 +382,25 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
                     e["bw"] == expected["bw"]
                     for expected in expected_activation_encodings.values()
                 )
+        elif encoding_version == "2.0.0.beta":
+            expected_encodings = expected_param_encodings | expected_activation_encodings
+
+            for e in onnx_encodings["encodings"]:
+                name = e.pop("name")
+                if name in expected_encodings:
+                    assert e == expected_encodings[name]
+                    continue
+
+                assert any(
+                    e.get("output_dtype") == expected.get("output_dtype") and
+                    e.get("y_scale")      == expected.get("y_scale") and
+                    e.get("y_zero_point") == expected.get("y_zero_point") and
+                    e.get("per_channel_float_scale") == expected.get("per_channel_float_scale") and
+                    e.get("per_block_int_scale")     == expected.get("per_block_int_scale")
+                    for expected in expected_encodings.values()
+                )
+        else:
+            raise RuntimeError(f"Unexpected encoding veresion: {encoding_version}")
 
         """
         Then: The exported onnx model should produce output close enough to
