@@ -168,18 +168,21 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
         return "min" in self._parameters and "max" in self._parameters
 
     def __getattr__(self, name: str):
-        if (name in ("min", "max") and self._is_scale_offset_quantizer()) or \
-                (name in ("scale", "offset") and self._is_min_max_quantizer()):
-            param_names = "/".join(self._parameters.keys())
-            msg = (
-                f"'{type(self).__qualname__}' object has no attribute '{name}' "
-                f"because it's parametrized with {param_names}. "
-                f"To get '{name}' of this quantizer, use qtzr.get_{name}() instead. "
-                "To assign a new input range to this quantizer, use qtzr.set_range() instead"
-            )
-            raise AttributeError(msg)
+        try:
+            return super().__getattr__(name)
+        except AttributeError as e:
+            if (name in ("min", "max") and self._is_scale_offset_quantizer()) or \
+                    (name in ("scale", "offset") and self._is_min_max_quantizer()):
+                param_names = "/".join(self._parameters.keys())
+                msg = (
+                    f"'{type(self).__qualname__}' object has no attribute '{name}' "
+                    f"because it's parametrized with {param_names}. "
+                    f"To get '{name}' of this quantizer, use qtzr.get_{name}() instead. "
+                    "To assign a new input range to this quantizer, use qtzr.set_range() instead"
+                )
+                raise AttributeError(msg) from e
 
-        return super().__getattr__(name)
+            raise e
 
     def _reparametrize_to_scale_offset(self):
         # pylint: disable=attribute-defined-outside-init
