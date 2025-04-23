@@ -20,7 +20,7 @@ on:
 
 env:
   DEFAULT_SRC_BRANCH: develop
-  DEFAULT_DST_BRABCH: develop
+  DEFAULT_DST_BRANCH: develop
 
 jobs:
 
