@@ -79,7 +79,7 @@ class FloatEncoding(EncodingBase):
         return self._exponent_bits
 
     @property
-    def maxval(self) -> torch.Tensor:
+    def maxval(self) -> Optional[torch.Tensor]:
         """
         Returns the maximum representable value of the dequantized tensor
         """
@@ -97,7 +97,7 @@ class FloatEncoding(EncodingBase):
         """
         Returns the granularity of the quantizer encoding
         """
-        if self.maxval.dim() == 0:
+        if self.maxval is None or self.maxval.dim() == 0:
             return "pertensor"
         non_singleton_dims = tuple(dim for dim in self.maxval.shape if dim > 1)
         if len(non_singleton_dims) <= 1:
