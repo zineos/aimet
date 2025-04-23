@@ -38,16 +38,21 @@
 """ Test Omniquant functions. (Not include LET modules.) """
 import contextlib
 import copy
+import numpy as np
 import os
-from safetensors.numpy import save_file
+from safetensors.numpy import save_file, load_file
 import tempfile
 import torch
+from pathlib import Path
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from peft.tuners.lora.layer import Linear as LoraLinear
 import pytest
 
 from aimet_torch.omniquant import decoder_processor
 from aimet_torch.omniquant import omniquant_optimizer
+from aimet_torch.omniquant.let_modules import LETModule
+from aimet_torch.omniquant._utils import _convert_sim_to_letsim
+from aimet_torch.v2.quantsim import QuantizationSimModel
 
 @contextlib.contextmanager
 def add_custom_model_class_to_support_model_group(model_class, target_group_name):
@@ -153,6 +158,55 @@ class TestOmniquant:
 
         with pytest.raises(ValueError):
             decoder_processor.get_transformer_processor(fake_llama_model)
+
+    def test_dump_meta_data(self):
+        """ Test _dump_meta_data saves data and they are same as LET scale/ """
+        layer_num = 5
+        seq_len = 20
+        head_num = 5
+        emb_dim = 10
+        dummy_input = torch.randn(1, seq_len, emb_dim)
+        fake_llama_model = FakeLlamaModel(layer_num, seq_len, head_num, emb_dim)
+        qsim = QuantizationSimModel(fake_llama_model, dummy_input)
+        _convert_sim_to_letsim(qsim)
+        omniquant = omniquant_optimizer.Omniquant()
+
+        with add_custom_model_class_to_support_model_group(FakeLlamaModel, "LlamaModelGroup"):
+            with torch.no_grad():
+                llama_processor = decoder_processor.get_transformer_processor(fake_llama_model)
+                decoder_list = llama_processor.get_decoder_list(qsim.model)
+
+                for _decoder_block in decoder_list:
+                    qt_let_pair_list = llama_processor.get_let_module_pair(_decoder_block)
+                    llama_processor.init_let_params(qt_let_pair_list, num_repeats=1)
+
+                    # Manual apply scale to Let Module
+                    for let_pair in qt_let_pair_list:
+                        prev, foll = let_pair.prev, let_pair.follow
+                        scale = torch.randn(emb_dim)
+                        prev[0].prev_scale = torch.nn.Parameter(prev[0].prev_scale*scale)
+                        for _foll in foll:
+                            _foll.foll_scale = torch.nn.Parameter(_foll.foll_scale*scale)
+
+                    for module in _decoder_block.modules():
+                        if isinstance(module, LETModule):
+                            module.fold_let_params()
+
+                with tempfile.TemporaryDirectory() as tempdir:
+                    omniquant._dump_meta_data(qsim.model, Path(tempdir))
+                    metadata_path = os.path.join(tempdir, "aimet_omniquant_metadata.safetensor")
+                    metadata = load_file(metadata_path)
+                    assert len(metadata) == 55 # There should be 55 scales dumped.
+
+                for k, metadata_scale in metadata.items():
+                    module_name = ".".join(k.split(".")[:-1])
+                    prev_foll = k.split(".")[-1]
+                    let_module = qsim.model.get_submodule(module_name)
+                    cached_scale = getattr(let_module, "_cached_" + prev_foll + "_scale")
+                    print(cached_scale)
+                    print(metadata_scale)
+                    print(np.equal(cached_scale, metadata_scale))
+                    assert (np.equal(cached_scale, metadata_scale)).all() # metadata_scale is numpy array
 
     def test_load_lora_model(self):
         """ Test omniquant_optimizer.update_lora_weights """

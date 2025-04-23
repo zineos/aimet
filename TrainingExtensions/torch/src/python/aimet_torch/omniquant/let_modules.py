@@ -56,6 +56,8 @@ class LETModule():
     LET modules implementation for omniquant
     """
     def __init__(self, source: QuantizationMixin):
+        self._cached_prev_scale = None
+        self._cached_foll_scale = None
         self._reset_let_params()
         # TODO in e2e integration decide what happens if some of the quantizers are None/missing
         # For now we assume all 3 values are present, else we throw an error
@@ -89,9 +91,15 @@ class LETModule():
         # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
         self.num_repeats = num_repeats
 
+    def _cache_train_scale(self):
+        """ Cache trained scale to numpy tensor. """
+        self._cached_prev_scale = self.prev_scale.data.numpy() if self.prev_scale is not None else None
+        self._cached_foll_scale = self.foll_scale.data.numpy() if self.foll_scale is not None else None
+
     def fold_let_params(self):
-        """ Call (usually at the end) to fold the scales into the model params. """
+        """ Call (usually at the end) to fold the scales into the model params, cache trained scale, reset let param to None. """
         self._fold()
+        self._cache_train_scale()
         self._reset_let_params()
 
     @abstractmethod

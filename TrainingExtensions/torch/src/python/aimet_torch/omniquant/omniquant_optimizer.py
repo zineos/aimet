@@ -45,7 +45,7 @@ from safetensors.numpy import save_file, load_file
 import tempfile
 import torch
 from torch import nn
-from typing import Union
+from typing import Union, Callable
 import time
 
 from aimet_torch._base.quantsim import logger
@@ -80,7 +80,7 @@ class Omniquant:
     """
     @classmethod
     def apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, omniquant_config: OmniquantConfig, dataloader,
-                        output_path: str = OMNIQUANT_ARTIFACT_DIR) -> torch.nn.Module:
+                        forward_fn: Callable, output_path: str = OMNIQUANT_ARTIFACT_DIR) -> torch.nn.Module:
         """
         Returns model with with omniquant weight, and save metadata in safetensor format to output path. Metadata safetensor
         can be used in update_lora_weights to update lora adaptor weights for peft lora model.
@@ -89,6 +89,8 @@ class Omniquant:
         :param model: Original fp32 model from which quant_sim was created.
         :param omniquant_config: Configuration for Omniquant optimization.
         :param dataloader: Dataloader used to train model.
+        :param forward_fn: Model forward function used to cache intermediate data. 
+                           Expect to have model and inputs as function argument. e.g. lambda model, inputs: model(*inputs) 
         :param output_path: Path to save {layer_name: scale} metadata safetensor.
         :return: Model with Omniquant weights.
         """
@@ -107,7 +109,7 @@ class Omniquant:
         _logger.info(omniquant_config)
         start_omq_optmztn_time = time.perf_counter()
         with disable_dynamic_cache():
-            cls._apply_omniquant(quant_sim, model, omniquant_config, dataloader, output_path)
+            cls._apply_omniquant(quant_sim, model, omniquant_config, dataloader, forward_fn, output_path)
         total_omq_optmztn_time= time.perf_counter() - start_omq_optmztn_time
         _logger.info("Took %.4f seconds for omq optimization ", total_omq_optmztn_time)
 
@@ -118,7 +120,7 @@ class Omniquant:
     # pylint: disable=too-many-statements
     @classmethod
     def _apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, omniquant_config: OmniquantConfig,
-                         dataloader, output_path: str) -> torch.nn.Module:
+                         dataloader, forward_fn, output_path: str) -> torch.nn.Module:
         """
         Implemenatation to run omniquant optimization block by block. Return model with optimized weights.
 
@@ -126,6 +128,8 @@ class Omniquant:
         :param model: Original fp32 model from which quant_sim was created.
         :param omniquant_config: Configuration for Omniquant optimization.
         :param dataloader: Dataloader used to train model.
+        :param forward_fn: Model forward function used to cache intermediate data. 
+                           Expect to have model and inputs as function argument. e.g. lambda model, inputs: model(*inputs) 
         :param output_path: Path where to store artifacts.
         :return: Model with Omniquant weights.
         """
@@ -148,7 +152,7 @@ class Omniquant:
 
                 cached_fp_dataset, cached_quant_dataset = get_block_inputs(
                     model, quant_sim, ".".join([transformer_processor.transformer_block_list_path, "0"]), cached_dataset, omniquant_config.cache_on_cpu,
-                    lambda model, input: model.forward(**input), omniquant_config.num_batch, cached_dir, incl_kwargs=True
+                    forward_fn, omniquant_config.num_batch, cached_dir, incl_kwargs=True
                 )
                 for block_num, (fp_block, qt_block) in enumerate(zip(fp_transformer_block_list, qt_transformer_block_list)):
                     qt_let_pair_list = transformer_processor.get_let_module_pair(qt_block)
@@ -199,6 +203,7 @@ class Omniquant:
                     for module in qt_block.modules():
                         if isinstance(module, LETModule):
                             module.fold_let_params()
+
                     # Freeze the param quantizers for LET optimized modules
                     freeze_let_optimized_param_quantizers(qt_block)
                     # TODO if should call compute_param_encodings after blockwise training
@@ -284,15 +289,16 @@ class Omniquant:
         assert omniquant_config.input_symmetry[2:] in ("qt", "fp"), input_symmetry_error_msg
 
     @classmethod
+    # pylint: disable=protected-access
     def _dump_meta_data(cls, model, output_path):
         """ Traverse quantized model, get LET scales, and dump {module_name: scale} dict to output path. """
         meta_data = {}
         for name, module in model.named_modules():
             if isinstance(module, LETModule):
-                if module.prev_scale is not None:
-                    meta_data[f"{name}.prev"] = module.prev_scale.data.numpy()
-                if  module.foll_scale is not None:
-                    meta_data[f"{name}.foll"] = module.foll_scale.data.numpy()
+                if module._cached_prev_scale is not None:
+                    meta_data[f"{name}.prev"] = module._cached_prev_scale
+                if  module._cached_foll_scale is not None:
+                    meta_data[f"{name}.foll"] = module._cached_foll_scale
 
         save_file(meta_data, output_path/OMNIQUANT_METADATA_SAFETENSOR_NAME)
         logger.info("Aimet omniquant metadata saved at %s", (output_path/OMNIQUANT_METADATA_SAFETENSOR_NAME).absolute())
