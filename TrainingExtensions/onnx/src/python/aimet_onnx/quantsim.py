@@ -776,8 +776,10 @@ class QuantizationSimModel:
 
         encodings_dict = {'version': enc_version,
                           'activation_encodings': activation_encodings,
-                          'param_encodings': param_encodings,
-                          'quantizer_args': self.quant_args}
+                          'param_encodings': param_encodings}
+
+        if quantsim.encoding_version < "2.0.0":
+            encodings_dict.update({'quantizer_args': self.quant_args})
 
         save_json_yaml(encoding_file_path, encodings_dict)
 

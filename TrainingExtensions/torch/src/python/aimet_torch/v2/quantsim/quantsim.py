@@ -752,11 +752,13 @@ class _QuantizationSimOnnxExport:
 
         encodings_dict = {'version': quantsim.encoding_version,
                           'activation_encodings': activation_encodings,
-                          'param_encodings': param_encodings,
-                          'excluded_layers': self.sim._excluded_layer_names}
+                          'param_encodings': param_encodings}
 
-        if self.sim.quant_args:
-            encodings_dict.update({'quantizer_args': self.sim.quant_args})
+        if quantsim.encoding_version < "2.0.0":
+            encodings_dict.update({"excluded_layers": self.sim._excluded_layer_names})
+
+            if self.sim.quant_args:
+                encodings_dict.update({'quantizer_args': self.sim.quant_args})
 
         # export weight encodings to output json file
         onnx_file_path = (f if isinstance(f, str) else f.name)
