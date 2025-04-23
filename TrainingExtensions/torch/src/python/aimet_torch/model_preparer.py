@@ -217,6 +217,7 @@ functional_with_stateless_api = {
     'masked_fill'               : aimet_modules.MaskedFill,
     'square'                    : aimet_modules.Square,
     'rsqrt'                     : aimet_modules.RSqrt,
+    'grid_sample'               : aimet_modules.GridSample,
 }
 
 
