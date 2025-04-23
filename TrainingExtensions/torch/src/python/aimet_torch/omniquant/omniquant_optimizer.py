@@ -361,9 +361,14 @@ def _get_meta_dict(meta_data):
         return ".".join(split_key[:-1]), split_key[-1]
 
     for key, scale in meta_data.items():
-        let_module_name, prev_foll = _get_name_suf(key)
-        assert prev_foll in ("foll", "prev"), f"Expect metadata suffix = foll or prev, but got {prev_foll}"
-        meta_data_dict[let_module_name] = {prev_foll: torch.from_numpy(scale)}
+        let_module_name, prev_or_foll = _get_name_suf(key)
+        assert prev_or_foll in ("foll", "prev"), f"Expect metadata suffix = foll or prev, but got {prev_or_foll}"
+        if meta_data_dict.get(let_module_name) is not None:
+            assert prev_or_foll not in meta_data_dict[let_module_name], f"{prev_or_foll} already exists for let_module_name"
+            assert len(meta_data_dict[let_module_name]) == 1
+            meta_data_dict[let_module_name][prev_or_foll] = torch.from_numpy(scale)
+        else:
+            meta_data_dict[let_module_name] = {prev_or_foll: torch.from_numpy(scale)}
 
     return meta_data_dict
 
@@ -377,19 +382,28 @@ def update_lora_weights(peft_model: PeftModel, omniquant_metadata_path: Union[st
     """
     meta_data = load_file(omniquant_metadata_path)
     meta_data_dict = _get_meta_dict(meta_data)
-
-    assert isinstance(peft_model, PeftModel), f"Expect peft_mdel class PeftModel, but got {peft_model.__class__}"
+    assert isinstance(peft_model, PeftModel), f"Expect peft_model class PeftModel, but got {peft_model.__class__}"
     hf_model = peft_model.base_model.model # PeftModel -> LoraModel (base_model) -> Transformer model (model)
     with torch.no_grad():
         for _module_name, _let_scale_dict in meta_data_dict.items():
             let_module = hf_model.get_submodule(_module_name)
+            num_repeats = 1
             if isinstance(let_module, LoraLinear):
                 prev = _let_scale_dict["prev"] if "prev" in _let_scale_dict else None
                 foll = _let_scale_dict["foll"] if "foll" in _let_scale_dict else None
-
                 if foll is not None:
                     # Lora_A weight [lora_dim, lin_in_dim]
+                    # For some pairs prev_layer out channel != foll_layer in channel.
+                    # We will repeat the "scale" num_repeats times to match the dimension in foll_layer
+                    # Same approach was followed when doing omniquant optimization on the base model
+                    # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
+                    # This needs to be taken care of when applying the learnt scales to lora adapter
+                    # For such pairs the foll scale shape will not match the lora_A in-channel dimension
+                    # We will repeat the foll scale as we did for base model for lora_A as well
                     for module in getattr(let_module, "lora_A").values():
+                        if foll.shape != module.in_features:
+                            num_repeats = module.in_features//foll.shape[0]
+                        foll = torch.repeat_interleave(foll, dim=0, repeats=num_repeats)
                         new_weight = module.weight*(foll.unsqueeze(0))
                         module.weight.copy_(new_weight)
 
@@ -398,3 +412,34 @@ def update_lora_weights(peft_model: PeftModel, omniquant_metadata_path: Union[st
                     for module in getattr(let_module, "lora_B").values():
                         new_weight = module.weight/(prev.unsqueeze(-1))
                         module.weight.copy_(new_weight)
+
+
+def update_base_model_with_omniquant_metadata(model: torch.nn.Module, omniquant_metadata_path: Union[str, Path]):
+    """
+    Read omniquant metadata safetensor, and apply LET scale to base model with original weights
+    :param model: Base model.
+    :param omniquant_metadata_path: Path to omniquant metadata generated at the end of apply omniquant.
+    """
+    meta_data = load_file(omniquant_metadata_path)
+    meta_data_dict = _get_meta_dict(meta_data)
+    with torch.no_grad():
+        for _module_name, _let_scale_dict in meta_data_dict.items():
+            let_module = model.get_submodule(_module_name)
+            num_repeats = 1
+            prev = _let_scale_dict["prev"] if "prev" in _let_scale_dict else None
+            foll = _let_scale_dict["foll"] if "foll" in _let_scale_dict else None
+            if foll is not None:
+                # We will repeat the "scale" num_repeats times to match the dimension in foll_layer
+                # Same approach was followed when doing omniquant optimization on the base model
+                # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
+                if foll.shape != let_module.weight.shape[1]:
+                    num_repeats = let_module.weight.shape[1]//foll.shape[0]
+                foll = torch.repeat_interleave(foll, dim=0, repeats=num_repeats)
+                new_weight = let_module.weight*foll
+                let_module.weight.copy_(new_weight)
+            if prev is not None:
+                if isinstance(let_module, torch.nn.Linear):
+                    new_weight = let_module.weight/prev.reshape(-1,1)
+                else:
+                    new_weight = let_module.weight/prev
+                let_module.weight.copy_(new_weight)
