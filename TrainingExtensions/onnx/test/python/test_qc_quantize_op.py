@@ -521,7 +521,7 @@ class TestQcQuantizeOp:
                              rounding_mode='nearest',
                              op_mode=OpMode.updateStats,
                              bitwidth=8,
-                             use_symmetric_encodings=True,
+                             use_symmetric_encodings=symmetric,
                              )
 
         session.run(None, {'input': input_arr})

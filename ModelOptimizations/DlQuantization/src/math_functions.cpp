@@ -198,8 +198,18 @@ void InitializePdf(PDF& pdf, DTYPE min_val, DTYPE max_val, bool signed_vals)
     }
     // Enlarge the range by factor 3, to be on the safe side.
     DTYPE center = (max_val + min_val) / 2;
-    min_val      = std::max(std::numeric_limits<DTYPE>::lowest(), center - 3 * (center - min_val));
-    max_val      = std::min(std::numeric_limits<DTYPE>::max(), center + 3 * (max_val - center));
+
+    min_val = std::max(
+        // Use 0.99 of numeric limits to avoid floating point overflow
+        static_cast<DTYPE>(.99) * std::numeric_limits<DTYPE>::lowest(),
+        center - 3 * (center - min_val)
+    );
+    max_val = std::min(
+        // Use 0.99 of numeric limits to avoid floating point overflow
+        static_cast<DTYPE>(.99) * std::numeric_limits<DTYPE>::max(),
+        center + 3 * (max_val - center)
+    );
+
     // Initialize the PDF's buckets.
     double bucket_size;
     if (signed_vals)
