@@ -713,7 +713,7 @@ class BaseQuantizationMixin(abc.ABC):
 
         if len(input) == 1:
             input, = input
-            if self.input_quantizers[0]:
+            if isinstance(self.input_quantizers[0], AffineQuantizerBase):
                 input_scale = self.input_quantizers[0].get_scale()
             elif isinstance(input, QuantizedTensorBase) and isinstance(input.encoding, AffineEncoding):
                 input_scale = input.encoding.scale

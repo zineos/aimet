@@ -274,9 +274,16 @@ def test_export_torchvision_models(model_factory, input_shape):
 
 @torch.no_grad()
 @pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0", "2.0.0.beta"])
-@pytest.mark.parametrize("lpbq", (False, True))
-@pytest.mark.parametrize("fold_param_quantizers", (False, True))
-def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quantizers: bool):
+@pytest.mark.parametrize("lpbq", [False, True])
+@pytest.mark.parametrize("fold_param_quantizers", [False, True])
+@pytest.mark.parametrize(
+    "weight_dtype,  activation_dtype", [
+    (torch.int8,    torch.uint8),
+    (torch.int8,    torch.float16),
+    (torch.float16, torch.float16),
+])
+def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quantizers: bool,
+                                  weight_dtype: torch.dtype, activation_dtype: torch.dtype):
     """
     When: Export quantized torchvision model using quantsim.export
     """
@@ -284,7 +291,9 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
     model = resnet18().eval()
     model = prepare_model(model)
     fold_all_batch_norms(model, None, x)
-    sim = QuantizationSimModel(model, x, config_file=get_path_for_per_channel_config())
+    sim = QuantizationSimModel(model, x,
+                               default_param_bw=weight_dtype.itemsize * 8,
+                               default_output_bw=activation_dtype.itemsize * 8)
 
     if lpbq:
         set_grouped_blockwise_quantization_for_weights(sim,
@@ -294,6 +303,26 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
                                                        decompressed_bw=8,
                                                        block_size=64)
 
+    if weight_dtype.is_floating_point:
+        for qmodule in sim.qmodules():
+            for name, qtzr in qmodule.param_quantizers.items():
+                if not qtzr:
+                    continue
+                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=weight_dtype)
+
+    if activation_dtype.is_floating_point:
+        for qmodule in sim.qmodules():
+            for i, qtzr in enumerate(qmodule.input_quantizers):
+                if not qtzr:
+                    continue
+                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+
+        for qmodule in sim.qmodules():
+            for i, qtzr in enumerate(qmodule.output_quantizers):
+                if not qtzr:
+                    continue
+                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+
     sim.compute_encodings(lambda model: model(x))
 
     # Compute original pytorch model output with qdq weights
@@ -302,19 +331,20 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
             f"{module_name}.{param_name}": qtzr.get_encodings().to_qnn_encoding_dict(encoding_version)
             for module_name, qmodule in sim.named_qmodules()
             for param_name, qtzr in qmodule.param_quantizers.items()
+            if isinstance(qtzr, Q.affine.AffineQuantizerBase)
         }
         expected_activation_encodings = {}
         expected_activation_encodings.update({
             f"{module_name}.input_quantizers.{i}": qtzr.get_encodings().to_qnn_encoding_dict(encoding_version)
             for module_name, qmodule in sim.named_qmodules()
             for i, qtzr in enumerate(qmodule.input_quantizers)
-            if qtzr is not None
+            if isinstance(qtzr, Q.affine.AffineQuantizerBase)
         })
         expected_activation_encodings.update({
             f"{module_name}.output_quantizers.{i}": qtzr.get_encodings().to_qnn_encoding_dict(encoding_version)
             for module_name, qmodule in sim.named_qmodules()
             for i, qtzr in enumerate(qmodule.output_quantizers)
-            if qtzr is not None
+            if isinstance(qtzr, Q.affine.AffineQuantizerBase)
         })
 
         with remove_activation_quantizers(sim.model):
@@ -407,6 +437,6 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
               the original pytorch model with qdq weights
         """
         sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
-        out, = sess.run(None, {onnx_model.graph.input[0].name: x.numpy()})
+        out, = sess.run(None, {"input": x.numpy()})
 
         assert torch.allclose(torch.from_numpy(out), expected_out, atol=1e-5)

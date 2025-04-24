@@ -147,4 +147,18 @@ class FloatEncoding(EncodingBase):
         if encoding_version == '1.0.0':
             return {'dtype': 'FLOAT', 'bw': self.bitwidth, 'enc_type': EncodingType.PER_TENSOR.name}
 
+        if encoding_version == "2.0.0.beta":
+            if self.exponent_bits == 5 and self.mantissa_bits == 10:
+                # float16
+                return {}
+
+            if self.exponent_bits == 8 and self.mantissa_bits == 7:
+                # bfloat16
+                return {}
+
+            raise NotImplementedError(
+                "Floating point encoding export only supports [b]float16; "
+                f"got exponent_bits={self.exponent_bits}, mantissa_bits={self.mantissa_bits}"
+            )
+
         raise AssertionError(f'Export encoding version {encoding_version} not supported.')

@@ -61,7 +61,6 @@ from aimet_torch._base.quantsim import (
     save_checkpoint,
     load_checkpoint,
     check_accumulator_overflow,
-    _QuantizedModuleProtocol,
 )
 from aimet_torch.v2 import nn as aimet_nn
 from aimet_torch.v2.nn import BaseQuantizationMixin, QuantizationMixin, UnknownModuleError
@@ -70,6 +69,7 @@ from aimet_torch.v2._builder import _V2LazyQuantizeWrapper
 from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.quantization.affine import AffineQuantizerBase
+from aimet_torch.v2.quantization.float import FloatQuantizeDequantize
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch import utils
@@ -616,9 +616,11 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
                     # In this case, we honor the custom bias quantizer defined by the user
                     continue
 
-                # pylint: disable=protected-access
-                handle = qmodule.register_forward_hook(type(qmodule)._create_int32_bias_quantizer)
-                handles.append(handle)
+                if "weight" in qmodule.param_quantizers and \
+                        isinstance(qmodule.param_quantizers["weight"], AffineQuantizerBase):
+                    # pylint: disable=protected-access
+                    handle = qmodule.register_forward_hook(type(qmodule)._create_int32_bias_quantizer)
+                    handles.append(handle)
             try:
                 self.model(*args)
             finally:
@@ -682,6 +684,41 @@ def _temporarily_unfold_param_quantizers(sim: QuantizationSimModel):
             qmodule._fold_param_quantizers()
 
 
+@contextlib.contextmanager
+def _remove_fp16_quantizers(sim: QuantizationSimModel):
+    """
+    Temporarily remove [b]float16 quantizers for sim.onnx.export,
+    as sim.onnx.export does NOT support exporting [b]float16 quantizers.
+    """
+    original_containers = {}
+
+    try:
+        for qmodule in sim.qmodules():
+            for name, qtzr in qmodule.param_quantizers.items():
+                if isinstance(qtzr, FloatQuantizeDequantize) and \
+                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                    original_containers[(qmodule.param_quantizers, name)] = qtzr
+                    qmodule.param_quantizers[name] = None
+
+            for i, qtzr in enumerate(qmodule.input_quantizers):
+                if isinstance(qtzr, FloatQuantizeDequantize) and \
+                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                    original_containers[(qmodule.input_quantizers, i)] = qtzr
+                    qmodule.input_quantizers[i] = None
+
+            for i, qtzr in enumerate(qmodule.output_quantizers):
+                if isinstance(qtzr, FloatQuantizeDequantize) and \
+                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                    original_containers[(qmodule.output_quantizers, i)] = qtzr
+                    qmodule.output_quantizers[i] = None
+
+        yield
+
+    finally:
+        for (container, key), qtzr in original_containers.items():
+            container[key] = qtzr
+
+
 class _QuantizationSimOnnxExport:
     """
     Helper class for exporting quantized models to ONNX format.
@@ -708,14 +745,13 @@ class _QuantizationSimOnnxExport:
         :param f: file object or path where to store exported ONNX mode
         """
         # pylint: disable=too-many-locals, too-many-branches, protected-access
-        if self._has_non_affine_quantizer(self.sim.model):
-            raise RuntimeError("Export using onnx only export only supports affine quantizers. "
-                               "Other quantizer types are not supported.")
+        self._check_unsupported_quantizers(self.sim.model)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with _temporarily_unfold_param_quantizers(self.sim), \
                     self.sim._concretize_int32_bias_quantizers(args), \
-                    self.sim._apply_qdq_to_model_parameters(self.sim.model):
+                    self.sim._apply_qdq_to_model_parameters(self.sim.model), \
+                    _remove_fp16_quantizers(self.sim):
                 tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
                 export(self.sim.model, args, tmp_onnx_path, *posargs, **kwargs)
                 onnx_model = onnx.load(tmp_onnx_path)
@@ -745,6 +781,7 @@ class _QuantizationSimOnnxExport:
                 "encodings": [
                     {"name": name, **qnn_encoding}
                     for name, qnn_encoding in qnn_encodings.items()
+                    if qnn_encoding
                 ]
             })
         else:
@@ -752,23 +789,23 @@ class _QuantizationSimOnnxExport:
                 param_encodings = [
                     {"name": name, **qnn_encoding}
                     for name, qnn_encoding in qnn_encodings.items()
-                    if name in param_names
+                    if qnn_encoding and name in param_names
                 ]
                 activation_encodings = [
                     {"name": name, **qnn_encoding}
                     for name, qnn_encoding in qnn_encodings.items()
-                    if name not in param_names
+                    if qnn_encoding and name not in param_names
                 ]
             else:
                 param_encodings = {
                     name: qnn_encoding
                     for name, qnn_encoding in qnn_encodings.items()
-                    if name in param_names
+                    if qnn_encoding and name in param_names
                 }
                 activation_encodings = {
                     name: qnn_encoding
                     for name, qnn_encoding in qnn_encodings.items()
-                    if name not in param_names
+                    if qnn_encoding and name not in param_names
                 }
 
             encodings_dict.update({
@@ -787,15 +824,15 @@ class _QuantizationSimOnnxExport:
             json.dump(encodings_dict, encoding_file, indent=2)
 
     @staticmethod
-    def _has_non_affine_quantizer(module: torch.nn.Module):
-        for submodule in module.modules():
-            if isinstance(submodule, _QuantizedModuleProtocol):
-                for quantizer in itertools.chain(submodule.input_quantizers,
-                                                 submodule.output_quantizers,
-                                                 submodule.param_quantizers.values()):
-                    if quantizer and not isinstance(quantizer, AffineQuantizerBase):
-                        return True
-        return False
+    def _check_unsupported_quantizers(module: torch.nn.Module):
+        for qtzr in module.modules():
+            if isinstance(qtzr, FloatQuantizeDequantize):
+                if not qtzr.is_float16() and not qtzr.is_bfloat16():
+                    msg = " ".join([
+                        "sim.onnx.export doesn't support exporting floating point encodings",
+                        f"except [b]float16. Got {qtzr.bitwidth}-bit float encoding",
+                    ])
+                    raise RuntimeError(msg)
 
 
 @deprecated("""
