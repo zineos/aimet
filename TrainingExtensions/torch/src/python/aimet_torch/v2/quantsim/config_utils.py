@@ -233,12 +233,12 @@ def _set_activation_quantizers_to_float(sim: QuantizationSimModel, condition: Ca
             for idx, quantizer in enumerate(quant_layer.input_quantizers):
                 if quantizer is not None:
                     device = _get_quantizer_device_or_default(quantizer, model_device)
-                    quant_layer.input_quantizers[idx] = FloatQuantizeDequantize(exponent_bits, mantissa_bits, dtype).to(device)
+                    quant_layer.input_quantizers[idx] = FloatQuantizeDequantize(exponent_bits, mantissa_bits, dtype=dtype).to(device)
 
             for idx, quantizer in enumerate(quant_layer.output_quantizers):
                 if quantizer is not None:
                     device = _get_quantizer_device_or_default(quantizer, model_device)
-                    quant_layer.output_quantizers[idx] = FloatQuantizeDequantize(exponent_bits, mantissa_bits, dtype).to(device)
+                    quant_layer.output_quantizers[idx] = FloatQuantizeDequantize(exponent_bits, mantissa_bits, dtype=dtype).to(device)
 
 
 @overload

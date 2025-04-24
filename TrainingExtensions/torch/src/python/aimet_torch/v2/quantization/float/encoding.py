@@ -43,6 +43,7 @@ from torch._C._nn import _parse_to as parse_to_args
 
 from aimet_common.defs import EncodingType
 from aimet_torch.v2.quantization.base import EncodingBase
+from ._finfo import _finfo
 
 
 __all__ = ["FloatEncoding"]
@@ -52,9 +53,9 @@ class FloatEncoding(EncodingBase):
     """
     Encoding object for float quantization
     """
-    def __init__(self, mantissa_bits: int, exponent_bits: int, maxval: Optional[torch.Tensor]):
-        self._mantissa_bits = mantissa_bits
-        self._exponent_bits = exponent_bits
+    def __init__(self, mantissa_bits: int, exponent_bits: int,
+                 finite: bool, unsigned_zero: bool, maxval: Optional[torch.Tensor]):
+        self._finfo = _finfo(exponent_bits, mantissa_bits, finite, unsigned_zero)
         self._maxval = maxval
 
     @property
@@ -69,14 +70,28 @@ class FloatEncoding(EncodingBase):
         """
         Return number of mantissa bits in float representation
         """
-        return self._mantissa_bits
+        return self._finfo.mantissa_bits
 
     @property
     def exponent_bits(self) -> int:
         """
         Returns the number of exponent bits in float representation
         """
-        return self._exponent_bits
+        return self._finfo.exponent_bits
+
+    @property
+    def finite(self) -> bool:
+        """
+        Returns True if +/-inf is representable
+        """
+        return self._finfo.finite
+
+    @property
+    def unsigned_zero(self) -> bool:
+        """
+        Returns True if -0 or -nan is NOT representable
+        """
+        return self._finfo.unsigned_zero
 
     @property
     def maxval(self) -> Optional[torch.Tensor]:
@@ -90,7 +105,7 @@ class FloatEncoding(EncodingBase):
         """
         Returns the bitwidth of the quantizer encoding
         """
-        return self._mantissa_bits + self._exponent_bits + 1
+        return self.mantissa_bits + self.exponent_bits + 1
 
     @property
     def granularity(self) -> str:
@@ -130,7 +145,8 @@ class FloatEncoding(EncodingBase):
 
         maxval = self._maxval.to(dtype=dtype, device=device)
 
-        return type(self)(self._mantissa_bits, self._exponent_bits, maxval)
+        return type(self)(self.mantissa_bits, self.exponent_bits,
+                          self.finite, self.unsigned_zero, maxval)
 
     def quantize(self, input: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

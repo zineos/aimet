@@ -39,7 +39,7 @@
 
 import contextlib
 import functools
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 import math
 
 import torch
@@ -49,6 +49,7 @@ from aimet_torch.v2.quantization.float import FloatEncoding
 from aimet_torch.v2.quantization.tensor import DequantizedTensor
 from aimet_torch.v2.utils import StatisticsNotFoundError, patch_attr
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
+from ._finfo import _finfo, _torch_dtype_to_finfo
 
 
 __all__ = ['QuantizeDequantize', 'FloatQuantizeDequantize']
@@ -58,17 +59,6 @@ def _ieee_float_max_representable_value(exponent_bits, mantissa_bits):
     exponent_max = 2 ** exponent_bits - 1
     exponent_bias = exponent_max // 2
     return (2 - 2**-mantissa_bits) * 2 ** (exponent_max - exponent_bias - 1)
-
-
-_IEEE_FLOAT16_EXPONENT_BITS = 5
-_IEEE_FLOAT16_MANTISSA_BITS = 10
-assert _ieee_float_max_representable_value(_IEEE_FLOAT16_EXPONENT_BITS, _IEEE_FLOAT16_MANTISSA_BITS) == \
-        torch.finfo(torch.float16).max
-
-_BFLOAT16_EXPONENT_BITS = 8
-_BFLOAT16_MANTISSA_BITS = 7
-assert _ieee_float_max_representable_value(_BFLOAT16_EXPONENT_BITS, _BFLOAT16_MANTISSA_BITS) == \
-        torch.finfo(torch.bfloat16).max
 
 
 class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
@@ -136,37 +126,37 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         tensor([[ 1.8994, -0.0947], [-1.0889, -0.1727]])
     """
 
-    maxval: torch.Tensor
+    maxval: Optional[torch.Tensor]
 
     def __init__(self,
-                 exponent_bits: int = None,
-                 mantissa_bits: int = None,
-                 dtype: torch.dtype = None,
-                 encoding_analyzer: EncodingAnalyzer = None):
+                 exponent_bits: Optional[int] = None,
+                 mantissa_bits: Optional[int] = None,
+                 finite: Optional[bool] = None,
+                 unsigned_zero: Optional[bool] = None,
+                 dtype: Optional[torch.dtype] = None,
+                 encoding_analyzer: Optional[EncodingAnalyzer] = None):
         super().__init__()
 
         if dtype is None:
             if exponent_bits is None or mantissa_bits is None:
                 raise ValueError('Neither "dtype" nor "exponent/mantissa_bits" was specified.')
 
+            if finite is None:
+                self.finite = False
+
+            if unsigned_zero is None:
+                self.unsigned_zero = False
+
         if dtype is not None:
-            if exponent_bits is not None or mantissa_bits is not None:
+            if exponent_bits is not None or mantissa_bits is not None or \
+                    finite is not None or unsigned_zero is not None:
                 raise ValueError(
-                    'Argument "dtype" is mutually exclusive with "exponent/mantissa_bits".')
+                    'Argument "dtype" is mutually exclusive with "exponent/mantissa_bits/finite/unsigned_zero".')
 
-            if dtype not in (torch.half, torch.float16, torch.bfloat16):
-                raise ValueError(
-                    f"Float quantizer only supports torch.float16 and torch.bfloat16. Got {dtype}.")
+            exponent_bits, mantissa_bits, finite, unsigned_zero = _finfo.from_torch_dtype(dtype)
 
-            if dtype in (torch.half, torch.float16):
-                exponent_bits = _IEEE_FLOAT16_EXPONENT_BITS
-                mantissa_bits = _IEEE_FLOAT16_MANTISSA_BITS
-            else:
-                exponent_bits = _BFLOAT16_EXPONENT_BITS
-                mantissa_bits = _BFLOAT16_MANTISSA_BITS
+        self._finfo = _finfo(exponent_bits, mantissa_bits, finite, unsigned_zero)
 
-        self.exponent_bits = exponent_bits
-        self.mantissa_bits = mantissa_bits
         self.encoding_analyzer = encoding_analyzer
 
         if self.encoding_analyzer:
@@ -175,6 +165,49 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
             self.register_buffer('maxval', torch.full(shape, maxval))
         else:
             self.register_buffer('maxval', None)
+
+        self._assert_supported_dtype()
+
+    def _assert_supported_dtype(self):
+        if self._finfo.finite or self._finfo.unsigned_zero:
+            if self._finfo.to_torch_dtype() is None:
+                torch_special_builtin_dtypes = [
+                    dtype for dtype in _torch_dtype_to_finfo
+                    if dtype not in (torch.float16, torch.bfloat16)
+                ]
+                msg = " ".join([
+                    "finite/unsigned_zero floating point has limited support.",
+                    f"Expected PyTorch built-in data types, such as {torch_special_builtin_dtypes};",
+                    f"got '{self._finfo.to_str()}'",
+                ])
+                raise RuntimeError(msg)
+
+            if self.maxval is not None:
+                msg = " ".join([
+                    "finite/unsigned_zero floating point has limited support.",
+                    "Expected 'maxval' to be None",
+                ])
+                raise RuntimeError(msg)
+
+    @property
+    def exponent_bits(self):
+        """ Returns exponent bits """
+        return self._finfo.exponent_bits
+
+    @exponent_bits.setter
+    def exponent_bits(self, exponent_bits: int):
+        _, mantissa_bits, finite, unsigned_zero = self._finfo
+        self._finfo = _finfo(exponent_bits, mantissa_bits, finite, unsigned_zero)
+
+    @property
+    def mantissa_bits(self):
+        """ Returns mantissa bits """
+        return self._finfo.mantissa_bits
+
+    @mantissa_bits.setter
+    def mantissa_bits(self, mantissa_bits: int):
+        exponent_bits, _, finite, unsigned_zero = self._finfo
+        self._finfo = _finfo(exponent_bits, mantissa_bits, finite, unsigned_zero)
 
     def get_extra_state(self):
         extra_state_dict = super().get_extra_state()
@@ -210,15 +243,13 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         """
         Returns true if current configuration simulates IEEE float16
         """
-        return self.exponent_bits == _IEEE_FLOAT16_EXPONENT_BITS and \
-               self.mantissa_bits == _IEEE_FLOAT16_MANTISSA_BITS
+        return self._finfo.is_float16()
 
     def is_bfloat16(self):
         """
         Returns true if current configuration simulates bfloat16
         """
-        return self.exponent_bits == _BFLOAT16_EXPONENT_BITS and \
-               self.mantissa_bits == _BFLOAT16_MANTISSA_BITS
+        return self._finfo.is_bfloat16()
 
     def get_legacy_encodings(self) -> Optional[List[Dict]]:
         """
@@ -243,7 +274,11 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
 
     def get_encodings(self) -> Optional[FloatEncoding]:
         if self.is_initialized():
-            return FloatEncoding(self.mantissa_bits, self.exponent_bits, self.maxval)
+            return FloatEncoding(self._finfo.mantissa_bits,
+                                 self._finfo.exponent_bits,
+                                 self._finfo.finite,
+                                 self._finfo.unsigned_zero,
+                                 self.maxval)
         return None
 
     @classmethod
@@ -316,6 +351,8 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         :param input: Input to quantize and dequantize
         :return: Quantize-dequantized output
         """
+        self._assert_supported_dtype()
+
         if not self.is_initialized():
             raise RuntimeError(
                 'Failed to run FloatQuantizeDequantize since quantization parameters are not initialized.'
@@ -328,12 +365,12 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         maxval = encoding.maxval
         exponent_bits = encoding.exponent_bits
         mantissa_bits = encoding.mantissa_bits
+        target_torch_dtype = self._finfo.to_torch_dtype()
 
-        if maxval is None and (self.is_float16() or self.is_bfloat16()):
+        if maxval is None and target_torch_dtype is not None:
             # Fast forward using type casting
             orig_dtype = input.dtype
-            dtype = torch.float16 if self.is_float16() else torch.bfloat16
-            output = input.to(dtype).to(orig_dtype)
+            output = input.to(target_torch_dtype).to(orig_dtype)
         else:
             if maxval is None:
                 maxval = _ieee_float_max_representable_value(exponent_bits, mantissa_bits)
@@ -353,7 +390,20 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
         """
         :meta private:
         """
-        return f'exponent_bits={self.exponent_bits}, mantissa_bits={self.mantissa_bits}'
+        if self.maxval is None:
+            torch_dtype = self._finfo.to_torch_dtype()
+
+            if torch_dtype is not None:
+                return f"dtype={torch_dtype}"
+
+        exponent_bits, mantissa_bits, finite, unsigned_zero = self._finfo
+
+        return " ".join([
+            f"exponent_bits={exponent_bits}",
+            f"mantissa_bits={mantissa_bits}",
+            f"finite={finite}",
+            f"unsigned_zero={unsigned_zero}",
+        ])
 
 class QuantizeDequantize(FloatQuantizeDequantize):
     r"""

@@ -45,6 +45,7 @@ import warnings
 from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
 from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.float import FloatQuantizeDequantize, FloatEncoding
+from aimet_torch.v2.quantization.float._finfo import _finfo
 from aimet_torch.v2.quantization.float.quantizer import _ieee_float_max_representable_value
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
 
@@ -70,19 +71,25 @@ def x():
 
 
 @torch.no_grad()
-def test_qdq_output_standard_dtypes(x):
+@pytest.mark.parametrize(
+    "dtype,               exponent_bits, mantissa_bits, finite, unsigned_zero", [
+    (torch.float16,       5,             10,            False,  False),
+    (torch.bfloat16,      8,             7,             False,  False),
+    (torch.float8_e5m2,   5,             2,             False,  False),
+    (torch.float8_e4m3fn, 4,             3,             True,   False),
+    # NOTE: Not supported in torch 2.1
+    # (torch.float8_e5m2fnuz, 5,             2,             False,  False),
+    # (torch.float8_e4m3fnuz, 4,             3,             True,   False),
+])
+def test_qdq_output_standard_dtypes(x, dtype, exponent_bits, mantissa_bits, finite, unsigned_zero):
     """
     Given: Instantiated FloatQuantizeDequantize with a well-known dtype of pytorch
     When: Run forward
     Then: Output should be equal to downcasting and upcasting the input
     """
-    float16_qdq = FloatQuantizeDequantize(dtype=torch.float16)
-    expected_output = x.to(torch.float16).float()
-    assert torch.equal(float16_qdq(x), expected_output)
-
-    bfloat16_qdq = FloatQuantizeDequantize(dtype=torch.bfloat16)
-    expected_output = x.to(torch.bfloat16).float()
-    assert torch.equal(bfloat16_qdq(x), expected_output)
+    float_qdq = FloatQuantizeDequantize(dtype=dtype)
+    expected_output = x.to(dtype).float()
+    assert torch.equal(float_qdq(x), expected_output)
 
     """
     Given: Instantiated two quantizers:
@@ -93,33 +100,46 @@ def test_qdq_output_standard_dtypes(x):
     When: Run forward
     Then: The two quantizers should produce same output
     """
-    float16_qdq_1 = FloatQuantizeDequantize(dtype=torch.float16)
-    float16_qdq_2 = FloatQuantizeDequantize(exponent_bits=5, mantissa_bits=10)
-    float16_qdq_out_1 = float16_qdq_1(x)
-    float16_qdq_out_2 = float16_qdq_2(x)
-    assert torch.equal(float16_qdq_out_1, float16_qdq_out_2)
-    assert isinstance(float16_qdq_out_1, DequantizedTensor)
-    assert isinstance(float16_qdq_out_2, DequantizedTensor)
-    assert float16_qdq_out_1.encoding.exponent_bits == \
-           float16_qdq_out_2.encoding.exponent_bits ==  5
-    assert float16_qdq_out_1.encoding.mantissa_bits == \
-           float16_qdq_out_2.encoding.mantissa_bits ==  10
-    assert float16_qdq_out_1.dequantize() is float16_qdq_out_1
-    assert float16_qdq_out_2.dequantize() is float16_qdq_out_2
+    float_qdq_1 = FloatQuantizeDequantize(dtype=dtype)
+    float_qdq_2 = FloatQuantizeDequantize(exponent_bits, mantissa_bits, finite, unsigned_zero)
+    float_qdq_out_1 = float_qdq_1(x)
+    float_qdq_out_2 = float_qdq_2(x)
+    assert torch.equal(float_qdq_out_1, float_qdq_out_2)
+    assert isinstance(float_qdq_out_1, DequantizedTensor)
+    assert isinstance(float_qdq_out_2, DequantizedTensor)
+    assert float_qdq_out_1.encoding.exponent_bits == \
+           float_qdq_out_2.encoding.exponent_bits == exponent_bits
+    assert float_qdq_out_1.encoding.mantissa_bits == \
+           float_qdq_out_2.encoding.mantissa_bits == mantissa_bits
+    assert float_qdq_out_1.dequantize() is float_qdq_out_1
+    assert float_qdq_out_2.dequantize() is float_qdq_out_2
 
-    bfloat16_qdq_1 = FloatQuantizeDequantize(dtype=torch.bfloat16)
-    bfloat16_qdq_2 = FloatQuantizeDequantize(exponent_bits=8, mantissa_bits=7)
-    bfloat16_qdq_out_1 = bfloat16_qdq_1(x)
-    bfloat16_qdq_out_2 = bfloat16_qdq_2(x)
-    assert torch.equal(bfloat16_qdq_1(x), bfloat16_qdq_2(x))
-    assert isinstance(bfloat16_qdq_out_1, DequantizedTensor)
-    assert isinstance(bfloat16_qdq_out_2, DequantizedTensor)
-    assert bfloat16_qdq_out_1.encoding.exponent_bits == \
-           bfloat16_qdq_out_2.encoding.exponent_bits ==  8
-    assert bfloat16_qdq_out_1.encoding.mantissa_bits == \
-           bfloat16_qdq_out_2.encoding.mantissa_bits ==  7
-    assert bfloat16_qdq_out_1.dequantize() is bfloat16_qdq_out_1
-    assert bfloat16_qdq_out_2.dequantize() is bfloat16_qdq_out_2
+
+
+@pytest.mark.parametrize(
+    "finite, unsigned_zero", [
+    (True,   True),
+    (True,   False),
+    (False,  True),
+])
+def test_special_floats_sanity(finite, unsigned_zero):
+    ...
+    """
+    When: Instantiate non-builtin finite/unsigned_zero float qdq
+    Then: Should throw runtime error
+    """
+    with pytest.raises(RuntimeError):
+        _ = FloatQuantizeDequantize(3, 3, finite=finite, unsigned_zero=unsigned_zero)
+
+    """
+    Given: Start from a non-fininte, non-unsigned_zero float qdq
+    When: Forcefully set fininte/unsigned_zero to True
+    Then: Should throw runtime error
+    """
+    qdq = FloatQuantizeDequantize(3, 3, finite=False, unsigned_zero=False)
+    qdq._finfo = _finfo(qdq.exponent_bits, qdq.mantissa_bits, finite, unsigned_zero)
+    with pytest.raises(RuntimeError):
+        _ = qdq(torch.randn(10))
 
 
 @torch.no_grad()
@@ -228,7 +248,8 @@ def test_float_encoding_to():
     When: Call .to()
     Then: Should return identical object
     """
-    encoding = FloatEncoding(exponent_bits=5, mantissa_bits=10, maxval=None)
+    encoding = FloatEncoding(exponent_bits=5, mantissa_bits=10,
+                             finite=False, unsigned_zero=False, maxval=None)
     new_encoding = encoding.to(device="cpu", dtype=torch.float16)
     assert new_encoding is encoding
 
@@ -237,6 +258,7 @@ def test_float_encoding_to():
     """
     encoding = FloatEncoding(exponent_bits=5,
                              mantissa_bits=10,
+                             finite=False, unsigned_zero=False,
                              maxval=torch.tensor(124.))
     """
     When: Call .to() with same dtype and device

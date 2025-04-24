@@ -55,7 +55,7 @@ class TestFloatEncoding:
               4) bitwidth is mantissa_bits + exponent_bits + 1
               5) mapping is "float"
         """
-        encoding = FloatEncoding(mantissa_bits, exponent_bits, maxval)
+        encoding = FloatEncoding(mantissa_bits, exponent_bits, False, False, maxval)
         assert isinstance(encoding.maxval, torch.Tensor)
         assert encoding.mantissa_bits == mantissa_bits
         assert encoding.exponent_bits == exponent_bits
@@ -73,7 +73,7 @@ class TestFloatEncoding:
         mantissa_bits = 5
         exponent_bits = 10
         maxval = torch.tensor(1.0).to(device)
-        encoding = FloatEncoding(mantissa_bits, exponent_bits, maxval)
+        encoding = FloatEncoding(mantissa_bits, exponent_bits, False, False, maxval)
         assert encoding.maxval.device == torch.device(device)
 
         """
@@ -95,7 +95,7 @@ class TestFloatEncoding:
         mantissa_bits = 5
         exponent_bits = 10
         maxval = torch.tensor(1.0).to(dtype)
-        encoding = FloatEncoding(mantissa_bits, exponent_bits, maxval)
+        encoding = FloatEncoding(mantissa_bits, exponent_bits, False, False, maxval)
         assert encoding.maxval.dtype == dtype
 
         """
@@ -117,7 +117,7 @@ class TestFloatEncoding:
         mantissa_bits = 5
         exponent_bits = 10
         maxval = torch.randn(shape)
-        encoding = FloatEncoding(mantissa_bits, exponent_bits, maxval)
+        encoding = FloatEncoding(mantissa_bits, exponent_bits, False, False, maxval)
         assert encoding.maxval.shape == shape
         assert encoding.granularity == "perchannel"
         assert encoding.mapping == "float"
@@ -131,7 +131,7 @@ class TestFloatEncoding:
         mantissa_bits = 5
         exponent_bits = 10
         maxval = torch.randn([])
-        encoding = FloatEncoding(mantissa_bits, exponent_bits, maxval)
+        encoding = FloatEncoding(mantissa_bits, exponent_bits, False, False, maxval)
         assert encoding.maxval.shape == tuple()
         assert encoding.granularity == "pertensor"
         assert encoding.mapping == "float"
