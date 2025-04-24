@@ -131,12 +131,19 @@ class AdaScale:
         cls._replace_with_adascale_weight_quantizers(adascale_blocks)
         qsim.model.to("cpu")
 
-        sampler = BlockwiseSampler(qsim, adascale_blocks, data_loader, forward_fn)
+        sampler = BlockwiseSampler(
+            qsim,
+            adascale_blocks,
+            data_loader,
+            forward_fn,
+            keep_unused_blocks_on_cpu=True,
+            cache_activations_on_disk=True
+        )
+
         qsim.model.requires_grad_(False)
 
         with remove_activation_quantizers(adascale_blocks):
-            for block, fp_block_inputs, qt_block_inputs in sampler.sample(keep_unused_blocks_on_cpu=True, device=device, desc="AdaScale blocks processed"):
-
+            for block, fp_block_inputs, qt_block_inputs in sampler.sample(device=device, desc="AdaScale blocks processed"):
                 # only set adascale params to train mode
                 trainable_params = cls._get_adascale_trainable_params(block)
                 optimizer = torch.optim.Adam(trainable_params)
@@ -146,7 +153,9 @@ class AdaScale:
                 for batch_idx in range(len(data_loader)):
                     with remove_all_quantizers(block):
                         with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
-                            fp_args, fp_kwargs = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx]), device)
+                            with fp_block_inputs[batch_idx].load():
+                                fp_args = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx].args), device)
+                                fp_kwargs = change_tensor_and_cache_device_placement(deepcopy(fp_block_inputs[batch_idx].kwargs), device)
                         fp_block_results = change_tensor_and_cache_device_placement(block(*fp_args, **fp_kwargs), "cpu")
                         fp_out.append(fp_block_results)
                         del fp_args, fp_kwargs
@@ -155,7 +164,9 @@ class AdaScale:
                     for batch_idx in range(len(data_loader)):
                         with torch.set_grad_enabled(True):
                             with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
-                                qt_args, qt_kwargs = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx]), device)
+                                with qt_block_inputs[batch_idx].load():
+                                    qt_args = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx].args), device)
+                                    qt_kwargs = change_tensor_and_cache_device_placement(deepcopy(qt_block_inputs[batch_idx].kwargs), device)
                             quant_out = block(*qt_args, **qt_kwargs)
                             del qt_args, qt_kwargs
 

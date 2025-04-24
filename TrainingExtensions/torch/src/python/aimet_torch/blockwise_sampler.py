@@ -37,9 +37,12 @@
 
 """Blockwise sampling utilty"""
 import itertools
+import pickle
+import os
 import sys
+import tempfile
+import contextlib
 from copy import deepcopy
-from dataclasses import dataclass
 from tqdm import tqdm
 from typing import List, Union, Tuple, Generator, Callable
 
@@ -94,6 +97,137 @@ def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=N
     return moved_inputs
 
 
+class CachedBlockInput:
+    """
+    Class providing disk offloading capabilities for cache block inputs. If specified in the constructor arguments,
+    objects of this class will be offloaded to CPU unless they are accessed inside the .load() context manager. This
+    allows the blockwise sampler to be used with a much higher number of samples, although there is a slight slowdown
+    due to the disk I/O incurred by disk operations.
+    """
+    def __init__(self, args, kwargs, place_on_disk: bool = False):
+        self._args = args
+        self._kwargs = kwargs
+
+        self.args_path = None
+        self.args_changed = True
+        self.kwargs_path = None
+        self.kwargs_changed = True
+        self.place_on_disk = place_on_disk
+
+        if place_on_disk:
+            self.enable_disk_caching()
+
+    def enable_disk_caching(self):
+        """ Function to enable disk caching """
+        fd, self.args_path = tempfile.mkstemp(suffix=".pkl", text=True)
+        os.close(fd)  # If fd is not closed then it remains open
+        self.args_changed = True
+
+        fd, self.kwargs_path = tempfile.mkstemp(suffix=".pkl", text=True)
+        os.close(fd)  # If fd is not closed then it remains open
+        self.kwargs_changed = True
+
+        self.place_on_disk = True
+        self._cache_on_disk()
+
+    def disable_disk_caching(self):
+        """ Function to disable disk caching """
+        if not self.place_on_disk:
+            return # Disk caching already disabled
+
+        self.place_on_disk = False
+        os.remove(self.args_path)
+        os.remove(self.kwargs_path)
+
+    @contextlib.contextmanager
+    def load(self):
+        """ Context manager that ensures CachedBlockInput is loaded from disk, and returned to the correct location. """
+        if self.place_on_disk:
+            self._load_from_disk()
+
+        yield
+
+        if self.place_on_disk:
+            self._cache_on_disk()
+
+    @property
+    def args(self):
+        """ Getter function for captured args """
+        return self._args
+
+    @args.setter
+    def args(self, args):
+        """ Setter function for captured args """
+        if self._args is None:
+            raise RuntimeError("Attempting to modify args without loading from disk. Please place this line inside"
+                               " a .load() context manager.")
+        self.args_changed = True
+        self._args = args
+
+    @property
+    def kwargs(self):
+        """ Getter function for captured kwargs """
+        return self._kwargs
+
+    @kwargs.setter
+    def kwargs(self, kwargs):
+        """ Setter function for captured kwargs """
+        if self._kwargs is None:
+            raise RuntimeError("Attempting to modify kwargs without loading from disk. Please place this line inside"
+                               " a .load() context manager.")
+        self.kwargs_changed = True
+        self._kwargs = kwargs
+
+    def _cache_on_disk(self):
+        """ Helper function to cache on disk. """
+        assert self.place_on_disk
+
+        if self.args_changed:
+            with open(self.args_path, "wb") as args_file:
+                pickle.dump(self.args, args_file)
+
+        if self.kwargs_changed:
+            with open(self.kwargs_path, "wb") as kwargs_file:
+                pickle.dump(self.kwargs, kwargs_file)
+
+        self._args = None
+        self._kwargs = None
+
+    def _load_from_disk(self):
+        """ Helper function to load from disk. """
+        assert self.place_on_disk
+
+        with open(self.args_path, "rb") as args_file:
+            self._args = pickle.load(args_file)
+        with open(self.kwargs_path, "rb") as kwargs_file:
+            self._kwargs = pickle.load(kwargs_file)
+
+        self.args_changed = False
+        self.kwargs_changed = False
+
+    def to(self, device):
+        """ Helper function to move loaded args and kwargs between devices."""
+        if self.args is not None:
+            self._args = change_tensor_and_cache_device_placement(self.args, device)
+        if self.kwargs is not None:
+            self._kwargs = change_tensor_and_cache_device_placement(self.kwargs, device)
+
+        return self
+
+    def __del__(self):
+        """ Destructor to make sure that temp files are cleaned up. """
+        self.disable_disk_caching()
+
+    def __deepcopy__(self, memo):
+        """ Custom deepcopy implementation to make sure that tensor computational graphs are not copied. """
+        with self.load(), patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
+            return CachedBlockInput(deepcopy(self.args), deepcopy(self.kwargs), deepcopy(self.place_on_disk))
+
+    def __iter__(self):
+        """ Allows tuple unpacking on objects of this class. """
+        return iter((self.args, self.kwargs))
+
+
 class BlockwiseSampler:
     """
     Class providing blockwise sampling utilities. Specifically, BlockWise sampler allows users to specify a list of
@@ -104,38 +238,28 @@ class BlockwiseSampler:
     use of any user adjustments to quantization parameters for a particular block made in the sampling loop.
     NOTE: users CAN NOT modify model weights during the sample() loop
     """
-    def __init__(self,
-                 sim: QuantizationSimModel,
-                 blocks: List[torch.nn.Module],
-                 dataloader: DataLoader,
-                 forward_fn: Callable = default_forward_fn
-                 ):
+    def __init__(
+            self,
+            sim: QuantizationSimModel,
+            blocks: List[torch.nn.Module],
+            dataloader: DataLoader,
+            forward_fn: Callable = default_forward_fn,
+            keep_unused_blocks_on_cpu: bool = True,
+            cache_activations_on_disk: bool = True
+    ):
         self.sim = sim
         self.blocks = blocks
         self.dataloader = dataloader
         self.forward_fn = forward_fn
+        self.keep_unused_blocks_on_cpu = keep_unused_blocks_on_cpu
+        self.cache_activations_on_disk = cache_activations_on_disk
 
     @torch.no_grad()
-    def run_inference(self, sample) -> Generator[torch.Tensor, None, None]:
+    def run_inference(self, sample) -> Generator[CachedBlockInput, None, None]:
         """
         Helper function to run inference on the model using the given sample, pausing and yielding the results after
         each block.
         """
-
-        @dataclass
-        class InputHolder:
-            """Dataclass to hold input args and kwargs to a pytorch module."""
-            args: tuple
-            kwargs: dict
-
-            def to(self, device):
-                """ Moves the contents of InputHolder to the provided device """
-                self.args = change_tensor_and_cache_device_placement(self.args, device)
-                self.kwargs = change_tensor_and_cache_device_placement(self.kwargs, device)
-
-            def __deepcopy__(self, memo):
-                with patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
-                    return InputHolder(deepcopy(self.args), deepcopy(self.kwargs))
 
         class StopForwardExceptionWithInput(utils.StopForwardException):
             """Exception raised in order to stop forward execution through the model. Holds module input data."""
@@ -143,32 +267,35 @@ class BlockwiseSampler:
                 self.captured_input = captured_input
 
         def hook_fn(_, args, kwargs):
-            raise StopForwardExceptionWithInput(deepcopy(InputHolder(args, kwargs)))
+            raise StopForwardExceptionWithInput(deepcopy(CachedBlockInput(args, kwargs)))
 
+        hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
         try:
-            hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
             self.forward_fn(self.sim.model, sample)
         except StopForwardExceptionWithInput as e:
             # pylint: disable=used-before-assignment
             hook.remove()
             next_block_input = e.captured_input
             next_block_input.to("cpu")
-            e.captured_input = None
 
-            yield next_block_input.args, next_block_input.kwargs
+            if self.cache_activations_on_disk:
+                next_block_input.enable_disk_caching()
+
+            yield next_block_input
 
         for block in self.blocks[:-1]:
-            next_block_input.to(utils.get_device(block))
-            next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
-            next_block_input.to("cpu")
+            with next_block_input.load():
+                next_block_input.to(utils.get_device(block))
+                next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
+                next_block_input.to("cpu")
 
-            if not isinstance(next_block_input.args, tuple):
-                next_block_input.args = (next_block_input.args,)
+                if not isinstance(next_block_input.args, tuple):
+                    next_block_input.args = (next_block_input.args,)
 
-            yield next_block_input.args, next_block_input.kwargs
+            yield next_block_input
 
 
-    def sample(self, keep_unused_blocks_on_cpu:bool=True, device=None, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], torch.Tensor, torch.Tensor], None, None]:
+    def sample(self, device=None, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], List[CachedBlockInput], List[CachedBlockInput]], None, None]:
         """
         Main generator function for blockwise sampler. Each loop of this generator yields a tuple of
         (block, [list of FP inputs to block], [list of QT inputs to block]) based on the list of blocks provided during
@@ -183,7 +310,7 @@ class BlockwiseSampler:
             fp_inferences.append(self.run_inference(sample))
             qt_inferences.append(self.run_inference(sample))
 
-        if keep_unused_blocks_on_cpu:
+        if self.keep_unused_blocks_on_cpu:
             self.sim.model.to("cpu")
 
         blocks = iter(self.blocks)
@@ -193,7 +320,7 @@ class BlockwiseSampler:
                 try:
                     block = next(blocks)
 
-                    if keep_unused_blocks_on_cpu:
+                    if self.keep_unused_blocks_on_cpu:
                         prev_block.to(device)
 
                     # Quantizers must be ENABLED when calculating quantized block inputs
@@ -203,7 +330,7 @@ class BlockwiseSampler:
                     with utils.disable_all_quantizers(self.sim.model):
                         fp_block_inputs = [next(block_input) for block_input in fp_inferences]
 
-                    if keep_unused_blocks_on_cpu:
+                    if self.keep_unused_blocks_on_cpu:
                         prev_block.to("cpu")
                         block.to(device)
 
@@ -214,5 +341,5 @@ class BlockwiseSampler:
                 except StopIteration:
                     break
 
-            if keep_unused_blocks_on_cpu:
+            if self.keep_unused_blocks_on_cpu:
                 block.to("cpu")

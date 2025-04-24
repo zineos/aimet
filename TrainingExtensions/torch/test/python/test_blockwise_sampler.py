@@ -36,6 +36,9 @@
 # =============================================================================
 
 from dataclasses import dataclass
+from contextlib import ExitStack
+
+import pytest
 import torch
 from torch.utils.data import DataLoader, Dataset
 
@@ -94,7 +97,9 @@ class StopForwardExceptionWithInput(StopForwardException):
 def hook_fn(module, args, kwargs):
     raise StopForwardExceptionWithInput(InputHolder(args, kwargs))
 
-def test_blockwise_sampler():
+@pytest.mark.parametrize("cache_activations_on_disk", [True, False])
+@pytest.mark.parametrize("keep_unused_blocks_on_cpu", [True, False])
+def test_blockwise_sampler(cache_activations_on_disk, keep_unused_blocks_on_cpu):
     model = ModelWithBlocks()
     sim = QuantizationSimModel(model, dummy_input=torch.randn(3, 3, 3))
     dataset = RandomDataset((3, 3, 3), 10)
@@ -104,7 +109,14 @@ def test_blockwise_sampler():
             _ = sim.model(sample)
     sim.compute_encodings(forward_pass_callback)
 
-    sampler = BlockwiseSampler(sim=sim, blocks=sim.model.blocks, dataloader=DataLoader(dataset, batch_size=1, shuffle=False))
+    sampler = BlockwiseSampler(
+        sim=sim,
+        blocks=sim.model.blocks,
+        dataloader=DataLoader(dataset, batch_size=1, shuffle=False),
+        cache_activations_on_disk=cache_activations_on_disk,
+        keep_unused_blocks_on_cpu=keep_unused_blocks_on_cpu
+    )
+
     for block, fp_block_inputs, qt_block_inputs in sampler.sample():
         # put a hook on the block, grab fp_inputs, grab qt_inputs without using sampler. Check if they are the same
         hook = block.register_forward_pre_hook(hook_fn, with_kwargs=True)
@@ -129,12 +141,17 @@ def test_blockwise_sampler():
             for tensor1, tensor2 in zip(tuple1, tuple2):
                 assert torch.equal(tensor1, tensor2)
 
-        fp_block_inputs_args = (inputs[0] for inputs in fp_block_inputs)
-        qt_block_inputs_args = (inputs[0] for inputs in qt_block_inputs)
+        with ExitStack() as stack:
+            for fp_block_input in fp_block_inputs:
+                stack.enter_context(fp_block_input.load())
+            for qt_block_input in qt_block_inputs:
+                stack.enter_context(qt_block_input.load())
 
-        assert block in sim.model.blocks
-        for cached_tensors, uncached_tensors in zip(fp_block_inputs_args, fp_block_inputs_without_caching):
-            _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
-        for cached_tensors, uncached_tensors in zip(qt_block_inputs_args, qt_block_inputs_without_caching):
-            _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
+            fp_block_inputs_args = tuple(fp_block_input.args for fp_block_input in fp_block_inputs)
+            qt_block_inputs_args = tuple(qt_block_input.args for qt_block_input in qt_block_inputs)
 
+            assert block in sim.model.blocks
+            for cached_tensors, uncached_tensors in zip(fp_block_inputs_args, fp_block_inputs_without_caching):
+                _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
+            for cached_tensors, uncached_tensors in zip(qt_block_inputs_args, qt_block_inputs_without_caching):
+                _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
