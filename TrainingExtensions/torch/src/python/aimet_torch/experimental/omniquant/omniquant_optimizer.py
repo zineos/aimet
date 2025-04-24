@@ -56,7 +56,6 @@ from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.nn import compute_param_encodings
 from aimet_common.utils import AimetLogger
 from .decoder_processor import get_transformer_processor
-from .omniquant_config import OmniquantConfig
 from .let_modules import LETModule
 from ._utils import (
     _convert_sim_to_letsim,
@@ -70,7 +69,9 @@ from tqdm import tqdm
 
 OMNIQUANT_ARTIFACT_DIR = "./aimet_omniquant_artifact/"
 OMNIQUANT_METADATA_SAFETENSOR_NAME = "aimet_omniquant_metadata.safetensor"
-
+OMNIQUANT_COMPUTE_SQNR = True
+OMNIQUANT_LR = 5e-4 # 1st fp/qt to choose input source on fp block to get ground truth. 2nd fp/qt to choose input source on qt block to get prediction.
+CACHE_ON_CPU = True # Will be removed after using blockwise sampler.
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
@@ -78,22 +79,25 @@ class Omniquant:
     """
     Omniquant for Post Training Quantization (PTQ)
     """
+    # pylint: disable=too-many-arguments
     @classmethod
-    def apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, omniquant_config: OmniquantConfig, dataloader,
-                        forward_fn: Callable, output_path: str = OMNIQUANT_ARTIFACT_DIR) -> torch.nn.Module:
+    def apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, dataloader,
+                        forward_fn: Callable, num_epoch: int, output_path: str = OMNIQUANT_ARTIFACT_DIR) -> torch.nn.Module:
         """
         Returns model with with omniquant weight, and save metadata in safetensor format to output path. Metadata safetensor
         can be used in update_lora_weights to update lora adaptor weights for peft lora model.
 
         :param quant_sim: QuantizationSimModel object to optimize with Omniquant.
         :param model: Original fp32 model from which quant_sim was created.
-        :param omniquant_config: Configuration for Omniquant optimization.
         :param dataloader: Dataloader used to train model.
         :param forward_fn: Model forward function used to cache intermediate data. 
                            Expect to have model and inputs as function argument. e.g. lambda model, inputs: model(*inputs) 
+        :param num_epoch: Epochs to train each block with omniquant.
         :param output_path: Path to save {layer_name: scale} metadata safetensor.
         :return: Model with Omniquant weights.
         """
+        num_batch = len(dataloader)
+
         @contextlib.contextmanager
         def disable_dynamic_cache():
             # Disable dynamic_cache for LET blockwise training, and restore after optimization.
@@ -105,11 +109,10 @@ class Omniquant:
                 quant_sim.model.config.use_cache, model.config.use_cache = quant_sim_use_cache_bool, model_use_cache_bool
         output_path = Path(output_path)
         os.makedirs(output_path, exist_ok=True)
-        cls._validate_omniquant_config(omniquant_config)
-        _logger.info(omniquant_config)
+
         start_omq_optmztn_time = time.perf_counter()
         with disable_dynamic_cache():
-            cls._apply_omniquant(quant_sim, model, omniquant_config, dataloader, forward_fn, output_path)
+            cls._apply_omniquant(quant_sim, model, dataloader, forward_fn, num_epoch, num_batch, output_path)
         total_omq_optmztn_time= time.perf_counter() - start_omq_optmztn_time
         _logger.info("Took %.4f seconds for omq optimization ", total_omq_optmztn_time)
 
@@ -119,17 +122,18 @@ class Omniquant:
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-statements
     @classmethod
-    def _apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, omniquant_config: OmniquantConfig,
-                         dataloader, forward_fn, output_path: str) -> torch.nn.Module:
+    def _apply_omniquant(cls, quant_sim: QuantizationSimModel, model: torch.nn.Module, dataloader, forward_fn,
+                         num_epoch: int, num_batch: int, output_path: str) -> torch.nn.Module:
         """
         Implemenatation to run omniquant optimization block by block. Return model with optimized weights.
 
         :param quant_sim: QuantizationSimModel object to optimize with Omniquant.
         :param model: Original fp32 model from which quant_sim was created.
-        :param omniquant_config: Configuration for Omniquant optimization.
         :param dataloader: Dataloader used to train model.
         :param forward_fn: Model forward function used to cache intermediate data. 
                            Expect to have model and inputs as function argument. e.g. lambda model, inputs: model(*inputs) 
+        :param num_epoch: Epochs to train each block with omniquant.
+        :param num_batch: Number of batches in dataloader.
         :param output_path: Path where to store artifacts.
         :return: Model with Omniquant weights.
         """
@@ -148,11 +152,11 @@ class Omniquant:
             num_repeats = model.config.num_attention_heads//model.config.num_key_value_heads
             with tempfile.TemporaryDirectory() as tempdir:
                 cached_dir = os.path.join(tempdir, 'cached_dataset')
-                cached_dataset = CachedDataset(dataloader, omniquant_config.num_batch, cached_dir)
+                cached_dataset = CachedDataset(dataloader, num_batch, cached_dir)
 
                 cached_fp_dataset, cached_quant_dataset = get_block_inputs(
-                    model, quant_sim, ".".join([transformer_processor.transformer_block_list_path, "0"]), cached_dataset, omniquant_config.cache_on_cpu,
-                    forward_fn, omniquant_config.num_batch, cached_dir, incl_kwargs=True
+                    model, quant_sim, ".".join([transformer_processor.transformer_block_list_path, "0"]), cached_dataset, CACHE_ON_CPU,
+                    forward_fn, num_batch, cached_dir, incl_kwargs=True
                 )
                 for block_num, (fp_block, qt_block) in enumerate(zip(fp_transformer_block_list, qt_transformer_block_list)):
                     qt_let_pair_list = transformer_processor.get_let_module_pair(qt_block)
@@ -174,26 +178,26 @@ class Omniquant:
                     encoding_params, param_names = cls._get_trainable_params(qt_block)
                     let_params = cls._get_let_params(qt_let_pair_list)
                     grouped_params = [
-                            {"params": encoding_params, "lr": omniquant_config.omq_lr, "weight_decay":  0.},
-                            {"params": let_params, "lr": omniquant_config.omq_lr, "weight_decay": 0.},
+                            {"params": encoding_params, "lr": OMNIQUANT_LR, "weight_decay":  0.},
+                            {"params": let_params, "lr": OMNIQUANT_LR, "weight_decay": 0.},
                         ]
 
                     optimizer = torch.optim.AdamW(grouped_params)
                     loss_fn = torch.nn.MSELoss(reduction="sum")
 
                     _logger.info("Starting blockwise training for params")
-                    for epoch in tqdm(range(omniquant_config.num_epoch)):
+                    for epoch in tqdm(range(num_epoch)):
                         sqnr_list = []
                         loss_list = []
-                        for batch_num in range(omniquant_config.num_batch):
+                        for batch_num in range(num_batch):
                             fp_input, qt_input = cached_fp_dataset[batch_num], cached_quant_dataset[batch_num]
                             # Do block-wise training.
-                            loss, sqnr = cls._block_wise_training_step(omniquant_config, fp_input, qt_input, fp_block, qt_block, qt_let_pair_list, optimizer, loss_fn, omniquant_config.compute_sqnr, model.device)
+                            loss, sqnr = cls._block_wise_training_step(fp_input, qt_input, fp_block, qt_block, qt_let_pair_list, optimizer, loss_fn, model.device)
                             sqnr_list += [sqnr]
                             loss_list += [loss]
                         loss_mean = torch.stack(loss_list).mean()
                         log_msg = f"layer {block_num} epoch {epoch} | loss: {loss_mean:.3f}"
-                        if omniquant_config.compute_sqnr:
+                        if OMNIQUANT_COMPUTE_SQNR:
                             sqnr_mean = torch.stack(sqnr_list).mean()
                             log_msg += f"{log_msg} | sqnr: {sqnr_mean:.3f}"
 
@@ -208,7 +212,7 @@ class Omniquant:
                     freeze_let_optimized_param_quantizers(qt_block)
                     # TODO if should call compute_param_encodings after blockwise training
                     get_block_outputs(
-                            fp_block, qt_block, False, cached_fp_dataset, cached_quant_dataset, omniquant_config.cache_on_cpu,
+                            fp_block, qt_block, False, cached_fp_dataset, cached_quant_dataset, CACHE_ON_CPU,
                             lambda decoder_block, *args, **kwargs: decoder_block(*args, **kwargs), model.device, cached_dir
                         )
             # pylint: disable=protected-access
@@ -224,7 +228,6 @@ class Omniquant:
     # pylint: disable=too-many-arguments
     @classmethod
     def _block_wise_training_step(cls,
-            omniquant_config,
             fp_input,
             qt_input,
             fp_block,
@@ -232,13 +235,11 @@ class Omniquant:
             qt_let_pair_list,
             optimizer,
             loss_fn,
-            compute_sqnr : bool,
             device : str):
         """
         Run block-wise traing on LET parameters. Use fp_block output as ground truth and qt_block output as
-        model output. Use omniquant_config.input_symmetry to choose input for fp and qt block.
+        model output. 
 
-        :param omniquant_config: Configuration for Omniquant optimization.
         :param fp_input: block output from previous block in fp model.
         :param qt_input: block output from previous block in qt model.
         :param fp_block: decoder block in fp model.
@@ -246,7 +247,6 @@ class Omniquant:
         :param qt_let_pair_list: let_pair_list in qt model. Use to get LET training parameters.
         :param optimizer: optimizer used for LET blockwise training
         :param loss_fn: loss_fn used for LET bloackwise training
-        :param compute_sqnr: Computes sqnr between fp and qt block during blockwise training
         """
         optimizer.zero_grad()
         def _process_block_input(_block_input):
@@ -258,19 +258,20 @@ class Omniquant:
             _kwargs = _move_to_device(_kwargs, device)
             return _args, _kwargs
 
+        input_symmetry = "fpfp"
         # Get target output (ground truth)
-        target_input = fp_input if omniquant_config.input_symmetry.startswith("fp") else qt_input
+        target_input = fp_input if input_symmetry.startswith("fp") else qt_input
         _args, _kwargs = _process_block_input(target_input)
         fp_outputs = fp_block(*_args, **_kwargs)[0]
 
         # Get model output (prediction)
-        model_input = fp_input if omniquant_config.input_symmetry.endswith("fp") else qt_input
+        model_input = fp_input if input_symmetry.endswith("fp") else qt_input
         _qt_args, _qt_kwargs = _process_block_input(model_input)
         target_op = fp_block(*_qt_args, **_qt_kwargs)[0]
         qt_output = qt_block(*_qt_args, **_qt_kwargs)[0]
 
         with torch.no_grad():
-            sqnr = (torch.tensor(get_sqnr(target_op, qt_output)) if omniquant_config.compute_sqnr else None)
+            sqnr = (torch.tensor(get_sqnr(target_op, qt_output)) if OMNIQUANT_COMPUTE_SQNR else None)
 
         loss = loss_fn(qt_output, target_op)
         loss.backward()
@@ -278,15 +279,6 @@ class Omniquant:
         optimizer.zero_grad()
 
         return loss.detach().cpu(), sqnr
-
-    @classmethod
-    def _validate_omniquant_config(cls, omniquant_config: OmniquantConfig):
-        """ Validate omniquant config """
-        # input_symmetry should be one of qtqt, qtfp, fpqt, fpfp
-        input_symmetry_error_msg = f"Expect omniquant_config.input_symmetry be one of qtqt, qtfp, fpqt, fpfp but got {omniquant_config.input_symmetry}."
-        assert len(omniquant_config.input_symmetry) == 4, input_symmetry_error_msg
-        assert omniquant_config.input_symmetry[:2] in ("qt", "fp"), input_symmetry_error_msg
-        assert omniquant_config.input_symmetry[2:] in ("qt", "fp"), input_symmetry_error_msg
 
     @classmethod
     # pylint: disable=protected-access
