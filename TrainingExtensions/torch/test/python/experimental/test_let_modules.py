@@ -40,13 +40,13 @@ import torch
 import copy
 from torch import nn
 
-from aimet_torch.omniquant.module_defns import (
+from aimet_torch.experimental.omniquant.module_defns import (
     GemmaRMSNorm,
     LlamaRMSNorm,
 )
 
-from aimet_torch.omniquant._utils import _convert_sim_to_letsim
-from aimet_torch.omniquant.let_modules import (
+from aimet_torch.experimental.omniquant._utils import _convert_sim_to_letsim
+from aimet_torch.experimental.omniquant.let_modules import (
     LETQuantizedLlamaRMSNorm,
     LETQuantizedGemmaNorm,
 )

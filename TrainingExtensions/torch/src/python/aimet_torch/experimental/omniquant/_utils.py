@@ -42,11 +42,11 @@ from aimet_torch.v2.nn import (
     QuantizedConv2d,
 )
 
-from aimet_torch.omniquant.module_defns import (
+from aimet_torch.experimental.omniquant.module_defns import (
     QuantizedLlamaRMSNorm,
     QuantizedGemmaNorm,
 )
-from aimet_torch.omniquant.let_modules import LETModule
+from aimet_torch.experimental.omniquant.let_modules import LETModule
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 import torch

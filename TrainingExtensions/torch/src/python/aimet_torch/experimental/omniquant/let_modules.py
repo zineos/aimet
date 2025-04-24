@@ -42,7 +42,7 @@ from aimet_torch.v2.nn import (
 )
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.utils import patch_attr
-from aimet_torch.omniquant.module_defns import (
+from aimet_torch.experimental.omniquant.module_defns import (
     QuantizedLlamaRMSNorm,
     QuantizedGemmaNorm,
 )

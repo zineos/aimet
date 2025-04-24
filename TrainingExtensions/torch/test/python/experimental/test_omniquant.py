@@ -48,11 +48,12 @@ from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft
 from peft.tuners.lora.layer import Linear as LoraLinear
 import pytest
 
-from aimet_torch.omniquant import decoder_processor
-from aimet_torch.omniquant import omniquant_optimizer
-from aimet_torch.omniquant.let_modules import LETModule
-from aimet_torch.omniquant._utils import _convert_sim_to_letsim
+from aimet_torch.experimental.omniquant import decoder_processor
+from aimet_torch.experimental.omniquant import omniquant_optimizer
+from aimet_torch.experimental.omniquant.let_modules import LETModule
+from aimet_torch.experimental.omniquant._utils import _convert_sim_to_letsim
 from aimet_torch.v2.quantsim import QuantizationSimModel
+
 
 @contextlib.contextmanager
 def add_custom_model_class_to_support_model_group(model_class, target_group_name):
@@ -69,6 +70,7 @@ def add_custom_model_class_to_support_model_group(model_class, target_group_name
     setattr(decoder_processor, target_group_name, target_group)
 
 class FakeLlamaModel(torch.nn.Module):
+    """ Toy model for test """
     def __init__(self, layer_num, seq_len, head_num, emb_dim):
         super().__init__()
         assert emb_dim % head_num == 0, "emb_dim need to be dividable by head_num."
@@ -76,12 +78,14 @@ class FakeLlamaModel(torch.nn.Module):
         self.out_linear = torch.nn.Linear(emb_dim, 5)
 
     def forward(self, x):
+        """ model forward """
         for layer in self.layers:
             x = layer(x)
         x = self.out_linear(x)
         return x
 
 class FakeDecoderBlcok(torch.nn.Module):
+    """ Toy model for test """
     def __init__(self, seq_len, head_num, emb_dim):
         super().__init__()
         self.input_layernorm = torch.nn.LayerNorm(emb_dim)
@@ -90,6 +94,7 @@ class FakeDecoderBlcok(torch.nn.Module):
         self.post_attention_layernorm = torch.nn.LayerNorm(emb_dim)
 
     def forward(self, x):
+        """ model forward """
         x = self.input_layernorm(x)
         x = self.self_attn(x)
         x = self.mlp(x)
@@ -97,6 +102,7 @@ class FakeDecoderBlcok(torch.nn.Module):
         return x
 
 class FakeSelfAttn(torch.nn.Module):
+    """ Toy model for test """
     def __init__(self, seq_len, head_num, emb_dim):
         super().__init__()
         self.seq_len = seq_len
@@ -108,6 +114,7 @@ class FakeSelfAttn(torch.nn.Module):
         self.o_proj = torch.nn.Linear(emb_dim, emb_dim)
 
     def forward(self, x):
+        """ model forward """
         head_dim = self.emb_dim//self.head_num
         q = self.q_proj(x).reshape(-1, self.seq_len, self.head_num, head_dim).permute(0, 2, 1, 3)
         k = self.k_proj(x).reshape(-1, self.seq_len, self.head_num, head_dim).permute(0, 2, 3, 1)
@@ -119,6 +126,7 @@ class FakeSelfAttn(torch.nn.Module):
         return out
 
 class FakeMlp(torch.nn.Module):
+    """ Toy model for test """
     def __init__(self, emb_dim):
         super().__init__()
         self.gate_proj = torch.nn.Linear(emb_dim, emb_dim)
@@ -126,6 +134,7 @@ class FakeMlp(torch.nn.Module):
         self.down_proj = torch.nn.Linear(emb_dim, emb_dim)
 
     def forward(self, x):
+        """ model forward """
         y0 = self.gate_proj(x)
         y1 = self.up_proj(x)
         y1 = self.down_proj(y1)
@@ -159,6 +168,7 @@ class TestOmniquant:
         with pytest.raises(ValueError):
             decoder_processor.get_transformer_processor(fake_llama_model)
 
+    # pylint: disable=too-many-locals
     def test_dump_meta_data(self):
         """ Test _dump_meta_data saves data and they are same as LET scale/ """
         layer_num = 5
@@ -191,7 +201,7 @@ class TestOmniquant:
                     for module in _decoder_block.modules():
                         if isinstance(module, LETModule):
                             module.fold_let_params()
-
+                # pylint: disable=protected-access
                 with tempfile.TemporaryDirectory() as tempdir:
                     omniquant._dump_meta_data(qsim.model, Path(tempdir))
                     metadata_path = os.path.join(tempdir, "aimet_omniquant_metadata.safetensor")
@@ -208,6 +218,7 @@ class TestOmniquant:
                     print(np.equal(cached_scale, metadata_scale))
                     assert (np.equal(cached_scale, metadata_scale)).all() # metadata_scale is numpy array
 
+    # pylint: disable=too-many-locals
     def test_load_lora_model(self):
         """ Test omniquant_optimizer.update_lora_weights """
         layer_num = 2
