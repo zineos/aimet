@@ -243,7 +243,7 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=enable_pcq))
     seq_params = SeqMseParams(num_batches=1)
@@ -275,7 +275,7 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -303,7 +303,7 @@ def test_apply_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -323,7 +323,7 @@ def test_static_apply_seq_mse(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -340,7 +340,7 @@ def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -364,7 +364,7 @@ def test_dependency_graph():
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=4,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -393,7 +393,7 @@ def test_residual_model_dependency_graph():
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=4,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -429,7 +429,7 @@ def test_apply_seq_mse_for_residual_model(param_bw, loss_fn, enable_pcq):
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=param_bw,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=enable_pcq))
     seq_params = SeqMseParams(num_batches=2)
@@ -452,7 +452,7 @@ def test_model_with_multiple_inputs_dependency_graph_utils():
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=4,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)
@@ -471,7 +471,7 @@ def test_model_with_multiple_outputs_value_info():
                                quant_scheme=QuantScheme.post_training_tf,
                                default_activation_bw=8,
                                default_param_bw=4,
-                               use_cuda=False,
+                               providers=["CPUExecutionProvider"],
                                config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
                                                             unsigned_symmetric=False, pcq=True))
     seq_params = SeqMseParams(num_batches=1)

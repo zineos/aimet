@@ -41,7 +41,7 @@ import contextlib
 import tempfile
 from pathlib import Path
 import os
-from typing import Any, Callable, Dict, List, Optional, overload, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Optional, overload, Tuple, TypeVar, Union, Sequence
 import itertools
 import json
 import warnings
@@ -160,11 +160,11 @@ class QuantizationSimModel:
     :param model: ONNX model
     :param dummy_input: Dummy input to the model. If None, will attempt to auto-generate a dummy input
     :param quant_scheme: Quantization scheme (e.g. QuantScheme.post_training_tf)
-    :param rounding_mode: Rounding mode (e.g. nearest)
+    :param rounding_mode: Deprecated
     :param default_param_bw: Quantization bitwidth for parameter
     :param default_activation_bw: Quantization bitwidth for activation
-    :param use_symmetric_encodings: True if symmetric encoding is used.  False otherwise.
-    :param use_cuda: True if using CUDA to run quantization op. False otherwise.
+    :param use_symmetric_encodings: Deprecated, symmetry is controlled by the config_file
+    :param use_cuda: Deprecated, use `providers` instead
     :param config_file: File path or alias of the configuration file.
                         Alias can be one of {{ {', '.join(_config_file_aliases.keys())} }} (Default: `"default"`)
     :param default_data_type: Default data type to use for quantizing all layer inputs, outputs and parameters.
@@ -172,27 +172,80 @@ class QuantizationSimModel:
                              Note that the mode default_data_type=QuantizationDataType.float is only supported with
                              default_output_bw=16 and default_param_bw=16
     :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
+    :param providers: Onnxruntime execution providers to use when building InferenceSession. 
+                      If `None`, falls back to `onnxruntime.get_available_providers()`
     :param path: Directory to save the artifacts.
     """
 
     def __init__(self,
                  model: Union[ModelProto, ONNXModel],
-                 dummy_input: Dict[str, np.ndarray] = None,
+                 dummy_input: Optional[Dict[str, np.ndarray]] = None,
                  quant_scheme: QuantScheme = QuantScheme.min_max,
-                 rounding_mode: str = 'nearest',
+                 rounding_mode: str = None, # Deprecated
                  default_param_bw: int = 8,
                  default_activation_bw: int = 8,
-                 use_symmetric_encodings: bool = False, use_cuda: bool = True,
-                 device: int = 0, config_file: str = None,
+                 use_symmetric_encodings: bool = None, # Deprecated
+                 use_cuda: bool = None, # Deprecated
+                 device: int = None, # Deprecated
+                 config_file: Optional[str] = None,
                  default_data_type: QuantizationDataType = QuantizationDataType.int,
-                 user_onnx_libs: List[str] = None, path: str = None):
+                 user_onnx_libs: List[str] = None,
+                 providers: Optional[Sequence[str | Tuple[str, Dict[Any, Any]]]] = None,
+                 path: Optional[str] = None):
+        # pylint: disable = too-many-branches, too-many-statements
+        if rounding_mode is not None:
+            if rounding_mode == 'nearest':
+                warnings.warn(_red("Passing rounding_mode='nearest' is no longer needed " \
+                                   "and will be deprecated soon in the later versions."),
+                              DeprecationWarning, stacklevel=2)
+            else:
+                raise TypeError("'rounding_mode' parameter is no longer supported.")
+
+        if use_symmetric_encodings is not None:
+            warnings.warn(_red("Passing `use_symmetric_encodings` is not needed and will be deprecated in later versions."),
+                          DeprecationWarning, stacklevel=2)
+
+        if device is not None:
+            warnings.warn(_red("Passing `device` will be deprecated in later versions. " \
+                               "Please use the `providers` argument instead to specify cuda device."),
+                          DeprecationWarning, stacklevel=2)
+            if providers is not None:
+                raise RuntimeError("Cannot provide `device` and `providers` at the same time.")
+
+        if use_cuda is not None:
+            warnings.warn(_red("Passing `use_cuda` will be deprecated in later versions. " \
+                               "Please use the `providers` argument instead."),
+                          DeprecationWarning, stacklevel=2)
+            if providers is not None:
+                raise RuntimeError("Cannot provide `use_cuda` and `providers` at the same time.")
+
+            # Legacy behavior of use_cuda
+            if "CUDAExecutionProvider" not in ort.get_available_providers():
+                use_cuda = False
+
+            device = device or 0
+            if use_cuda:
+                providers = [('CUDAExecutionProvider', {'device_id': device}), 'CPUExecutionProvider']
+            else:
+                providers = ['CPUExecutionProvider']
+
+        if not providers:
+            providers = ort.get_available_providers()
+
         if isinstance(quant_scheme, str):
             quant_scheme = QuantScheme.from_str(quant_scheme)
 
         if isinstance(model, ModelProto):
             model = ONNXModel(model)
 
+        op_domain = "aimet.customop.cpu"
+        for provider in providers:
+            if provider == "CUDAExecutionProvider" or provider[0] == "CUDAExecutionProvider":
+                op_domain = "aimet.customop.cuda"
+
         self.model = model
+        self._op_domain = op_domain
+        self.providers = providers
 
         if not dummy_input:
             dummy_input = make_dummy_input(self.model.model)
@@ -204,16 +257,6 @@ class QuantizationSimModel:
         self._default_param_bw = default_param_bw
         self._default_activation_bw = default_activation_bw
         self._default_quantization_data_type = default_data_type
-        self._use_symmetric_encodings = use_symmetric_encodings
-        self._use_cuda = use_cuda
-        if 'CUDAExecutionProvider' not in ort.get_available_providers():
-            self._use_cuda = False
-        if self._use_cuda:
-            self._op_domain = "aimet.customop.cuda"
-            self.providers = [('CUDAExecutionProvider', {'device_id': device, 'cudnn_conv_algo_search': 'DEFAULT'}), 'CPUExecutionProvider']
-        else:
-            self._op_domain = "aimet.customop.cpu"
-            self.providers = ['CPUExecutionProvider']
         self._user_onnx_libs = user_onnx_libs
         self.param_names = []
         self.input_quantizers_name = []
@@ -465,7 +508,7 @@ class QuantizationSimModel:
                                                           rounding_mode=self._rounding_mode,
                                                           op_mode=OpMode.oneShotQuantizeDequantize,
                                                           bitwidth=self._default_param_bw,
-                                                          use_symmetric_encodings=self._use_symmetric_encodings,
+                                                          use_symmetric_encodings=False,
                                                           tensor_quantizer_params=tensor_quantizer_params)
 
     def _create_quant_info_object_for_param(self, param_name: str):
@@ -533,7 +576,7 @@ class QuantizationSimModel:
                                                           rounding_mode=self._rounding_mode,
                                                           op_mode=OpMode.updateStats,
                                                           bitwidth=self._default_activation_bw,
-                                                          use_symmetric_encodings=self._use_symmetric_encodings)
+                                                          use_symmetric_encodings=False)
 
     @staticmethod
     def build_session(model: onnx.ModelProto, providers: List, user_onnx_libs: List[str] = None, path: str = None):

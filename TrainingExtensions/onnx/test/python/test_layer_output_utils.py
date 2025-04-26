@@ -71,7 +71,7 @@ def get_quantsim_artifacts():
     def callback(session, input_dict):
         session.run(None, input_dict)
 
-    quantsim = QuantizationSimModel(model=model, dummy_input=input_dict, use_cuda=False)
+    quantsim = QuantizationSimModel(model=model, dummy_input=input_dict, providers=["CPUExecutionProvider"])
     quantsim.compute_encodings(callback, input_dict)
 
     output_names = [node.name for node in quantsim.model.model.graph.input]

@@ -90,6 +90,8 @@ from .models.models_for_tests import (
     _convert_to_onnx
 )
 
+CPU_PROVIDERS = ["CPUExecutionProvider"]
+CUDA_PROVIDERS = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
 def _compare_encodings(dst, src):
     return (dst.min == src.min and
@@ -342,7 +344,7 @@ class TestQuantSim:
     def test_single_residual(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, use_cuda=False, path=tempdir)
+            sim = QuantizationSimModel(model, providers=["CPUExecutionProvider"], path=tempdir)
             for quantizer in sim.qc_quantize_op_dict:
                 sim.qc_quantize_op_dict[quantizer].enabled = True
 
@@ -398,9 +400,9 @@ class TestQuantSim:
             onnx_model_cpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
             onnx_model_gpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
 
-            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, use_cuda=False,
+            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, providers=CPU_PROVIDERS,
                                                 quant_scheme=QuantScheme.post_training_tf_enhanced, path=tempdir)
-            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, use_cuda=True,
+            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, providers=CUDA_PROVIDERS,
                                                 quant_scheme=QuantScheme.post_training_tf_enhanced, path=tempdir)
 
             for node in onnx_sim_gpu.model.graph().node:
@@ -456,11 +458,11 @@ class TestQuantSim:
             onnx_model_cpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
             onnx_model_gpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
 
-            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, use_cuda=False,
+            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, providers=CPU_PROVIDERS,
                                                 quant_scheme=QuantScheme.post_training_tf_enhanced,
                                                 default_data_type=QuantizationDataType.float, default_param_bw=16,
                                                 default_activation_bw=16, path=tempdir)
-            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, use_cuda=True,
+            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, providers=CUDA_PROVIDERS,
                                                 quant_scheme=QuantScheme.post_training_tf_enhanced,
                                                 default_data_type=QuantizationDataType.float, default_param_bw=16,
                                                 default_activation_bw=16, path=tempdir)
@@ -481,7 +483,7 @@ class TestQuantSim:
     def test_per_channel_quantization(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, use_cuda=False, config_file=get_path_for_per_channel_config(),
+            sim = QuantizationSimModel(model, providers=CPU_PROVIDERS, config_file=get_path_for_per_channel_config(),
                                        path=tempdir)
             def dummy_callback(session, args):
                 in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
@@ -513,7 +515,7 @@ class TestQuantSim:
                 conv_transpose_weight_names.append(node.input[1])
 
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, use_cuda=False, config_file=get_path_for_per_channel_config(),
+            sim = QuantizationSimModel(model, providers=CPU_PROVIDERS, config_file=get_path_for_per_channel_config(),
                                        path=tempdir)
 
             def dummy_callback(session, args):
@@ -1690,6 +1692,30 @@ class TestQuantSim:
         sim.compute_encodings(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
         assert len(quantizer.get_encodings()) == model.graph.initializer[0].dims[-1] * model.graph.initializer[0].dims[-2] // block_size
 
+    @pytest.mark.cuda
+    def test_quantsim_init_args(self):
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(single_residual_model(), use_cuda=True, providers=["CPUExecutionProvider"])
+
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(single_residual_model(), use_cuda=False, providers=["CPUExecutionProvider"])
+
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(single_residual_model(), device=0, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+
+        with pytest.raises(TypeError):
+            QuantizationSimModel(single_residual_model(), rounding_mode="stochastic")
+
+        sim = QuantizationSimModel(single_residual_model(), providers=CUDA_PROVIDERS)
+        assert sim.session.get_providers() == CUDA_PROVIDERS
+
+        sim = QuantizationSimModel(single_residual_model(), providers=CPU_PROVIDERS)
+        assert sim.session.get_providers() == CPU_PROVIDERS
+
+        providers = [('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT'}), 'CPUExecutionProvider']
+        sim = QuantizationSimModel(single_residual_model(), providers=providers)
+        assert sim.session.get_providers() == CUDA_PROVIDERS
+        assert sim.session.get_provider_options()["CUDAExecutionProvider"]["cudnn_conv_algo_search"] == "DEFAULT"
 
 class TestEncodingPropagation:
 

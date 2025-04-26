@@ -288,11 +288,16 @@ class _QuantizationSimModel(QuantizationSimModel):
                  rounding_mode: str = 'nearest',
                  default_param_bw: int = 8,
                  default_activation_bw: int = 8,
-                 use_symmetric_encodings: bool = False, use_cuda: bool = True,
-                 device: int = 0, config_file: str = None, default_data_type: QuantizationDataType = QuantizationDataType.int,
-                 user_onnx_libs: List[str] = None):
+                 use_symmetric_encodings: bool = None, # Deprecated
+                 use_cuda: bool = None, # Deprecated
+                 device: int = None, # Deprecated
+                 config_file = None,
+                 default_data_type: QuantizationDataType = QuantizationDataType.int,
+                 user_onnx_libs: List[str] = None,
+                 providers = None,
+                 path = None):
         super(_QuantizationSimModel, self).__init__(model, dummy_input, quant_scheme, rounding_mode, default_param_bw, default_activation_bw,
-                                                    use_symmetric_encodings, use_cuda, device, config_file, default_data_type, user_onnx_libs)
+                                                    use_symmetric_encodings, use_cuda, device, config_file, default_data_type, user_onnx_libs, providers, path)
 
         self.session = {'applied_bn_folding': getattr(model, 'applied_bn_folding'),
                         'applied_cle': getattr(model, 'applied_cle'),
