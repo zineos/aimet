@@ -1638,8 +1638,10 @@ class OnnxSaver:
                 for key in remove_kwargs:
                     kwargs.pop(key, None)
                 torch.onnx.export(model, dummy_input, temp_file, **kwargs)
-            except torch.onnx.CheckerError:
-                _logger.warning("ONNX Checker has failed but ONNX graph is still generated.")
+            except RuntimeError as e:
+                CheckerError = getattr(torch.onnx.errors, "CheckerError", type(None))
+                if isinstance(e, CheckerError):
+                    _logger.warning("ONNX Checker has failed but ONNX graph is still generated.")
 
 def save_initializer_restored_onnx_graph(original_model_path: str,
                                          restored_model_path: str):
