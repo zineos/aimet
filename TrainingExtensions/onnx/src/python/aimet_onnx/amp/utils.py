@@ -42,7 +42,7 @@ from collections import defaultdict
 # Import AIMET specific modules
 from aimet_common.amp.utils import CANDIDATE_WITH_DTYPE, get_effective_bitwidth
 from aimet_common.cost_calculator import CostCalculator
-from aimet_onnx.meta.connectedgraph import ConnectedGraph
+from aimet_onnx.meta.connectedgraph import ConnectedGraph, WEIGHT_INDEX
 from aimet_onnx.amp.quantizer_groups import QuantizerGroup
 from aimet_onnx import utils
 from aimet_onnx.quantsim import QuantizationSimModel
@@ -107,7 +107,8 @@ def find_layer_database_for_mac_calculation(sim: QuantizationSimModel) -> Dict[s
             if len(layer.output_shape) == 2:
                 # Append 1, 1 to Linear layer's shape
                 layer.output_shape = list(layer.output_shape) + [1, 1]
-            layer.weight_shape = _get_weight_shape(ops[node.name])
+            # If _get_weight_shape returns None, weight index is an activation
+            layer.weight_shape = _get_weight_shape(ops[node.name]) or activation_shapes[node.input[WEIGHT_INDEX]]
             op_database[node.name] = layer
 
     return op_database

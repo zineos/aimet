@@ -2704,6 +2704,35 @@ def conv_with_weight_identity_input():
     onnx.checker.check_model(model, True)
     return model
 
+def dynamic_conv_model():
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="DynamicConvModel",
+            inputs=[helper.make_tensor_value_info('x', TensorProto.FLOAT, shape=[10, 10, 32, 32]),
+                    helper.make_tensor_value_info('y', TensorProto.FLOAT, shape=[10, 10, 1, 1])],
+            outputs=[helper.make_tensor_value_info('model_output', TensorProto.FLOAT, shape=[10, 10, 32, 32])],
+            initializer=[
+                numpy_helper.from_array(np.random.randn(10, 10, 1, 1).astype('float32'), name='add.input'),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Add",
+                    inputs=["y", "add.input"],
+                    outputs=["dynamic_conv.weight"],
+                    name="add"
+                ),
+                helper.make_node(
+                    "Conv",
+                    inputs=["x", "dynamic_conv.weight"],
+                    outputs=["model_output"],
+                    name="conv"
+                )
+            ]
+        )
+    )
+    onnx.checker.check_model(model, True)
+    return model
+
 
 def squeezenet1_0(tmpdir):
     import torchvision

@@ -539,6 +539,9 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         """
         Uses OpGraph if available to optimize the mixed precision profile in the sim object
         """
+        # Apply exception rules logic to enforce a valid quantizer configuration
+        self._sim._apply_exception_rules() # pylint: disable = protected-access
+
         # Recompute quantizer encodings
         self._sim.compute_encodings(self.algo_params.forward_pass_callback,
                                     self.algo_params.forward_pass_callback_args)

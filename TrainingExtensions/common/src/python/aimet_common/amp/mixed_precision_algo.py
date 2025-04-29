@@ -275,8 +275,8 @@ class GreedyMixedPrecisionAlgo(abc.ABC): # pylint: disable=too-many-instance-att
                              (candidate[CandAttr.parameter][CandParam.bitwdith],
                               candidate[CandAttr.parameter][CandParam.data_type])))
 
-        percentage_act_quantizers_flipped = (count_act_quantizers_flipped * 100) / total_act_quantizers
-        percentage_param_quantizers_flipped = (count_param_quantizers_flipped * 100) / total_param_quantizers
+        percentage_act_quantizers_flipped = (count_act_quantizers_flipped * 100) / total_act_quantizers if total_act_quantizers else 0
+        percentage_param_quantizers_flipped = (count_param_quantizers_flipped * 100) / total_param_quantizers if total_param_quantizers else 0
         percentage_quantizers_flipped = ((count_param_quantizers_flipped + count_act_quantizers_flipped) * 100) / \
                                         (total_param_quantizers + total_act_quantizers)
         total_quantizers = total_param_quantizers + total_act_quantizers

@@ -49,12 +49,15 @@ from packaging import version
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo, _compute_sqnr, EvalCallbackFactory
 from aimet_onnx.defs import DataLoader
+from aimet_onnx.utils import make_dummy_input
+from aimet_onnx.mixed_precision import choose_mixed_precision
 
 from aimet_common.defs import QuantizationDataType, CallbackFunc
 from aimet_common.amp.mixed_precision_algo import interpolation_search, brute_force_search, binary_search
 from aimet_common.amp.utils import calculate_starting_bit_ops, AMPSearchAlgo
 
 from .models.test_models import single_residual_model
+from .models import models_for_tests
 
 INPUT_SHAPE = (1, 3, 32, 32)
 
@@ -583,6 +586,69 @@ class TestAMPv1:
                                         results_dir, True, forward_pass_callback)
         algo.run(0.01, AMPSearchAlgo.Binary)
         assert quantizer.bitwidth == 4
+
+
+    @pytest.mark.parametrize("model", (
+            single_residual_model().model, 
+            models_for_tests.dynamic_matmul_model(10),
+            models_for_tests.matmul_with_constant_first_input(),
+            models_for_tests.weight_matmul_model(),
+            models_for_tests.dynamic_conv_model(),
+            models_for_tests.mobilenetv2().model,
+            models_for_tests.depthwise_transposed_conv_model().model,
+            models_for_tests.model_with_split_matmul(),
+            models_for_tests.hierarchical_model().model,
+            ))
+    def test_choose_mixed_precision(self, model, tmpdir):
+        np.random.seed(0)
+
+        sim = QuantizationSimModel(model, default_activation_bw=8, default_param_bw=8, config_file="htp_v73")
+        enabled_quantizers = {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
+        total_bits = 16 * len(enabled_quantizers)
+
+        forward_callback = CallbackFunc(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
+
+        def phase_2_callback(sess, _):
+            bits = sum(q.bitwidth if q.enabled else 16 for q in enabled_quantizers)
+            return bits / total_bits
+
+        # Define dummy eval callbacks
+        eval_callback_phase1 = CallbackFunc(lambda sess, _: np.random.rand())
+        eval_callback_phase2 = CallbackFunc(phase_2_callback, None)
+
+        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+                      ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+                      ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+
+        # Apply mixed precision
+        choose_mixed_precision(sim, candidates, eval_callback_phase1, eval_callback_phase2, 0.4, tmpdir, True,
+                               forward_callback)
+        
+        # Assert that no param quantizers are in int16 (not a valid candidate)
+        for name in sim.param_names:
+            quantizer = sim.qc_quantize_op_dict[name]
+            assert not (quantizer.bitwidth == 16 and quantizer.data_type == QuantizationDataType.int)
+
+        # Assert that the final result meets the accuracy metric
+        assert sum(q.bitwidth for q in enabled_quantizers) <= total_bits
+        assert sum(q.bitwidth for q in enabled_quantizers) >= total_bits * 0.6
+
+        # Assert that the final mixed-precision profile obeys config file's exception rules
+        for op in sim.connected_graph.ordered_ops:
+            if not op.type in ("MatMul", "Gemm"):
+                continue
+
+            q1, q2 = sim._get_closest_enabled_quantizer(op.inputs[0]), sim._get_closest_enabled_quantizer(op.inputs[1])
+            if not q1 or not q2:
+                continue
+
+            # Config requires symmetric second input for 16-bit matmul
+            if q2.bitwidth == 16 and not q2.data_type == QuantizationDataType.float:
+                assert q2.use_symmetric_encodings
+
+            # 8 x 16 MatMul is not a valid combination
+            if q1.bitwidth == 8:
+                assert q2.bitwidth == 8
 
 
 class TestAMPv2:
