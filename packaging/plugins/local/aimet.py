@@ -141,6 +141,7 @@ def optional_dependencies() -> dict[str, list[str]]:
             "safetensors",
             "torchvision",
             "transformers",
+            "datasets"
         ],
         "docs": [
             "furo",
