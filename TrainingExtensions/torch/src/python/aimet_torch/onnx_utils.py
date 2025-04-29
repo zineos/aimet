@@ -1672,7 +1672,7 @@ class OnnxSaver:
                     kwargs.pop(key, None)
                 torch.onnx.export(model, dummy_input, temp_file, **kwargs)
             except RuntimeError as e:
-                CheckerError = getattr(torch.onnx.errors, "CheckerError", type(None))
+                CheckerError = getattr(torch.onnx, "CheckerError", type(None))
                 if isinstance(e, CheckerError) and os.path.isfile(temp_file):
                     _logger.warning("ONNX Checker has failed but ONNX graph is still generated.")
                 else:
