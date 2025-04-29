@@ -230,6 +230,9 @@
       "op_list": ["Conv", "BatchNormalization","PRelu"]
     },
     {
+      "op_list": ["Conv", "BatchNormalization", "LeakyRelu"]
+    },
+    {
       "op_list": ["Conv", "BatchNormalization", "Relu"]
     },
     {
@@ -237,6 +240,9 @@
     },
     {
       "op_list": ["Conv", "Transpose", "PRelu"]
+    },
+    {
+      "op_list": ["Conv", "Transpose", "LeakyRelu"]
     },
 	{
       "op_list": ["Conv", "Clip"]
@@ -246,6 +252,9 @@
     },
     {
       "op_list": ["Conv", "PRelu"]
+    },
+    {
+      "op_list": ["Conv", "LeakyRelu"]
     },
     {
       "op_list": ["Conv", "Relu"]
