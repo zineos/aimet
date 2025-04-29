@@ -2341,3 +2341,99 @@ def test_onnx_qdq(model_factory,
             "due to numerical instability"
         )
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol)
+
+# Note this is useful code for comparing AIMET QDQ vs. the Hub.
+# Not being used explicitly just yet
+def compare_onnx_qdq_models(model1, model2):
+    graph1 = model1.graph
+    graph2 = model2.graph
+
+    # All quantize linear ops in graph1
+    graph1_q_nodes = [node for node in graph1.node if node.op_type == 'QuantizeLinear']
+    graph1_node_consumer_map = dict()
+    for node in graph1.node:
+        for input_tensor in node.input:
+            if input_tensor in graph1_node_consumer_map:
+                graph1_node_consumer_map[input_tensor].append(node)
+            else:
+                graph1_node_consumer_map[input_tensor] = [node]
+
+    # Couple of helper maps for graph2
+    graph2_node_name_map = {node.name: node for node in graph2.node}
+    graph2_node_producer_map = dict()
+    for node in graph2.node:
+        for output_tensor in node.output:
+            graph2_node_producer_map[output_tensor] = node
+
+    # Iterate over all QuantizeLinear ops in graph1 and find the consuming op
+    for graph1_q_node in graph1_q_nodes:
+        assert len(graph1_q_node.output) == 1  # Every q has only 1 output tensor
+        assert len(graph1_node_consumer_map[graph1_q_node.output[0]]) == 1  # Every q has only 1 consumer
+        graph1_dq_node = graph1_node_consumer_map[graph1_q_node.output[0]][0]  # And that consumer is the dq
+
+        assert len(graph1_dq_node.output) == 1  # Every dq has only 1 output tensor
+        assert len(graph1_node_consumer_map[graph1_dq_node.output[0]]) <= 1  # Every dq has only 1 consumer
+        if graph1_node_consumer_map[graph1_dq_node.output[0]]:
+            consuming_op_name = graph1_node_consumer_map[graph1_dq_node.output[0]][0].name
+            print(consuming_op_name)
+
+@pytest.mark.parametrize(
+    "model_factory,                                         input_shape,        param_bw,   act_bw",
+    [
+        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     16,          16),
+        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           8),
+        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           16),
+        # (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     4,           16),
+        # Todo - For 4-bit need special support
+        # (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           12),
+        # Todo - For irregular bits need additional check
+    ])
+def test_onnx_qdq_different_precisions(model_factory, input_shape, param_bw, act_bw):
+    model = model_factory()
+    sim = QuantizationSimModel(model, default_param_bw=param_bw,
+                               default_activation_bw=act_bw, use_cuda=False)
+    input = np.random.randn(*input_shape).astype(np.float32)
+
+    """
+    When: Create a pure onnx model with sim._to_onnx_qdq()
+    Then: Output of the pure onnx model should be equal to that of sim.session
+    """
+
+    PARAM_BW = {4: onnx.TensorProto.INT4,
+                8: onnx.TensorProto.INT8,
+                16: onnx.TensorProto.INT16}
+
+    ACT_BW = {8: onnx.TensorProto.UINT8,
+              16: onnx.TensorProto.UINT16}
+
+    sim.compute_encodings(lambda sess, _: sess.run(None, {"input": input}), None)
+
+    onnx_qdq_model = sim._to_onnx_qdq()
+
+    op_map = {node.name: node for node in onnx_qdq_model.graph.node}
+    output_to_op_map = dict()
+    for node in op_map.values():
+        tensor_name = node.output[0]
+        output_to_op_map[tensor_name] = node
+
+    zp_name_map = {node.name: node for node in onnx_qdq_model.graph.initializer if "zero_point" in node.name}
+
+    # Check for onnx opset version
+    opset_version = onnx_qdq_model.opset_import[0].version
+    if param_bw == 16 or act_bw == 16:
+        assert opset_version == 21, "AIMET did not upgrade opset version appropriately"
+
+    # Spot checks for precision
+    for node in op_map.values():
+        if node.op_type in ['Conv']:
+            # Look for the weight dq
+            dq_node = output_to_op_map[node.input[1]]
+            assert dq_node.op_type == 'DequantizeLinear'
+            zp = zp_name_map[dq_node.input[2]]
+            assert zp.data_type == PARAM_BW[param_bw]
+
+            # Look for the activation dq
+            dq_node = output_to_op_map[node.input[0]]
+            assert dq_node.op_type == 'DequantizeLinear'
+            zp = zp_name_map[dq_node.input[2]]
+            assert zp.data_type == ACT_BW[act_bw]

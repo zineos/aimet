@@ -1185,11 +1185,13 @@ class QuantizationSimModel:
             opset.version for opset in self.model.opset_import() if opset.domain == ""
         )
 
+        desired_onnx_opset_version = onnx_opset_version
+
         if onnx_opset_version < 10:
-            raise RuntimeError(
-                "onnx::QuantizeLinear and DequantizeLinear are only supported in opset >= 10; "
-                f"got opset={onnx_opset_version}"
-            )
+            desired_onnx_opset_version = 10
+
+            logger.info("onnx::QuantizeLinear and DequantizeLinear are only supported in opset >= 10;"
+                        " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 13 and any(
             qtzr.quant_info.usePerChannelMode and
@@ -1197,10 +1199,9 @@ class QuantizationSimModel:
             qtzr.tensor_quantizer_params.channel_axis is not None
             for qtzr in self.qc_quantize_op_dict.values()
         ):
-            raise RuntimeError(
-                "onnx::QuantizeLinear and DequantizeLinear only supports "
-                f"per-channel quantization in opset >= 13; got opset={onnx_opset_version}"
-            )
+            desired_onnx_opset_version = 13
+            logger.info("onnx::QuantizeLinear and DequantizeLinear with per-channel are only supported in opset >= 13;"
+                        " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 21 and any(
             qtzr.quant_info.usePerChannelMode and
@@ -1208,20 +1209,18 @@ class QuantizationSimModel:
             qtzr.quant_info.blockSize > 0
             for qtzr in self.qc_quantize_op_dict.values()
         ):
-            raise RuntimeError(
-                "onnx::QuantizeLinear and DequantizeLinear only supports "
-                f"blockwise quantization in opset >= 21; got opset={onnx_opset_version}"
-            )
+            desired_onnx_opset_version = 21
+            logger.info("onnx::QuantizeLinear and DequantizeLinear with per-block are only supported in opset >= 21;"
+                        " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 21 and any(
             qtzr.data_type == QuantizationDataType.int and
             8 < qtzr.bitwidth <= 16
             for qtzr in self.qc_quantize_op_dict.values()
         ):
-            raise RuntimeError(
-                "onnx::QuantizeLinear and DequantizeLinear only supports "
-                f"int16/uint16 quantization in opset >= 21; got opset={onnx_opset_version}"
-            )
+            desired_onnx_opset_version = 21
+            logger.info("onnx::QuantizeLinear and DequantizeLinear with INT16 are only supported in opset >= 21;"
+                        " got opset=%d", onnx_opset_version)
 
         model_copy = onnx.ModelProto()
         model_copy.CopyFrom(self.model.model)
@@ -1258,6 +1257,7 @@ class QuantizationSimModel:
         #       aren't topologically sorted, but onnx.checker asserts topological
         #       order of all nodes. Needs to be fixed asap.
         # onnx.checker.check_model(model_copy, True)
+        model_copy = onnx.version_converter.convert_version(model_copy, desired_onnx_opset_version)
         return model_copy
 
 
@@ -1284,6 +1284,9 @@ def _add_onnx_qdq_node(model: onnx.ModelProto,
     output_dtype = encodings["output_dtype"]
     axis = encodings.get("axis", None)
     block_size = encodings.get("block_size", None)
+
+    # Check for supported precisions
+
 
     y_scale = np.array(encodings["y_scale"]).astype(np.float32)
     if encodings.get("y_zero_point", None):
