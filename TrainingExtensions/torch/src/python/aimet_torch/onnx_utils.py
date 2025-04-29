@@ -1055,6 +1055,7 @@ class OnnxSaver:
         for node in onnx_graph.node:
             for index, param_name in enumerate(node.output):
                 updated_name = cls._get_updated_name(param_name)
+                updated_name = cls._get_matching_name(updated_name, node.name)
 
                 if MAKE_NODE_OUTPUT_NAME_UNIQUE:
                     updated_name = cls._get_unique_node_output_name(
@@ -1592,6 +1593,38 @@ class OnnxSaver:
         if '/marked_module' in name:
             name = name.replace('/marked_module', '')
         return name
+
+    @staticmethod
+    def _get_matching_name(param_name: str, node_name: str) -> str:
+        """
+        Correct the input/output names of each node in ONNX model exported by set_node_names when using
+        vanilla prepare and pro prepare with KEEP_ORIGINAL_MODEL_STRUCTURE set to True.
+
+        NOTE: A node has a following node name in ONNX model exported by set_node_names:
+        layer2.0.downsample.0.
+        This function employs the node name to get the name of corresponding output:
+        /layer2/layer2.0/downsample/downsample.0/Conv_output_0.
+
+        :param param_name: Name of the output of current node in the ONNX model.
+        :param node_name: Name of the node in the ONNX model.
+        :return: Updated name.
+
+        """
+        if '.' not in node_name or '/' in node_name or '/' not in param_name:
+            return param_name
+        tokens = node_name.split('.')
+        updated_tokens = [tokens[0]]
+
+        for i in range(len(tokens) - 1):
+            if tokens[i + 1].isdecimal():
+                updated_tokens.append(tokens[i] + '.' + tokens[i + 1])
+            elif tokens[i + 1] == 'end' and '#' in tokens[i]:
+                updated_tokens[-1] += '.' + tokens[i + 1]
+            else:
+                updated_tokens.append(tokens[i + 1])
+        updated_name = '/' + '/'.join([token for token in updated_tokens if token])
+        updated_name += '/' + param_name.split('/')[-1]
+        return updated_name
 
     @staticmethod
     def _export_model_to_onnx(model: Union[torch.nn.Module, torch.jit.ScriptModule, torch.jit.ScriptFunction],
