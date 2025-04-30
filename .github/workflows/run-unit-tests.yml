@@ -32,7 +32,12 @@ jobs:
       - if: matrix.ENABLE_TESTS == 'ON'
         uses: actions/download-artifact@v3
         with:
-          name: "${{ matrix.id }}"
+          name: "${{ matrix.id }}-wheel"
+          path: "downloads"
+      - if: matrix.ENABLE_TESTS == 'ON'
+        uses: actions/download-artifact@v3
+        with:
+          name: "${{ matrix.id }}-tests"
           path: "downloads"
       - name: Try to load python virtual environment from the cache
         if: matrix.ENABLE_TESTS == 'ON'
@@ -63,9 +68,9 @@ jobs:
         if: matrix.ENABLE_TESTS == 'ON'
         env:
           CTEST_TARGETS: |
-            downloads/build/bin/MoDlCompressionTest
-            downloads/build/bin/MoDlEqualizationTest
-            downloads/build/bin/MoDlQuantizationTest
+            downloads/MoDlCompressionTest
+            downloads/MoDlEqualizationTest
+            downloads/MoDlQuantizationTest
         run: |
           set -x
 

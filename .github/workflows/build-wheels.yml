@@ -98,9 +98,17 @@ jobs:
         uses: actions/upload-artifact@v3
         if: matrix.id != 'tf-torch-cpu'
         with:
-          name: "${{ matrix.id }}"
+          name: "${{ matrix.id }}-wheel"
           path: |
             wheelhouse/aimet*.whl
+          if-no-files-found: error
+          retention-days: 30d
+      - name: Upload compiled C++ unit tests
+        uses: actions/upload-artifact@v3
+        if: matrix.id != 'tf-torch-cpu'
+        with:
+          name: "${{ matrix.id }}-tests"
+          path: |
             build/bin/MoDlCompressionTest
             build/bin/MoDlEqualizationTest
             build/bin/MoDlQuantizationTest

@@ -155,7 +155,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
         with:
-          name: "${{ matrix.id }}"
+          name: "${{ matrix.id }}-wheel"
           path: "downloads"
       - run: |
           apt-get update
