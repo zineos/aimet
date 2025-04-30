@@ -37,7 +37,19 @@
 """ Top level API for performing quantization simulation of a pytorch model """
 
 import copy
-from typing import Union, Tuple, Optional, Sequence, TypeVar, Any, Callable, overload, Dict, Type
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Mapping,
+    Optional,
+    overload,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 import warnings
 import itertools
 import io
@@ -67,7 +79,7 @@ from aimet_torch.v2.nn import BaseQuantizationMixin, QuantizationMixin, UnknownM
 from aimet_torch.v2.nn.fake_quant import _legacy_impl
 from aimet_torch.v2._builder import _V2LazyQuantizeWrapper
 from aimet_torch.v2.quantization import DequantizedTensor
-from aimet_torch.v2.quantization.base import QuantizerBase
+from aimet_torch.v2.quantization.base import QuantizerBase, EncodingBase
 from aimet_torch.v2.quantization.affine import AffineQuantizerBase
 from aimet_torch.v2.quantization.float import FloatQuantizeDequantize
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
@@ -744,7 +756,7 @@ class _QuantizationSimOnnxExport:
         :param args: Dummy input to the model. Used to export model to ONNX format.
         :param f: file object or path where to store exported ONNX mode
         """
-        # pylint: disable=too-many-locals, too-many-branches, protected-access
+        # pylint: disable=protected-access
         self._check_unsupported_quantizers(self.sim.model)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -764,14 +776,32 @@ class _QuantizationSimOnnxExport:
                     if quantizer
                 }
 
-        tensor_to_encoding_map = remove_quantization_nodes_from_onnx_graph(onnx_model)
-        onnx.save(onnx_model, f)
-
-        qnn_encodings = {
-            name: encoding.to_qnn_encoding_dict(quantsim.encoding_version)
-            for name, encoding in tensor_to_encoding_map.items()
+        tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]
+        tensor_to_encoding_map = {
+            name: (encoding, name in param_names)
+            for name, encoding in remove_quantization_nodes_from_onnx_graph(onnx_model).items()
         }
 
+        if kwargs.get("embed_qdq", False): # pylint: disable=no-else-raise
+            # TODO: Export onnx QDQ graph in this case
+            raise NotImplementedError
+        else:
+            onnx.save(onnx_model, f)
+            encodings_dict = self._to_json(tensor_to_encoding_map)
+
+            # export weight encodings to output json file
+            onnx_file_path = (f if isinstance(f, str) else f.name)
+            encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
+            with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
+                json.dump(encodings_dict, encoding_file, indent=2)
+
+    def _to_json(self, tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]):
+        qnn_encodings = {
+            name: (encoding.to_qnn_encoding_dict(quantsim.encoding_version), is_param)
+            for name, (encoding, is_param) in tensor_to_encoding_map.items()
+        }
+
+        encodings_dict: Mapping[str, Any]
         encodings_dict = {
             "version": quantsim.encoding_version,
         }
@@ -780,7 +810,7 @@ class _QuantizationSimOnnxExport:
             encodings_dict.update({
                 "encodings": [
                     {"name": name, **qnn_encoding}
-                    for name, qnn_encoding in qnn_encodings.items()
+                    for name, (qnn_encoding, _) in qnn_encodings.items()
                     if qnn_encoding
                 ]
             })
@@ -788,40 +818,36 @@ class _QuantizationSimOnnxExport:
             if quantsim.encoding_version >= "1.0.0":
                 param_encodings = [
                     {"name": name, **qnn_encoding}
-                    for name, qnn_encoding in qnn_encodings.items()
-                    if qnn_encoding and name in param_names
+                    for name, (qnn_encoding, is_param) in qnn_encodings.items()
+                    if qnn_encoding and is_param
                 ]
                 activation_encodings = [
                     {"name": name, **qnn_encoding}
-                    for name, qnn_encoding in qnn_encodings.items()
-                    if qnn_encoding and name not in param_names
+                    for name, (qnn_encoding, is_param) in qnn_encodings.items()
+                    if qnn_encoding and not is_param
                 ]
             else:
                 param_encodings = {
                     name: qnn_encoding
-                    for name, qnn_encoding in qnn_encodings.items()
-                    if qnn_encoding and name in param_names
+                    for name, (qnn_encoding, is_param) in qnn_encodings.items()
+                    if qnn_encoding and is_param
                 }
                 activation_encodings = {
                     name: qnn_encoding
-                    for name, qnn_encoding in qnn_encodings.items()
-                    if qnn_encoding and name not in param_names
+                    for name, (qnn_encoding, is_param) in qnn_encodings.items()
+                    if qnn_encoding and not is_param
                 }
 
             encodings_dict.update({
                 "activation_encodings": activation_encodings,
                 "param_encodings": param_encodings,
-                "excluded_layers": self.sim._excluded_layer_names,
+                "excluded_layers": self.sim._excluded_layer_names, # pylint: disable=protected-access
             })
 
             if self.sim.quant_args:
                 encodings_dict.update({'quantizer_args': self.sim.quant_args})
 
-        # export weight encodings to output json file
-        onnx_file_path = (f if isinstance(f, str) else f.name)
-        encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
-        with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
-            json.dump(encodings_dict, encoding_file, indent=2)
+        return encodings_dict
 
     @staticmethod
     def _check_unsupported_quantizers(module: torch.nn.Module):
