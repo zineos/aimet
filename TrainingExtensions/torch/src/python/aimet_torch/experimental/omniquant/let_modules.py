@@ -42,10 +42,9 @@ from aimet_torch.v2.nn import (
 )
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.utils import patch_attr
-from aimet_torch.experimental.omniquant.module_defns import (
-    QuantizedLlamaRMSNorm,
-    QuantizedGemmaNorm,
-)
+
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import QuantizedGemma3RMSNorm
 
 import torch
 import copy
@@ -146,7 +145,7 @@ class LETModule():
             return LETQuantizedConv2d(mdl)
         if isinstance(mdl, QuantizedLlamaRMSNorm):
             return LETQuantizedLlamaRMSNorm(mdl)
-        if isinstance(mdl, QuantizedGemmaNorm):
+        if isinstance(mdl, QuantizedGemma3RMSNorm):
             return LETQuantizedGemmaNorm(mdl)
         assert False, "Let Quantized module is not implemented"
 
@@ -292,12 +291,13 @@ class LETQuantizedLlamaRMSNorm(QuantizedLlamaRMSNorm, LETModule):
             return super().__call__(*args, **kwargs)
 
 # pylint: disable=too-many-ancestors
-class LETQuantizedGemmaNorm(QuantizedGemmaNorm, LETModule):
+class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
     """ LET module implementation for QuantizedGemmaNorm """
     def __init__(self, module:QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
+        self.bias = 1.0
 
     def _update_parameters(self):
         """
@@ -313,15 +313,26 @@ class LETQuantizedGemmaNorm(QuantizedGemmaNorm, LETModule):
         return {'weight': weight, 'bias': bias}
 
     def _get_source_quant_module(self):
-        return QuantizedGemmaNorm(self.weight.shape)
+        return QuantizedGemma3RMSNorm(self.weight.shape)
 
-    def __call__(self, *args, **kwargs):
+    def forward(self, hidden_states):
+        # pylint: disable=arguments-differ
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
-            with patch_attr(self, 'bias', params['bias']):
-                # No need to call compute_encodings here as we don't want to calibrate
-                # min-max when doing LET blockwise training.
-                return super().__call__(*args, **kwargs)
+        with patch_attr(self, 'weight', params['weight']), patch_attr(self, 'bias', params['bias']):
+            weight = self.weight
+            bias = self.bias
+            if self.input_quantizers[0]:
+                hidden_states = self.input_quantizers[0](hidden_states)
+
+            if self.param_quantizers.weight:
+                weight = self.param_quantizers.weight(weight)
+
+            ret = self._norm(hidden_states.float())
+            ret = ret * (bias + weight)
+
+            if self.output_quantizers[0]:
+                ret = self.output_quantizers[0](ret)
+            return ret
 
     def _fold(self):
         # Do not want bias to be copied.

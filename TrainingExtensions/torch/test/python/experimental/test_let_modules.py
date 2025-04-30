@@ -40,10 +40,8 @@ import torch
 import copy
 from torch import nn
 
-from aimet_torch.experimental.omniquant.module_defns import (
-    GemmaRMSNorm,
-    LlamaRMSNorm,
-)
+from transformers.models.llama.modeling_llama import LlamaRMSNorm
+from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
 from aimet_torch.experimental.omniquant._utils import _convert_sim_to_letsim
 from aimet_torch.experimental.omniquant.let_modules import (
@@ -160,7 +158,7 @@ def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
                 module.bias.copy_(bias_s)
 
 @pytest.mark.parametrize("inp_fn", [get_conv_conv(True), get_conv_conv(False), get_lin_lin(True), get_lin_lin(False), \
-                                    get_norm_lin(GemmaRMSNorm), get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
+                                    get_norm_lin(Gemma3RMSNorm), get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
 def test_pair(inp_fn):
     """
     Test the LET modules and LET pairs:

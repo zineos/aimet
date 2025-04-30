@@ -42,18 +42,17 @@ from aimet_torch.v2.nn import (
     QuantizedConv2d,
 )
 
-from aimet_torch.experimental.omniquant.module_defns import (
-    QuantizedLlamaRMSNorm,
-    QuantizedGemmaNorm,
-)
 from aimet_torch.experimental.omniquant.let_modules import LETModule
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import QuantizedGemma3RMSNorm
+
 import torch
 import numpy as np
 import contextlib
 
-_SUPPORTED_QUANTIZED_MODULES = (QuantizedLinear, QuantizedLayerNorm, QuantizedConv2d, QuantizedLlamaRMSNorm, QuantizedGemmaNorm)
+_SUPPORTED_QUANTIZED_MODULES = (QuantizedLinear, QuantizedLayerNorm, QuantizedConv2d, QuantizedLlamaRMSNorm, QuantizedGemma3RMSNorm)
 
 def _convert_sim_to_letsim(sim):
     """ Convert sim model with LET quantizers inplace. """

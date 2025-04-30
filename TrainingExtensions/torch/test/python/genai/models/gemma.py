@@ -42,92 +42,15 @@ import torch
 
 from transformers import AutoTokenizer, AutoConfig, PreTrainedModel, PreTrainedTokenizer
 from transformers.models.gemma3 import modeling_gemma3
-from transformers.activations import PytorchGELUTanh
 
 from aimet_common.defs import QuantScheme
 from aimet_torch.v2.nn import QuantizationMixin
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import QuantizedGemma3RMSNorm
 
 from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
-
-if QuantizationMixin.cls_to_qcls.get(modeling_gemma3.Gemma3RMSNorm, None) is None:
-    @QuantizationMixin.implements(modeling_gemma3.Gemma3RMSNorm)
-    class QuantizedQwen2RMSNorm(QuantizationMixin, modeling_gemma3.Gemma3RMSNorm):
-        """ Implement Quantized Gemma RMSNorm """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-            self.input_quantizers = torch.nn.ModuleList([None])
-            self.output_quantizers = torch.nn.ModuleList([None])
-            self.param_quantizers = torch.nn.ModuleDict({"weight": None})
-
-        def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            if self.input_quantizers[0]:
-                hidden_states = self.input_quantizers[0](hidden_states)
-
-            with self._patch_quantized_parameters():
-                ret = super().forward(hidden_states)
-
-            if self.output_quantizers[0]:
-                ret = self.output_quantizers[0](ret)
-
-            return ret
-
-
-if QuantizationMixin.cls_to_qcls.get(modeling_gemma3.Gemma3RotaryEmbedding, None) is None:
-    @QuantizationMixin.implements(modeling_gemma3.Gemma3RotaryEmbedding)
-    class QuantizedQwen2RotaryEmbedding(QuantizationMixin, modeling_gemma3.Gemma3RotaryEmbedding):
-        """ Implement Quantized Gemma Rotary Embedding """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-        def forward(self, x: torch.Tensor, position_ids: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            return super().forward(x, position_ids)
-
-
-if QuantizationMixin.cls_to_qcls.get(modeling_gemma3.Gemma3TextScaledWordEmbedding, None) is None:
-    @QuantizationMixin.implements(modeling_gemma3.Gemma3TextScaledWordEmbedding)
-    class QuantizedGemma3TextScaledWordEmbedding(QuantizationMixin, modeling_gemma3.Gemma3TextScaledWordEmbedding):
-        """ Implement Quantized Gemma Text Scaled Word Embedding """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-        def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            return super().forward(input_ids)
-
-
-if QuantizationMixin.cls_to_qcls.get(PytorchGELUTanh, None) is None:
-    @QuantizationMixin.implements(PytorchGELUTanh)
-    class QuantizedPytorchGELUTanh(QuantizationMixin, PytorchGELUTanh):
-        """ Implement Quantized Transformers PytorchGELUTanh function """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-            self.input_quantizers = torch.nn.ModuleList([None])
-            self.output_quantizers = torch.nn.ModuleList([None])
-
-        def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            if self.input_quantizers[0]:
-                hidden_states = self.input_quantizers[0](hidden_states)
-
-            with self._patch_quantized_parameters():
-                ret = super().forward(hidden_states)
-
-            if self.output_quantizers[0]:
-                ret = self.output_quantizers[0](ret)
-
-            return ret
-
 
 class Gemma_3_1b(GenAIModel):
     """ Generic quantized Gemma 3 """
@@ -191,7 +114,7 @@ class Gemma_3_1b(GenAIModel):
         remove_param_quantizers(quantsim.model.model.model.embed_tokens)
         quantsim.model.model.lm_head.param_quantizers["weight"].bitwidth = 8
         for _, module in quantsim.model.named_modules():
-            if isinstance(module, QuantizationMixin.cls_to_qcls[modeling_gemma3.Gemma3RMSNorm]):
+            if isinstance(module, QuantizedGemma3RMSNorm):
                 module.param_quantizers["weight"].bitwidth = 16
 
         return quantsim

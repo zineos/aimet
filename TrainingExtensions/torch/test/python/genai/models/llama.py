@@ -49,48 +49,10 @@ from aimet_common.defs import QuantScheme
 from aimet_torch.v2.nn import QuantizationMixin
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
 
 from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
-
-
-if QuantizationMixin.cls_to_qcls.get(modeling_llama.LlamaRMSNorm, None) is None:
-    @QuantizationMixin.implements(modeling_llama.LlamaRMSNorm)
-    class QuantizedLlamaRMSNorm(QuantizationMixin, modeling_llama.LlamaRMSNorm):
-        """ Implement Quantized LLama RMS Norm """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-            self.input_quantizers = torch.nn.ModuleList([None])
-            self.output_quantizers = torch.nn.ModuleList([None])
-            self.param_quantizers = torch.nn.ModuleDict({"weight": None})
-
-        def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            if self.input_quantizers[0]:
-                hidden_states = self.input_quantizers[0](hidden_states)
-
-            with self._patch_quantized_parameters():
-                ret = super().forward(hidden_states)
-
-            if self.output_quantizers[0]:
-                ret = self.output_quantizers[0](ret)
-
-            return ret
-
-
-if QuantizationMixin.cls_to_qcls.get(modeling_llama.LlamaRotaryEmbedding, None) is None:
-    @QuantizationMixin.implements(modeling_llama.LlamaRotaryEmbedding)
-    class QuantizedLlamaRotaryEmbedding(QuantizationMixin, modeling_llama.LlamaRotaryEmbedding):
-        """ Implement Quantized LLama Rotary Embedding """
-        def __quant_init__(self):
-            # pylint: disable=useless-parent-delegation
-            super().__quant_init__()
-
-        def forward(self, x: torch.Tensor, position_ids: torch.Tensor) -> torch.Tensor:
-            # pylint: disable=arguments-differ
-            return super().forward(x, position_ids)
 
 
 class Llama_32_1B(GenAIModel):
@@ -161,7 +123,7 @@ class Llama_32_1B(GenAIModel):
         remove_param_quantizers(quantsim.model.model.model.embed_tokens)
         quantsim.model.model.lm_head.param_quantizers["weight"].bitwidth = 8
         for _, module in quantsim.model.named_modules():
-            if isinstance(module, QuantizationMixin.cls_to_qcls[modeling_llama.LlamaRMSNorm]):
+            if isinstance(module, QuantizedLlamaRMSNorm):
                 module.param_quantizers["weight"].bitwidth = 16
 
         return quantsim
