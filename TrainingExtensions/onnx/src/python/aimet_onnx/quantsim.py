@@ -49,7 +49,7 @@ import numpy as np
 import onnx
 
 from onnx import helper
-from onnx.numpy_helper import from_array, to_array
+from onnx.numpy_helper import to_array
 import onnxruntime as ort
 from onnxruntime import SessionOptions, InferenceSession
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
@@ -58,6 +58,7 @@ from packaging import version
 from aimet_common import libpymo, quantsim
 from aimet_common import libquant_info
 from aimet_common.defs import QuantScheme, QuantizationDataType
+from aimet_common.onnx._utils import _add_onnx_qdq_node
 from aimet_common.quantsim import extract_global_quantizer_args, VALID_ENCODING_VERSIONS, _INT32_MINIMUM_SCALE
 from aimet_common.utils import save_json_yaml, AimetLogger, _red
 from aimet_common.quant_utils import _convert_encoding_format_0_6_1_to_1_0_0
@@ -1259,102 +1260,6 @@ class QuantizationSimModel:
         # onnx.checker.check_model(model_copy, True)
         model_copy = onnx.version_converter.convert_version(model_copy, desired_onnx_opset_version)
         return model_copy
-
-
-def _add_onnx_qdq_node(model: onnx.ModelProto,
-                       input_name: str,
-                       output_name: str,
-                       node_name_prefix: str,
-                       encodings: dict):
-    """
-    Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
-
-     -------> onnx::QuantizeLinear -------------> onnx::DequantizeLinear ----->
-    (input)                        (input_int)                           (output)
-
-
-    except for int32 bias encodings, for which we take alternative representation as below
-    since onnx::QuantizeLinear doesn't allow int32 outputs.
-
-    -------------> onnx::DequantizeLinear ----->
-    (bias_int)                           (bias_qdq)
-
-    """
-    # pylint: disable=too-many-branches
-    output_dtype = encodings["output_dtype"]
-    axis = encodings.get("axis", None)
-    block_size = encodings.get("block_size", None)
-
-    # Check for supported precisions
-
-
-    y_scale = np.array(encodings["y_scale"]).astype(np.float32)
-    if encodings.get("y_zero_point", None):
-        y_zero_point = np.array(encodings["y_zero_point"]).astype(output_dtype)
-    else:
-        y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)
-
-    if output_dtype in ("int32", "uint32"):
-        nodes_to_add = [
-            helper.make_node('DequantizeLinear',
-                      name=f"{node_name_prefix}_dq",
-                      inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
-                      outputs=[output_name],
-                      axis=axis,
-                      block_size=block_size)
-        ]
-
-        bias = utils.ParamUtils.get_param_by_name(model, input_name)
-        tensors_to_remove = [bias]
-
-        bias_int32 = (to_array(bias) / y_scale).round()
-        if output_dtype == "int32":
-            bias_int32 = bias_int32.clip(-2**31, 2**31-1)
-        else:
-            bias_int32 = bias_int32.clip(0, 2**32-1)
-
-        tensors_to_add = [
-            from_array(bias_int32.astype(output_dtype), name=f"{input_name}_int"),
-            from_array(y_scale, name=f"{input_name}_scale"),
-            from_array(y_zero_point, name=f"{input_name}_zero_point"),
-        ]
-    else:
-        nodes_to_add = [
-            helper.make_node('QuantizeLinear',
-                      name=f"{node_name_prefix}_q",
-                      inputs=[input_name, f"{input_name}_scale", f"{input_name}_zero_point"],
-                      outputs=[f"{input_name}_int"],
-                      axis=axis,
-                      block_size=block_size),
-            helper.make_node('DequantizeLinear',
-                      name=f"{node_name_prefix}_dq",
-                      inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
-                      outputs=[output_name],
-                      axis=axis,
-                      block_size=block_size)
-        ]
-        tensors_to_remove = []
-        tensors_to_add = [
-            from_array(y_scale, name=f"{input_name}_scale"),
-            from_array(y_zero_point, name=f"{input_name}_zero_point"),
-        ]
-
-    for n in nodes_to_add:
-        model.graph.node.append(n)
-
-    for t in tensors_to_remove:
-        try:
-            model.graph.initializer.remove(t)
-        except ValueError:
-            for node in model.graph.node:
-                if node.op_type == "Constant" and node.output[0] == t.name:
-                    model.graph.node.remove(node)
-                    break
-            else:
-                raise
-
-    for t in tensors_to_add:
-        model.graph.initializer.append(t)
 
 
 # pylint: disable=too-many-locals, too-many-branches

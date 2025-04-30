@@ -47,6 +47,7 @@ import onnx
 from onnx import helper, numpy_helper, mapping
 
 from aimet_common.utils import AimetLogger
+from aimet_common.onnx._utils import _ParamUtils
 from packaging import version
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -321,64 +322,7 @@ def get_graph_intermediate_activations(graph: GraphProto) -> List[str]:
     return activation_names
 
 
-class ParamUtils:
-    """ Param utilities """
-    @staticmethod
-    def get_shape(model: ModelProto, node: NodeProto, param_index: int) -> List:
-        """
-        Returns a list of shape for the param specifies
-        :param model: ONNX model
-        :param node: ONNX node to which the param feeds to
-        :param param_index: Index at which param feeds to the ONNX node
-        """
-        param = ParamUtils.get_param(model, node, param_index)
-        if param:
-            return param.dims
-        return None
-
-    @staticmethod
-    def get_param(model: ModelProto, node: NodeProto, param_index: int) -> TensorProto:
-        """
-        Returns the param tensor
-        :param model: ONNX model
-        :param node: ONNX node to which the param feeds to
-        :param param_index: Index at which param feeds to the ONNX node
-        """
-        if len(node.input) >= param_index + 1:
-            param_name = node.input[param_index]
-            return ParamUtils.get_param_by_name(model, param_name)
-        return None
-
-    @staticmethod
-    def get_param_by_name(model: ModelProto, param_name: str) -> TensorProto:
-        """
-        Returns the param tensor
-
-        :param model: ONNX model
-        :param param_name: Name of parameter to retrieve
-        """
-        def find_param_in_model_initializers(param_name: str, model: ModelProto):
-            for param in model.graph.initializer:
-                if param.name == param_name:
-                    return param
-            return None
-
-        def find_param_in_model_constants(param_name: str, model: ModelProto):
-            for node in model.graph.node:
-                if node.op_type == 'Constant' and param_name in node.output:
-                    for attribute in node.attribute:
-                        if attribute.name == 'value':
-                            param = attribute.t
-                            param.name = param_name
-                            return param
-                if node.op_type == 'Identity' and param_name == node.output[0]:
-                    return ParamUtils.get_param(model, node, 0)
-            return None
-
-        param = find_param_in_model_initializers(param_name, model)
-        if param is None:
-            param = find_param_in_model_constants(param_name, model)
-        return param
+ParamUtils = _ParamUtils
 
 
 def get_product_name_from_quantized_name(quantized_name: str):
