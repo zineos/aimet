@@ -157,11 +157,11 @@ class TestPerChannelQcQuantizeOpStaticGrid:
         quantizer.compute_encoding()
 
         assert len(quantizer.encoding) == 4
-        assert quantizer.encoding[0].max == 7
-        assert round(quantizer.encoding[0].min, 2) == -7.06
+        assert quantizer.encoding[0].min == -7
+        assert torch.allclose(torch.tensor(quantizer.encoding[0].max), torch.tensor(7 - quantizer.encoding[0].delta))
 
-        assert quantizer.encoding[3].max == 5
-        assert round(quantizer.encoding[3].min, 2) == -5.04
+        assert quantizer.encoding[3].min == -5
+        assert torch.allclose(torch.tensor(quantizer.encoding[3].max), torch.tensor(5 - quantizer.encoding[3].delta))
 
     def test_per_channel_asymmetric_compute_encodings(self):
         """ Test tensor quantizer asymmetric compute-encodings functionality on cpu """

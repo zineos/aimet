@@ -604,6 +604,7 @@ class TestQuantSim:
         torch.random.manual_seed(0)
         np.random.seed(0)
         model = single_residual_model().model
+        output_name = model.graph.output[0].name
 
         # Update weights for testing is_unsigned_symmetric override later
         weight_initializers = [i.name for i in model.graph.initializer if len(i.dims) > 1]
@@ -660,7 +661,7 @@ class TestQuantSim:
                 assert sim.get_qc_quantize_op()[weight_initializers[2]].use_strict_symmetric
                 assert sim.get_qc_quantize_op()[weight_initializers[3]].use_unsigned_symmetric
                 assert len(mismatched_encodings) == 8
-                assert np.allclose(out2, out3, rtol=0.01)
+                assert np.allclose(out2, out3, atol=sim.qc_quantize_op_dict[output_name].get_encodings()[0].delta) # Bit flip is possible from recomputing min/max during load
 
     @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(functools.partial(set_grouped_blockwise_quantization_for_weights,
                                                                                  op_types=("MatMul", "Conv", "Gemm"),

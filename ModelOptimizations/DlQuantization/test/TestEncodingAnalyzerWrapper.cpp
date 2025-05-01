@@ -77,7 +77,7 @@ TYPED_TEST(TestEncodingAnalyzerWrapperCpuGpu, UpdateBlockStatsSymmetric)
     analyzer.updateStats(inputBlob.getDataPtrOnDevice(), inputShape, TypeParam::modeCpuGpu);
     auto encodings = analyzer.computeEncoding(bitwidth, symmetric, false, false);
 
-    DataType expectedMax[4] = {10.f, 23.1f, 10.f, .3f};
+    DataType expectedMax[4] = {10.f, 23.1f, 10.f * 127./128., .3f};
     for (size_t i = 0; i < 4; i++)
     {
         auto enc = encodings[i];

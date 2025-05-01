@@ -84,9 +84,9 @@ TfEncoding getComputedEncodings(uint8_t bw, double min, double max, bool useSymm
     {
         // If we desire symmetric encodings then we need to expand either the min or max to be mirrors of each other
         // centered around 0
-        max                           = std::max(std::abs(max), std::abs(min));
         unsigned int numPositiveSteps = std::floor(numSteps / 2);
-        encoding.delta                = max / numPositiveSteps;
+        unsigned int numNegativeSteps = numSteps - numPositiveSteps;
+        encoding.delta = std::max(max / numPositiveSteps, - min / numNegativeSteps);
         encoding.offset               = -std::ceil(numSteps / 2);
         encoding.min                  = std::max(encoding.offset * encoding.delta, (double) std::numeric_limits<float>::lowest());
         encoding.max                  = std::min(encoding.delta * numPositiveSteps, (double) std::numeric_limits<float>::max());

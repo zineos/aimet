@@ -681,7 +681,7 @@ class TestBlockwiseQuantizeOp:
         # Computed encodings should be symmetric and correspond to the absolute min/max in the block
         expected_max = np.max(np.abs(input_tensor.reshape(4, 3)), axis=1)
         for idx, enc in enumerate(encodings):
-            assert isclose(enc.max, expected_max[idx])
+            assert isclose(enc.max, expected_max[idx]) or isclose(-enc.min, expected_max[idx])
             assert isclose((enc.max + enc.min), -1 * enc.delta)
             assert enc.offset == -128
             assert isclose(enc.delta, enc.max / (2 ** (bitwidth - 1) - 1))
@@ -749,7 +749,7 @@ class TestBlockwiseQuantizeOp:
         expected_max = np.max(np.abs(input_tensor.reshape(4, 3)), axis=1)
         cpp_encodings = quant_info.encoding
         for idx, enc in enumerate(cpp_encodings):
-            assert isclose(enc.max, expected_max[idx])
+            assert isclose(enc.max, expected_max[idx]) or isclose(- enc.min, expected_max[idx])
             assert isclose((enc.max + enc.min), -1 * enc.delta)
             assert enc.offset == -128
             assert isclose(enc.delta, enc.max / (2 ** (bitwidth - 1) - 1))
@@ -951,9 +951,9 @@ class TestLPBQOp:
 
         # Note: computed delta = abs_max / num_positive_steps = abs_max / 7
         input_tensor = np.asarray([
-            [7. * 32, -7 * 1.6],
+            [7. * 32, -8 * 1.6],
             [-.35, 7.343],
-            [7. * 13.334, 7 * -1.1112],
+            [7. * 13.334, 8 * -1.1112],
             [22.1, .11233]
         ], np.float32)
         expected_scale = np.asarray([
@@ -985,9 +985,9 @@ class TestLPBQOp:
 
         # Note: computed delta = abs_max / num_positive_steps = abs_max / 7
         input_tensor = np.asarray([
-            [7. * 32, -7 * 1.6],
+            [7. * 32, -8 * 1.6],
             [-.35, 7.343],
-            [7. * 13.334, 7 * -1.1112],
+            [7. * 13.334, 8 * -1.1112],
             [22.1, .11233]
         ], np.float32)
         expected_scale = np.asarray([
