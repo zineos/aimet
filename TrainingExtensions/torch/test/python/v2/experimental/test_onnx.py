@@ -440,3 +440,95 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
         out, = sess.run(None, {"input": x.numpy()})
 
         assert torch.allclose(torch.from_numpy(out), expected_out, atol=1e-5)
+
+
+@pytest.mark.parametrize("lpbq", [False])
+@pytest.mark.parametrize("fold_param_quantizers", [False, True])
+@pytest.mark.parametrize(
+    "weight_dtype,  activation_dtype", [
+    (torch.int8,    torch.uint8),
+    (torch.int8,    torch.float16),
+    (torch.float16, torch.float16),
+])
+def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
+                                           fold_param_quantizers: bool,
+                                           weight_dtype: torch.dtype,
+                                           activation_dtype: torch.dtype):
+    """
+    When: Export quantized torchvision model using quantsim.export
+    """
+    x = torch.randn(1, 3, 224, 224)
+    model = resnet18().eval()
+    model = prepare_model(model)
+    fold_all_batch_norms(model, None, x)
+    sim = QuantizationSimModel(model, x,
+                               default_param_bw=weight_dtype.itemsize * 8,
+                               default_output_bw=activation_dtype.itemsize * 8)
+
+    if lpbq:
+        set_grouped_blockwise_quantization_for_weights(sim,
+                                                       [sim.model.fc],
+                                                       bitwidth=4,
+                                                       symmetric=True,
+                                                       decompressed_bw=8,
+                                                       block_size=64)
+
+    if weight_dtype.is_floating_point:
+        for qmodule in sim.qmodules():
+            for name, qtzr in qmodule.param_quantizers.items():
+                if not qtzr:
+                    continue
+                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=weight_dtype)
+
+    if activation_dtype.is_floating_point:
+        for qmodule in sim.qmodules():
+            for i, qtzr in enumerate(qmodule.input_quantizers):
+                if not qtzr:
+                    continue
+                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+
+        for qmodule in sim.qmodules():
+            for i, qtzr in enumerate(qmodule.output_quantizers):
+                if not qtzr:
+                    continue
+                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+
+    if fold_param_quantizers:
+        sim.fold_param_quantizers()
+
+    sim.compute_encodings(lambda model: model(x))
+
+    with sim._concretize_int32_bias_quantizers(x):
+        expected_out = sim.model(x)
+
+    with tempfile.TemporaryDirectory() as dirname:
+        onnx_path = os.path.join(dirname, "torchvision_model.onnx")
+        sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"],
+                        embed_qdq=True)
+
+        """
+        Then: The saved onnx model should pass onnx model checker
+        """
+        onnx_model = onnx.load_model(onnx_path)
+        onnx.checker.check_model(onnx_model)
+
+        """
+        Then: Input/Output names should be strictly honored
+        """
+        assert list(x.name for x in onnx_model.graph.input) == ["input"]
+        assert list(y.name for y in onnx_model.graph.output) == ["output"]
+
+        sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
+        out, = sess.run(None, {"input": x.numpy()})
+
+    if not activation_dtype.is_floating_point:
+        # Allow off-by-3 error
+        atol = sim.model.fc.output_quantizers[0].get_scale().item() * 3
+    elif not weight_dtype.is_floating_point:
+        # Weight-only quantization; allow off-by-1-ish error
+        atol = ((expected_out.max() - expected_out.min()).item() / 255)
+    else:
+        # Full float16; use most rigorous criteria
+        atol = ((expected_out.max() - expected_out.min()).item() / 2550)
+
+    assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)

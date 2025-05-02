@@ -34,6 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
+# pylint: disable=too-many-lines
 """ Top level API for performing quantization simulation of a pytorch model """
 
 import copy
@@ -64,6 +65,7 @@ from aimet_common import quantsim
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_common.quantsim_config.quantsim_config import _config_file_aliases
 from aimet_common.utils import deprecated, _red
+from aimet_common.onnx._utils import _add_onnx_qdq_nodes
 from aimet_torch._base.quantsim import (
     _QuantizationSimModelBase,
     logger,
@@ -781,7 +783,8 @@ class _QuantizationSimOnnxExport:
         :param args: Dummy input to the model. Used to export model to ONNX format.
         :param f: file object or path where to store exported ONNX mode
         """
-        # pylint: disable=protected-access
+        # pylint: disable=protected-access, too-many-locals
+        embed_qdq = kwargs.pop("embed_qdq", False)
         self._check_unsupported_quantizers(self.sim.model)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -807,9 +810,9 @@ class _QuantizationSimOnnxExport:
             for name, encoding in remove_quantization_nodes_from_onnx_graph(onnx_model).items()
         }
 
-        if kwargs.get("embed_qdq", False): # pylint: disable=no-else-raise
-            # TODO: Export onnx QDQ graph in this case
-            raise NotImplementedError
+        if embed_qdq:
+            onnx_qdq_model = self._to_onnx_qdq(onnx_model, tensor_to_encoding_map)
+            onnx.save(onnx_qdq_model, f)
         else:
             onnx.save(onnx_model, f)
             encodings_dict = self._to_json(tensor_to_encoding_map)
@@ -819,6 +822,34 @@ class _QuantizationSimOnnxExport:
             encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
             with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
                 json.dump(encodings_dict, encoding_file, indent=2)
+
+    def _to_onnx_qdq(self,
+                     onnx_model: onnx.ModelProto,
+                     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]) -> onnx.ModelProto:
+        qnn_encodings = {
+            name: encoding.to_qnn_encoding_dict("2.0.0.beta")
+            for name, (encoding, _) in tensor_to_encoding_map.items()
+        }
+        qnn_encodings = {
+            name: encoding for name, encoding in qnn_encodings.items() if encoding
+        }
+
+        qdq_tensor_names = {
+            fp_tensor_name: f"{fp_tensor_name}_qdq"
+            for fp_tensor_name in qnn_encodings
+        }
+
+        # Add onnx QDQ nodes in batch
+        _add_onnx_qdq_nodes(onnx_model,
+                            input_names=qnn_encodings.keys(),
+                            output_names=qdq_tensor_names.values(),
+                            node_name_prefixes=qnn_encodings.keys(),
+                            encodings=qnn_encodings.values())
+
+        # Restore model output names from "{output}_qdq" to "{output}"
+        _restore_model_output_names(onnx_model, qdq_tensor_names)
+
+        return onnx_model
 
     def _to_json(self, tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]):
         qnn_encodings = {
@@ -884,6 +915,47 @@ class _QuantizationSimOnnxExport:
                         f"except [b]float16. Got {qtzr.bitwidth}-bit float encoding",
                     ])
                     raise RuntimeError(msg)
+
+
+def _rename_inputs(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
+    for node in onnx_model.graph.node:
+        for i, old_name in enumerate(node.input):
+            new_name = new_names.get(old_name, None)
+            if new_name is not None:
+                node.input[i] = new_name
+
+
+def _rename_outputs(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
+    for node in onnx_model.graph.node:
+        for i, old_name in enumerate(node.output):
+            new_name = new_names.get(old_name, None)
+            if new_name is not None:
+                node.output[i] = new_name
+
+
+def _restore_model_output_names(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
+    """
+    Rename model outputs. Assuming "output" is the model output,
+
+    before:
+        Softmax ----> output -------> QDQ -------> output_qdq
+
+    after:
+        Softmax ----> output__ -----> QDQ -------> output
+    """
+    _new_names = {
+        output.name: f"{output.name}__"
+        for output in onnx_model.graph.output
+        if output.name in new_names
+    }
+    _rename_inputs(onnx_model, _new_names)
+
+    _new_names.update({
+        new_names[output.name]: output.name
+        for output in onnx_model.graph.output
+        if output.name in new_names
+    })
+    _rename_outputs(onnx_model, _new_names)
 
 
 @deprecated("""

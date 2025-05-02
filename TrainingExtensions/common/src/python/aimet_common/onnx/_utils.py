@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Collection of onnx-related util functions that can be shared across aimet-onnx and aimet-torch"""
+from collections import deque
 from typing import Iterable, Optional, Sequence
 import numpy as np
 from onnx import helper, ModelProto, NodeProto, TensorProto
@@ -82,12 +83,16 @@ def _add_onnx_qdq_nodes(model: ModelProto,
     (bias_int)                           (bias_qdq)
 
     """
-    # pylint: disable=too-many-branches, too-many-locals
+    # pylint: disable=too-many-branches, too-many-locals, too-many-statements
     nodes_to_add = []
     tensors_to_add = []
     tensors_to_remove = {}
+    inputs_to_rename = {}
 
-    for input_name, output_name, node_name_prefix, encoding in zip(input_names, output_names, node_name_prefixes, encodings):
+    for input_name, output_name, node_name_prefix, encoding in zip(input_names,
+                                                                   output_names,
+                                                                   node_name_prefixes,
+                                                                   encodings):
         output_dtype = encoding["output_dtype"]
         axis = encoding.get("axis", None)
         block_size = encoding.get("block_size", None)
@@ -97,6 +102,8 @@ def _add_onnx_qdq_nodes(model: ModelProto,
             y_zero_point = np.array(encoding["y_zero_point"]).astype(output_dtype)
         else:
             y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)
+
+        inputs_to_rename[input_name] = output_name
 
         if output_dtype in ("int32", "uint32"):
             nodes_to_add.append(
@@ -109,7 +116,7 @@ def _add_onnx_qdq_nodes(model: ModelProto,
             )
 
             bias = _ParamUtils.get_param_by_name(model, input_name)
-            tensors_to_remove[bias.name] = bias
+            tensors_to_remove[input_name] = True
 
             bias_int32 = (to_array(bias) / y_scale).round()
             if output_dtype == "int32":
@@ -142,22 +149,74 @@ def _add_onnx_qdq_nodes(model: ModelProto,
                 from_array(y_zero_point, name=f"{input_name}_zero_point"),
             ])
 
-    for n in nodes_to_add:
-        model.graph.node.append(n)
+    # Remove dangling tensors/nodes
+    initializers = [
+        init for init in model.graph.initializer
+        if not tensors_to_remove.pop(init.name, None)
+    ]
+    model.graph.ClearField("initializer")
+    model.graph.initializer.extend(initializers)
 
-    for t in tensors_to_remove.values():
-        try:
-            model.graph.initializer.remove(t)
-        except ValueError:
-            for node in model.graph.node:
-                if node.op_type == "Constant" and node.output[0] == t.name:
-                    model.graph.node.remove(node)
-                    break
-            else:
-                raise
+    nodes = [
+        node for node in model.graph.node
+        if not (node.op_type == "Constant" and tensors_to_remove.pop(node.output[0], None))
+    ]
+    model.graph.ClearField("node")
+    model.graph.node.extend(nodes)
 
+    # Redirect consumers that took the removed biases to take qdq bias instead
+    # before:
+    #     bias --------------------> consumer
+    # after:
+    #     bias_int32 --> DQ -------> consumer
+    for node in model.graph.node:
+        for i, old_name in enumerate(node.input):
+            new_name = inputs_to_rename.get(old_name, None)
+            if new_name is not None:
+                node.input[i] = new_name
+
+    # Add new tensors
     for t in tensors_to_add:
         model.graph.initializer.append(t)
+
+    # Insert new nodes in a topologically order
+    original_nodes = deque(list(model.graph.node))
+    new_nodes = {
+        node.input[0]: node for node in nodes_to_add
+    }
+    queue = deque([])
+
+    queue.extend([
+        new_nodes.pop(inp.name)
+        for inp in model.graph.input
+        if inp.name in new_nodes
+    ])
+    queue.extend([
+        new_nodes.pop(init.name)
+        for init in model.graph.initializer
+        if init.name in new_nodes
+    ])
+
+    if not queue and original_nodes:
+        queue.append(original_nodes.popleft())
+
+    model.graph.ClearField("node")
+
+    while queue:
+        node = queue.popleft()
+        model.graph.node.append(node)
+
+        qdq_nodes = [
+            new_nodes.pop(output_name) for output_name in node.output
+            if output_name in new_nodes
+        ]
+        if qdq_nodes:
+            queue.extend(qdq_nodes)
+
+        if not queue and original_nodes:
+            queue.append(original_nodes.popleft())
+
+    model.graph.node.extend(new_nodes.values())
 
 
 class _ParamUtils:
