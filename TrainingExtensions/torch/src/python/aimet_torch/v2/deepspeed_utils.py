@@ -40,6 +40,11 @@
 import contextlib
 import torch
 
+from aimet_common.utils import AimetLogger
+
+_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
+
+
 try:
     from deepspeed.runtime.zero import ZeroParamStatus, GatheredParameters
     from deepspeed.utils import safe_set_local_fp32_param
@@ -87,7 +92,21 @@ try:
             for name, data in orig_data.items():
                 getattr(module, name).data = data
 
-except ImportError:
+# pylint: disable=broad-exception-caught
+except Exception as e:
+    if not isinstance(e, ImportError):
+        import traceback
+        import io
+        f = io.StringIO()
+        traceback.print_exc(file=f)
+        _logger.warning( # pylint: disable=logging-fstring-interpolation
+            f"Found deepspeed package but failed to import due to {type(e).__name__}.\n\n"
+            "Full traceback:\n"
+            "==============================================================\n"
+            f"{f.getvalue()}"
+            "==============================================================\n\n"
+        )
+
     class SafeGatheredParameters(contextlib.nullcontext):
         """ Dummy placeholder in case deepspeed doesn't exist """
         def __init__(self, *args, **kwargs): # pylint: disable=unused-argument
