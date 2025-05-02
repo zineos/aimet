@@ -114,8 +114,13 @@ map_torch_types_to_onnx = {
     nn.Softmax: ['Softmax'],
     nn.Softplus: ['Softplus'],
     nn.Tanh: ['Tanh'],
-    nn.Upsample: ['Upsample'],
-    nn.UpsamplingNearest2d: ['Upsample'],
+    nn.Upsample: ["Resize"],
+    nn.UpsamplingBilinear2d: ["Resize"],
+    nn.UpsamplingNearest2d: ["Resize"],
+
+    torchvision.transforms.Resize: ["Resize"],
+    torchvision.ops.RoIPool: ['MaxRoiPool'],
+
     aimet_modules.Add: ['Add'],
     aimet_modules.Cast: ['Cast'],
     aimet_modules.ChannelShuffle: ['ChannelShuffle'],
@@ -144,7 +149,6 @@ map_torch_types_to_onnx = {
     aimet_modules.Subtract: ['Sub'],
     aimet_modules.Tile: ['Tile'],
     aimet_modules.TopK: ['TopK'],
-    torchvision.ops.RoIPool: ['MaxRoiPool'],
     aimet_modules.Mean: ['ReduceMean'],
     aimet_modules.NonMaxSuppression: ['NonMaxSuppression'],
     aimet_modules.RmsNorm: ['RMSNormalization'],

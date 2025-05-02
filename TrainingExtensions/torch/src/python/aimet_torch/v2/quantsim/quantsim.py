@@ -355,6 +355,10 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
         # Class instantiation for supporting sim.onnx.export()
         self.onnx = _QuantizationSimOnnxExport(self)
 
+        if self._hw_version is not None:
+            # Let input/output of HTP resize ops to share same encoding
+            self._propagate_encodings()
+
     @overload
     def compute_encodings(self, forward_pass_callback: Callable[[torch.nn.Module], Any]): # pylint: disable=arguments-differ
         ...
@@ -674,6 +678,27 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
         """
         for qmodule in self.qmodules():
             qmodule.fold_param_quantizers()
+
+    def _propagate_encodings(self):
+        # pylint: disable=import-outside-toplevel
+        from aimet_torch.onnx_utils import map_torch_types_to_onnx
+        from aimet_torch.v2.experimental.quantsim_utils import propagate_output_encodings
+
+        resize_ops = set()
+
+        for qmodule in self.qmodules():
+            orig_module_type = type(qmodule.get_original_module())
+            onnx_op = map_torch_types_to_onnx.get(orig_module_type)
+
+            if not onnx_op or len(onnx_op) > 1:
+                continue
+
+            onnx_op, = onnx_op
+
+            if onnx_op == "Resize":
+                resize_ops.add(qmodule)
+
+        propagate_output_encodings(self, lambda module: module in resize_ops)
 
 
 @contextlib.contextmanager

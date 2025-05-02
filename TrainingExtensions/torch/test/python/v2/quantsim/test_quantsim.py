@@ -36,6 +36,7 @@
 # =============================================================================
 import contextlib
 import torch
+from torch import nn, randn
 import tempfile
 import os
 import json
@@ -1277,6 +1278,53 @@ class TestQuantsim:
 
         # trivial sanity check
         assert [enc["name"] for enc in encodings_before_fold["param_encodings"]] == ["0.weight"]
+
+
+    @pytest.mark.parametrize(
+        "module_factory,                                  input_factory", [
+        (lambda: nn.Upsample(scale_factor=2),             lambda: randn(1, 1, 10, 10)),
+        (lambda: nn.UpsamplingBilinear2d(scale_factor=2), lambda: randn(1, 1, 10, 10)),
+        (lambda: nn.UpsamplingNearest2d(scale_factor=2),  lambda: randn(1, 1, 10, 10)),
+        # (lambda torchvision.transforms.Resize(),        lambda: ...),
+    ])
+    def test_htp_resize(self, module_factory, input_factory):
+        """
+        Purpose: HTP treats onnx::Resize as data movement op, and therefore
+                 requires its input/output to share the same encoding
+        """
+
+        """
+        Given: Modules that get lowered into onnx::Resize
+        """
+        model = torch.nn.Sequential(module_factory())
+        inputs = input_factory()
+
+        if not isinstance(inputs, (tuple, list)):
+            inputs = (inputs,)
+
+        """
+        When: Create quantsim
+        Then: Input/output should share the same quantizer
+        """
+        sim = QuantizationSimModel(model, inputs, config_file="htp_v81")
+        assert sim.model[0].input_quantizers[0] is sim.model[0].output_quantizers[0]
+
+        """
+        When: Export
+        Then: Input/output should share the same encodings
+        """
+        sim.compute_encodings(lambda model: model(*inputs))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sim.export(tmpdir, "resize", inputs)
+
+            with open(os.path.join(tmpdir, "resize.encodings")) as f:
+                encodings = json.load(f)
+
+        inp_enc, out_enc = encodings["activation_encodings"]
+        inp_enc.pop("name")
+        out_enc.pop("name")
+        assert inp_enc == out_enc
 
 
 class TestQuantsimUtilities:
