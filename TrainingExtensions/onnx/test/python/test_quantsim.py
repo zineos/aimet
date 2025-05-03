@@ -2298,23 +2298,29 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         assert np.allclose(bias_scale, expected_bias_scale)
 
 
+@pytest.mark.parametrize("seed", range(10))
 @pytest.mark.parametrize("enable_graph_output_quantizer", [True, False])
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize(
-    "model_factory,                                   input_shape", [
-    (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32)),
-    (lambda: transposed_conv_model(opset_version=13), (10, 10, 4, 4)),
-    (batchnorm_model,                                 (10, 10, 8, 8)),
-    (batchnorm_model_constants,                       (10, 10, 8, 8)),
-    (lambda: instance_norm_model(opset_version=13),   (2, 10, 24, 24)),
-    (layernorm_model,                                 (1, 4, 64, 64)),
+    "model_factory,                                   input_shape,     tolerance", [
+    (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32),  2),
+    (lambda: transposed_conv_model(opset_version=13), (10, 10, 4, 4),  2),
+    (batchnorm_model,                                 (10, 10, 8, 8),  1),
+    (batchnorm_model_constants,                       (10, 10, 8, 8),  1),
+    (lambda: instance_norm_model(opset_version=13),   (2, 10, 24, 24), 3),
+    (layernorm_model,                                 (1, 4, 64, 64),  3),
 ])
 def test_onnx_qdq(model_factory,
                   input_shape: tuple[int, ...],
+                  tolerance: int,
                   export_int32_bias_encodings: bool,
-                  enable_graph_output_quantizer: bool):
+                  enable_graph_output_quantizer: bool,
+                  seed: int):
+    ort.set_seed(seed)
+    np.random.seed(seed)
+
     model = model_factory()
-    sim = QuantizationSimModel(model)
+    sim = QuantizationSimModel(model, config_file="htp_v81")
     input = np.random.randn(*input_shape).astype(np.float32)
 
     """
@@ -2326,25 +2332,41 @@ def test_onnx_qdq(model_factory,
     if export_int32_bias_encodings:
         sim._concretize_int32_bias_quantizers()
 
-    # Tolerate off-by-three error.
+        # FIXME: Need extra tolerance due to numerical instability of AIMET int32 bias qdq.
+        tolerance += 1
+        if any(node.op_type == "InstanceNormalization" for node in sim.model.graph().node):
+            # FIXME: InstanceNormalization is especially more unstable with int32 bias qdq.
+            tolerance += 2
+
+    # Tolerate off-by-N error.
     # Off-by-N error can occur due to slight numerical differences between
     # AIMET QcQuantizOp and onnx::QuantizeLinear/DequantizeLinear
-    atol = 3 * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
+    atol = tolerance * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
 
     sim.qc_quantize_op_dict["output"].enabled = enable_graph_output_quantizer
 
     out_sim, = sim.session.run(None, {"input": input})
 
     onnx_qdq_model = sim._to_onnx_qdq()
-    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), providers=['CPUExecutionProvider'])
-    out_onnx_qdq, = sess.run(None, {"input": input})
 
-    if export_int32_bias_encodings:
-        pytest.skip(
-            "Simulating int32 bias quantize-dequantize in AIMET doesn't "
-            "produce output close enough to equivalent onnx QDQ graph "
-            "due to numerical instability"
-        )
+    # NOTE: Should disable all ORT graph optimization to circumvent known bugs
+    # in CPUExecutionProvider operator fusing.
+    # ORT CPUExecutionProvider produces corrupted output after fusing pattern A to B:
+    #
+    # A:
+    #   x -----> QuantizeLinear -> DequantizeLinear -+
+    #   W -----> QuantizeLinear -> DequantizeLinear -+-> Conv
+    #   b_int32 -----------------> DequantizeLinear -+
+    #
+    # B:
+    #   x -----> QuantizeLinear -+
+    #   W -----> QuantizeLinear -+---------------------> QLinearConv
+    #   b_int32 -----------------+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+
+    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
+    out_onnx_qdq, = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol)
 
 # Note this is useful code for comparing AIMET QDQ vs. the Hub.
