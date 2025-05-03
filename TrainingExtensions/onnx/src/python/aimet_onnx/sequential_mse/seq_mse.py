@@ -218,7 +218,7 @@ class SequentialMse:
         3) run the onnx graph and compute encoding using seq mse algorithm
         4) re-enable the quantizer disabled in first step
         """
-        with self.temporarily_disable_quantizers():
+        with self.temporarily_disable_quantizers(), _remove_session(self.sim):
             self._topological_traversal()
 
     def _get_quantizers_to_be_disabled(self) -> List[QcQuantizeOp]:
@@ -588,3 +588,14 @@ class SequentialMse:
             yield session
         finally:
             del session
+
+@contextmanager
+def _remove_session(sim: QuantizationSimModel):
+    """
+    Deletes sim.session for the duration of the context to save GPU memory. Rebuilds the session upon exiting.
+    """
+    try:
+        del sim.session
+        yield
+    finally:
+        sim._rebuild_session() # pylint:disable = protected-access
