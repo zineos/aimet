@@ -103,6 +103,11 @@ def _prune_unused_initializer(graph: onnx.GraphProto, init_name):
             graph.initializer.remove(initializer)
             break
 
+    for _input in graph.input:
+        if _input.name == init_name:
+            graph.input.remove(_input)
+            break
+
 
 def remove_node(node: NodeProto, onnx_graph: onnx.GraphProto):
     """

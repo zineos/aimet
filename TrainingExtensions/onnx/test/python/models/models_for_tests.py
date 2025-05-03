@@ -2928,3 +2928,58 @@ def resnet18():
                           )
         model = ONNXModel(load_model(save_path))
         return model
+
+
+def model_with_initializers_in_graph_input():
+    """
+    Models with IR<4 have initializers in graph input compulsorily
+    """
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid('', 11)],
+        ir_version=3,
+        graph=helper.make_graph(
+            name="InitInGraphInputModel",
+            inputs=[
+                helper.make_tensor_value_info('model_input', TensorProto.FLOAT, shape=[1, 3, 32, 32]),
+                helper.make_tensor_value_info('conv_weight', TensorProto.FLOAT, shape=[8, 3, 3, 3]),
+                helper.make_tensor_value_info('conv_bias', TensorProto.FLOAT, shape=[8]),
+                helper.make_tensor_value_info('bn_scale', TensorProto.FLOAT, shape=[8]),
+                helper.make_tensor_value_info('bn_bias', TensorProto.FLOAT, shape=[8]),
+                helper.make_tensor_value_info('bn_mean', TensorProto.FLOAT, shape=[8]),
+                helper.make_tensor_value_info('bn_variance', TensorProto.FLOAT, shape=[8]),
+            ],
+            outputs=[
+                helper.make_tensor_value_info('model_output', TensorProto.FLOAT, shape=[1, 8, 30, 30]),
+            ],
+            initializer=[
+                numpy_helper.from_array(np.random.randn(8, 3, 3, 3).astype('float32'), name='conv_weight'),
+                numpy_helper.from_array(np.random.randn(8).astype('float32'), name='conv_bias'),
+                numpy_helper.from_array(np.random.randn(8).astype('float32'), name='bn_scale'),
+                numpy_helper.from_array(np.random.randn(8).astype('float32'), name='bn_bias'),
+                numpy_helper.from_array(np.random.randn(8).astype('float32'), name='bn_mean'),
+                numpy_helper.from_array(np.random.randn(8).astype('float32'), name='bn_variance'),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Conv",
+                    inputs=["model_input", "conv_weight", "conv_bias"],
+                    outputs=["conv_output"],
+                    name="conv"
+                ),
+                helper.make_node(
+                    "BatchNormalization",
+                    inputs=["conv_output", "bn_scale", "bn_bias", "bn_mean", "bn_variance"],
+                    outputs=["bn_output"],
+                    name="bn"
+                ),
+                helper.make_node(
+                    "Relu",
+                    inputs=["bn_output"],
+                    outputs=["model_output"],
+                    name="relu"
+                )
+            ]
+        )
+    )
+    onnx.checker.check_model(model, True)
+    return model

@@ -165,6 +165,21 @@ class TestUtils:
         assert new_node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten']
         assert model.graph.output[0].name in model.graph.node[-1].output
 
+    def test_remove_node_for_initializer_pruning(self):
+        """
+        Verify initializers are completely deleted from the model if they are no longer used
+        """
+        model = models_for_tests.model_with_initializers_in_graph_input()
+        bn_node = model.graph.node[1]
+        utils.remove_node(bn_node, model.graph)
+
+        model_input = [inp.name for inp in model.graph.input]
+        model_init = [init.name for init in model.graph.initializer]
+
+        # Initializers should be removed from both the lists- inputs and initializers.
+        # Missing this will lead to failure in ORT Inference Session creation.
+        assert all([not inp.startswith('bn_') for inp in model_input])
+        assert all([not init.startswith('bn_') for init in model_init])
 
     def test_get_attribute(self):
         """
