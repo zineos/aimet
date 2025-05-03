@@ -1026,7 +1026,7 @@ class TestQuantizationSimStaticGrad:
 
                 activation_encodings = {encoding['name']: encoding for encoding in encodings['activation_encodings']}
                 param_encodings = {encoding['name']: encoding for encoding in encodings['param_encodings']}
-                assert 16 == len(activation_encodings)
+                assert 15 == len(activation_encodings)
                 assert param_encodings['conv1_a.weight']['scale'][0] * 127 - 10 < param_encodings['conv1_a.weight']['scale'][0]
 
             # check the exported model

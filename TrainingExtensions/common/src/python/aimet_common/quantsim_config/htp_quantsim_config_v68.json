@@ -171,6 +171,22 @@
     {
       "is_output_quantized": "False",
       "per_channel_quantization": "False"
+    },
+    "Flatten":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Unsqueeze":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Compress":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Identity":
+    {
+      "is_output_quantized" : "False"
     }
   },
 

@@ -448,7 +448,7 @@ def test_model_with_tf_op_lambda_operators_multi_tf_keras_input():
         assert len(qsim.model.layers[2].input_quantizers) == 1, "tf.transpose should have only 1 input_quantizer"
         assert len(qsim.model.layers[5].input_quantizers) == 2, "tf.matmul should have 2 input_quantizer for a @ b"
         assert len(qsim.model.layers[8].input_quantizers) == 3, "tf.image.resize should have 3 input_quantizers for input, and the tensors for the new height and width for tf.shape"
-        assert len(encodings['activation_encodings']) == 5
+        assert len(encodings['activation_encodings']) == 4
         assert len(encodings['param_encodings']) == 1, "Only the Dense layer in this model should have param_encoding"
 
 

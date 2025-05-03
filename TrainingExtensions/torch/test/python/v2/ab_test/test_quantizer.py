@@ -929,7 +929,7 @@ class TestQuantizationSimStaticGrad:
                 encodings = json.load(fp)
 
                 param_encodings = {encoding['name']: encoding for encoding in encodings['param_encodings']}
-                assert 16 == len(encodings['activation_encodings'])
+                assert 15 == len(encodings['activation_encodings'])
                 assert np.isclose(param_encodings['conv1_a.weight']['scale'][0], 20/255)
                 assert all(offset == -128 for offset in param_encodings['conv1_a.weight']['offset'])
 

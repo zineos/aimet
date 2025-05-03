@@ -2041,7 +2041,11 @@ class TestEncodingPropagation:
                     "unsigned_symmetric": "False"
                 },
             "params": {},
-            "op_type": {},
+            "op_type": {
+                "Unsqueeze": {
+                    "is_output_quantized" : "False"
+                }
+            },
             "supergroups": [],
             "model_input": {
                 "is_input_quantized": "True"

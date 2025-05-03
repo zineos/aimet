@@ -210,6 +210,30 @@
     "Transpose":
     {
       "is_output_quantized": "False"
+    },
+    "Flatten":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Unsqueeze":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Compress":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Identity":
+    {
+      "is_output_quantized" : "False"
+    },
+    "Shape":
+    {
+      "is_output_quantized" : "False"
+    },
+    "If":
+    {
+      "is_output_quantized" : "False"
     }
   },
 

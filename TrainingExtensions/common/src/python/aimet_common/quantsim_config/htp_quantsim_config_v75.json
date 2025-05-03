@@ -210,6 +210,14 @@
     "Transpose":
     {
       "is_output_quantized": "False"
+    },
+    "Shape":
+    {
+      "is_output_quantized" : "False"
+    },
+    "If":
+    {
+      "is_output_quantized" : "False"
     }
   },
 
