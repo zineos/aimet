@@ -109,15 +109,18 @@ class QcQuantizeOp:
         """ Sets encodings to frozen """
         self._is_encoding_frozen = True
 
-    def enable_per_channel_quantization(self):
+    def enable_per_channel_quantization(self, enable: bool = True):
         """
         Enables per channel quantization for qc_quantize_op
         """
-        assert self.tensor_quantizer_params is not None
-        assert self.tensor_quantizer_params.channel_axis is not None
-        channel_axis = self.tensor_quantizer_params.channel_axis
-        self.quant_info.usePerChannelMode = True
-        self.quant_info.channelAxis = channel_axis if channel_axis >= 0 else channel_axis + len(self.tensor_quantizer_params.tensor_shape)
+        self.quant_info.usePerChannelMode = enable
+
+        if enable:
+            assert self.tensor_quantizer_params is not None
+            assert self.tensor_quantizer_params.channel_axis is not None
+            channel_axis = self.tensor_quantizer_params.channel_axis
+            self.quant_info.channelAxis = channel_axis if channel_axis >= 0 else channel_axis + len(self.tensor_quantizer_params.tensor_shape)
+
         self._tensor_quantizer = self._build_tensor_quantizer()
 
     def _enable_blockwise_quantization(self, block_size):

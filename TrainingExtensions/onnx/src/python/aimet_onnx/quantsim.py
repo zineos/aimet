@@ -67,7 +67,7 @@ from aimet_common.connected_graph.product import Product
 from aimet_onnx import utils
 from aimet_onnx.meta.operations import Op
 from aimet_onnx.meta.utils import get_op_given_param_name, get_param_shape_using_connected_graph
-from aimet_onnx.meta.connectedgraph import ConnectedGraph
+from aimet_onnx.meta.connectedgraph import ConnectedGraph, _get_matmul_add_bias_idx
 from aimet_onnx.qc_quantize_op import QcQuantizeOp, OpMode, TensorQuantizerParams, GroupedBlockQuantizeDequantize, \
     _EncodingMismatchInfo
 from aimet_onnx.quantsim_config.quantsim_config import QuantSimConfigurator
@@ -398,34 +398,6 @@ class QuantizationSimModel:
 
         return True
 
-    def _is_matmul_bias_add(self, cg_op: Op) -> bool:
-        """
-        For given node, check if the previous and the current nodes are of type 'MatMul' and 'Add' respectively.
-
-        NOTE:
-        Linear = (Matmul -> Add) gets fused into a single MatMul / FullyConnected HTP op.
-        Second input of Add (Bias) needs to be either uint8 or int32.
-        This utility will find such pattern and help ensure that the second input of Add op (bias) won't be configured
-         with activation precision.
-
-        :param cg_op: ConnectedGraph op
-        :return: True if the MatMul + Add pattern is found, False otherwise.
-        """
-        if cg_op.type != "Add":
-            return False
-
-        for inp1, inp2 in itertools.permutations(cg_op.inputs):
-            if not inp1.producer or inp1.producer.type != "MatMul":
-                continue
-            if len(inp1.consumers) > 1:
-                return False
-
-            param = utils.ParamUtils.get_param_by_name(self.model.model, inp2.name)
-            # TODO: Refine this check. Checks that param is static tensor with rank 1
-            return param and len(param.dims) == 1
-
-        return False
-
     def _infer_activation_dtypes(self):
         """
         Get the data type for each activation through shape inference
@@ -709,11 +681,28 @@ class QuantizationSimModel:
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_first_input.bitwidth = 16
 
-            elif self._is_matmul_bias_add(op):
-                # Disable intermediate output quantization and bias quantization
-                for inp in op.inputs:
-                    if inp.name in self.qc_quantize_op_dict:
-                        self.qc_quantize_op_dict[inp.name].enabled = False
+            else:
+                bias_idx = _get_matmul_add_bias_idx(op, self.model.model)
+
+                if bias_idx is not None:
+                    bias = op.inputs[bias_idx]
+                    matmul_output = op.inputs[1 - bias_idx]
+                    matmul = matmul_output.producer
+                    weight = next(
+                        param for param, param_type in matmul.parameters.values()
+                        if param_type == "weight"
+                    )
+
+                    matmul_output_qtzr = self.qc_quantize_op_dict[matmul_output.name]
+                    bias_qtzr = self.qc_quantize_op_dict[bias.name]
+                    weight_qtzr = self.qc_quantize_op_dict[weight.name]
+
+                    # Disable intermediate output quantization and bias quantization
+                    matmul_output_qtzr.enabled = False
+                    bias_qtzr.enabled = False
+
+                    # Let bias quantizers follow the same granularity as weight quantizer
+                    bias_qtzr.enable_per_channel_quantization(weight_qtzr.quant_info.usePerChannelMode)
 
     def _get_closest_enabled_quantizer(self, tensor: Product):
         """

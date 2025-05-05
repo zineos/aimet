@@ -44,7 +44,8 @@ operations represent a node that generates a tensor, while products represent
 the tensors that are either input to the model (input, constant or parameter) or the
 result of an operation. Furthermore the graph representation is bi-directional."""
 
-from typing import Union
+import itertools
+from typing import Optional, Union
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 import onnx
 from packaging import version
@@ -243,6 +244,22 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             if weight_tensor:
                 set_as_param(weight_tensor, my_op, 'weight')
 
+        def create_bias_add_params(my_op: Op):
+            """
+            Create products for MatMul layer
+
+            :param my_op: Connected Graph Op
+            """
+            op = my_op.get_module()
+
+            bias_idx = _get_matmul_add_bias_idx(my_op, self.model)
+
+            if bias_idx is None:
+                return
+
+            bias_tensor, _ = retrieve_constant_input(op, self.model, bias_idx)
+            set_as_param(bias_tensor, my_op, 'bias')
+
         def create_recurrent_type_params(my_op: Op):
             """
             Create products for RNN, LSTM and GRU layer
@@ -283,6 +300,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             logger.debug("Nothing to handle for op %s", my_op.name)
 
         switcher = {
+            "Add": create_bias_add_params,
             "Conv": create_weight_bias_params,
             "Gemm": create_weight_bias_params,
             "ConvTranspose": create_weight_bias_params,
@@ -299,6 +317,25 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         for op in self._ops.values():
             handler = switcher.get(op.type, handle_default)
             handler(op)
+
+
+def _get_matmul_add_bias_idx(cg_op: Op, model: ModelProto) -> Optional[int]:
+    if cg_op.type != "Add":
+        return None
+
+    for inp1, inp2 in itertools.permutations(cg_op.inputs):
+        if not inp1.producer or inp1.producer.type != "MatMul":
+            continue
+        if len(inp1.consumers) > 1:
+            return None
+
+        param = ParamUtils.get_param_by_name(model, inp2.name)
+        # TODO: Refine this check. Checks that param is static tensor with rank 1
+        if param and len(param.dims) == 1:
+            return cg_op.inputs.index(inp2)
+        return None
+
+    return None
 
 
 def get_op_attributes(node: NodeProto, attribute_name: str):

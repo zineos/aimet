@@ -2108,6 +2108,29 @@ class TestEncodingPropagation:
             """
             assert sim.qc_quantize_op_dict["weight"].bitwidth == 4
 
+    def test_matmul_add_bias_quantizer(self):
+        """
+        Given: Model that contains matmul-add sequence that can be interpreted as
+               weight_matmul - bias_add
+        """
+        model = models_for_tests.matmul_bias_add_model()
+
+        """
+        When: Create QuantizationSimModel
+        Then:
+          1) Bias quantizer should be disabled
+          2) Bias quantizer should follow the same granularity as weight quantizer
+          3) get_op_quantizer should return bias quantizer of Add
+        """
+        sim = QuantizationSimModel(model)
+        weight_qtzr = sim.qc_quantize_op_dict[f"matmul.weight"]
+        bias_qtzr = sim.qc_quantize_op_dict[f"add.bias"]
+        assert not bias_qtzr.enabled
+        assert bias_qtzr.quant_info.usePerChannelMode == weight_qtzr.quant_info.usePerChannelMode
+
+        _, _, param_quantizers = sim.get_op_quantizers(sim.connected_graph._ops["add"])
+        assert list(param_quantizers.values()) == [bias_qtzr]
+
     def test_identity_conv_perchannel(self):
         model = models_for_tests.conv_with_weight_identity_input()
 

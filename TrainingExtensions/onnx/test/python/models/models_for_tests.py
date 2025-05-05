@@ -2468,6 +2468,42 @@ def matmul_add_model():
     onnx.checker.check_model(model, True)
     return model
 
+def matmul_bias_add_model():
+    opset = OperatorSetIdProto()
+    opset.version = 18
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name='MatmulAdd',
+            inputs=[
+                helper.make_tensor_value_info('input', TensorProto.FLOAT, shape=[10, 10])
+            ],
+            outputs=[
+                helper.make_tensor_value_info('output', TensorProto.FLOAT, shape=[10, 10])
+            ],
+            initializer=[
+                numpy_helper.from_array(np.random.randn(10, 10).astype('float32'), name='matmul.weight'),
+                numpy_helper.from_array(np.random.randn(10).astype('float32'), name='add.bias'),
+            ],
+            nodes=[
+                helper.make_node(
+                    'MatMul',
+                    inputs=['input', 'matmul.weight'],
+                    outputs=['matmul_out'],
+                    name='matmul',
+                ),
+                helper.make_node(
+                    'Add',
+                    inputs=['matmul_out', 'add.bias'],
+                    outputs=['output'],
+                    name='add',
+                ),
+            ],
+        ),
+        opset_imports=[opset],
+    )
+    onnx.checker.check_model(model)
+    return model
+
 def softmax_model():
     model = helper.make_model(
         graph=helper.make_graph(
