@@ -2405,17 +2405,21 @@ def compare_onnx_qdq_models(model1, model2):
             print(consuming_op_name)
 
 @pytest.mark.parametrize(
-    "model_factory,                                         input_shape,        param_bw,   act_bw",
-    [
-        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     16,          16),
-        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           8),
-        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           16),
-        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     4,           16),
-        # Todo - For 4-bit need special support
-        (lambda: single_residual_model(opset_version=13),   (1, 3, 32, 32),     8,           12),
-    ])
-def test_onnx_qdq_different_precisions(model_factory, input_shape, param_bw, act_bw):
-    model = model_factory()
+    "opset_version", [
+        10, 12, 13, 14, 20, # Opset 21 not supported in onnx 1.16
+    ]
+)
+@pytest.mark.parametrize(
+    "param_bw, act_bw", [
+    (16,       16),
+    (8,        8),
+    (8,        16),
+    (4,        16),
+    (8,        12),
+])
+def test_onnx_qdq_different_precisions(opset_version, param_bw, act_bw):
+    input_shape = (1, 3, 32, 32)
+    model = single_residual_model(opset_version=opset_version)
     sim = QuantizationSimModel(model, default_param_bw=param_bw,
                                default_activation_bw=act_bw, use_cuda=False)
     input = np.random.randn(*input_shape).astype(np.float32)
