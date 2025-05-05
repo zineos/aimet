@@ -107,7 +107,7 @@ def _apply_constraints(flag: bool):
 
     NOTE: Default setting doesn't apply these constraints.
     """
-    global _tie_qtzrs # pylint: disable=global-statement
+    global _tie_qtzrs  # pylint: disable=global-statement
     orig_flag = _tie_qtzrs
     try:
         _tie_qtzrs = flag
@@ -182,12 +182,12 @@ class QuantizationSimModel:
                  model: Union[ModelProto, ONNXModel],
                  dummy_input: Optional[Dict[str, np.ndarray]] = None,
                  quant_scheme: QuantScheme = QuantScheme.min_max,
-                 rounding_mode: str = None, # Deprecated
+                 rounding_mode: str = None,  # Deprecated
                  default_param_bw: int = 8,
                  default_activation_bw: int = 8,
-                 use_symmetric_encodings: bool = None, # Deprecated
-                 use_cuda: bool = None, # Deprecated
-                 device: int = None, # Deprecated
+                 use_symmetric_encodings: bool = None,  # Deprecated
+                 use_cuda: bool = None,  # Deprecated
+                 device: int = None,  # Deprecated
                  config_file: Optional[str] = None,
                  default_data_type: QuantizationDataType = QuantizationDataType.int,
                  user_onnx_libs: List[str] = None,
@@ -203,8 +203,9 @@ class QuantizationSimModel:
                 raise TypeError("'rounding_mode' parameter is no longer supported.")
 
         if use_symmetric_encodings is not None:
-            warnings.warn(_red("Passing `use_symmetric_encodings` is not needed and will be deprecated in later versions."),
-                          DeprecationWarning, stacklevel=2)
+            warnings.warn(
+                _red("Passing `use_symmetric_encodings` is not needed and will be deprecated in later versions."),
+                DeprecationWarning, stacklevel=2)
 
         if device is not None:
             warnings.warn(_red("Passing `device` will be deprecated in later versions. " \
@@ -351,12 +352,14 @@ class QuantizationSimModel:
         # Capture intermediate activations and model outputs
         for node in self.model.nodes():
             for name in node.input:
-                if name not in self.activation_names and name not in self.param_names and self._is_tensor_quantizable(name):
+                if name not in self.activation_names and name not in self.param_names and self._is_tensor_quantizable(
+                        name):
                     self.activation_names.append(name)
                     self.input_quantizers_name.append(name)
 
             for name in node.output:
-                if name not in self.activation_names and name not in self.param_names and self._is_tensor_quantizable(name):
+                if name not in self.activation_names and name not in self.param_names and self._is_tensor_quantizable(
+                        name):
                     self.activation_names.append(name)
 
         # Rename model output node
@@ -373,7 +376,8 @@ class QuantizationSimModel:
         """
         # Check if the tensor data-type can be quantized
         if name in self.model.get_initializer_name_set():  # static activation
-            if self.model.get_initializer(name).data_type != 1:  # 1 corresponds to float, dictionary can be found by using onnx.TensorProto.DataType.items()
+            if self.model.get_initializer(
+                    name).data_type != 1:  # 1 corresponds to float, dictionary can be found by using onnx.TensorProto.DataType.items()
                 return False
         else:  # dynamic activation
             if name not in self.activation_dtypes or self.activation_dtypes[name] not in data_types_to_quantize:
@@ -690,13 +694,17 @@ class QuantizationSimModel:
                     continue
                 if self._hw_version in {'V66', 'V68', 'V69'}:
                     if target_quantizer_for_second_input is None:
-                        logger.warning("The target quantizer for second input could not be found. MatMul exception rule does not apply for op: %s.", op.name)
+                        logger.warning(
+                            "The target quantizer for second input could not be found. MatMul exception rule does not apply for op: %s.",
+                            op.name)
                     else:
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_second_input.bitwidth = 8
                 else:
                     if target_quantizer_for_first_input is None or target_quantizer_for_second_input is None:
-                        logger.warning("The target quantizers could not be found. MatMul exception rule does not apply for op: %s.", op.name)
+                        logger.warning(
+                            "The target quantizers could not be found. MatMul exception rule does not apply for op: %s.",
+                            op.name)
                     elif target_quantizer_for_second_input.bitwidth == 16:
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_first_input.bitwidth = 16
@@ -733,13 +741,14 @@ class QuantizationSimModel:
         self.model.save_model_to_file(os.path.join(self._path, filename_prefix) + '.onnx')
 
     @overload
-    def compute_encodings(self, forward_pass_callback: Callable[[ort.InferenceSession], Any]): # pylint: disable=arguments-differ
+    def compute_encodings(self, forward_pass_callback: Callable[
+        [ort.InferenceSession], Any]):  # pylint: disable=arguments-differ
         ...
 
     T = TypeVar('T')
 
     @overload
-    def compute_encodings(self, # pylint: disable=arguments-differ
+    def compute_encodings(self,  # pylint: disable=arguments-differ
                           forward_pass_callback: Callable[[ort.InferenceSession, T], Any],
                           forward_pass_callback_args: T):
         ...
@@ -895,7 +904,7 @@ class QuantizationSimModel:
 
             bias = to_array(bias_proto)
 
-            bias_scale = np.maximum(abs(bias) / 2**31, _INT32_MINIMUM_SCALE)
+            bias_scale = np.maximum(abs(bias) / 2 ** 31, _INT32_MINIMUM_SCALE)
 
             if not bias_qtzr.quant_info.usePerChannelMode:
                 bias_scale = bias_scale.max()
@@ -965,7 +974,6 @@ class QuantizationSimModel:
 
             return bias_scale
 
-
         switcher = {
             "Conv": get_analytic_bias_scale,
             "Gemm": get_analytic_bias_scale,
@@ -1015,9 +1023,9 @@ class QuantizationSimModel:
             for enc, scale in zip(encodings, bias_scale.flatten()):
                 enc.bw = 32
                 enc.delta = scale
-                enc.offset = -2**31
-                enc.min = scale * -2**31
-                enc.max = scale * (2**31 - 1)
+                enc.offset = -2 ** 31
+                enc.min = scale * -2 ** 31
+                enc.max = scale * (2 ** 31 - 1)
 
             bias_qtzr.load_encodings(encodings)
             bias_qtzr.enabled = True
@@ -1042,7 +1050,7 @@ class QuantizationSimModel:
             if self.model.model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
                 # Note: Saving as external data mutates the saved model, removing all initializer data
                 save_model_with_external_weights(self.model.model, os.path.join(path, filename_prefix) + '.onnx',
-                                                location=filename_prefix + ".data", all_tensors_to_one_file=True)
+                                                 location=filename_prefix + ".data", all_tensors_to_one_file=True)
             else:
                 self.model.save_model_to_file(os.path.join(path, filename_prefix) + '.onnx')
 
@@ -1195,29 +1203,29 @@ class QuantizationSimModel:
                         " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 13 and any(
-            qtzr.quant_info.usePerChannelMode and
-            qtzr.tensor_quantizer_params and
-            qtzr.tensor_quantizer_params.channel_axis is not None
-            for qtzr in self.qc_quantize_op_dict.values()
+                qtzr.quant_info.usePerChannelMode and
+                qtzr.tensor_quantizer_params and
+                qtzr.tensor_quantizer_params.channel_axis is not None
+                for qtzr in self.qc_quantize_op_dict.values()
         ):
             desired_onnx_opset_version = 13
             logger.info("onnx::QuantizeLinear and DequantizeLinear with per-channel are only supported in opset >= 13;"
                         " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 21 and any(
-            qtzr.quant_info.usePerChannelMode and
-            qtzr.tensor_quantizer_params and
-            qtzr.quant_info.blockSize > 0
-            for qtzr in self.qc_quantize_op_dict.values()
+                qtzr.quant_info.usePerChannelMode and
+                qtzr.tensor_quantizer_params and
+                qtzr.quant_info.blockSize > 0
+                for qtzr in self.qc_quantize_op_dict.values()
         ):
             desired_onnx_opset_version = 21
             logger.info("onnx::QuantizeLinear and DequantizeLinear with per-block are only supported in opset >= 21;"
                         " got opset=%d", onnx_opset_version)
 
         if onnx_opset_version < 21 and any(
-            qtzr.data_type == QuantizationDataType.int and
-            8 < qtzr.bitwidth <= 16
-            for qtzr in self.qc_quantize_op_dict.values()
+                qtzr.data_type == QuantizationDataType.int and
+                8 < qtzr.bitwidth <= 16
+                for qtzr in self.qc_quantize_op_dict.values()
         ):
             desired_onnx_opset_version = 21
             logger.info("onnx::QuantizeLinear and DequantizeLinear with INT16 are only supported in opset >= 21;"
@@ -1229,12 +1237,12 @@ class QuantizationSimModel:
         aimet_qc_quantize_nodes = [
             node for node in model_copy.graph.node
             if node.op_type == "QcQuantizeOp"
-            and node.domain in ("aimet.customop.cpu", "aimet.customop.cuda")
+               and node.domain in ("aimet.customop.cpu", "aimet.customop.cuda")
         ]
 
         for aimet_node in aimet_qc_quantize_nodes:
             qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
-            encodings = qtzr._export_2_0_0_encodings() # pylint: disable=protected-access
+            encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
 
             if encodings:
                 # Affine quantizer
@@ -1244,7 +1252,8 @@ class QuantizationSimModel:
                                    input_name=aimet_node.input[0],
                                    output_name=aimet_node.output[0],
                                    node_name_prefix=aimet_node.name,
-                                   encodings=encodings)
+                                   encodings=encodings,
+                                   onnx_opset=desired_onnx_opset_version)
             else:
                 # Float or disabled quantizer.
                 # In this case, we don't add any QuantizeLinear or DequantizeLinear,
@@ -1297,8 +1306,8 @@ def load_encodings_to_sim(quant_sim_model: QuantizationSimModel, onnx_encoding_p
         )
 
     if encoding_version == '0.6.1':
-        encodings['activation_encodings'] =  _convert_encoding_format_0_6_1_to_1_0_0(encodings['activation_encodings'])
-        encodings['param_encodings'] =  _convert_encoding_format_0_6_1_to_1_0_0(encodings['param_encodings'])
+        encodings['activation_encodings'] = _convert_encoding_format_0_6_1_to_1_0_0(encodings['activation_encodings'])
+        encodings['param_encodings'] = _convert_encoding_format_0_6_1_to_1_0_0(encodings['param_encodings'])
 
     validate_encodings_to_load(encodings, quant_sim_model)
 
@@ -1466,7 +1475,7 @@ def set_blockwise_quantization_for_weights(sim: QuantizationSimModel,
     """
 
     if isinstance(op_types, str):
-        op_types = (op_types, )
+        op_types = (op_types,)
 
     for op in sim.connected_graph.ordered_ops:
         if op.type not in op_types:
@@ -1481,7 +1490,7 @@ def set_blockwise_quantization_for_weights(sim: QuantizationSimModel,
             continue
 
         try:
-            weight_quantizer._enable_blockwise_quantization(block_size) # pylint:disable = protected-access
+            weight_quantizer._enable_blockwise_quantization(block_size)  # pylint:disable = protected-access
         except ValueError as e:
             if strict:
                 raise e
@@ -1528,14 +1537,13 @@ def set_grouped_blockwise_quantization_for_weights(sim: QuantizationSimModel,
     """
 
     if isinstance(op_types, str):
-        op_types = (op_types, )
+        op_types = (op_types,)
 
     for op in sim.connected_graph.ordered_ops:
         if op.type not in op_types:
             continue
 
         _, _, param_quantizers = sim.get_op_quantizers(op)
-
 
         weight_quantizer: QcQuantizeOp = param_quantizers.get("weight")
         bias_quantizer: QcQuantizeOp = param_quantizers.get("bias")

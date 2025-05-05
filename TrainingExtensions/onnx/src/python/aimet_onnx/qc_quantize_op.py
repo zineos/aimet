@@ -627,17 +627,6 @@ class QcQuantizeOp:
         signed = self.use_symmetric_encodings
         bw = encodings[0].bw
 
-        if bw <= 4:
-            bw = 4
-        elif bw <= 8:
-            bw = 8
-        elif bw <= 16:
-            bw = 16
-        elif bw <= 32:
-            bw = 32
-        else:
-            raise RuntimeError(f"Invalid bw: {bw}")
-
         output_dtype = f"int{bw}" if signed else f"uint{bw}"
 
         y_scale = np.array([e.delta for e in encodings])

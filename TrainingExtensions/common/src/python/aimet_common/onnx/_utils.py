@@ -35,8 +35,11 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Collection of onnx-related util functions that can be shared across aimet-onnx and aimet-torch"""
+
+# pylint: disable=no-member
+
 from collections import deque
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional, Sequence, Dict, List
 import numpy as np
 from onnx import helper, ModelProto, NodeProto, TensorProto
 from onnx.numpy_helper import from_array, to_array
@@ -46,7 +49,8 @@ def _add_onnx_qdq_node(model: ModelProto,
                        input_name: str,
                        output_name: str,
                        node_name_prefix: str,
-                       encodings: dict):
+                       encodings: dict,
+                       onnx_opset: int):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
 
@@ -61,14 +65,15 @@ def _add_onnx_qdq_node(model: ModelProto,
     (bias_int)                           (bias_qdq)
 
     """
-    _add_onnx_qdq_nodes(model, [input_name], [output_name], [node_name_prefix], [encodings])
+    _add_onnx_qdq_nodes(model, [input_name], [output_name], [node_name_prefix], [encodings], onnx_opset)
 
 
 def _add_onnx_qdq_nodes(model: ModelProto,
                         input_names: Iterable[str],
                         output_names: Iterable[str],
                         node_name_prefixes: Iterable[str],
-                        encodings: Iterable[dict]):
+                        encodings: Iterable[dict],
+                        onnx_opset: int):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
 
@@ -83,72 +88,44 @@ def _add_onnx_qdq_nodes(model: ModelProto,
     (bias_int)                           (bias_qdq)
 
     """
-    # pylint: disable=too-many-branches, too-many-locals, too-many-statements
-    nodes_to_add = []
-    tensors_to_add = []
-    tensors_to_remove = {}
-    inputs_to_rename = {}
+    if onnx_opset < 10:
+        raise RuntimeError('ONNX opset {} cannot represent QuantizeLinear and DequantizeLinear nodes.'
+                           'So not able to export model as ONNX QDQ graph')
 
-    for input_name, output_name, node_name_prefix, encoding in zip(input_names,
-                                                                   output_names,
-                                                                   node_name_prefixes,
-                                                                   encodings):
-        output_dtype = encoding["output_dtype"]
-        axis = encoding.get("axis", None)
-        block_size = encoding.get("block_size", None)
+    if onnx_opset < 13:
+        _add_onnx_qdq_nodes_opset_10(model, input_names, output_names, node_name_prefixes, encodings)
 
-        y_scale = np.array(encoding["y_scale"]).astype(np.float32)
-        if encoding.get("y_zero_point", None):
-            y_zero_point = np.array(encoding["y_zero_point"]).astype(output_dtype)
-        else:
-            y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)
+    elif onnx_opset < 21:
+        _add_onnx_qdq_nodes_opset_13(model, input_names, output_names, node_name_prefixes, encodings)
 
-        inputs_to_rename[input_name] = output_name
+    else:
+        _add_onnx_qdq_nodes_opset_21(model, input_names, output_names, node_name_prefixes, encodings)
 
-        if output_dtype in ("int32", "uint32"):
-            nodes_to_add.append(
-                helper.make_node('DequantizeLinear',
-                          name=f"{node_name_prefix}_dq",
-                          inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
-                          outputs=[output_name],
-                          axis=axis,
-                          block_size=block_size)
-            )
 
-            bias = _ParamUtils.get_param_by_name(model, input_name)
-            tensors_to_remove[input_name] = True
+def _replace_bias_with_quantized_bias(model: ModelProto,
+                                      bias_name: str,
+                                      y_scale: np.array,
+                                      output_dtype: str,
+                                      tensors_to_add: List[TensorProto],
+                                      tensors_to_remove: Dict):
 
-            bias_int32 = (to_array(bias) / y_scale).round()
-            if output_dtype == "int32":
-                bias_int32 = bias_int32.clip(-2**31, 2**31-1)
-            else:
-                bias_int32 = bias_int32.clip(0, 2**32-1)
+    bias = _ParamUtils.get_param_by_name(model, bias_name)
+    tensors_to_remove[bias_name] = True
 
-            tensors_to_add.extend([
-                from_array(bias_int32.astype(output_dtype), name=f"{input_name}_int"),
-                from_array(y_scale, name=f"{input_name}_scale"),
-                from_array(y_zero_point, name=f"{input_name}_zero_point"),
-            ])
-        else:
-            nodes_to_add.extend([
-                helper.make_node('QuantizeLinear',
-                          name=f"{node_name_prefix}_q",
-                          inputs=[input_name, f"{input_name}_scale", f"{input_name}_zero_point"],
-                          outputs=[f"{input_name}_int"],
-                          axis=axis,
-                          block_size=block_size),
-                helper.make_node('DequantizeLinear',
-                          name=f"{node_name_prefix}_dq",
-                          inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
-                          outputs=[output_name],
-                          axis=axis,
-                          block_size=block_size)
-            ])
-            tensors_to_add.extend([
-                from_array(y_scale, name=f"{input_name}_scale"),
-                from_array(y_zero_point, name=f"{input_name}_zero_point"),
-            ])
+    bias_int32 = (to_array(bias) / y_scale).round()
+    if output_dtype == "int32":
+        bias_int32 = bias_int32.clip(-2 ** 31, 2 ** 31 - 1)
+    else:
+        bias_int32 = bias_int32.clip(0, 2 ** 32 - 1)
 
+    tensors_to_add.append(from_array(bias_int32.astype(output_dtype), name=f"{bias_name}_int"))
+
+
+def _finalize_graph_changes(model: ModelProto,
+                            nodes_to_add: Iterable,
+                            inputs_to_rename: Dict,
+                            tensors_to_add: List[TensorProto],
+                            tensors_to_remove: Dict):
     # Remove dangling tensors/nodes
     initializers = [
         init for init in model.graph.initializer
@@ -218,9 +195,278 @@ def _add_onnx_qdq_nodes(model: ModelProto,
 
     model.graph.node.extend(new_nodes.values())
 
+def _add_onnx_qdq_nodes_opset_10(model: ModelProto,
+                                 input_names: Iterable[str],
+                                 output_names: Iterable[str],
+                                 node_name_prefixes: Iterable[str],
+                                 encodings: Iterable[dict]):
+    """
+    Specialized code for creating QDQ nodes for Opset 10
+    Special rules for Opset 10
+    - Only support for INT8 and UINT8 precision
+    - No support for per-channel quantization
+    """
+    # pylint: disable=too-many-branches, too-many-locals
+    nodes_to_add = []
+    tensors_to_add = []
+    tensors_to_remove = {}
+    inputs_to_rename = {}
+
+    for input_name, output_name, node_name_prefix, encoding in zip(input_names, output_names, node_name_prefixes,
+                                                                   encodings):
+
+        inputs_to_rename[input_name] = output_name
+
+        output_dtype = encoding["output_dtype"]
+        dtype_map_to_onnx = {'int8': TensorProto.INT8,
+                             'uint8': TensorProto.UINT8,
+                             'int32': TensorProto.INT32,
+                            }
+
+        if output_dtype not in dtype_map_to_onnx:
+            raise RuntimeError("ONNX QDQ in opset 10 cannot represent {} precision. "
+                               "Hence cannot export to ONNX QDQ".format(output_dtype))
+
+        block_size = encoding.get("block_size", None)
+
+        y_scale = np.array(encoding["y_scale"]).astype(np.float32)
+        if encoding.get("y_zero_point", None):
+            y_zero_point = np.array(encoding["y_zero_point"]).astype(output_dtype)
+        else:
+            y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)
+
+        if output_dtype in ("int32", "uint32"):
+            new_node = helper.make_node('DequantizeLinear',
+                                        name=f"{node_name_prefix}_dq",
+                                        inputs=[f"{input_name}_int", f"{input_name}_scale",
+                                                f"{input_name}_zero_point"],
+                                        outputs=[output_name],
+                                        block_size=block_size)
+
+            nodes_to_add.append(new_node)
+            tensors_to_add.extend([
+                from_array(y_scale, name=f"{input_name}_scale"),
+                from_array(y_zero_point, name=f"{input_name}_zero_point"),
+            ])
+
+            _replace_bias_with_quantized_bias(model, input_name, y_scale, output_dtype, tensors_to_add, tensors_to_remove)
+
+        else:
+
+            q_node = helper.make_node('QuantizeLinear',
+                                      name=f"{node_name_prefix}_q",
+                                      inputs=[input_name, f"{input_name}_scale", f"{input_name}_zero_point"],
+                                      outputs=[f"{input_name}_int"],
+                                      block_size=block_size)
+
+            dq_node = helper.make_node('DequantizeLinear',
+                                       name=f"{node_name_prefix}_dq",
+                                       inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
+                                       outputs=[output_name],
+                                       block_size=block_size)
+
+            nodes_to_add.extend([q_node, dq_node])
+            tensors_to_add.extend([
+                from_array(y_scale, name=f"{input_name}_scale"),
+                from_array(y_zero_point, name=f"{input_name}_zero_point"),
+            ])
+
+    _finalize_graph_changes(model, nodes_to_add, inputs_to_rename, tensors_to_add, tensors_to_remove)
+
+
+
+def _add_onnx_qdq_nodes_opset_13(model: ModelProto,
+                                 input_names: Iterable[str],
+                                 output_names: Iterable[str],
+                                 node_name_prefixes: Iterable[str],
+                                 encodings: Iterable[dict]):
+    """
+    Specialized code for creating QDQ nodes for Opset 13
+    Special rules for Opset 13
+    - QuantizeLinear and DequantizeLinear have an axis field for per-channel quantization
+    - Only support for INT8 and UINT8 precision
+    """
+
+    # pylint: disable=too-many-branches, too-many-locals
+    nodes_to_add = []
+    tensors_to_add = []
+    tensors_to_remove = {}
+    inputs_to_rename = {}
+
+    for input_name, output_name, node_name_prefix, encoding in zip(input_names, output_names, node_name_prefixes,
+                                                                   encodings):
+
+        inputs_to_rename[input_name] = output_name
+
+        output_dtype = encoding["output_dtype"]
+        dtype_map_to_onnx = {'int8': TensorProto.INT8,
+                             'uint8': TensorProto.UINT8,
+                             'int32': TensorProto.INT32,
+                             }
+
+        if output_dtype not in dtype_map_to_onnx:
+            raise RuntimeError("ONNX QDQ in opset 13 cannot represent {} precision. "
+                               "Hence cannot export to ONNX QDQ".format(output_dtype))
+
+        axis = encoding.get("axis", None)
+        block_size = encoding.get("block_size", None)
+
+        y_scale = np.array(encoding["y_scale"]).astype(np.float32)
+        if encoding.get("y_zero_point", None):
+            y_zero_point = np.array(encoding["y_zero_point"]).astype(output_dtype)
+        else:
+            y_zero_point = np.zeros(y_scale.shape).astype(output_dtype)
+
+        if output_dtype in ("int32", "uint32"):
+            new_node = helper.make_node('DequantizeLinear',
+                                        name=f"{node_name_prefix}_dq",
+                                        inputs=[f"{input_name}_int", f"{input_name}_scale",
+                                                f"{input_name}_zero_point"],
+                                        outputs=[output_name],
+                                        axis=axis,
+                                        block_size=block_size)
+
+            nodes_to_add.append(new_node)
+            tensors_to_add.extend([
+                from_array(y_scale, name=f"{input_name}_scale"),
+                from_array(y_zero_point, name=f"{input_name}_zero_point"),
+            ])
+
+            _replace_bias_with_quantized_bias(model, input_name, y_scale, output_dtype, tensors_to_add, tensors_to_remove)
+
+        else:
+
+            q_node = helper.make_node('QuantizeLinear',
+                                      name=f"{node_name_prefix}_q",
+                                      inputs=[input_name, f"{input_name}_scale", f"{input_name}_zero_point"],
+                                      outputs=[f"{input_name}_int"],
+                                      axis=axis,
+                                      block_size=block_size)
+
+            dq_node = helper.make_node('DequantizeLinear',
+                                       name=f"{node_name_prefix}_dq",
+                                       inputs=[f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"],
+                                       outputs=[output_name],
+                                       axis=axis,
+                                       block_size=block_size)
+
+            nodes_to_add.extend([q_node, dq_node])
+            tensors_to_add.extend([
+                from_array(y_scale, name=f"{input_name}_scale"),
+                from_array(y_zero_point, name=f"{input_name}_zero_point"),
+            ])
+
+    _finalize_graph_changes(model, nodes_to_add, inputs_to_rename, tensors_to_add, tensors_to_remove)
+
+
+def _add_onnx_qdq_nodes_opset_21(model: ModelProto,
+                                 input_names: Iterable[str],
+                                 output_names: Iterable[str],
+                                 node_name_prefixes: Iterable[str],
+                                 encodings: Iterable[dict]):
+    """
+    Specialized code for creating QDQ nodes for Opset 21
+    Special rules for Opset 21
+    - QuantizeLinear.output_dtype set to quantized data type
+    - QuantizeLinear.y_zero_point data type set to quantized data type
+    - Support for INT8, INT16 and INT4 precisions
+    - Special handling for y_zero_point 4 bits - we are currently not supporting asymmetric 4-bit quantization
+    """
+    # pylint: disable=too-many-branches, too-many-locals
+    nodes_to_add = []
+    tensors_to_add = []
+    tensors_to_remove = {}
+    inputs_to_rename = {}
+
+    for input_name, output_name, node_name_prefix, encoding in zip(input_names, output_names, node_name_prefixes,
+                                                                   encodings):
+
+        inputs_to_rename[input_name] = output_name
+
+        output_dtype = encoding["output_dtype"]
+        dtype_map_to_onnx = {'int4': TensorProto.INT4,
+                             'uint4': TensorProto.UINT4,
+                             'int8': TensorProto.INT8,
+                             'uint8': TensorProto.UINT8,
+                             'int16': TensorProto.INT16,
+                             'uint16': TensorProto.UINT16,
+                             'int32': TensorProto.INT32,
+                            }
+
+        if output_dtype not in dtype_map_to_onnx:
+            raise RuntimeError("ONNX QDQ in opset 21 cannot represent {} precision. "
+                               "Hence cannot export to ONNX QDQ".format(output_dtype))
+
+        output_dtype_onnx = dtype_map_to_onnx[output_dtype]
+
+        axis = encoding.get("axis", None)
+        block_size = encoding.get("block_size", None)
+
+        y_scale = np.array(encoding["y_scale"]).astype(np.float32)
+        tensors_to_add.append(from_array(y_scale, name=f"{input_name}_scale"))
+
+        # No zero point specified if not needed - since output_dtype indicates quantized data_type
+        y_zero_point = encoding.get("y_zero_point", None)
+        if y_zero_point:
+            if output_dtype in ("int4", "uint4"):
+                raise NotImplementedError("No support for asymmetric 4-bit quantization when exporting to QDQ")
+            else:
+                y_zero_point = np.array(encoding["y_zero_point"]).astype(output_dtype)
+                tensors_to_add.append(from_array(y_zero_point, name=f"{input_name}_zero_point"))
+
+
+        if output_dtype in ("int32", "uint32"):
+            params = {'name':     f"{node_name_prefix}_dq",
+                      'outputs': [output_name],
+                      'axis': axis,
+                      'block_size': block_size}
+
+            if y_zero_point:
+                params['inputs'] = [f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"]
+            else:
+                params['inputs'] = [f"{input_name}_int", f"{input_name}_scale"]
+
+            new_node = helper.make_node('DequantizeLinear',
+                                        **params)
+
+            nodes_to_add.append(new_node)
+
+            _replace_bias_with_quantized_bias(model, input_name, y_scale, output_dtype, tensors_to_add, tensors_to_remove)
+
+        else:
+            params = {'name':     f"{node_name_prefix}_q",
+                      'outputs': [f"{input_name}_int"],
+                      'output_dtype': output_dtype_onnx,
+                      'axis': axis,
+                      'block_size': block_size}
+            if y_zero_point:
+                params['inputs'] = [input_name, f"{input_name}_scale", f"{input_name}_zero_point"]
+            else:
+                params['inputs'] = [input_name, f"{input_name}_scale"]
+
+            q_node = helper.make_node('QuantizeLinear',
+                                      **params)
+
+            params = {'name':     f"{node_name_prefix}_dq",
+                      'outputs': [output_name],
+                      'axis': axis,
+                      'block_size': block_size}
+            if y_zero_point:
+                params['inputs'] = [f"{input_name}_int", f"{input_name}_scale", f"{input_name}_zero_point"]
+            else:
+                params['inputs'] = [f"{input_name}_int", f"{input_name}_scale"]
+
+            dq_node = helper.make_node('DequantizeLinear',
+                                       **params)
+
+            nodes_to_add.extend([q_node, dq_node])
+
+    _finalize_graph_changes(model, nodes_to_add, inputs_to_rename, tensors_to_add, tensors_to_remove)
+
 
 class _ParamUtils:
     """ Param utilities """
+
     @staticmethod
     def get_shape(model: ModelProto, node: NodeProto, param_index: int) -> Optional[Sequence[int]]:
         """
@@ -255,6 +501,7 @@ class _ParamUtils:
         :param model: ONNX model
         :param param_name: Name of parameter to retrieve
         """
+
         def find_param_in_model_initializers(param_name: str, model: ModelProto):
             for param in model.graph.initializer:
                 if param.name == param_name:

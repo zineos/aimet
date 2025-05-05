@@ -839,12 +839,15 @@ class _QuantizationSimOnnxExport:
             for fp_tensor_name in qnn_encodings
         }
 
+        onnx_opset_version = next(opset.version for opset in onnx_model.opset_import if opset.domain == "")
+
         # Add onnx QDQ nodes in batch
         _add_onnx_qdq_nodes(onnx_model,
                             input_names=qnn_encodings.keys(),
                             output_names=qdq_tensor_names.values(),
                             node_name_prefixes=qnn_encodings.keys(),
-                            encodings=qnn_encodings.values())
+                            encodings=qnn_encodings.values(),
+                            onnx_opset=onnx_opset_version)
 
         # Restore model output names from "{output}_qdq" to "{output}"
         _restore_model_output_names(onnx_model, qdq_tensor_names)
