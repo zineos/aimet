@@ -617,6 +617,10 @@ class QcQuantizeOp:
         return enc_dict
 
     def _export_2_0_0_encodings(self) -> Optional[Dict]: # pylint: disable=too-many-branches
+        if not self.enabled or not self.is_initialized() or \
+                (self.data_type == QuantizationDataType.float and self.bitwidth >= 16):
+            return None
+
         encodings = self.get_encodings()
 
         if encodings is None:

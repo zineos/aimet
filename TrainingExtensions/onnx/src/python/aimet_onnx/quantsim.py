@@ -913,7 +913,9 @@ class QuantizationSimModel:
             """
             weight_qtzr = self.qc_quantize_op_dict.get(weight.name)
 
-            if not (weight_qtzr and weight_qtzr.enabled and weight_qtzr.is_initialized()):
+            if not (weight_qtzr and weight_qtzr.enabled and
+                    weight_qtzr.data_type == QuantizationDataType.int and
+                    weight_qtzr.is_initialized()):
                 # Weight quantizer wasn't created, enabled, or initialized.
                 # Since weight_scale isn't avaiable, fall back to statictical bias scale
                 return get_statistical_bias_scale(input, weight, bias)
@@ -997,6 +999,10 @@ class QuantizationSimModel:
 
             input, *_ = op.inputs
             bias_qtzr = self.qc_quantize_op_dict.get(bias.name)
+
+            if bias_qtzr.data_type == QuantizationDataType.float:
+                # Float16 quantizers are not exported to onnx QDQ graph
+                continue
 
             if bias_qtzr and bias_qtzr.enabled and bias_qtzr.is_initialized():
                 # Edge case: bias encoding already exists.
@@ -1255,11 +1261,7 @@ class QuantizationSimModel:
 
         for aimet_node in aimet_qc_quantize_nodes:
             qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
-
-            if qtzr.enabled:
-                encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
-            else:
-                encodings = None
+            encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
 
             if encodings:
                 # Affine quantizer

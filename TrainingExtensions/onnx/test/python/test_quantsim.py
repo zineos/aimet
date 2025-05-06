@@ -2357,8 +2357,13 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
 
 
 @pytest.mark.parametrize("seed", range(10))
-@pytest.mark.parametrize("enable_graph_output_quantizer", [True, False])
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
+@pytest.mark.parametrize(
+    "param_dtype, activation_dtype", [
+    ("int8",      "uint8"),
+    ("int8",      "float16"),
+    ("float16",   "float16"),
+])
 @pytest.mark.parametrize(
     "model_factory,                                   input_shape,     tolerance", [
     (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32),  1),
@@ -2371,14 +2376,31 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
 def test_onnx_qdq(model_factory,
                   input_shape: tuple[int, ...],
                   tolerance: int,
+                  param_dtype: str,
+                  activation_dtype: str,
                   export_int32_bias_encodings: bool,
-                  enable_graph_output_quantizer: bool,
                   seed: int):
     ort.set_seed(seed)
     np.random.seed(seed)
 
     model = model_factory()
-    sim = QuantizationSimModel(model, config_file="htp_v81")
+    sim = QuantizationSimModel(model,
+                               default_param_bw=np.dtype(param_dtype).itemsize * 8,
+                               default_activation_bw=np.dtype(activation_dtype).itemsize * 8,
+                               config_file="htp_v81")
+
+    if np.dtype(param_dtype).kind == "f":
+        for op in sim.connected_graph.get_all_ops().values():
+            _, _, param_quantizers = sim.get_op_quantizers(op)
+            for qtzr in param_quantizers.values():
+                qtzr.data_type = QuantizationDataType.float
+
+    if np.dtype(activation_dtype).kind == "f":
+        for op in sim.connected_graph.get_all_ops().values():
+            input_quantizers, output_quantizers, _ = sim.get_op_quantizers(op)
+            for qtzr in itertools.chain(input_quantizers, output_quantizers):
+                qtzr.data_type = QuantizationDataType.float
+
     input = np.random.randn(*input_shape).astype(np.float32)
 
     """
@@ -2395,13 +2417,6 @@ def test_onnx_qdq(model_factory,
             # FIXME: InstanceNormalization is especially more unstable with int32 bias qdq.
             tolerance += 2
 
-    # Tolerate off-by-N error.
-    # Off-by-N error can occur due to slight numerical differences between
-    # AIMET QcQuantizOp and onnx::QuantizeLinear/DequantizeLinear
-    atol = tolerance * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
-
-    sim.qc_quantize_op_dict["output"].enabled = enable_graph_output_quantizer
-
     out_sim, = sim.session.run(None, {"input": input})
 
     onnx_qdq_model = sim._to_onnx_qdq()
@@ -2410,7 +2425,12 @@ def test_onnx_qdq(model_factory,
     Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
     """
     assert len([node for node in onnx_qdq_model.graph.node if node.op_type == "DequantizeLinear"]) \
-           == len([qtzr for qtzr in sim.qc_quantize_op_dict.values() if qtzr.enabled])
+           == \
+           len([
+               qtzr for qtzr in sim.qc_quantize_op_dict.values()
+               if qtzr.enabled and
+                  (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
+            ])
 
     # NOTE: Should disable all ORT graph optimization to circumvent known bugs
     # in CPUExecutionProvider operator fusing.
@@ -2431,9 +2451,20 @@ def test_onnx_qdq(model_factory,
     """
     Then: Output of the pure onnx model should be equal to that of sim.session
     """
+    if np.dtype(activation_dtype).kind in ("u", "i"):
+        # Allow off-by-N error
+        atol = tolerance * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
+    elif np.dtype(param_dtype).kind in ("u", "i"):
+        # Weight-only quantization; allow off-by-1-ish error
+        atol = ((out_sim.max() - out_sim.min()).item() / 255)
+    else:
+        # Full float16; use most rigorous criteria
+        atol = ((out_sim.max() - out_sim.min()).item() / 2550)
+
+    rtol = 1e-3 * tolerance
     sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
     out_onnx_qdq, = sess.run(None, {"input": input})
-    assert np.allclose(out_sim, out_onnx_qdq, atol=atol)
+    assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
 
 # Note this is useful code for comparing AIMET QDQ vs. the Hub.
 # Not being used explicitly just yet
