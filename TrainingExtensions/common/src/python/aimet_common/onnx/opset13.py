@@ -45,14 +45,14 @@ class QuantizeLinear(opset10.QuantizeLinear):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
         if block_size is not None:
             raise RuntimeError(
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
             )
 
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
 
         return helper.make_node("QuantizeLinear",
                                 name=name,
@@ -66,14 +66,14 @@ class DequantizeLinear(opset10.DequantizeLinear):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
         if block_size is not None:
             raise RuntimeError(
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
             )
 
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
 
         return helper.make_node("DequantizeLinear",
                                 name=name,

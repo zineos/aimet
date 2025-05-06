@@ -36,6 +36,7 @@
 # =============================================================================
 # pylint: disable=no-member
 from abc import ABC, abstractmethod
+import sys
 from typing import Iterable, Mapping, Optional
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
@@ -47,7 +48,7 @@ class _QdqNodeFactory(ABC):
     @classmethod
     @abstractmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
         ...
 
@@ -65,21 +66,51 @@ class _QdqNodeFactory(ABC):
     def make_zero_point(cls, zero_point: np.ndarray, dtype: str, name: str):
         cls._check_dtype(dtype)
 
+        if (dtype == "int32" or dtype.startswith("float")) and not np.all(zero_point == 0):
+            raise RuntimeError(
+                "DequantizeLinear with type int32 or float8 should have "
+                "no zero point or all zero points should be 0"
+            )
+
         if dtype not in ("int4", "uint4"):
             zero_point = zero_point.astype(dtype)
             return numpy_helper.from_array(zero_point, name=name)
 
+        target_shape = zero_point.shape
+
         # Numpy doesn't support int4/uint4.
         # Do bitshift operations to pack int4 array into int8 array
-        zero_point = zero_point.astype("int8" if dtype == "int4" else "uint8")
-        MSB = zero_point.flatten()[::2] << 4
-        LSB = zero_point.flatten()[1::2]
-        tensor = numpy_helper.from_array(MSB | LSB, name=name)
+        zero_point = zero_point.astype("int8" if dtype == "int4" else "uint8").flatten()
+        if zero_point.size % 2 == 1:
+            # Add 0 padding to enable int4x2 packing
+            zero_point = np.concatenate((zero_point, np.array([0], dtype=zero_point.dtype)))
+
+        if sys.byteorder == "little":
+            # Little endian:
+            #
+            #       zp[n+1]     zp[n]
+            #       <-----> | <----->
+            # bit:  7 6 5 4   3 2 1 0
+            #     (MSB)           (LSB)
+            MSB = zero_point[1::2] << 4
+            LSB = zero_point[::2] & 0x0F
+        else:
+            # Big endian:
+            #
+            #       zp[n]     zp[n+1]
+            #       <-----> | <----->
+            # bit:  7 6 5 4   3 2 1 0
+            #     (MSB)           (LSB)
+            MSB = zero_point[::2] << 4
+            LSB = zero_point[1::2] & 0x0F
+
+        zero_point_int4x2 = MSB | LSB
+        tensor = numpy_helper.from_array(zero_point_int4x2, name=name)
 
         # Restore data_type to INT4/UINT4
         tensor.data_type = TensorProto.INT4 if dtype == "int4" else TensorProto.UINT4
         tensor.ClearField("dims")
-        tensor.dims.extend(zero_point.shape)
+        tensor.dims.extend(target_shape)
 
         return tensor
 
@@ -93,7 +124,7 @@ class QuantizeLinear(_QdqNodeFactory):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
         if axis is not None:
             raise RuntimeError(
@@ -105,7 +136,7 @@ class QuantizeLinear(_QdqNodeFactory):
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
             )
 
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
 
         return helper.make_node("QuantizeLinear",
                                 name=name,
@@ -123,7 +154,7 @@ class DequantizeLinear(_QdqNodeFactory):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
         if axis is not None:
             raise RuntimeError(
@@ -135,7 +166,7 @@ class DequantizeLinear(_QdqNodeFactory):
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
             )
 
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
 
         return helper.make_node("DequantizeLinear",
                                 name=name,

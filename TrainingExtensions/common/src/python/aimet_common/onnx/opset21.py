@@ -52,15 +52,24 @@ class QuantizeLinear(opset13.QuantizeLinear):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
+
+        if axis is None and block_size is not None:
+            raise RuntimeError(
+                "axis must be specified if block_size is not None; "
+                f"got axis={axis}, block_size={block_size}"
+            )
 
         return helper.make_node("QuantizeLinear",
                                 name=name,
                                 inputs=list(inputs),
                                 outputs=[output],
-                                output_dtype=cls.SUPPORTED_DTYPES[output_dtype],
+                                # NOTE: Don't pass output_dtype explicitly; ORT has a bug
+                                #       where per-tensor int8 QuantizeLinear
+                                #       fails with output_dtype explicitly specified as INT8
+                                # output_dtype=cls.SUPPORTED_DTYPES[dtype],
                                 axis=axis,
                                 block_size=block_size)
 
@@ -77,9 +86,15 @@ class DequantizeLinear(opset13.DequantizeLinear):
 
     @classmethod
     def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  output_dtype: str, axis: Optional[int] = None,
+                  dtype: str, axis: Optional[int] = None,
                   block_size: Optional[int] = None):
-        cls._check_dtype(output_dtype)
+        cls._check_dtype(dtype)
+
+        if axis is None and block_size is not None:
+            raise RuntimeError(
+                "axis must be specified if block_size is not None; "
+                f"got axis={axis}, block_size={block_size}"
+            )
 
         return helper.make_node("DequantizeLinear",
                                 name=name,

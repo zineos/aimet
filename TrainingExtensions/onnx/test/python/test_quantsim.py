@@ -2521,11 +2521,6 @@ def test_onnx_qdq_different_precisions(opset_version, param_bw, act_bw):
                                default_activation_bw=act_bw, use_cuda=False)
     input = np.random.randn(*input_shape).astype(np.float32)
 
-    """
-    When: Create a pure onnx model with sim._to_onnx_qdq()
-    Then: Output of the pure onnx model should be equal to that of sim.session
-    """
-
     PARAM_BW = {4: onnx.TensorProto.INT4,
                 8: onnx.TensorProto.INT8,
                 16: onnx.TensorProto.INT16}
@@ -2538,49 +2533,43 @@ def test_onnx_qdq_different_precisions(opset_version, param_bw, act_bw):
     if param_bw not in PARAM_BW or act_bw not in ACT_BW:
         with pytest.raises(RuntimeError):
             onnx_qdq_model = sim._to_onnx_qdq()
+        return
 
-    else:
-        onnx_qdq_model = sim._to_onnx_qdq()
+    """
+    When: Create a pure onnx model with sim._to_onnx_qdq()
+    Then: Should pass onnx checker
+    """
+    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx.checker.check_model(onnx_qdq_model)
 
-        op_map = {node.name: node for node in onnx_qdq_model.graph.node}
-        output_to_op_map = dict()
-        for node in op_map.values():
-            tensor_name = node.output[0]
-            output_to_op_map[tensor_name] = node
+    op_map = {node.name: node for node in onnx_qdq_model.graph.node}
+    output_to_op_map = dict()
+    for node in op_map.values():
+        tensor_name = node.output[0]
+        output_to_op_map[tensor_name] = node
 
-        zp_name_map = {node.name: node for node in onnx_qdq_model.graph.initializer if "zero_point" in node.name}
+    param_names = set(
+        param.name
+        for op in sim.connected_graph.get_all_ops().values()
+        for param, _ in op.parameters.values()
+    )
+    q_nodes = [
+        node for node in onnx_qdq_model.graph.node
+        if node.op_type == "QuantizeLinear"
+    ]
+    expected_output_dtypes = {
+        q.output[0]: PARAM_BW[param_bw] if q.input[0] in param_names
+                     else ACT_BW[act_bw]
+        for q in q_nodes
+    }
 
-        # Check for onnx opset version
-        opset_version = onnx_qdq_model.opset_import[0].version
-        if param_bw > 8 or act_bw > 8:
-            assert opset_version == 21, "AIMET did not upgrade opset version appropriately"
+    """
+    When: Infer output dtype of QuantizeLinear
+    Then: Output dtype should match expected param/activatoin dtype
+    """
+    onnx_qdq_model = onnx.shape_inference.infer_shapes(onnx_qdq_model)
 
-        def find_attibute(node, attr_name):
-            for attr in node.attribute:
-                if attr.name == attr_name:
-                    return attr
-            return None
-
-        # Spot checks for precision
-        for node in op_map.values():
-            if node.op_type in ['Conv']:
-                # Look for the weight q
-                dq_node = output_to_op_map[node.input[1]]
-                q_node = output_to_op_map[dq_node.input[0]]
-                assert q_node.op_type == 'QuantizeLinear'
-
-                output_dtype = find_attibute(q_node, 'output_dtype')
-                if opset_version < 21:
-                    assert not output_dtype
-                else:
-                    assert output_dtype.i == PARAM_BW.get(param_bw, None)
-
-                # Look for the activation q
-                dq_node = output_to_op_map[node.input[0]]
-                q_node = output_to_op_map[dq_node.input[0]]
-                assert q_node.op_type == 'QuantizeLinear'
-                output_dtype = find_attibute(q_node, 'output_dtype')
-                if opset_version < 21:
-                    assert not output_dtype
-                else:
-                    assert output_dtype.i == ACT_BW.get(act_bw, None)
+    for val in onnx_qdq_model.graph.value_info:
+        if val.name in expected_output_dtypes:
+            expected_dtype = expected_output_dtypes[val.name]
+            assert val.type.tensor_type.elem_type == expected_dtype
