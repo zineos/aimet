@@ -1253,6 +1253,8 @@ class QuantizationSimModel:
         model_copy = onnx.ModelProto()
         model_copy.CopyFrom(self.model.model)
 
+        self._overwrite_parameters(model_copy, self._get_qdq_parameters())
+
         aimet_qc_quantize_nodes = [
             node for node in model_copy.graph.node
             if node.op_type == "QcQuantizeOp"
@@ -1288,6 +1290,102 @@ class QuantizationSimModel:
         # onnx.checker.check_model(model_copy, True)
         model_copy = onnx.version_converter.convert_version(model_copy, desired_onnx_opset_version)
         return model_copy
+
+    def _get_qdq_parameters(self):
+        param_names = {
+            product.name
+            for op in self.connected_graph.get_all_ops().values()
+            for product, _ in op.parameters.values()
+            if self.qc_quantize_op_dict[product.name].bitwidth <= 16
+        }
+        qdq_params = {
+            f"{product.name}_qdq": product
+            for op in self.connected_graph.get_all_ops().values()
+            for product, _ in op.parameters.values()
+            if self.qc_quantize_op_dict[product.name].bitwidth <= 16
+        }
+
+        partial_model = onnx.helper.make_model(
+            graph=onnx.helper.make_graph(
+                name="partial",
+                inputs=[],
+                outputs=[
+                    onnx.helper.make_tensor_value_info(qdq_param_name,
+                                                       onnx.TensorProto.FLOAT,
+                                                       shape=p.shape)
+                    for qdq_param_name, p in qdq_params.items()
+                ],
+                initializer=[
+                    init for init in self.model.model.graph.initializer
+                    if init.name in param_names
+                ],
+                nodes=[
+                    node for node in self.model.model.graph.node
+                    if any(inp in param_names for inp in node.input) or
+                       (node.op_type == "Constant" and
+                        any(out in param_names for out in node.output))
+                ],
+            )
+        )
+
+        sess = self.build_session(partial_model, ["CPUExecutionProvider"])
+        out = sess.run(list(qdq_params.keys()), {})
+        return {
+            qdq_param_name: qdq_param
+            for qdq_param_name, qdq_param
+            in zip(qdq_params.keys(), out)
+        }
+
+    @staticmethod
+    def _overwrite_parameters(model: onnx.ModelProto, parameters: Dict[str, np.ndarray]):
+        initializers = [
+            (init, parameters.pop(f"{init.name}_qdq"))
+            for init in model.graph.initializer
+            if f"{init.name}_qdq" in parameters
+        ]
+        constants = [
+            (node, parameters.pop(f"{node.output[0]}_qdq"))
+            for node in model.graph.node
+            if node.op_type == "Constant" and f"{node.output[0]}_qdq" in parameters
+        ]
+
+        found = set(init.name for init, _ in initializers) | \
+                set(const.output[0] for const, _ in constants)
+
+        not_found = parameters.keys() - found
+
+        if not_found:
+            raise RuntimeError(
+                f"Couldn't find parameters: {list(not_found)}"
+            )
+
+        for const, _ in constants:
+            if any(attr.name in ("value_string", "value_strings")
+                   for attr in const.attribute):
+                raise RuntimeError(f"String constant {const.name} can't be quantized")
+
+        for init, qdq_param in initializers:
+            init.raw_data = qdq_param.tobytes()
+
+        for const, qdq_param in constants:
+            for attr in const.attribute:
+                if attr.name == "value":
+                    attr.t.raw_data = qdq_param.tobytes()
+                    break
+                if attr.name == "value_float":
+                    attr.float = float(qdq_param)
+                    break
+                if attr.name == "value_floats":
+                    attr.ClearField("floats")
+                    attr.floats.extend(qdq_param.astype(np.float32).tolist())
+                    break
+                if attr.name == "value_int":
+                    attr.int = int(qdq_param)
+                    break
+                if attr.name == "value_ints":
+                    attr.ClearField("ints")
+                    attr.floats.extend(qdq_param.astype(np.int64).tolist())
+                    break
 
 
 # pylint: disable=too-many-locals, too-many-branches

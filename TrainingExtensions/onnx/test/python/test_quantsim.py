@@ -2410,12 +2410,8 @@ def test_onnx_qdq(model_factory,
 
     if export_int32_bias_encodings:
         sim._concretize_int32_bias_quantizers()
-
         # FIXME: Need extra tolerance due to numerical instability of AIMET int32 bias qdq.
         tolerance += 1
-        if any(node.op_type == "InstanceNormalization" for node in sim.model.graph().node):
-            # FIXME: InstanceNormalization is especially more unstable with int32 bias qdq.
-            tolerance += 2
 
     out_sim, = sim.session.run(None, {"input": input})
 
