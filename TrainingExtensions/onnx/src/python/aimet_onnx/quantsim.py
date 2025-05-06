@@ -1255,7 +1255,11 @@ class QuantizationSimModel:
 
         for aimet_node in aimet_qc_quantize_nodes:
             qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
-            encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
+
+            if qtzr.enabled:
+                encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
+            else:
+                encodings = None
 
             if encodings:
                 # Affine quantizer

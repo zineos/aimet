@@ -2361,8 +2361,8 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize(
     "model_factory,                                   input_shape,     tolerance", [
-    (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32),  2),
-    (lambda: transposed_conv_model(opset_version=13), (10, 10, 4, 4),  2),
+    (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32),  1),
+    (lambda: transposed_conv_model(opset_version=13), (10, 10, 4, 4),  1),
     (batchnorm_model,                                 (10, 10, 8, 8),  1),
     (batchnorm_model_constants,                       (10, 10, 8, 8),  1),
     (lambda: instance_norm_model(opset_version=13),   (2, 10, 24, 24), 3),
@@ -2383,7 +2383,6 @@ def test_onnx_qdq(model_factory,
 
     """
     When: Create a pure onnx model with sim._to_onnx_qdq()
-    Then: Output of the pure onnx model should be equal to that of sim.session
     """
     sim.compute_encodings(lambda sess, _: sess.run(None, {"input": input}), None)
 
@@ -2407,6 +2406,12 @@ def test_onnx_qdq(model_factory,
 
     onnx_qdq_model = sim._to_onnx_qdq()
 
+    """
+    Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
+    """
+    assert len([node for node in onnx_qdq_model.graph.node if node.op_type == "DequantizeLinear"]) \
+           == len([qtzr for qtzr in sim.qc_quantize_op_dict.values() if qtzr.enabled])
+
     # NOTE: Should disable all ORT graph optimization to circumvent known bugs
     # in CPUExecutionProvider operator fusing.
     # ORT CPUExecutionProvider produces corrupted output after fusing pattern A to B:
@@ -2423,6 +2428,9 @@ def test_onnx_qdq(model_factory,
     sess_options = ort.SessionOptions()
     sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
+    """
+    Then: Output of the pure onnx model should be equal to that of sim.session
+    """
     sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
     out_onnx_qdq, = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol)
