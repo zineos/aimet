@@ -58,7 +58,7 @@ from packaging import version
 from aimet_common import libpymo, quantsim
 from aimet_common import libquant_info
 from aimet_common.defs import QuantScheme, QuantizationDataType
-from aimet_common.onnx._utils import _add_onnx_qdq_node
+from aimet_common.onnx._utils import _add_onnx_qdq_nodes
 from aimet_common.quantsim import extract_global_quantizer_args, VALID_ENCODING_VERSIONS, _INT32_MINIMUM_SCALE
 from aimet_common.utils import save_json_yaml, AimetLogger, _red
 from aimet_common.quant_utils import _convert_encoding_format_0_6_1_to_1_0_0
@@ -1261,6 +1261,14 @@ class QuantizationSimModel:
                and node.domain in ("aimet.customop.cpu", "aimet.customop.cuda")
         ]
 
+        qdq_node_info = {
+            "input_names": [],
+            "output_names": [],
+            "node_name_prefixes": [],
+            "encodings": [],
+        }
+        removed_nodes = []
+
         for aimet_node in aimet_qc_quantize_nodes:
             qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
             encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
@@ -1269,19 +1277,20 @@ class QuantizationSimModel:
                 # Affine quantizer
                 # Replace QcQuantizeOp with onnx::QuantizeLinear and DequantizeLinear
                 model_copy.graph.node.remove(aimet_node)
-                _add_onnx_qdq_node(model_copy,
-                                   input_name=aimet_node.input[0],
-                                   output_name=aimet_node.output[0],
-                                   node_name_prefix=aimet_node.name,
-                                   encodings=encodings,
-                                   onnx_opset=desired_onnx_opset_version)
+                qdq_node_info["input_names"].append(aimet_node.input[0])
+                qdq_node_info["output_names"].append(aimet_node.output[0])
+                qdq_node_info["node_name_prefixes"].append(aimet_node.name)
+                qdq_node_info["encodings"].append(encodings)
             else:
                 # Float or disabled quantizer.
                 # In this case, we don't add any QuantizeLinear or DequantizeLinear,
                 # but we should perform extra graph surgery to relay
                 # the producer of QcQuantizerOp's input and
                 # the consumer of QcQuantizerOp's output
-                utils.remove_node(aimet_node, model_copy.graph)
+                removed_nodes.append(aimet_node)
+
+        utils.remove_nodes(removed_nodes, model_copy.graph)
+        _add_onnx_qdq_nodes(model_copy, **qdq_node_info, onnx_opset=desired_onnx_opset_version)
 
         # TODO: Unfortunately, this sanity check doesn't pass yet because the
         #       QcQuantizeOp nodes inserted during QuantizationSimModel.__init__

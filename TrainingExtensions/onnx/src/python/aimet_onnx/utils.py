@@ -38,7 +38,7 @@
 
 import copy
 import itertools
-from typing import Dict, List, Union, Tuple
+from typing import Dict, Iterable, List, Union, Tuple
 import os
 import pickle
 import numpy as np
@@ -90,23 +90,36 @@ def remove_nodes_with_type(node_type: str, onnx_graph: onnx.GraphProto):
                 node.output[0] = outputs.name
 
 
-def _prune_unused_initializer(graph: onnx.GraphProto, init_name):
+def _prune_unused_initializer(graph: onnx.GraphProto, init_name: str):
     """
     Remove initializer from graph if it is unused
     """
-    for node in graph.node:
-        if init_name in node.input:
-            return # Don't prune if initializer is still used
+    return _prune_unused_initializers(graph, [init_name])
 
-    for initializer in graph.initializer:
-        if initializer.name == init_name:
-            graph.initializer.remove(initializer)
-            break
 
-    for _input in graph.input:
-        if _input.name == init_name:
-            graph.input.remove(_input)
-            break
+def _prune_unused_initializers(graph: onnx.GraphProto, init_names: Iterable[str]):
+    """
+    Remove initializer from graph if it is unused
+    """
+    to_be_pruned = set(init_names)
+
+    # Don't prune if initializer is still used
+    to_be_pruned -= set(inp for node in graph.node for inp in node.input)
+
+    initializers = [
+        init for init in graph.initializer
+        if init.name not in to_be_pruned
+    ]
+
+    graph.ClearField("initializer")
+    graph.initializer.extend(initializers)
+
+    inputs = [
+        inp for inp in graph.input
+        if inp.name not in to_be_pruned
+    ]
+    graph.ClearField("input")
+    graph.input.extend(inputs)
 
 
 def remove_node(node: NodeProto, onnx_graph: onnx.GraphProto):
@@ -117,20 +130,53 @@ def remove_node(node: NodeProto, onnx_graph: onnx.GraphProto):
     :param onnx_graph: onnx graph to modify
 
     """
-    onnx_graph.node.remove(node)
-    for other_node in onnx_graph.node:
+    remove_nodes([node], onnx_graph)
+
+
+def remove_nodes(nodes: Iterable[NodeProto], onnx_graph: onnx.GraphProto):
+    """
+    Remove a specific node from graph along with associated initializers
+
+    :param node: the node to be removed
+    :param onnx_graph: onnx graph to modify
+
+    """
+
+    removed_nodes = {node.name: node for node in nodes}
+    remaining_nodes = [
+        node for node in onnx_graph.node
+        if node.name not in removed_nodes
+    ]
+    output_to_node = {
+        node.output[0]: node for node in onnx_graph.node
+    }
+
+    for other_node in remaining_nodes:
         if other_node.input and other_node.output:
             # Check if other node takes input from removed node
             for idx, _input in enumerate(other_node.input):
-                if _input == node.output[0]:
-                    other_node.input[idx] = node.input[0]
-            # Check if removed node output is an output of the graph
-            for outputs in onnx_graph.output:
-                if outputs.name == node.output[0] and other_node.output[0] == node.input[0]:
-                    other_node.output[0] = outputs.name
+                prev_node = output_to_node.get(_input)
+                if prev_node and prev_node.name in removed_nodes:
+                    other_node.input[idx] = prev_node.input[0]
 
-    for input_name in node.input:
-        _prune_unused_initializer(onnx_graph, input_name)
+    for output in onnx_graph.output:
+        prev_node = output_to_node.get(output.name)
+        if prev_node and prev_node.name in removed_nodes:
+            prev_prev_node = output_to_node.get(prev_node.input[0])
+
+            if not prev_prev_node:
+                raise RuntimeError(
+                    "Dangling output: "
+                    f"Leaf output '{output.name}' is not an output of any node"
+                )
+
+            prev_prev_node.output[0] = output.name
+
+    for node in removed_nodes.values():
+        onnx_graph.node.remove(node)
+
+    removed_node_inputs = set(inp for node in removed_nodes.values() for inp in node.input)
+    _prune_unused_initializers(onnx_graph, removed_node_inputs)
 
 
 def transpose_tensor(t: TensorProto, axes: Union[List, Tuple]) -> TensorProto:
