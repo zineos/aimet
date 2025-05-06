@@ -512,7 +512,7 @@ class QuantizationSimModel:
         return quant_info, tensor_quantizer_params
 
     @staticmethod
-    def _get_quantization_axes(op: Op) -> Tuple[int, int]:
+    def _get_quantization_axes(op: Op) -> Tuple[Optional[int], Optional[int]]:
         """
         Gets quantization axes for per-channel and blockwise quantization
 
@@ -529,6 +529,7 @@ class QuantizationSimModel:
             return 1, 0
         if op.type in ['MatMul']:
             return -1, -2
+
         return None, None
 
     def _insert_activation_quantization_nodes(self):
@@ -933,6 +934,16 @@ class QuantizationSimModel:
                 block_axis = weight_qtzr.quant_info.blockAxis if block_size else None
 
                 expected_channel_axis, expected_block_axis = self._get_quantization_axes(op)
+                ndim = len(weight_qtzr.tensor_quantizer_params.tensor_shape)
+
+                if channel_axis < 0:
+                    channel_axis = ndim + channel_axis
+                if block_axis is not None and block_axis < 0:
+                    block_axis = ndim + block_axis
+                if expected_channel_axis is not None and expected_channel_axis < 0:
+                    expected_channel_axis = ndim + expected_channel_axis
+                if expected_block_axis is not None and expected_block_axis < 0:
+                    expected_block_axis = ndim + expected_block_axis
 
                 if channel_axis != expected_channel_axis or \
                         block_axis not in (expected_block_axis, None):
@@ -966,6 +977,7 @@ class QuantizationSimModel:
         switcher = {
             "Conv": get_analytic_bias_scale,
             "Gemm": get_analytic_bias_scale,
+            "MatMul": get_analytic_bias_scale,
             "ConvTranspose": get_analytic_bias_scale,
             "BatchNormalization": get_statistical_bias_scale,
             "InstanceNormalization": get_statistical_bias_scale,
@@ -974,24 +986,16 @@ class QuantizationSimModel:
         }
 
         ops_with_bias = {
-            op
+            op: self._get_weight_and_bias(op)
             for op in self.connected_graph.get_all_ops().values()
-            for param_name, (_, param_type) in op.parameters.items()
-            if param_type == "bias"
+            if op.type in switcher
         }
 
-        for op in ops_with_bias:
+        for op, (weight, bias) in ops_with_bias.items():
+            if bias is None:
+                continue
+
             input, *_ = op.inputs
-            weight = None
-            bias = None
-
-            for inp in op.inputs:
-                _, param_type = op.parameters.get(inp.name, (None, None))
-                if param_type == "weight":
-                    weight = inp
-                elif param_type == "bias":
-                    bias = inp
-
             bias_qtzr = self.qc_quantize_op_dict.get(bias.name)
 
             if bias_qtzr and bias_qtzr.enabled and bias_qtzr.is_initialized():
@@ -1018,6 +1022,26 @@ class QuantizationSimModel:
 
             bias_qtzr.load_encodings(encodings)
             bias_qtzr.enabled = True
+
+    def _get_weight_and_bias(self, op: Op) -> Tuple[Optional[Product], Optional[Product]]:
+        weight = None
+        bias = None
+
+        for inp in op.inputs:
+            _, param_type = op.parameters.get(inp.name, (None, None))
+            if param_type == "weight":
+                weight = inp
+            elif param_type == "bias":
+                bias = inp
+
+        if op.type == "MatMul":
+            # Fetch weight from the previous MatMul node
+            bias_idx = _get_matmul_add_bias_idx(op, self.model.model)
+            if bias_idx is not None:
+                add, = op.outputs[0].consumers
+                _, bias = self._get_weight_and_bias(add)
+
+        return weight, bias
 
     def export(self, path: str, filename_prefix: str, export_model: bool = True):
         """

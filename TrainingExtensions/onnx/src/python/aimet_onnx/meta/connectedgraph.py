@@ -320,7 +320,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
 
 def _get_matmul_add_bias_idx(cg_op: Op, model: ModelProto) -> Optional[int]:
-    if cg_op.type != "Add":
+    if cg_op.type not in ("Add", "MatMul"):
+        return None
+
+    if cg_op.type == "MatMul":
+        if len(cg_op.outputs[0].consumers) == 1:
+            consumer, = cg_op.outputs[0].consumers
+            return _get_matmul_add_bias_idx(consumer, model)
         return None
 
     for inp1, inp2 in itertools.permutations(cg_op.inputs):

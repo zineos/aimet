@@ -68,6 +68,7 @@ from aimet_onnx.quantsim import (
     set_grouped_blockwise_quantization_for_weights,
     _INT32_MINIMUM_SCALE,
 )
+import aimet_onnx
 from aimet_onnx.qc_quantize_op import OpMode, GroupedBlockQuantizeDequantize
 from aimet_onnx.utils import make_dummy_input
 from .models import models_for_tests, test_models
@@ -2108,7 +2109,21 @@ class TestEncodingPropagation:
             """
             assert sim.qc_quantize_op_dict["weight"].bitwidth == 4
 
-    def test_matmul_add_bias_quantizer(self):
+    @pytest.mark.parametrize("per_channel", [True, False])
+    def test_matmul_add_bias_quantizer(self, per_channel: bool):
+        quantsim_config = {
+            "defaults": {
+                "ops": { "is_output_quantized": "True" },
+                "params": { "is_quantized": "True", "is_symmetric": "True" },
+                "per_channel_quantization": str(per_channel),
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {}, "op_type": {}, "supergroups": [],
+            "model_input": { "is_input_quantized": "True" },
+            "model_output": { "is_output_quantized": "True" }
+        }
+
         """
         Given: Model that contains matmul-add sequence that can be interpreted as
                weight_matmul - bias_add
@@ -2122,7 +2137,13 @@ class TestEncodingPropagation:
           2) Bias quantizer should follow the same granularity as weight quantizer
           3) get_op_quantizer should return bias quantizer of Add
         """
-        sim = QuantizationSimModel(model)
+        with tempfile.TemporaryDirectory() as tempdir:
+            config_file = os.path.join(tempdir, "quantsim_config.json")
+            with open(config_file, 'w') as f:
+                json.dump(quantsim_config, f)
+            sim = QuantizationSimModel(model, config_file=config_file)
+
+        input_qtzr = sim.qc_quantize_op_dict[f"input"]
         weight_qtzr = sim.qc_quantize_op_dict[f"matmul.weight"]
         bias_qtzr = sim.qc_quantize_op_dict[f"add.bias"]
         assert not bias_qtzr.enabled
@@ -2130,6 +2151,20 @@ class TestEncodingPropagation:
 
         _, _, param_quantizers = sim.get_op_quantizers(sim.connected_graph._ops["add"])
         assert list(param_quantizers.values()) == [bias_qtzr]
+
+        """
+        When: Concretize int32 bias quantizers
+        Then: Bias scale should be derived as input_scale * weight_scale of matmul
+        """
+        with aimet_onnx.compute_encodings(sim):
+            _ = sim.session.run(None, {"input": np.random.randn(10, 10).astype(np.float32)})
+
+        sim._concretize_int32_bias_quantizers()
+        assert bias_qtzr.enabled
+        bias_scale = np.array(bias_qtzr.export_encodings("2.0.0.beta")["y_scale"]) ,
+        expected = np.array(weight_qtzr.export_encodings("2.0.0.beta")["y_scale"]) * \
+                   np.array(input_qtzr.export_encodings("2.0.0.beta")["y_scale"])
+        assert np.allclose(bias_scale, expected)
 
     def test_identity_conv_perchannel(self):
         model = models_for_tests.conv_with_weight_identity_input()
