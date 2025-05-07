@@ -2,7 +2,7 @@
 # =============================================================================
 #  @@-COPYRIGHT-START-@@
 #
-#  Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+#  Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -34,12 +34,26 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-# pylint: disable=missing-module-docstring
+""" Defines onnx export API """
+from .v2.quantsim.quantsim import QuantizationSimModel, _QuantizationSimOnnxExport
 
-from aimet_common import _version
-__version__ = _version.__version__
 
-from .quantsim import QuantizationSimModel
-from . import nn
-from . import quantization
-from . import onnx
+def export(sim: QuantizationSimModel, *args, **kwargs):
+    """
+    Export :class:`QuantizationSimModel` object to onnx model with
+    QuantizeLinear/DequantizeLinear embedded in the graph.
+
+    This function takes set of same arguments as torch.onnx.export(),
+    except that the first argument is a QuantizationSimModel object, not a nn.Module.
+    """
+    if not isinstance(sim, QuantizationSimModel):
+        raise RuntimeError(f"Expected {QuantizationSimModel} object; got {type(sim)}")
+
+    try:
+        embed_qdq = kwargs.pop("embed_qdq")
+    except KeyError:
+        embed_qdq = True
+
+    _QuantizationSimOnnxExport(sim).export(*args,
+                                           embed_qdq=embed_qdq,
+                                           **kwargs)

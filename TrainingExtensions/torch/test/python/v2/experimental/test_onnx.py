@@ -55,6 +55,7 @@ from aimet_torch.utils import get_all_quantizers
 from aimet_torch.v2.utils import remove_activation_quantizers
 from aimet_torch.model_preparer import prepare_model
 from aimet_torch.v2.quantsim.config_utils import set_grouped_blockwise_quantization_for_weights
+import aimet_torch
 
 
 @pytest.fixture(autouse=True, params=range(1))
@@ -503,8 +504,7 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
 
     with tempfile.TemporaryDirectory() as dirname:
         onnx_path = os.path.join(dirname, "torchvision_model.onnx")
-        sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"],
-                        embed_qdq=True)
+        aimet_torch.onnx.export(sim, x, onnx_path, input_names=["input"], output_names=["output"])
 
         """
         Then: The saved onnx model should pass onnx model checker
