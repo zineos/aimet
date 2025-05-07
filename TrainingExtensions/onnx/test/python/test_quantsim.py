@@ -2566,6 +2566,23 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
     }
 
     """
+    Then: Model input/outputs should be associated with QDQ
+    """
+    input_names = set(inp.name for inp in onnx_qdq_model.graph.input)
+    output_names = set(out.name for out in onnx_qdq_model.graph.output)
+
+    for node in onnx_qdq_model.graph.node:
+        if node.input and node.input[0] in input_names:
+            assert node.op_type == "QuantizeLinear"
+            input_names.remove(node.input[0])
+        if node.output and node.output[0] in output_names:
+            assert node.op_type == "DequantizeLinear"
+            output_names.remove(node.output[0])
+
+    assert not input_names
+    assert not output_names
+
+    """
     When: Infer output dtype of QuantizeLinear
     Then: Output dtype should match expected param/activatoin dtype
     """
