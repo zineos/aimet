@@ -57,7 +57,7 @@ from aimet_common import quantsim
 from aimet_common import libquant_info
 from aimet_common import libpymo
 from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType
-from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
+from aimet_common.quantsim_config.utils import get_path_for_per_channel_config, get_path_for_per_tensor_config
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx.quantsim import (
     QuantizationSimModel,
@@ -2497,45 +2497,50 @@ def compare_onnx_qdq_models(model1, model2):
             consuming_op_name = graph1_node_consumer_map[graph1_dq_node.output[0]][0].name
             print(consuming_op_name)
 
+
+@pytest.mark.parametrize("input_model_opset", range(9, 22))
 @pytest.mark.parametrize(
-    "opset_version", [
-        10, 12, 13, 14, 20, # Opset 21 not supported in onnx 1.16
-    ]
-)
-@pytest.mark.parametrize(
-    "param_bw, act_bw", [
-    (16,       16),
-    (8,        8),
-    (8,        16),
-    (4,        16),
-    (8,        12),
+    "param_bw, act_bw, per_channel, minimum_required_opset", [
+    (4,        16,     False,       21),
+    (8,        8,      False,       10),
+    (8,        16,     False,       21),
+    (16,       16,     False,       21),
+    (4,        16,     True,        21),
+    (8,        8,      True,        13),
+    (8,        16,     True,        21),
+    (16,       16,     True,        21),
+    (8,        12,     True,        -1),
 ])
-def test_onnx_qdq_different_precisions(opset_version, param_bw, act_bw):
+def test_onnx_qdq_opset_compatibility(input_model_opset: int,
+                                      param_bw: int,
+                                      act_bw: int,
+                                      per_channel: bool,
+                                      minimum_required_opset: int):
     input_shape = (1, 3, 32, 32)
-    model = single_residual_model(opset_version=opset_version)
-    sim = QuantizationSimModel(model, default_param_bw=param_bw,
-                               default_activation_bw=act_bw, use_cuda=False)
+    model = single_residual_model(opset_version=input_model_opset)
+    config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
+    sim = QuantizationSimModel(model,
+                               default_param_bw=param_bw,
+                               default_activation_bw=act_bw,
+                               use_cuda=False,
+                               config_file=config_file)
     input = np.random.randn(*input_shape).astype(np.float32)
-
-    PARAM_BW = {4: onnx.TensorProto.INT4,
-                8: onnx.TensorProto.INT8,
-                16: onnx.TensorProto.INT16}
-
-    ACT_BW = {8: onnx.TensorProto.UINT8,
-              16: onnx.TensorProto.UINT16}
-
     sim.compute_encodings(lambda sess, _: sess.run(None, {"input": input}), None)
 
-    if param_bw not in PARAM_BW or act_bw not in ACT_BW:
+    if minimum_required_opset < 0:
         with pytest.raises(RuntimeError):
             onnx_qdq_model = sim._to_onnx_qdq()
         return
 
     """
     When: Create a pure onnx model with sim._to_onnx_qdq()
-    Then: Should pass onnx checker
+    Then:
+      1. Onnx opset should be upgraded to minimum required opset if needed
+      2. Should pass onnx checker
     """
     onnx_qdq_model = sim._to_onnx_qdq()
+    output_model_opset = onnx_qdq_model.opset_import[0].version
+    assert output_model_opset == max(input_model_opset, minimum_required_opset)
     onnx.checker.check_model(onnx_qdq_model)
 
     op_map = {node.name: node for node in onnx_qdq_model.graph.node}
@@ -2554,8 +2559,9 @@ def test_onnx_qdq_different_precisions(opset_version, param_bw, act_bw):
         if node.op_type == "QuantizeLinear"
     ]
     expected_output_dtypes = {
-        q.output[0]: PARAM_BW[param_bw] if q.input[0] in param_names
-                     else ACT_BW[act_bw]
+        q.output[0]: getattr(onnx.TensorProto, f"INT{param_bw}")
+                     if q.input[0] in param_names
+                     else getattr(onnx.TensorProto, f"UINT{act_bw}")
         for q in q_nodes
     }
 

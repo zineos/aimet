@@ -1098,11 +1098,16 @@ def single_residual_model(training=torch.onnx.TrainingMode.EVAL,
                           save_path,  # where to save the model (can be a file or file-like object)
                           training=training,
                           export_params=True,  # store the trained parameter weights inside the model file
-                          opset_version=opset_version,  # the ONNX version to export the model to
+                          opset_version=min(opset_version, 20),  # the ONNX version to export the model to
                           do_constant_folding=True,  # whether to execute constant folding for optimization
                           input_names=['input'],  # the model's input names
                           output_names=['output'])
-        model_onnx = ONNXModel(load_model(save_path))
+
+        model = load_model(save_path)
+        if opset_version > 20:
+            model = onnx.version_converter.convert_version(model, opset_version)
+
+        model_onnx = ONNXModel(model)
     return model_onnx
 
 def multi_input_model(opset_version=_DEFAULT_OPSET_VERSION):
@@ -1146,11 +1151,16 @@ def transposed_conv_model(opset_version=_DEFAULT_OPSET_VERSION):
                           x,  # model input (or a tuple for multiple inputs)
                           save_path,  # where to save the model (can be a file or file-like object)
                           export_params=True,  # store the trained parameter weights inside the model file
-                          opset_version=opset_version,  # the ONNX version to export the model to
+                          opset_version=min(opset_version, 20),  # the ONNX version to export the model to
                           do_constant_folding=True,  # whether to execute constant folding for optimization
                           input_names=['input'],  # the model's input names
                           output_names=['output'])
-        model = ONNXModel(load_model(save_path))
+
+        model = load_model(save_path)
+        if opset_version > 20:
+            model = onnx.version_converter.convert_version(model, opset_version)
+
+        model = ONNXModel(model)
     return model
 
 
@@ -1862,11 +1872,16 @@ def instance_norm_model(opset_version=_DEFAULT_OPSET_VERSION):
                           # where to save the model (can be a file or file-like object),
                           training=torch.onnx.TrainingMode.TRAINING,
                           export_params=True,  # store the trained parameter weights inside the model file
-                          opset_version=opset_version,  # the ONNX version to export the model to
+                          opset_version=min(opset_version, 20),  # the ONNX version to export the model to
                           do_constant_folding=False,  # whether to execute constant folding for optimization
                           input_names=['input'],  # the model's input names
                           output_names=['output'])
-        model = ONNXModel(load_model(save_path))
+
+        model = load_model(save_path)
+        if opset_version > 20:
+            model = onnx.version_converter.convert_version(model, opset_version)
+
+        model = ONNXModel(model)
     return model
 
 def custom_add_model():

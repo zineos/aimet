@@ -843,17 +843,24 @@ class QuantizationSimModel:
         self.model = self.remove_quantizers(self.model)
 
     @staticmethod
-    def remove_quantizers(model: ONNXModel):
+    def remove_quantizers(model: Union[ONNXModel, ModelProto]):
         """
         Removes all QcQuantizeOp layers from model
         """
-        original_nodes = [node for node in model.nodes() if node.op_type != "QcQuantizeOp"]
-        tensor_name_map = {node.output[0]: node.input[0] for node in model.nodes() if node.op_type == "QcQuantizeOp"}
+        if isinstance(model, ONNXModel):
+            QuantizationSimModel.remove_quantizers(model.model)
+            return model
 
-        model.model.graph.ClearField("node")
-        model.model.graph.node.extend(original_nodes)
+        original_nodes = [node for node in model.graph.node if node.op_type != "QcQuantizeOp"]
+        tensor_name_map = {
+            node.output[0]: node.input[0] for node in model.graph.node
+            if node.op_type == "QcQuantizeOp"
+        }
 
-        for node in model.nodes():
+        model.graph.ClearField("node")
+        model.graph.node.extend(original_nodes)
+
+        for node in model.graph.node:
             for i, tensor in enumerate(node.input):
                 if tensor not in tensor_name_map:
                     continue
@@ -864,9 +871,9 @@ class QuantizationSimModel:
                     continue
                 node.output[i] = tensor_name_map[tensor]
 
-        for i, tensor in enumerate(model.graph().output):
+        for i, tensor in enumerate(model.graph.output):
             if tensor.name in tensor_name_map:
-                model.graph().output[i].name = tensor_name_map[tensor.name]
+                model.graph.output[i].name = tensor_name_map[tensor.name]
 
         return model
 
@@ -1267,7 +1274,6 @@ class QuantizationSimModel:
             "node_name_prefixes": [],
             "encodings": [],
         }
-        removed_nodes = []
 
         for aimet_node in aimet_qc_quantize_nodes:
             qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
@@ -1276,20 +1282,17 @@ class QuantizationSimModel:
             if encodings:
                 # Affine quantizer
                 # Replace QcQuantizeOp with onnx::QuantizeLinear and DequantizeLinear
-                model_copy.graph.node.remove(aimet_node)
                 qdq_node_info["input_names"].append(aimet_node.input[0])
                 qdq_node_info["output_names"].append(aimet_node.output[0])
                 qdq_node_info["node_name_prefixes"].append(aimet_node.name)
                 qdq_node_info["encodings"].append(encodings)
-            else:
-                # Float or disabled quantizer.
-                # In this case, we don't add any QuantizeLinear or DequantizeLinear,
-                # but we should perform extra graph surgery to relay
-                # the producer of QcQuantizerOp's input and
-                # the consumer of QcQuantizerOp's output
-                removed_nodes.append(aimet_node)
 
-        utils.remove_nodes(removed_nodes, model_copy.graph)
+        self.remove_quantizers(model_copy)
+
+        if onnx_opset_version < desired_onnx_opset_version:
+            model_copy = onnx.version_converter.convert_version(model_copy,
+                                                                desired_onnx_opset_version)
+
         _add_onnx_qdq_nodes(model_copy, **qdq_node_info, onnx_opset=desired_onnx_opset_version)
 
         # TODO: Unfortunately, this sanity check doesn't pass yet because the
@@ -1297,7 +1300,6 @@ class QuantizationSimModel:
         #       aren't topologically sorted, but onnx.checker asserts topological
         #       order of all nodes. Needs to be fixed asap.
         # onnx.checker.check_model(model_copy, True)
-        model_copy = onnx.version_converter.convert_version(model_copy, desired_onnx_opset_version)
         return model_copy
 
     def _get_qdq_parameters(self):
