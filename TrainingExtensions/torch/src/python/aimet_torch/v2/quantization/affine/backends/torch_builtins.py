@@ -163,7 +163,8 @@ _ALLOW_FAST_FORWARD = True # temporary flag for debugging
 
 @_onnx.register_symbolic(_onnx.quantize_dequantize_symbolic)
 def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        qmin: int, qmax: int, block_size: Optional[List] = None) -> torch.Tensor:
+                        qmin: int, qmax: int, block_size: Optional[List] = None,
+                        zero_point_shift: float = 0.0) -> torch.Tensor:
     """
     Performs differentiable quantize-dequantize given scale, offset, and quantization range.
 
@@ -173,6 +174,7 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
     :param qmin: Minimum value of the quantization range
     :param qmax: Maximum value of the quantization range
     :param block_size: Block sizes per dimension
+    :param zero_point_shift: Shift tensor by an amount proportional to scale during quantize dequantize
     """
     _validate_arguments(tensor, scale, qmin, qmax, block_size)
 
@@ -189,6 +191,9 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
 
     # if user explicitly designated specific rounding function, honor it strictly
     _fast_forward &= (_round_fn == torch.round and _round_fn_inplace == torch.round_)
+
+    # if user explicitly designated specific rounding function, honor it strictly
+    _fast_forward &= zero_point_shift == 0.0
 
     if _fast_forward:
         ret = _torch_fake_quantize(tensor, scale, offset, qmin, qmax)
@@ -209,12 +214,19 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
 
     orig_tensor_shape = tensor.shape
     tensor = reshape_tensor_for_blocks(tensor, scale.shape, block_size)
-    scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size))
+    scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size)).to(internal_dtype)
     offset = offset.view(get_encoding_shape_with_blocks(offset.shape, block_size))
-    return QuantDequantFunc.apply(tensor,
-                                  scale.to(internal_dtype),
-                                  offset.to(internal_dtype),
-                                  qmin, qmax).to(output_dtype).view(orig_tensor_shape)
+    shifted_tensor = tensor
+    if zero_point_shift != 0.0:
+        shifted_tensor = torch.sub(tensor, scale, alpha=zero_point_shift)
+    qdq_tensor =  QuantDequantFunc.apply(shifted_tensor,
+                                         scale,
+                                         offset.to(internal_dtype),
+                                         qmin, qmax)
+    if zero_point_shift != 0.0:
+        qdq_tensor = torch.add(qdq_tensor, scale, alpha=zero_point_shift)
+
+    return qdq_tensor.to(output_dtype).view(orig_tensor_shape)
 
 
 def _torch_fake_quantize(tensor: torch.Tensor,

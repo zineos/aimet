@@ -91,13 +91,13 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
     @overload
     @_register_signature(_init_signatures)
     def __init__(self, shape, qmin: int, qmax: int, symmetric: bool, encoding_analyzer: EncodingAnalyzer = None,
-                 block_size: Optional[Tuple[int, ...]] = None):
+                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
         ...
 
     @overload
     @_register_signature(_init_signatures)
     def __init__(self, shape, bitwidth: int, symmetric: bool, encoding_analyzer: EncodingAnalyzer = None,
-                 block_size: Optional[Tuple[int, ...]] = None):
+                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
         ...
 
     def __init__(self, shape, *args, **kwargs):
@@ -107,8 +107,8 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
         self.shape = tuple(shape)
         full_args = (shape, *args)
 
-        # Pad positional args with None's such that len(args) == 5
-        args = tuple(chain(args, repeat(None, 5 - len(args))))
+        # Pad positional args with None's such that len(args) == 6
+        args = tuple(chain(args, repeat(None, 6 - len(args))))
         arg0 = kwargs.pop('qmin', kwargs.pop('bitwidth', args[0]))
         arg1 = kwargs.pop('qmax', args[1])
 
@@ -122,6 +122,7 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
 
             encoding_analyzer = kwargs.pop('encoding_analyzer', args[3])
             block_size = kwargs.pop('block_size', args[4])
+            zero_point_shift = kwargs.pop('zero_point_shift', args[5])
         else:
             # (arg0, arg1) == (bitwidth, symmetric)
             bitwidth = arg0
@@ -134,6 +135,7 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
             qmin, qmax = _derive_qmin_qmax(bitwidth=bitwidth, signed=symmetric)
             encoding_analyzer = kwargs.pop('encoding_analyzer', args[2])
             block_size = kwargs.pop('block_size', args[3])
+            zero_point_shift = kwargs.pop('zero_point_shift', args[4])
 
         assert qmin is not None
         assert qmax is not None
@@ -150,6 +152,10 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
         self.qmax = qmax
         self._symmetric = symmetric
         self.block_size = block_size
+
+        self.zero_point_shift = zero_point_shift or 0.0
+        if self.zero_point_shift not in [0.0, 0.5]:
+            raise ValueError(f"zero_point_shift should be 0.0 or 0.5. Got {self.zero_point_shift}")
 
         self.encoding_analyzer = encoding_analyzer or \
                                  MinMaxEncodingAnalyzer(torch_builtins.get_encoding_shape_with_blocks(self.shape,
@@ -339,7 +345,7 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
         if self.is_initialized():
             return AffineEncoding(self.get_scale(dtype=torch.float32),
                                   self.get_offset(dtype=torch.float32),
-                                  self.qmin, self.qmax, self._symmetric, self.block_size)
+                                  self.qmin, self.qmax, self._symmetric, self.block_size, self.zero_point_shift)
         return None
 
     @classmethod
@@ -484,6 +490,8 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
             expanded_input = torch_builtins.reshape_tensor_for_blocks(input, shape, self.block_size)
             batch_statistics = self.encoding_analyzer.update_stats(expanded_input)
             num_steps = self.qmax - self.qmin
+            if self.zero_point_shift == 0.5:
+                num_steps -= 1
             dynamic_min, dynamic_max =\
                     self.encoding_analyzer.compute_encodings_from_stats(batch_statistics,
                                                                         num_steps,
@@ -521,6 +529,8 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin): # pylint: disable=too-many
 
         try:
             num_steps = self.qmax - self.qmin
+            if self.zero_point_shift == 0.5:
+                num_steps -= 1
             enc_min, enc_max = self.encoding_analyzer.compute_encodings(num_steps, self.symmetric)
             if self.block_size is not None:
                 enc_min = enc_min.view(shape)
@@ -705,6 +715,9 @@ class Quantize(AffineQuantizerBase):
     def __init__(self, shape, *args, **kwargs):
         super().__init__(shape, *args, **kwargs)
 
+        if self.zero_point_shift != 0.0:
+            raise RuntimeError('Nonzero quant shift not supported for Quantize')
+
     def forward(self, input: torch.Tensor) -> QuantizedTensor:
         """Quantizes the input tensor
 
@@ -867,7 +880,8 @@ class QuantizeDequantize(AffineQuantizerBase):
                                      encoding.offset,
                                      encoding.qmin,
                                      encoding.qmax,
-                                     block_size=self.block_size)
+                                     block_size=self.block_size,
+                                     zero_point_shift=self.zero_point_shift)
         output = output.as_subclass(DequantizedTensor)
         output.encoding = encoding
         return output
@@ -880,6 +894,9 @@ class Dequantize(AffineQuantizerBase): # pylint: disable=missing-class-docstring
                 'Failed to run Dequantize since quantization parameters are not initialized.'
                 ' Please initialize the quantization parameters using `compute_encodings()`.'
             )
+
+        if self.zero_point_shift != 0.0:
+            raise RuntimeError('Nonzero quant shift not supported for Dequantize')
 
         encoding = self.get_encodings()
 

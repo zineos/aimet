@@ -93,6 +93,16 @@ class ConcatModel(torch.nn.Module):
     def forward(self, *x):
         return self.cat(*x)
 
+
+class ConvModel(torch.nn.Module):
+    def __init__(self):
+        super(ConvModel, self).__init__()
+        self.conv = torch.nn.Conv2d(in_channels=3, out_channels=1, kernel_size=(2, 2))
+
+    def forward(self, x):
+        return self.conv(x)
+
+
 class TestQuantsim:
     """ Test Percentile quantization scheme """
 
@@ -1874,3 +1884,46 @@ class TestEncodingPropagation:
         assert isinstance(sim.model.linear.input_quantizers[1], QuantizeDequantize)
         assert isinstance(sim.model.linear.input_quantizers[2], QuantizeDequantize)
         assert isinstance(sim.model.linear.output_quantizers[0], QuantizeDequantize)
+
+    def test_export_with_zero_point_shift(self):
+        torch.manual_seed(0)
+
+        dummy_input = torch.randn(1, 3, 4, 4)
+        model = ConvModel()
+        qsim = QuantizationSimModel(model, dummy_input, config_file=get_path_for_per_channel_config())
+        qsim.model.conv.param_quantizers['weight'] = QuantizeDequantize(
+            shape=qsim.model.conv.param_quantizers['weight'].shape,
+            bitwidth=2,
+            symmetric=True,
+            zero_point_shift=0.5)
+        qsim.compute_encodings(lambda m: m(dummy_input))
+        out_1 = qsim.model(dummy_input)
+        with (tempfile.TemporaryDirectory() as tmpdir):
+            qsim.export(tmpdir, 'zero_point_shift_0.5_export', dummy_input)
+            qsim.save_encodings_to_json(tmpdir, 'zero_point_shift_0.5_encodings')
+            with open(os.path.join(tmpdir, 'zero_point_shift_0.5_export.encodings'), 'r') as f:
+                encodings = json.load(f)
+                assert encodings['param_encodings'][0]['offset'][0] == -1.5
+
+            with open(os.path.join(tmpdir, 'zero_point_shift_0.5_encodings.json'), 'r') as f:
+                encodings = json.load(f)
+                assert encodings['param_encodings']['conv.weight'][0]['offset'] == -2
+
+            qsim_2 = QuantizationSimModel(model, dummy_input, config_file=get_path_for_per_channel_config())
+            qsim_2.model.conv.param_quantizers['weight'] = QuantizeDequantize(
+                shape=qsim.model.conv.param_quantizers['weight'].shape,
+                bitwidth=2,
+                symmetric=True,
+                zero_point_shift=0.5)
+
+            assert not qsim_2.model.conv.param_quantizers['weight'].get_encodings()
+            qsim_2.load_encodings(os.path.join(tmpdir, 'zero_point_shift_0.5_encodings.json'))
+            qsim_weight_encoding = qsim.model.conv.param_quantizers['weight'].get_encodings()
+            qsim_2_weight_encoding = qsim_2.model.conv.param_quantizers['weight'].get_encodings()
+            assert qsim_weight_encoding.min == qsim_2_weight_encoding.min
+            assert qsim_weight_encoding.max == qsim_2_weight_encoding.max
+            assert qsim_weight_encoding.scale == qsim_2_weight_encoding.scale
+            assert qsim_weight_encoding.offset == qsim_2_weight_encoding.offset
+
+            out_2 = qsim_2.model(dummy_input)
+            assert torch.allclose(out_1, out_2, atol=1e-7)

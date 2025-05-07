@@ -62,13 +62,13 @@ class AffineEncoding(EncodingBase, _GridMixin):
     @overload
     @_register_signature(_init_signatures)
     def __init__(self, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int, symmetry=False,
-                 block_size: Optional[Tuple[int, ...]] = None):
+                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
         ...
 
     @overload
     @_register_signature(_init_signatures)
     def __init__(self, scale: torch.Tensor, offset: torch.Tensor, bitwidth: int, signed=False, symmetry=False,
-                 block_size: Optional[Tuple[int, ...]] = None):
+                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
         ...
 
     def __init__(self, scale: torch.Tensor, offset: torch.Tensor, *args, **kwargs): # pylint: disable=too-many-locals
@@ -76,14 +76,15 @@ class AffineEncoding(EncodingBase, _GridMixin):
         self._offset = offset
         full_args = (scale, offset, *args)
 
-        # Pad positional args with None's such that len(args) == 4
-        args = tuple(chain(args, repeat(None, 4 - len(args))))
+        # Pad positional args with None's such that len(args) == 5
+        args = tuple(chain(args, repeat(None, 5 - len(args))))
         arg0 = kwargs.pop('qmin', kwargs.pop('bitwidth', args[0]))
         arg1 = kwargs.pop('qmax', kwargs.pop('signed', args[1]))
         symmetry = kwargs.pop('symmetry', args[2])
         if symmetry is None:
             symmetry = False
         block_size = kwargs.pop('block_size', args[3])
+        zero_point_shift = kwargs.pop('zero_point_shift', args[4])
 
         if arg1 is None or isinstance(arg1, bool):
             # (arg0, arg1) == (bitwidth, signed)
@@ -112,6 +113,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
         self.qmax = qmax
         self._symmetry = symmetry
         self._block_size = block_size
+        self._zero_point_shift = zero_point_shift or 0.0
+        if self._zero_point_shift not in [0.0, 0.5]:
+            raise ValueError(f"zero_point_shift should be 0.0 or 0.5. Got {self._zero_point_shift}")
 
     @property
     def mapping(self) -> str:
@@ -238,6 +242,13 @@ class AffineEncoding(EncodingBase, _GridMixin):
         """
         return self._block_size
 
+    @property
+    def zero_point_shift(self) -> float:
+        """
+        Shifts tensor by a factor of scale before performing quantize/dequantize
+        """
+        return self._zero_point_shift
+
     def to(self, *args, **kwargs):
         """
         Changes dtype of data in quantizer encoding or device where the data is.
@@ -265,6 +276,8 @@ class AffineEncoding(EncodingBase, _GridMixin):
         qmin = self.qmin
         qmax = self.qmax
         block_size = self.block_size
+        if self.zero_point_shift != 0.0:
+            raise RuntimeError('Nonzero quant shift not supported in AffineEncoding quantize')
 
         # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
         # is known to introduce substantial CPU overhead.
@@ -278,6 +291,8 @@ class AffineEncoding(EncodingBase, _GridMixin):
         scale = self.scale
         offset = self.offset
         block_size = self.block_size
+        if self.zero_point_shift != 0.0:
+            raise RuntimeError('Nonzero quant shift not supported in AffineEncoding dequantize')
 
         # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
         # is known to introduce substantial CPU overhead.
@@ -347,6 +362,10 @@ class AffineEncoding(EncodingBase, _GridMixin):
             if self.signed:
                 offset = offset - 2 ** (self.bitwidth - 1)
             encoding_dict['offset'] = offset.to(torch.int).flatten().tolist()
+            if self.zero_point_shift != 0.0:
+                assert self.zero_point_shift == 0.5
+                assert self.symmetry
+                encoding_dict['offset'] = [encoding_dict['offset'][0] + self.zero_point_shift] * len(encoding_dict['offset'])
 
             assert self.granularity != 'unknown'
             if self.granularity == 'pertensor':
@@ -362,6 +381,8 @@ class AffineEncoding(EncodingBase, _GridMixin):
             return encoding_dict
 
         if encoding_version == "2.0.0.beta":
+            if self._zero_point_shift != 0.0:
+                raise RuntimeError('Nonzero quant shift not supported in AffineEncoding to_qnn_encoding_dict')
             output_dtype = self._get_export_dtype()
             assert output_dtype in ("int4", "int8", "int16", "int32", "uint4", "uint8", "uint16", "uint32")
 

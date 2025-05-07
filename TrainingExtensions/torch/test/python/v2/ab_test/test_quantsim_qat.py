@@ -66,7 +66,7 @@ class STE(torch.autograd.Function):
         return output_grad
 
 
-def autograd_based_qdq(tensor, scale, offset, qmin, qmax, block_size=None) -> torch.Tensor:
+def autograd_based_qdq(tensor, scale, offset, qmin, qmax, block_size=None, zero_point_shift=0.0) -> torch.Tensor:
     orig_tensor_shape = tensor.shape
     tensor = torch_builtins.reshape_tensor_for_blocks(tensor, scale.shape, block_size)
     scale = scale.view(torch_builtins.get_encoding_shape_with_blocks(scale.shape, block_size))

@@ -2173,3 +2173,30 @@ def test_min_max_scale_offset_equivalence(symmetric, bitwidth, dtype, device, in
     assert qtzr.bitwidth == bitwidth
     assert qtzr.symmetric == symmetric
     assert all(p.device == device for p in qtzr.parameters())
+
+def test_equivalence_with_pairwise_nearest():
+    torch.manual_seed(0)
+    for i in range(10):
+        quantizer = QuantizeDequantize(shape=(), bitwidth=2, symmetric=True, zero_point_shift=0.5)
+        tensor_to_qdq = torch.rand(5, 10) * 10.0 - 5
+        with quantizer.compute_encodings():
+            _ = quantizer(tensor_to_qdq)
+
+        qcom_scale = quantizer.get_scale()
+        tensor_max = torch.max(torch.abs(tensor_to_qdq))
+        scale = tensor_max / 1.5
+        assert qcom_scale == scale
+        c_dist_bins = torch.tensor([scale * -1.5, scale * -.5, scale * .5, scale * 1.5])
+
+        orig_shape = tensor_to_qdq.shape
+
+        distances = torch.cdist(tensor_to_qdq.flatten().unsqueeze(1), c_dist_bins.unsqueeze(1))
+
+        # Find the indices of the closest values
+        closest_indices = distances.argmin(dim=1)
+
+        # Map each element of tensor_a to the closest value in tensor_b
+        mapped_tensor = c_dist_bins[closest_indices].reshape(orig_shape)
+
+        out = quantizer(tensor_to_qdq)
+        assert torch.equal(mapped_tensor, out)

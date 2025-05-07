@@ -175,24 +175,29 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
                  6.,  7.,  7.,  8.,  9., 10., 10., 11., 12., 13., 13., 14., 15., 15.,
                  15., 15., 15., 15.])
     """
-    qmin, qmax, block_size = _parse_args(args, kwargs)
+    qmin, qmax, block_size, zero_point_shift = _parse_args(args, kwargs)
+    if zero_point_shift != 0.0:
+        raise RuntimeError("Nonzero zero_point_shift not supported for quantize()")
     return get_backend().quantize(tensor, scale, offset, qmin, qmax, block_size)
 
 
 @overload
 def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
                         bitwidth: Union[int, float], signed: bool = False,
-                        block_size: Optional[Tuple[int, ...]] = None):
+                        block_size: Optional[Tuple[int, ...]] = None,
+                        zero_point_shift: Optional[float] = None):
     ...
 
 @overload
 def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, *,
-                        num_steps: int, signed: bool = False, block_size: Optional[Tuple[int, ...]] = None):
+                        num_steps: int, signed: bool = False, block_size: Optional[Tuple[int, ...]] = None,
+                        zero_point_shift: Optional[float] = None):
     ...
 
 @overload
 def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        qmin: int, qmax: int, block_size: Optional[Tuple[int, ...]] = None):
+                        qmin: int, qmax: int, block_size: Optional[Tuple[int, ...]] = None,
+                        zero_point_shift: Optional[float] = None):
     ...
 
 
@@ -322,8 +327,8 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
                 0.6000, 0.6667, 0.6667, 0.7333, 0.8000, 0.8667, 0.8667, 0.9333, 1.0000,
                 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
     """
-    qmin, qmax, block_size = _parse_args(args, kwargs)
-    return get_backend().quantize_dequantize(tensor, scale, offset, qmin, qmax, block_size)
+    qmin, qmax, block_size, zero_point_shift = _parse_args(args, kwargs)
+    return get_backend().quantize_dequantize(tensor, scale, offset, qmin, qmax, block_size, zero_point_shift)
 
 
 def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
@@ -353,14 +358,15 @@ def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
     return get_backend().dequantize(tensor, scale, offset, block_size)
 
 
-def _parse_args(args, kwargs) -> Tuple[int, int, Optional[Tuple[int, ...]]]:
+def _parse_args(args, kwargs) -> Tuple[int, int, Optional[Tuple[int, ...]], float]:
     bitwidth = num_steps = signed = qmin = qmax = None
 
-    # Pad positional args with None's such that len(args) == 3
-    args = tuple(chain(args, repeat(None, 3 - len(args))))
+    # Pad positional args with None's such that len(args) == 4
+    args = tuple(chain(args, repeat(None, 4 - len(args))))
     arg0 = kwargs.get('qmin', kwargs.get('bitwidth', args[0]))
     arg1 = kwargs.get('qmax', kwargs.get('signed', args[1]))
     block_size = kwargs.get('block_size', None) or args[2]
+    zero_point_shift = args[3] or kwargs.get('zero_point_shift', 0.0)
 
     if arg0 is None:
         num_steps = kwargs['num_steps']
@@ -375,7 +381,7 @@ def _parse_args(args, kwargs) -> Tuple[int, int, Optional[Tuple[int, ...]]]:
     assert qmin is not None
     assert qmax is not None
 
-    return qmin, qmax, block_size
+    return qmin, qmax, block_size, zero_point_shift
 
 
 def _derive_qmin_qmax(*, bitwidth: int = None, num_steps: int = None, signed: bool):

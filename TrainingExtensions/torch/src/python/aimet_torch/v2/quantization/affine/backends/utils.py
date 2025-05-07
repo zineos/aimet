@@ -65,7 +65,8 @@ class _QuantizationBackendProtocol(Protocol):
                             offset: torch.Tensor,
                             qmin: int,
                             qmax: int,
-                            block_size: Optional[List] = None) -> torch.Tensor:
+                            block_size: Optional[List] = None,
+                            zero_point_shift: float = 0.0) -> torch.Tensor:
         ...
 
 

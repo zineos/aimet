@@ -158,10 +158,13 @@ def dequantize_symbolic(g, tensor, scale, offset, block_size=None):
     return g.onnxscript_op(dequantize, tensor, scale, offset, block_size_i=block_size).setType(tensor.type())
 
 
-def quantize_dequantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_size=None):
+def quantize_dequantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_size=None, zero_point_shift=0.0):
     """Onnx symbolic function definition for affine quantize-dequantize"""
     # Unsqueeze scale, offset if scalars.
     # This is necessary because ONNX Resize operator requires non-scalar input tensors
+
+    if zero_point_shift != 0.0:
+        raise RuntimeError('torch.onnx.export not supported for nonzero zero_point_shift')
     scale = _unsqueeze_scalar(g, scale)
     offset = _unsqueeze_scalar(g, offset)
 
