@@ -142,10 +142,10 @@ class FloatQuantizeDequantize(QuantizerBase): # pylint: disable=abstract-method
                 raise ValueError('Neither "dtype" nor "exponent/mantissa_bits" was specified.')
 
             if finite is None:
-                self.finite = False
+                finite = False
 
             if unsigned_zero is None:
-                self.unsigned_zero = False
+                unsigned_zero = False
 
         if dtype is not None:
             if exponent_bits is not None or mantissa_bits is not None or \

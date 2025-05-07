@@ -278,3 +278,11 @@ def test_float_encoding_to():
 
     assert encoding.maxval.device == torch.device("cpu")
     assert encoding.maxval.dtype == torch.float32
+
+
+def test_default_args():
+    float16_qdq = FloatQuantizeDequantize(exponent_bits=5, mantissa_bits=10)
+    assert float16_qdq.is_float16()
+
+    bfloat16_qdq = FloatQuantizeDequantize(exponent_bits=8, mantissa_bits=7)
+    assert bfloat16_qdq.is_bfloat16()
