@@ -55,8 +55,16 @@ class LETModule():
     LET modules implementation for omniquant
     """
     def __init__(self, source: QuantizationMixin):
+        # LET scale
+        self.prev_scale = None
+        self.foll_scale = None
+        # Cache trained scale to numpy after folding
         self._cached_prev_scale = None
         self._cached_foll_scale = None
+        # Placeholder to restore qsim to fp while block-wise training.
+        self._temp_prev = None
+        self._temp_foll = None
+
         self._reset_let_params()
         # TODO in e2e integration decide what happens if some of the quantizers are None/missing
         # For now we assume all 3 values are present, else we throw an error
@@ -95,14 +103,46 @@ class LETModule():
         self._cached_prev_scale = self.prev_scale.data.cpu().numpy() if self.prev_scale is not None else None
         self._cached_foll_scale = self.foll_scale.data.cpu().numpy() if self.foll_scale is not None else None
 
+    def swap_out_let_scale(self):
+        """
+        Move scale to _temp.
+        Can't reuse _cached_prev_scale because once a variable is assigned to a torch.nn.Parameter object.
+        It can't be re-assign to another data with type other than nn.Parameter or None, but _cached_prev_scale is expected to be 
+        assigned to a numpy data type. 
+        """
+        if self.prev_scale is not None:
+            self._temp_prev = self.prev_scale
+            self.prev_scale = None
+
+        if self.foll_scale is not None:
+            self._temp_foll = self.foll_scale
+            self.foll_scale = None
+
+    def restore_let_scales(self):
+        """ Restore trained scale to LET scale. """
+        if self._temp_prev is not None:
+            self.prev_scale = self._temp_prev
+            self._temp_prev = None
+
+        if self._temp_foll is not None:
+            self.foll_scale = self._temp_foll
+            self._temp_foll = None
+
     def fold_let_params(self):
         """ Call (usually at the end) to fold the scales into the model params, cache trained scale, reset let param to None. """
         self._fold()
         self._cache_train_scale()
         self._reset_let_params()
 
-    @abstractmethod
     def _fold(self):
+        """ Impl for fold scale to model. """
+        # Restore cached scale before fold
+        if self._cached_prev_scale is not None:
+            self.prev_scale = torch.nn.Parameter(torch.from_numpy(self._cached_prev_scale))
+
+        if self._cached_foll_scale is not None:
+            self.foll_scale = torch.nn.Parameter(torch.from_numpy(self._cached_foll_scale))
+
         params = self._update_parameters()
         with torch.no_grad():
             for k in params:
@@ -297,20 +337,17 @@ class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
-        self.bias = 1.0
 
     def _update_parameters(self):
         """
         Update the LETQuantizedGemmaNorm params with prev_scale/foll_scale
         """
         weight = self.weight
-        bias = self.bias
         if self.prev_scale is not None:
             prev_scale = self.prev_scale
-            weight = weight / prev_scale
-            bias = bias / prev_scale
+            weight = (weight/prev_scale) + (1/prev_scale) - 1
 
-        return {'weight': weight, 'bias': bias}
+        return {'weight': weight}
 
     def _get_source_quant_module(self):
         return QuantizedGemma3RMSNorm(self.weight.shape)
@@ -318,9 +355,8 @@ class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
     def forward(self, hidden_states):
         # pylint: disable=arguments-differ
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']), patch_attr(self, 'bias', params['bias']):
+        with patch_attr(self, 'weight', params['weight']):
             weight = self.weight
-            bias = self.bias
             if self.input_quantizers[0]:
                 hidden_states = self.input_quantizers[0](hidden_states)
 
@@ -328,14 +364,8 @@ class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
                 weight = self.param_quantizers.weight(weight)
 
             ret = self._norm(hidden_states.float())
-            ret = ret * (bias + weight)
+            ret = ret * (1 + weight)
 
             if self.output_quantizers[0]:
                 ret = self.output_quantizers[0](ret)
             return ret
-
-    def _fold(self):
-        # Do not want bias to be copied.
-        param = self._update_parameters()
-        with torch.no_grad():
-            self.weight.copy_(param['weight'])

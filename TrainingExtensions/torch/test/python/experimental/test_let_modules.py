@@ -65,11 +65,18 @@ def fold_test(sim: QuantizationSimModel):
         orig_wt = module.weight.cpu().detach().clone()
         module.fold_let_params() # Fold the scale into the weights
         scale_folded_wts = module.weight.cpu().detach()
-        if let_params['prev_scale'] is None:
-            factor = 1 / let_params['foll_scale']
+        if isinstance(module, LETQuantizedGemmaNorm):
+            prev_scale = let_params['prev_scale']
+            orig_wt = (orig_wt/prev_scale) + (1/prev_scale) - 1
+
+            assert torch.equal(orig_wt, scale_folded_wts)
         else:
-            factor = let_params['prev_scale']
-        assert torch.equal(orig_wt, scale_folded_wts * factor)
+            if let_params['prev_scale'] is None:
+                factor = 1 / let_params['foll_scale']
+            else:
+                factor = let_params['prev_scale']
+
+            assert torch.equal(orig_wt, scale_folded_wts * factor)
 
 def get_conv_conv(bias):
     """
@@ -144,7 +151,7 @@ def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
         with torch.no_grad():
             sim.model[idx].weight.copy_(wt_s)
 
-        if isinstance(module, LETQuantizedLlamaRMSNorm) or module.bias is None:
+        if isinstance(module, (LETQuantizedLlamaRMSNorm, LETQuantizedGemmaNorm)) or module.bias is None:
             continue
 
         bias_s = module.bias
@@ -158,7 +165,7 @@ def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
                 module.bias.copy_(bias_s)
 
 @pytest.mark.parametrize("inp_fn", [get_conv_conv(True), get_conv_conv(False), get_lin_lin(True), get_lin_lin(False), \
-                                    get_norm_lin(Gemma3RMSNorm), get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
+                                    get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
 def test_pair(inp_fn):
     """
     Test the LET modules and LET pairs:

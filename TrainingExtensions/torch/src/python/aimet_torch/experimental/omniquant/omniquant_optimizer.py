@@ -95,7 +95,7 @@ class Omniquant:
         :return: Model with Omniquant weights.
         """
         num_batch = len(dataloader)
-
+        num_batch = 40
         @contextlib.contextmanager
         def disable_dynamic_cache():
             # Disable dynamic_cache for LET blockwise training, and restore after optimization.
@@ -119,6 +119,7 @@ class Omniquant:
     # pylint: disable=unused-argument
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-statements
+    # pylint: disable=protected-access
     @classmethod
     def _apply_omniquant(cls, quant_sim: QuantizationSimModel, dataloader, forward_fn, num_epoch: int, num_batch: int, output_path: str) -> torch.nn.Module:
         """
@@ -200,14 +201,20 @@ class Omniquant:
 
                     _logger.info(log_msg)
 
-                # fold_let_params
+                # Reset scale to restore to true FP model for blockwise sampler to sampler correctly.
                 for module in qt_block.modules():
                     if isinstance(module, LETModule):
-                        module.fold_let_params()
+                        module._cache_train_scale()
+                        module._reset_let_params()
 
                 # Freeze the param quantizers for LET optimized modules
                 freeze_let_optimized_param_quantizers(qt_block)
                 # TODO if should call compute_param_encodings after blockwise training
+
+            # fold_let_params
+            for module in quant_sim.model.modules():
+                if isinstance(module, LETModule):
+                    module._fold()
 
             # pylint: disable=protected-access
             # pylint: disable=unnecessary-comprehension
@@ -246,17 +253,36 @@ class Omniquant:
             kwargs = change_tensor_and_cache_device_placement(deepcopy(_batch_block_input.kwargs), device)
             return args, kwargs
 
-        input_symmetry = "fpfp"
         # Get target output (ground truth)
-        target_input = fp_input if input_symmetry.startswith("fp") else qt_input
+        # Default to fpfp input symmetry: fp input for fp block to get ground truth
+        # and fp input for qt block to get prediction.
+        target_input = fp_input
         _args, _kwargs = _process_block_input(target_input)
-        with disable_all_quantizers(qt_block):
-            target_outputs = qt_block(*_args, **_kwargs)[0]
+
+        @contextlib.contextmanager
+        def reset_let_scale(qt_block):
+            # swap out scale to restore fp
+            for module in qt_block.modules():
+                if isinstance(module, LETModule):
+                    module.swap_out_let_scale()
+            try:
+                yield
+            finally:
+                # swap in scale to restore scales
+                for module in qt_block.modules():
+                    if isinstance(module, LETModule):
+                        module.restore_let_scales()
+
+        with reset_let_scale(qt_block):
+            with disable_all_quantizers(qt_block):
+                target_outputs = qt_block(*_args, **_kwargs)[0]
 
         # Get model output (prediction)
-        model_input = fp_input if input_symmetry.endswith("fp") else qt_input
+        model_input = fp_input
         _qt_args, _qt_kwargs = _process_block_input(model_input)
+
         qt_output = qt_block(*_qt_args, **_qt_kwargs)[0]
+
 
         with torch.no_grad():
             sqnr = (torch.tensor(get_sqnr(target_outputs, qt_output)) if OMNIQUANT_COMPUTE_SQNR else None)
