@@ -524,11 +524,8 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
     if not activation_dtype.is_floating_point:
         # Allow off-by-3 error
         atol = sim.model.fc.output_quantizers[0].get_scale().item() * 3
-    elif not weight_dtype.is_floating_point:
-        # Weight-only quantization; allow off-by-1-ish error
-        atol = ((expected_out.max() - expected_out.min()).item() / 255)
     else:
-        # Full float16; use most rigorous criteria
-        atol = ((expected_out.max() - expected_out.min()).item() / 2550)
+        # Allow off-by-3 error, using float16.eps as a pseudo-scale
+        atol = torch.finfo(torch.float16).eps * 3
 
     assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)
