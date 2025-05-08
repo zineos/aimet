@@ -42,7 +42,7 @@ import json
 import os
 import tempfile
 import tracemalloc
-import functools
+from functools import partial
 
 import onnx.numpy_helper
 import torch
@@ -87,6 +87,10 @@ from .models.models_for_tests import (
     multi_output_model,
     single_residual_model,
     SingleResidual,
+    standalone_batchnorm,
+    standalone_batchnorm_constants,
+    standalone_instancenorm,
+    standalone_layernorm,
     transposed_conv_model,
     _convert_to_onnx
 )
@@ -664,14 +668,14 @@ class TestQuantSim:
                 assert len(mismatched_encodings) == 8
                 assert np.allclose(out2, out3, atol=sim.qc_quantize_op_dict[output_name].get_encodings()[0].delta) # Bit flip is possible from recomputing min/max during load
 
-    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(functools.partial(set_grouped_blockwise_quantization_for_weights,
-                                                                                 op_types=("MatMul", "Conv", "Gemm"),
-                                                                                 decompressed_bw=8,
-                                                                                 strict=False), True),
-                                                              (functools.partial(set_blockwise_quantization_for_weights,
-                                                                                 op_types=("MatMul", "Conv", "Gemm"),
-                                                                                 strict=False,
-                                                                                 symmetric=True), False)])
+    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(partial(set_grouped_blockwise_quantization_for_weights,
+                                                                       op_types=("MatMul", "Conv", "Gemm"),
+                                                                       decompressed_bw=8,
+                                                                       strict=False), True),
+                                                              (partial(set_blockwise_quantization_for_weights,
+                                                                       op_types=("MatMul", "Conv", "Gemm"),
+                                                                       strict=False,
+                                                                       symmetric=True), False)])
     def test_load_per_block_and_lpbq_encodings(self, swap_quantizer_func, is_lpbq):
         torch.manual_seed(0)
         np.random.seed(0)
@@ -726,14 +730,14 @@ class TestQuantSim:
                 with pytest.raises(AssertionError):
                     load_encodings_to_sim(sim_3, os.path.join(tempdir, 'export.encodings'), strict=False)
 
-    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(functools.partial(set_grouped_blockwise_quantization_for_weights,
-                                                                                 op_types=("ConvTranspose",),
-                                                                                 decompressed_bw=8,
-                                                                                 strict=True), True),
-                                                              (functools.partial(set_blockwise_quantization_for_weights,
-                                                                                 op_types=("ConvTranspose",),
-                                                                                 strict=True,
-                                                                                 symmetric=True), False)
+    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(partial(set_grouped_blockwise_quantization_for_weights,
+                                                                       op_types=("ConvTranspose",),
+                                                                       decompressed_bw=8,
+                                                                       strict=True), True),
+                                                              (partial(set_blockwise_quantization_for_weights,
+                                                                       op_types=("ConvTranspose",),
+                                                                       strict=True,
+                                                                       symmetric=True), False)
                                                               ])
     def test_load_per_block_and_lpbq_conv_transpose(self, swap_quantizer_func, is_lpbq):
         torch.manual_seed(0)
@@ -2356,25 +2360,40 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         assert np.allclose(bias_scale, expected_bias_scale)
 
 
+def _parse_type(type_str: str) -> tuple[str, int]:
+    if type_str.startswith("int"):
+        return "int", int(type_str[3:])
+    if type_str.startswith("uint"):
+        return "uint", int(type_str[4:])
+    if type_str.startswith("float"):
+        return "float", int(type_str[5:])
+    raise RuntimeError
+
+
 @pytest.mark.parametrize("seed", range(10))
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize(
     "param_dtype, activation_dtype", [
+    ("int4",      "uint16"),
+    ("int4",      "float16"),
     ("int8",      "uint8"),
-    ("int8",      "float16"),
+    ("int8",      "uint16"),
     ("float16",   "float16"),
 ])
 @pytest.mark.parametrize(
-    "model_factory,                                   input_shape,     tolerance", [
-    (lambda: single_residual_model(opset_version=13), (1, 3, 32, 32),  1),
-    (lambda: transposed_conv_model(opset_version=13), (10, 10, 4, 4),  1),
-    (batchnorm_model,                                 (10, 10, 8, 8),  1),
-    (batchnorm_model_constants,                       (10, 10, 8, 8),  1),
-    (lambda: instance_norm_model(opset_version=13),   (2, 10, 24, 24), 3),
-    (layernorm_model,                                 (1, 4, 64, 64),  3),
+    "model_factory,                                               tolerance", [
+    (partial(single_residual_model, opset_version=21),            1),
+    (partial(transposed_conv_model, opset_version=21),            1),
+
+    # normalization layers tolerance rationale:
+    #   * off-by-one in input/output qtzn respectively
+    #   * No off-by-one in weight qtzn; weights are exported spot-on
+    (partial(standalone_batchnorm, (1, 32, 4096, 10)),            2),
+    (partial(standalone_batchnorm_constants, (1, 32, 4096, 10)),  2),
+    (partial(standalone_instancenorm, (1, 32, 40960)),            2),
+    (partial(standalone_layernorm, (1, 40960, 32)),               2),
 ])
 def test_onnx_qdq(model_factory,
-                  input_shape: tuple[int, ...],
                   tolerance: int,
                   param_dtype: str,
                   activation_dtype: str,
@@ -2384,23 +2403,29 @@ def test_onnx_qdq(model_factory,
     np.random.seed(seed)
 
     model = model_factory()
+    param_kind, param_bw = _parse_type(param_dtype)
+    activation_kind, activation_bw = _parse_type(activation_dtype)
     sim = QuantizationSimModel(model,
-                               default_param_bw=np.dtype(param_dtype).itemsize * 8,
-                               default_activation_bw=np.dtype(activation_dtype).itemsize * 8,
+                               default_param_bw=param_bw,
+                               default_activation_bw=activation_bw,
                                config_file="htp_v81")
 
-    if np.dtype(param_dtype).kind == "f":
+    if param_kind == "float":
         for op in sim.connected_graph.get_all_ops().values():
             _, _, param_quantizers = sim.get_op_quantizers(op)
             for qtzr in param_quantizers.values():
                 qtzr.data_type = QuantizationDataType.float
 
-    if np.dtype(activation_dtype).kind == "f":
+    if activation_kind == "float":
         for op in sim.connected_graph.get_all_ops().values():
             input_quantizers, output_quantizers, _ = sim.get_op_quantizers(op)
             for qtzr in itertools.chain(input_quantizers, output_quantizers):
                 qtzr.data_type = QuantizationDataType.float
 
+    input_shape = tuple(
+        dim.dim_value for dim
+        in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
     input = np.random.randn(*input_shape).astype(np.float32)
 
     """
@@ -2447,55 +2472,17 @@ def test_onnx_qdq(model_factory,
     """
     Then: Output of the pure onnx model should be equal to that of sim.session
     """
-    if np.dtype(activation_dtype).kind in ("u", "i"):
+    if activation_kind in ("uint", "int"):
         # Allow off-by-N error
         atol = tolerance * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
-    elif np.dtype(param_dtype).kind in ("u", "i"):
-        # Weight-only quantization; allow off-by-1-ish error
-        atol = ((out_sim.max() - out_sim.min()).item() / 255)
     else:
-        # Full float16; use most rigorous criteria
-        atol = ((out_sim.max() - out_sim.min()).item() / 2550)
+        # Allow off-by-3 error, using float16.eps as a pseudo-scale
+        atol = 3 * np.finfo(np.float16).eps
 
     rtol = 1e-3 * tolerance
     sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
     out_onnx_qdq, = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
-
-# Note this is useful code for comparing AIMET QDQ vs. the Hub.
-# Not being used explicitly just yet
-def compare_onnx_qdq_models(model1, model2):
-    graph1 = model1.graph
-    graph2 = model2.graph
-
-    # All quantize linear ops in graph1
-    graph1_q_nodes = [node for node in graph1.node if node.op_type == 'QuantizeLinear']
-    graph1_node_consumer_map = dict()
-    for node in graph1.node:
-        for input_tensor in node.input:
-            if input_tensor in graph1_node_consumer_map:
-                graph1_node_consumer_map[input_tensor].append(node)
-            else:
-                graph1_node_consumer_map[input_tensor] = [node]
-
-    # Couple of helper maps for graph2
-    graph2_node_name_map = {node.name: node for node in graph2.node}
-    graph2_node_producer_map = dict()
-    for node in graph2.node:
-        for output_tensor in node.output:
-            graph2_node_producer_map[output_tensor] = node
-
-    # Iterate over all QuantizeLinear ops in graph1 and find the consuming op
-    for graph1_q_node in graph1_q_nodes:
-        assert len(graph1_q_node.output) == 1  # Every q has only 1 output tensor
-        assert len(graph1_node_consumer_map[graph1_q_node.output[0]]) == 1  # Every q has only 1 consumer
-        graph1_dq_node = graph1_node_consumer_map[graph1_q_node.output[0]][0]  # And that consumer is the dq
-
-        assert len(graph1_dq_node.output) == 1  # Every dq has only 1 output tensor
-        assert len(graph1_node_consumer_map[graph1_dq_node.output[0]]) <= 1  # Every dq has only 1 consumer
-        if graph1_node_consumer_map[graph1_dq_node.output[0]]:
-            consuming_op_name = graph1_node_consumer_map[graph1_dq_node.output[0]][0].name
-            print(consuming_op_name)
 
 
 @pytest.mark.parametrize("input_model_opset", range(9, 22))
@@ -2516,6 +2503,9 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
                                       act_bw: int,
                                       per_channel: bool,
                                       minimum_required_opset: int):
+    ort.set_seed(1)
+    np.random.seed(1)
+
     input_shape = (1, 3, 32, 32)
     model = single_residual_model(opset_version=input_model_opset)
     config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
@@ -2531,6 +2521,8 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
         with pytest.raises(RuntimeError):
             onnx_qdq_model = sim._to_onnx_qdq()
         return
+
+    out_sim, = sim.session.run(None, {"input": input})
 
     """
     When: Create a pure onnx model with sim._to_onnx_qdq()
@@ -2592,3 +2584,16 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
         if val.name in expected_output_dtypes:
             expected_dtype = expected_output_dtypes[val.name]
             assert val.type.tensor_type.elem_type == expected_dtype
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+
+    """
+    Then: Output of the pure onnx model should be equal to that of sim.session
+    """
+    # Allow off-by-1 error
+    atol = sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
+    rtol = 1e-3
+    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
+    out_onnx_qdq, = sess.run(None, {"input": input})
+    assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)

@@ -37,6 +37,7 @@
 
 """ Models for use in unit testing """
 
+import functools
 from typing import Any
 import os
 import tempfile
@@ -2554,17 +2555,31 @@ def softmax_model():
     return model
 
 
-def batchnorm_model():
+def standalone_batchnorm(input_shape: tuple[int, int, int, int]):
+    _, num_channels, *_ = input_shape
+
     model = helper.make_model(
         graph=helper.make_graph(
             name='BatchnormModel',
-            inputs=[helper.make_tensor_value_info('input', TensorProto.FLOAT, shape=[10, 10, 8, 8])],
-            outputs=[helper.make_tensor_value_info('output', TensorProto.FLOAT, shape=[10, 10, 8, 8])],
+            inputs=[helper.make_tensor_value_info('input', TensorProto.FLOAT, shape=input_shape)],
+            outputs=[helper.make_tensor_value_info('output', TensorProto.FLOAT, shape=input_shape)],
             initializer=[
-                numpy_helper.from_array(np.abs(np.random.randn(10, )).astype('float32'), name='batchnorm.weight'),
-                numpy_helper.from_array(np.random.randn(10, ).astype('float32'), name='batchnorm.bias'),
-                numpy_helper.from_array(np.random.randn(10, ).astype('float32'), name='batchnorm.input_mean'),
-                numpy_helper.from_array(np.abs(np.random.randn(10, )).astype('float32'), name='batchnorm.input_var')
+                numpy_helper.from_array(
+                    (np.random.randint(2000, size=num_channels) / 1000).astype(np.float32),
+                    name='batchnorm.weight'
+                ),
+                numpy_helper.from_array(
+                    (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32),
+                    name='batchnorm.bias'
+                ),
+                numpy_helper.from_array(
+                    (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32),
+                    name='batchnorm.input_mean'
+                ),
+                numpy_helper.from_array(
+                    (np.random.randint(100, 2000, size=num_channels) / 1000).astype(np.float32),
+                    name='batchnorm.input_var'
+                )
             ],
             nodes=[
                 helper.make_node(
@@ -2579,22 +2594,56 @@ def batchnorm_model():
     onnx.checker.check_model(model, True)
     return model
 
-def batchnorm_model_constants():
+
+batchnorm_model = functools.partial(standalone_batchnorm, (10, 10, 8, 8))
+
+
+def standalone_batchnorm_constants(input_shape):
+    _, num_channels, *_ = input_shape
+
     model = helper.make_model(
         graph=helper.make_graph(
             name='BatchnormModel',
-            inputs=[helper.make_tensor_value_info('input', TensorProto.FLOAT, shape=[10, 10, 8, 8])],
-            outputs=[helper.make_tensor_value_info('output', TensorProto.FLOAT, shape=[10, 10, 8, 8])],
+            inputs=[helper.make_tensor_value_info('input', TensorProto.FLOAT, shape=input_shape)],
+            outputs=[helper.make_tensor_value_info('output', TensorProto.FLOAT, shape=input_shape)],
             initializer=[],
             nodes=[
-                helper.make_node('Constant', inputs=[], outputs=["batchnorm.weight"],
-                                 value=numpy_helper.from_array(np.abs(np.random.randn(10, )).astype('float32')), name='weight'),
-                helper.make_node('Constant', inputs=[], outputs=["batchnorm.bias"],
-                                 value=numpy_helper.from_array(np.random.randn(10, ).astype('float32')), name='bias'),
-                helper.make_node('Constant', inputs=[], outputs=["batchnorm.input_mean"],
-                                 value=numpy_helper.from_array(np.random.randn(10, ).astype('float32')), name="input_mean"),
-                helper.make_node('Constant', inputs=[], outputs=["batchnorm.input_var"],
-                                 value=numpy_helper.from_array(np.abs(np.random.randn(10, )).astype('float32')), name='input_var'),
+                helper.make_node(
+                    'Constant',
+                    inputs=[],
+                    outputs=["batchnorm.weight"],
+                    value=numpy_helper.from_array(
+                        (np.random.randint(2000, size=num_channels) / 1000).astype(np.float32)
+                    ),
+                    name='weight',
+                ),
+                helper.make_node(
+                    'Constant',
+                    inputs=[],
+                    outputs=["batchnorm.bias"],
+                    value=numpy_helper.from_array(
+                        (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32)
+                    ),
+                    name='bias',
+                ),
+                helper.make_node(
+                    'Constant',
+                    inputs=[],
+                    outputs=["batchnorm.input_mean"],
+                    value=numpy_helper.from_array(
+                        (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32)
+                    ),
+                    name="input_mean"
+                ),
+                helper.make_node(
+                    'Constant',
+                    inputs=[],
+                    outputs=["batchnorm.input_var"],
+                    value=numpy_helper.from_array(
+                        (np.random.randint(100, 2000, size=num_channels) / 1000).astype(np.float32)
+                    ),
+                    name='input_var'
+                ),
                 helper.make_node(
                     'BatchNormalization',
                     inputs=['input', 'batchnorm.weight', 'batchnorm.bias', 'batchnorm.input_mean', 'batchnorm.input_var'],
@@ -2606,6 +2655,9 @@ def batchnorm_model_constants():
     )
     onnx.checker.check_model(model, True)
     return model
+
+
+batchnorm_model_constants = functools.partial(standalone_batchnorm_constants, (10, 10, 8, 8))
 
 def integer_concat_model():
     model = helper.make_model(
@@ -3033,4 +3085,68 @@ def model_with_initializers_in_graph_input():
         )
     )
     onnx.checker.check_model(model, True)
+    return model
+
+
+def standalone_layernorm(input_shape: tuple[int, int, int]):
+    *_, num_channels = input_shape
+
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="LayerNormalization",
+            inputs=[helper.make_tensor_value_info("input", TensorProto.FLOAT, shape=input_shape)],
+            outputs=[helper.make_tensor_value_info("output", TensorProto.FLOAT, shape=input_shape)],
+            initializer=[
+                numpy_helper.from_array(
+                    (np.random.randint(2000, size=num_channels) / 1000).astype(np.float32),
+                    name="scale",
+                ),
+                numpy_helper.from_array(
+                    (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32),
+                    name="bias",
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "LayerNormalization",
+                    inputs=["input", "scale", "bias"],
+                    outputs=["output"],
+                    name="LayerNormalization",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model)
+    return model
+
+
+def standalone_instancenorm(input_shape: tuple[int, int, int]):
+    _, num_channels, _ = input_shape
+
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="InstanceNormalization",
+            inputs=[helper.make_tensor_value_info("input", TensorProto.FLOAT, shape=input_shape)],
+            outputs=[helper.make_tensor_value_info("output", TensorProto.FLOAT, shape=input_shape)],
+            initializer=[
+                numpy_helper.from_array(
+                    (np.random.randint(2000, size=num_channels) / 1000).astype(np.float32),
+                    name="scale",
+                ),
+                numpy_helper.from_array(
+                    (np.random.randint(-1000, 1000, size=num_channels) / 1000).astype(np.float32),
+                    name="bias",
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "InstanceNormalization",
+                    inputs=["input", "scale", "bias"],
+                    outputs=["output"],
+                    name="InstanceNormalization",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model)
     return model
