@@ -41,9 +41,10 @@ import pytest
 import contextlib
 import numpy as np
 import torch
+from torch.onnx import _constants
 import onnx
 import tempfile
-from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
+from aimet_common.quantsim_config.utils import get_path_for_per_channel_config, get_path_for_per_tensor_config
 from aimet_common import quantsim as quantsim_common
 import aimet_torch.v2 as aimet
 import aimet_torch.v2.quantization as Q
@@ -280,17 +281,17 @@ def test_export_torchvision_models(model_factory, input_shape):
 @pytest.mark.parametrize("export_int32_bias", [False, True])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
 @pytest.mark.parametrize(
-    "weight_dtype,  activation_dtype", [
-    (torch.int8,    torch.uint8),
-    (torch.int8,    torch.float16),
-    (torch.float16, torch.float16),
+    "param_dtype, activation_dtype", [
+    ("int8",      "uint8"),
+    ("int8",      "float16"),
+    ("float16",   "float16"),
 ])
 def test_quantsim_export_resnet18(encoding_version,
                                   lpbq: bool,
                                   fold_param_quantizers: bool,
                                   export_int32_bias: bool,
-                                  weight_dtype: torch.dtype,
-                                  activation_dtype: torch.dtype):
+                                  param_dtype: str,
+                                  activation_dtype: str):
     """
     When: Export quantized torchvision model using quantsim.export
     """
@@ -298,9 +299,12 @@ def test_quantsim_export_resnet18(encoding_version,
     model = resnet18().eval()
     model = prepare_model(model)
     fold_all_batch_norms(model, None, x)
+
+    param_kind, param_bw = _parse_type(param_dtype)
+    activation_kind, activation_bw = _parse_type(activation_dtype)
     sim = QuantizationSimModel(model, x,
-                               default_param_bw=weight_dtype.itemsize * 8,
-                               default_output_bw=activation_dtype.itemsize * 8)
+                               default_param_bw=param_bw,
+                               default_output_bw=activation_bw)
 
     if lpbq:
         set_grouped_blockwise_quantization_for_weights(sim,
@@ -310,25 +314,27 @@ def test_quantsim_export_resnet18(encoding_version,
                                                        decompressed_bw=8,
                                                        block_size=64)
 
-    if weight_dtype.is_floating_point:
+    if param_kind == "float":
+        dtype = getattr(torch, param_dtype)
         for qmodule in sim.qmodules():
             for name, qtzr in qmodule.param_quantizers.items():
                 if not qtzr:
                     continue
-                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=weight_dtype)
+                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
-    if activation_dtype.is_floating_point:
+    if activation_kind == "float":
+        dtype = getattr(torch, activation_dtype)
         for qmodule in sim.qmodules():
             for i, qtzr in enumerate(qmodule.input_quantizers):
                 if not qtzr:
                     continue
-                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
         for qmodule in sim.qmodules():
             for i, qtzr in enumerate(qmodule.output_quantizers):
                 if not qtzr:
                     continue
-                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
     sim.compute_encodings(lambda model: model(x))
 
@@ -450,20 +456,31 @@ def test_quantsim_export_resnet18(encoding_version,
         assert torch.allclose(torch.from_numpy(out), expected_out, atol=1e-5)
 
 
+def _parse_type(type_str: str) -> tuple[str, int]:
+    if type_str.startswith("int"):
+        return "int", int(type_str[3:])
+    if type_str.startswith("uint"):
+        return "uint", int(type_str[4:])
+    if type_str.startswith("float"):
+        return "float", int(type_str[5:])
+    raise RuntimeError
+
+
 @pytest.mark.parametrize("lpbq", [False])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
 @pytest.mark.parametrize("export_int32_bias", [False, True])
 @pytest.mark.parametrize(
-    "weight_dtype,  activation_dtype", [
-    (torch.int8,    torch.uint8),
-    (torch.int8,    torch.float16),
-    (torch.float16, torch.float16),
+    "param_dtype, activation_dtype", [
+    ("int8",      "uint8"),
+    ("int8",      "uint16"),
+    ("int8",      "float16"),
+    ("float16",   "float16"),
 ])
 def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
                                            export_int32_bias: bool,
                                            fold_param_quantizers: bool,
-                                           weight_dtype: torch.dtype,
-                                           activation_dtype: torch.dtype):
+                                           param_dtype: str,
+                                           activation_dtype: str):
     """
     When: Export quantized torchvision model using quantsim.export
     """
@@ -471,9 +488,12 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
     model = resnet18().eval()
     model = prepare_model(model)
     fold_all_batch_norms(model, None, x)
+
+    param_kind, param_bw = _parse_type(param_dtype)
+    activation_kind, activation_bw = _parse_type(activation_dtype)
     sim = QuantizationSimModel(model, x,
-                               default_param_bw=weight_dtype.itemsize * 8,
-                               default_output_bw=activation_dtype.itemsize * 8)
+                               default_param_bw=param_bw,
+                               default_output_bw=activation_bw)
 
     if lpbq:
         set_grouped_blockwise_quantization_for_weights(sim,
@@ -483,25 +503,27 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
                                                        decompressed_bw=8,
                                                        block_size=64)
 
-    if weight_dtype.is_floating_point:
+    if param_kind == "float":
+        dtype = getattr(torch, param_dtype)
         for qmodule in sim.qmodules():
             for name, qtzr in qmodule.param_quantizers.items():
                 if not qtzr:
                     continue
-                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=weight_dtype)
+                qmodule.param_quantizers[name] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
-    if activation_dtype.is_floating_point:
+    if activation_kind == "float":
+        dtype = getattr(torch, activation_dtype)
         for qmodule in sim.qmodules():
             for i, qtzr in enumerate(qmodule.input_quantizers):
                 if not qtzr:
                     continue
-                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+                qmodule.input_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
         for qmodule in sim.qmodules():
             for i, qtzr in enumerate(qmodule.output_quantizers):
                 if not qtzr:
                     continue
-                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
+                qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=dtype)
 
     sim.compute_encodings(lambda model: model(x))
 
@@ -518,6 +540,7 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
     with tempfile.TemporaryDirectory() as dirname:
         onnx_path = os.path.join(dirname, "torchvision_model.onnx")
         aimet_torch.onnx.export(sim, x, onnx_path, input_names=["input"], output_names=["output"],
+                                opset_version=21,
                                 export_int32_bias=export_int32_bias)
 
         """
@@ -540,7 +563,7 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
         ]
         assert len(onnx_dq_nodes) == len(sim_qdq_nodes)
 
-        if not activation_dtype.is_floating_point:
+        if activation_kind in ("uint", "int"):
             """
             Then: Model input/outputs should be associated with QDQ
             """
@@ -559,7 +582,7 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
         sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
         out, = sess.run(None, {"input": x.numpy()})
 
-    if not activation_dtype.is_floating_point:
+    if activation_kind in ("uint", "int"):
         # Allow off-by-3 error
         atol = sim.model.fc.output_quantizers[0].get_scale().item() * 3
     else:
@@ -567,3 +590,73 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
         atol = torch.finfo(torch.float16).eps * 3
 
     assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)
+
+
+@pytest.mark.parametrize("target_opset", range(_constants.ONNX_MIN_OPSET, 22))
+@pytest.mark.parametrize(
+    "param_bw, act_bw, per_channel, minimum_required_opset", [
+    (4,        16,     False,       21),
+    (8,        8,      False,       10),
+    (8,        16,     False,       21),
+    (16,       16,     False,       21),
+    (4,        16,     True,        21),
+    (8,        8,      True,        13),
+    (8,        16,     True,        21),
+    (16,       16,     True,        21),
+])
+def test_minimum_opset(param_bw: int,
+                       act_bw: int,
+                       per_channel: bool,
+                       minimum_required_opset: int,
+                       target_opset: int):
+    model = torch.nn.Sequential(
+        torch.nn.Conv2d(10, 10, 3),
+        torch.nn.ReLU(),
+    )
+    x = torch.randn(1, 10, 224, 224)
+    config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
+    sim = QuantizationSimModel(model, x,
+                               default_param_bw=param_bw,
+                               default_output_bw=act_bw,
+                               config_file=config_file)
+    sim.compute_encodings(lambda model: model(x))
+
+    expected_out = sim.model(x)
+    atol = 1 * sim.model[-1].output_quantizers[0].get_scale().item()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        full_path = os.path.join(tmpdir, "model.onnx")
+
+        if 9 <= target_opset <= _constants.ONNX_MAX_OPSET:
+            # sim.onnx.export (onnx + json export) should always work
+            sim.onnx.export(x, f=full_path, opset_version=target_opset)
+
+        if target_opset < minimum_required_opset:
+            """
+            When: target opset version < minimum required version
+            Then: Throw runtime error
+            """
+            with pytest.raises(RuntimeError):
+                aimet_torch.onnx.export(sim, x, f=full_path, opset_version=target_opset,
+                                        input_names=["input"], output_names=["output"])
+            return
+
+        """
+        When: aimet_torch.onnx.export with specific target opset version
+        """
+        aimet_torch.onnx.export(sim.model, x, f=full_path, opset_version=target_opset,
+                                input_names=["input"], output_names=["output"])
+
+        """
+        Then: Exported onnx model's opset should be equal to the target opset version
+        """
+        onnx_qdq_model = onnx.load_model(full_path)
+        assert onnx_qdq_model.opset_import[0].version == target_opset
+
+        sess_options = ort.SessionOptions()
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(),
+                                    providers=['CPUExecutionProvider'],
+                                    sess_options=sess_options)
+        out, = sess.run(None, {"input": x.detach().numpy()})
+        assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)

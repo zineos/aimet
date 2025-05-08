@@ -43,6 +43,7 @@ from typing import Any, Mapping, Tuple, Union
 
 import onnx
 import torch
+from torch.onnx import _constants
 
 from aimet_common.onnx._utils import _add_onnx_qdq_nodes
 
@@ -75,6 +76,22 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
             f"aimet_torch.export only supports torch.nn.Module or QuantizationSimModel; got {type(model)}"
         )
 
+    if len(posargs) >= 7:
+        arg0, arg1, arg2, arg3, arg4, arg5, target_version, *others = posargs
+        posargs = (arg0, arg1, arg2, arg3, arg4, arg5,
+                   min(target_version, _constants.ONNX_MAX_OPSET),
+                   *others)
+    else:
+        target_version = kwargs.pop("opset_version", _constants.ONNX_DEFAULT_OPSET)
+        kwargs["opset_version"] = min(target_version, _constants.ONNX_MAX_OPSET)
+
+    _assert_minimum_required_opset(model, target_version)
+
+    if target_version > 21:
+        raise RuntimeError(
+            f"aimet_torch.onnx.export only supports opset <= 21; got {target_version}"
+        )
+
     with contextlib.ExitStack() as stack:
         # Unfold all param quantizers to incorporate QuantizeLinear/DequantizeLinear
         # of those parameters in tracing time
@@ -95,8 +112,50 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
 
         onnx_model, tensor_to_encoding_map = _to_onnx(model, args, *posargs, **kwargs)
 
+    current_version = next(
+        opset.version for opset in onnx_model.opset_import if opset.domain == ""
+    )
+    if current_version < target_version:
+        onnx_model = onnx.version_converter.convert_version(onnx_model,
+                                                            target_version)
+
     onnx_qdq_model = _to_onnx_qdq(onnx_model, tensor_to_encoding_map)
     onnx.save(onnx_qdq_model, f)
+
+
+def _assert_minimum_required_opset(model: torch.nn.Module, current_opset_version: int):
+    if current_opset_version < 21 and any(
+            qtzr.block_size is not None for qtzr in model.modules()
+            if isinstance(qtzr, AffineQuantizerBase)
+    ):
+        raise RuntimeError(
+            "onnx::QuantizeLinear and DequantizeLinear with per-block are only supported in opset >= 21;"
+            f" got opset={current_opset_version}"
+        )
+
+    if current_opset_version < 21 and any(
+            8 < qtzr.bitwidth <= 16 for qtzr in model.modules()
+            if isinstance(qtzr, AffineQuantizerBase)
+    ):
+        raise RuntimeError(
+            "onnx::QuantizeLinear and DequantizeLinear with INT16 are only supported in opset >= 21;"
+            f" got opset={current_opset_version}"
+        )
+
+    if current_opset_version < 13 and any(
+            tuple(qtzr.shape) for qtzr in model.modules()
+            if isinstance(qtzr, AffineQuantizerBase)
+    ):
+        raise RuntimeError(
+            "onnx::QuantizeLinear and DequantizeLinear with per-channel are only supported in opset >= 13;"
+            f" got opset={current_opset_version}"
+        )
+
+    if current_opset_version < 10:
+        raise RuntimeError(
+            "onnx::QuantizeLinear and DequantizeLinear are only supported in opset >= 10;"
+            f" got opset={current_opset_version}"
+        )
 
 
 def _to_onnx(model: torch.nn.Module,
