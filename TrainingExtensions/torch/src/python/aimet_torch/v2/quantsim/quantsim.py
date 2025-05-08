@@ -57,7 +57,6 @@ import io
 import json
 import contextlib
 import os
-import tempfile
 import torch
 import onnx
 
@@ -65,7 +64,6 @@ from aimet_common import quantsim
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_common.quantsim_config.quantsim_config import _config_file_aliases
 from aimet_common.utils import deprecated, _red
-from aimet_common.onnx._utils import _add_onnx_qdq_nodes
 from aimet_torch._base.quantsim import (
     _QuantizationSimModelBase,
     logger,
@@ -80,15 +78,13 @@ from aimet_torch.v2 import nn as aimet_nn
 from aimet_torch.v2.nn import BaseQuantizationMixin, QuantizationMixin, UnknownModuleError
 from aimet_torch.v2.nn.fake_quant import _legacy_impl
 from aimet_torch.v2._builder import _V2LazyQuantizeWrapper
-from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.base import QuantizerBase, EncodingBase
 from aimet_torch.v2.quantization.affine import AffineQuantizerBase
-from aimet_torch.v2.quantization.float import FloatQuantizeDequantize
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch import utils
 from aimet_torch.v2.deepspeed_utils import _register_zero3_forward_hooks
-from aimet_torch.v2.experimental.onnx._export import remove_quantization_nodes_from_onnx_graph, export
+
 
 __all__ = [
     'QuantizationSimModel',
@@ -614,41 +610,6 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             if not utils.is_leaf_module(module):
                 cls._remove_quantization_wrappers(module, list_of_modules_to_exclude)
 
-    @contextlib.contextmanager
-    def _concretize_int32_bias_quantizers(self, args):
-        if not isinstance(args, (tuple, list)):
-            args = (args,)
-
-        handles = []
-        orig_bias_quantizers = {
-            qmodule: qmodule.param_quantizers["bias"]
-            for qmodule in self.qmodules()
-            if "bias" in qmodule.param_quantizers and qmodule.bias is not None
-        }
-
-        try:
-            for qmodule, qtzr in orig_bias_quantizers.items():
-                if qtzr is not None:
-                    # Bias quantizer already exists.
-                    # This means the user created bias quantizer by him/herself
-                    # In this case, we honor the custom bias quantizer defined by the user
-                    continue
-
-                if "weight" in qmodule.param_quantizers and \
-                        isinstance(qmodule.param_quantizers["weight"], AffineQuantizerBase):
-                    # pylint: disable=protected-access
-                    handle = qmodule.register_forward_hook(type(qmodule)._create_int32_bias_quantizer)
-                    handles.append(handle)
-            try:
-                self.model(*args)
-            finally:
-                for handle in handles:
-                    handle.remove()
-            yield
-        finally:
-            for qmodule, qtzr in orig_bias_quantizers.items():
-                qmodule.param_quantizers["bias"] = qtzr
-
     def fold_param_quantizers(self):
         """
         Fold parameter quantizers into their associated parameters to accelerate inference.
@@ -703,61 +664,6 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
         propagate_output_encodings(self, lambda module: module in resize_ops)
 
 
-@contextlib.contextmanager
-def _temporarily_unfold_param_quantizers(sim: QuantizationSimModel):
-    # pylint: disable=protected-access
-    """
-    Temporarily re-instantiate param quantizers for ease of export
-    """
-    modules_with_folded_parameters = [
-        qmodule for qmodule in sim.qmodules()
-        if any(isinstance(param, DequantizedTensor) for param in qmodule.parameters())
-    ]
-
-    try:
-        for qmodule in modules_with_folded_parameters:
-            qmodule._unfold_param_quantizers()
-        yield
-    finally:
-        for qmodule in modules_with_folded_parameters:
-            qmodule._fold_param_quantizers()
-
-
-@contextlib.contextmanager
-def _remove_fp16_quantizers(sim: QuantizationSimModel):
-    """
-    Temporarily remove [b]float16 quantizers for sim.onnx.export,
-    as sim.onnx.export does NOT support exporting [b]float16 quantizers.
-    """
-    original_containers = {}
-
-    try:
-        for qmodule in sim.qmodules():
-            for name, qtzr in qmodule.param_quantizers.items():
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
-                    original_containers[(qmodule.param_quantizers, name)] = qtzr
-                    qmodule.param_quantizers[name] = None
-
-            for i, qtzr in enumerate(qmodule.input_quantizers):
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
-                    original_containers[(qmodule.input_quantizers, i)] = qtzr
-                    qmodule.input_quantizers[i] = None
-
-            for i, qtzr in enumerate(qmodule.output_quantizers):
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
-                    original_containers[(qmodule.output_quantizers, i)] = qtzr
-                    qmodule.output_quantizers[i] = None
-
-        yield
-
-    finally:
-        for (container, key), qtzr in original_containers.items():
-            container[key] = qtzr
-
-
 class _QuantizationSimOnnxExport:
     """
     Helper class for exporting quantized models to ONNX format.
@@ -783,76 +689,16 @@ class _QuantizationSimOnnxExport:
         :param args: Dummy input to the model. Used to export model to ONNX format.
         :param f: file object or path where to store exported ONNX mode
         """
-        # pylint: disable=protected-access, too-many-locals
-        embed_qdq = kwargs.pop("embed_qdq", False)
-        self._check_unsupported_quantizers(self.sim.model)
+        from aimet_torch.onnx import _to_onnx
+        onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, *posargs, **kwargs)
+        onnx.save(onnx_model, f)
+        encodings_dict = self._to_json(tensor_to_encoding_map)
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with _temporarily_unfold_param_quantizers(self.sim), \
-                    self.sim._concretize_int32_bias_quantizers(args), \
-                    self.sim._apply_qdq_to_model_parameters(self.sim.model), \
-                    _remove_fp16_quantizers(self.sim):
-                tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
-                export(self.sim.model, args, tmp_onnx_path, *posargs, **kwargs)
-                onnx_model = onnx.load(tmp_onnx_path)
-
-                param_names = {
-                    f"{layer_name}.{param_name}"
-                    for layer_name, layer in self.sim.model.named_modules()
-                    if isinstance(layer, QuantizationMixin)
-                    for param_name, quantizer in layer.param_quantizers.items()
-                    if quantizer
-                }
-
-        tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]
-        tensor_to_encoding_map = {
-            name: (encoding, name in param_names)
-            for name, encoding in remove_quantization_nodes_from_onnx_graph(onnx_model).items()
-        }
-
-        if embed_qdq:
-            onnx_qdq_model = self._to_onnx_qdq(onnx_model, tensor_to_encoding_map)
-            onnx.save(onnx_qdq_model, f)
-        else:
-            onnx.save(onnx_model, f)
-            encodings_dict = self._to_json(tensor_to_encoding_map)
-
-            # export weight encodings to output json file
-            onnx_file_path = (f if isinstance(f, str) else f.name)
-            encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
-            with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
-                json.dump(encodings_dict, encoding_file, indent=2)
-
-    def _to_onnx_qdq(self,
-                     onnx_model: onnx.ModelProto,
-                     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]) -> onnx.ModelProto:
-        qnn_encodings = {
-            name: encoding.to_qnn_encoding_dict("2.0.0.beta")
-            for name, (encoding, _) in tensor_to_encoding_map.items()
-        }
-        qnn_encodings = {
-            name: encoding for name, encoding in qnn_encodings.items() if encoding
-        }
-
-        qdq_tensor_names = {
-            fp_tensor_name: f"{fp_tensor_name}_qdq"
-            for fp_tensor_name in qnn_encodings
-        }
-
-        onnx_opset_version = next(opset.version for opset in onnx_model.opset_import if opset.domain == "")
-
-        # Add onnx QDQ nodes in batch
-        _add_onnx_qdq_nodes(onnx_model,
-                            input_names=qnn_encodings.keys(),
-                            output_names=qdq_tensor_names.values(),
-                            node_name_prefixes=qnn_encodings.keys(),
-                            encodings=qnn_encodings.values(),
-                            onnx_opset=onnx_opset_version)
-
-        # Restore model output names from "{output}_qdq" to "{output}"
-        _restore_model_output_names(onnx_model, qdq_tensor_names)
-
-        return onnx_model
+        # export weight encodings to output json file
+        onnx_file_path = (f if isinstance(f, str) else f.name)
+        encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
+        with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
+            json.dump(encodings_dict, encoding_file, indent=2)
 
     def _to_json(self, tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]):
         qnn_encodings = {
@@ -907,59 +753,7 @@ class _QuantizationSimOnnxExport:
                 encodings_dict.update({'quantizer_args': self.sim.quant_args})
 
         return encodings_dict
-
-    @staticmethod
-    def _check_unsupported_quantizers(module: torch.nn.Module):
-        for qtzr in module.modules():
-            if isinstance(qtzr, FloatQuantizeDequantize):
-                if not qtzr.is_float16() and not qtzr.is_bfloat16():
-                    msg = " ".join([
-                        "sim.onnx.export doesn't support exporting floating point encodings",
-                        f"except [b]float16. Got {qtzr.bitwidth}-bit float encoding",
-                    ])
-                    raise RuntimeError(msg)
-
-
-def _rename_inputs(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
-    for node in onnx_model.graph.node:
-        for i, old_name in enumerate(node.input):
-            new_name = new_names.get(old_name, None)
-            if new_name is not None:
-                node.input[i] = new_name
-
-
-def _rename_outputs(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
-    for node in onnx_model.graph.node:
-        for i, old_name in enumerate(node.output):
-            new_name = new_names.get(old_name, None)
-            if new_name is not None:
-                node.output[i] = new_name
-
-
-def _restore_model_output_names(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
-    """
-    Rename model outputs. Assuming "output" is the model output,
-
-    before:
-        Softmax ----> output -------> QDQ -------> output_qdq
-
-    after:
-        Softmax ----> output__ -----> QDQ -------> output
-    """
-    _new_names = {
-        output.name: f"{output.name}__"
-        for output in onnx_model.graph.output
-        if output.name in new_names
-    }
-    _rename_inputs(onnx_model, _new_names)
-
-    _new_names.update({
-        new_names[output.name]: output.name
-        for output in onnx_model.graph.output
-        if output.name in new_names
-    })
-    _rename_outputs(onnx_model, _new_names)
-
+        
 
 @deprecated("""
 Use QuantizationSimModel.load_encodings with the following keyword arguments instead:

@@ -47,7 +47,8 @@ from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_common import quantsim as quantsim_common
 import aimet_torch.v2 as aimet
 import aimet_torch.v2.quantization as Q
-from aimet_torch.v2.quantsim import QuantizationSimModel
+from aimet_torch.v2.quantsim.quantsim import QuantizationSimModel
+from aimet_torch.onnx import _concretize_int32_bias_quantizers
 from torchvision.models import resnet18, mobilenet_v3_small
 from aimet_torch.v2.experimental.onnx._export import export as _export
 from aimet_torch.batch_norm_fold import fold_all_batch_norms
@@ -327,7 +328,7 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
     sim.compute_encodings(lambda model: model(x))
 
     # Compute original pytorch model output with qdq weights
-    with sim._concretize_int32_bias_quantizers(x):
+    with _concretize_int32_bias_quantizers(sim.model, x):
         expected_param_encodings = {
             f"{module_name}.{param_name}": qtzr.get_encodings().to_qnn_encoding_dict(encoding_version)
             for module_name, qmodule in sim.named_qmodules()
@@ -499,7 +500,7 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
 
     sim.compute_encodings(lambda model: model(x))
 
-    with sim._concretize_int32_bias_quantizers(x):
+    with _concretize_int32_bias_quantizers(sim.model, x):
         expected_out = sim.model(x)
 
     with tempfile.TemporaryDirectory() as dirname:
