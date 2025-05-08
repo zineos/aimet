@@ -675,7 +675,9 @@ class _QuantizationSimOnnxExport:
     def export(self,
                args: Union[Tuple[Any, ...], torch.Tensor],
                f: Union[str, io.BytesIO],
-               *posargs, **kwargs):
+               *posargs,
+               export_int32_bias: bool = True,
+               **kwargs):
         """
         This method exports out the quant-sim model so it is ready to be run on-target and
         takes the same arguments as torch.onnx.export()
@@ -689,8 +691,31 @@ class _QuantizationSimOnnxExport:
         :param args: Dummy input to the model. Used to export model to ONNX format.
         :param f: file object or path where to store exported ONNX mode
         """
-        from aimet_torch.onnx import _to_onnx
-        onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, *posargs, **kwargs)
+        from aimet_torch.onnx import (
+            _concretize_int32_bias_quantizers,
+            _remove_fp16_quantizers,
+            _to_onnx,
+            _temporarily_unfold_param_quantizers,
+        )
+
+        with contextlib.ExitStack() as stack:
+            # Unfold all param quantizers to incorporate QuantizeLinear/DequantizeLinear
+            # of those parameters in tracing time
+            stack.enter_context(_temporarily_unfold_param_quantizers(self.sim.model))
+
+            if export_int32_bias:
+                # Temoprarily instantiate int32 bias quantizers
+                stack.enter_context(_concretize_int32_bias_quantizers(self.sim.model, args))
+
+            # Export quantize-dequantized weight
+            # pylint: disable=protected-access
+            stack.enter_context(self.sim._apply_qdq_to_model_parameters(self.sim.model))
+
+            # Remove [b]float16 quantizers
+            stack.enter_context(_remove_fp16_quantizers(self.sim.model))
+
+            onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, *posargs, **kwargs)
+
         onnx.save(onnx_model, f)
         encodings_dict = self._to_json(tensor_to_encoding_map)
 

@@ -277,6 +277,7 @@ def test_export_torchvision_models(model_factory, input_shape):
 @torch.no_grad()
 @pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0", "2.0.0.beta"])
 @pytest.mark.parametrize("lpbq", [False, True])
+@pytest.mark.parametrize("export_int32_bias", [False, True])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
 @pytest.mark.parametrize(
     "weight_dtype,  activation_dtype", [
@@ -284,8 +285,12 @@ def test_export_torchvision_models(model_factory, input_shape):
     (torch.int8,    torch.float16),
     (torch.float16, torch.float16),
 ])
-def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quantizers: bool,
-                                  weight_dtype: torch.dtype, activation_dtype: torch.dtype):
+def test_quantsim_export_resnet18(encoding_version,
+                                  lpbq: bool,
+                                  fold_param_quantizers: bool,
+                                  export_int32_bias: bool,
+                                  weight_dtype: torch.dtype,
+                                  activation_dtype: torch.dtype):
     """
     When: Export quantized torchvision model using quantsim.export
     """
@@ -328,7 +333,7 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
     sim.compute_encodings(lambda model: model(x))
 
     # Compute original pytorch model output with qdq weights
-    with _concretize_int32_bias_quantizers(sim.model, x):
+    with _concretize_int32_bias_quantizers(sim.model, x) if export_int32_bias else contextlib.nullcontext():
         expected_param_encodings = {
             f"{module_name}.{param_name}": qtzr.get_encodings().to_qnn_encoding_dict(encoding_version)
             for module_name, qmodule in sim.named_qmodules()
@@ -360,7 +365,8 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
         encodings_path = os.path.join(dirname, "torchvision_model.encodings")
 
         with set_encoding_version(encoding_version):
-            sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"])
+            sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"],
+                            export_int32_bias=export_int32_bias)
 
         """
         Then: The saved onnx model should pass onnx model checker
@@ -446,6 +452,7 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
 
 @pytest.mark.parametrize("lpbq", [False])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
+@pytest.mark.parametrize("export_int32_bias", [False, True])
 @pytest.mark.parametrize(
     "weight_dtype,  activation_dtype", [
     (torch.int8,    torch.uint8),
@@ -453,6 +460,7 @@ def test_quantsim_export_resnet18(encoding_version, lpbq: bool, fold_param_quant
     (torch.float16, torch.float16),
 ])
 def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
+                                           export_int32_bias: bool,
                                            fold_param_quantizers: bool,
                                            weight_dtype: torch.dtype,
                                            activation_dtype: torch.dtype):
@@ -495,17 +503,22 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
                     continue
                 qmodule.output_quantizers[i] = Q.float.FloatQuantizeDequantize(dtype=activation_dtype)
 
+    sim.compute_encodings(lambda model: model(x))
+
+    with _concretize_int32_bias_quantizers(sim.model, x) if export_int32_bias else contextlib.nullcontext():
+        expected_out = sim.model(x)
+        sim_qdq_nodes = [
+            q for q in sim.model.modules()
+            if isinstance(q, (Q.affine.QuantizeDequantize, Q.affine.Dequantize))
+        ]
+
     if fold_param_quantizers:
         sim.fold_param_quantizers()
 
-    sim.compute_encodings(lambda model: model(x))
-
-    with _concretize_int32_bias_quantizers(sim.model, x):
-        expected_out = sim.model(x)
-
     with tempfile.TemporaryDirectory() as dirname:
         onnx_path = os.path.join(dirname, "torchvision_model.onnx")
-        aimet_torch.onnx.export(sim, x, onnx_path, input_names=["input"], output_names=["output"])
+        aimet_torch.onnx.export(sim, x, onnx_path, input_names=["input"], output_names=["output"],
+                                export_int32_bias=export_int32_bias)
 
         """
         Then: The saved onnx model should pass onnx model checker
@@ -518,6 +531,30 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
         """
         assert list(x.name for x in onnx_model.graph.input) == ["input"]
         assert list(y.name for y in onnx_model.graph.output) == ["output"]
+
+        """
+        Then: Model should contain expected number of DequantizedLinear nodes
+        """
+        onnx_dq_nodes = [
+            node for node in onnx_model.graph.node if node.op_type == "DequantizeLinear"
+        ]
+        assert len(onnx_dq_nodes) == len(sim_qdq_nodes)
+
+        if not activation_dtype.is_floating_point:
+            """
+            Then: Model input/outputs should be associated with QDQ
+            """
+            input_names = set(inp.name for inp in onnx_model.graph.input)
+            output_names = set(out.name for out in onnx_model.graph.output)
+            for node in onnx_model.graph.node:
+                if node.input and node.input[0] in input_names:
+                    assert node.op_type == "QuantizeLinear"
+                    input_names.remove(node.input[0])
+                if node.output and node.output[0] in output_names:
+                    assert node.op_type == "DequantizeLinear"
+                    output_names.remove(node.output[0])
+            assert not input_names
+            assert not output_names
 
         sess = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
         out, = sess.run(None, {"input": x.numpy()})

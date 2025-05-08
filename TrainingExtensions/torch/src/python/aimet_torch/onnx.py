@@ -58,7 +58,9 @@ from .v2.experimental import onnx as _onnx
 def export(model: Union[torch.nn.Module, QuantizationSimModel],
            args: Union[Tuple[Any, ...], torch.Tensor],
            f: Union[str, io.BytesIO],
-           *posargs, **kwargs):
+           *posargs,
+           export_int32_bias: bool = True,
+           **kwargs):
     """
     Export QuantizationSimModel to onnx model with
     QuantizeLinear/DequantizeLinear embedded in the graph.
@@ -73,7 +75,24 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
             f"aimet_torch.export only supports torch.nn.Module or QuantizationSimModel; got {type(model)}"
         )
 
-    onnx_model, tensor_to_encoding_map = _to_onnx(model, args, *posargs, **kwargs)
+    with contextlib.ExitStack() as stack:
+        # Unfold all param quantizers to incorporate QuantizeLinear/DequantizeLinear
+        # of those parameters in tracing time
+        stack.enter_context(_temporarily_unfold_param_quantizers(model))
+
+        if export_int32_bias:
+            # Temoprarily instantiate int32 bias quantizers
+            stack.enter_context(_concretize_int32_bias_quantizers(model, args))
+
+        # Export quantize-dequantized weight
+        # pylint: disable=protected-access
+        stack.enter_context(QuantizationSimModel._apply_qdq_to_model_parameters(model))
+
+        # Remove [b]float16 quantizers
+        stack.enter_context(_remove_fp16_quantizers(model))
+
+        onnx_model, tensor_to_encoding_map = _to_onnx(model, args, *posargs, **kwargs)
+
     onnx_qdq_model = _to_onnx_qdq(onnx_model, tensor_to_encoding_map)
     onnx.save(onnx_qdq_model, f)
 
@@ -81,25 +100,20 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
 def _to_onnx(model: torch.nn.Module,
              args: Union[Tuple[Any, ...], torch.Tensor],
              *posargs, **kwargs):
-    # pylint: disable=protected-access
     _check_unsupported_quantizers(model)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with _temporarily_unfold_param_quantizers(model), \
-                _concretize_int32_bias_quantizers(model, args), \
-                QuantizationSimModel._apply_qdq_to_model_parameters(model), \
-                _remove_fp16_quantizers(model):
-            tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
-            _onnx.export(model, args, tmp_onnx_path, *posargs, **kwargs)
-            onnx_model = onnx.load(tmp_onnx_path)
+        tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
+        _onnx.export(model, args, tmp_onnx_path, *posargs, **kwargs)
+        onnx_model = onnx.load(tmp_onnx_path)
 
-            param_names = {
-                f"{layer_name}.{param_name}"
-                for layer_name, layer in model.named_modules()
-                if isinstance(layer, QuantizationMixin)
-                for param_name, quantizer in layer.param_quantizers.items()
-                if quantizer
-            }
+        param_names = {
+            f"{layer_name}.{param_name}"
+            for layer_name, layer in model.named_modules()
+            if isinstance(layer, QuantizationMixin)
+            for param_name, quantizer in layer.param_quantizers.items()
+            if quantizer
+        }
 
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]
     tensor_to_encoding_map = {
