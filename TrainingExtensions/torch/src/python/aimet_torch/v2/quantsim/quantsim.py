@@ -705,7 +705,9 @@ class _QuantizationSimOnnxExport:
 
             if export_int32_bias:
                 # Temoprarily instantiate int32 bias quantizers
-                stack.enter_context(_concretize_int32_bias_quantizers(self.sim.model, args))
+                stack.enter_context(
+                    _concretize_int32_bias_quantizers(self.sim.model, args, kwargs.get("kwargs"))
+                )
 
             # Export quantize-dequantized weight
             # pylint: disable=protected-access

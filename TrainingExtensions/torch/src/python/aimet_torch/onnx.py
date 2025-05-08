@@ -82,7 +82,9 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
 
         if export_int32_bias:
             # Temoprarily instantiate int32 bias quantizers
-            stack.enter_context(_concretize_int32_bias_quantizers(model, args))
+            stack.enter_context(
+                _concretize_int32_bias_quantizers(model, args, kwargs.get("kwargs"))
+            )
 
         # Export quantize-dequantized weight
         # pylint: disable=protected-access
@@ -124,9 +126,11 @@ def _to_onnx(model: torch.nn.Module,
 
 
 @contextlib.contextmanager
-def _concretize_int32_bias_quantizers(model, args):
+def _concretize_int32_bias_quantizers(model, args, kwargs=None):
     if not isinstance(args, (tuple, list)):
         args = (args,)
+
+    kwargs = kwargs or {}
 
     handles = []
     orig_bias_quantizers = {
@@ -151,7 +155,7 @@ def _concretize_int32_bias_quantizers(model, args):
                 handle = qmodule.register_forward_hook(type(qmodule)._create_int32_bias_quantizer)
                 handles.append(handle)
         try:
-            model(*args)
+            model(*args, **kwargs)
         finally:
             for handle in handles:
                 handle.remove()
