@@ -365,7 +365,7 @@ class CrossLayerScaling:
         return scaling_factor
 
     @classmethod
-    def scale_cls_set_with_depthwise_layers(cls, cls_set: ClsSet) -> [np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(cls, cls_set: ClsSet) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -480,7 +480,7 @@ class PythonClsImpl(ClsImpl):
     """
     This class implements the CLS algorithm using Python version while following the base Implementation interface.
     """
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> [np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 

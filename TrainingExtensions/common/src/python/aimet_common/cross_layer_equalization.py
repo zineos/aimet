@@ -359,7 +359,7 @@ class CrossLayerScaling(ABC):
 
         return scaling_factor
 
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> [np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -579,7 +579,7 @@ class ClsImpl(ABC):
     The Implementation interface declares methods common to both MO (c++) and python versions of CLS algorithm.
     """
     @abstractmethod
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> [np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -599,7 +599,7 @@ class ClsImpl(ABC):
 
     @staticmethod
     def compute_scaling_params_for_depthwise_conv(weight_0: np.ndarray, weight_1: np.ndarray, weight_2: np.ndarray) \
-            -> [np.ndarray, np.ndarray]:
+            -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute scaling parameters for depth-wise separable layer.
 
@@ -623,7 +623,7 @@ class ClsImpl(ABC):
         return s_12, s_23
 
     @staticmethod
-    def compute_scaling_params_for_conv(weight_0: np.ndarray, weight_1: np.ndarray) -> [np.ndarray, np.ndarray]:
+    def compute_scaling_params_for_conv(weight_0: np.ndarray, weight_1: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute scaling parameters for conv layer.
         :param weight_0:
@@ -698,7 +698,7 @@ class HbfImpl(ABC):
 
     @staticmethod
     def _absorb_bias(activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer)\
-            -> (np.ndarray, np.ndarray):
+            -> Tuple[np.ndarray, np.ndarray]:
         """
 
         :param activation_is_relu:

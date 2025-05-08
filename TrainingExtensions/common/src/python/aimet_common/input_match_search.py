@@ -41,6 +41,7 @@
 
 """ Sub-sample data for weight reconstruction for channel pruning feature """
 
+from typing import Tuple
 import numpy as np
 
 from aimet_common.utils import AimetLogger
@@ -248,7 +249,7 @@ class InputMatchSearch:
 
     @classmethod
     def _determine_output_pixel_height_width_range_for_random_selection(cls, layer_attributes: tuple, out_shape: tuple)\
-            -> (tuple, tuple):
+            -> Tuple[tuple, tuple]:
         """
         Function returns height range and width range based on the Kernel size and Padding size.
         If the Kernel size is bigger than or equal to the Padding size, this function returns the height range and
@@ -283,7 +284,7 @@ class InputMatchSearch:
 
     @classmethod
     def subsample_data(cls, layer_attributes: tuple, input_data: np.ndarray, output_data: np.ndarray,
-                       samples_per_image: int) -> (np.ndarray, np.ndarray):
+                       samples_per_image: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         Function takes layer_attributes, input data (collected from pruned model) and output data (collected from
         original layer) and returns sub sampled input and their corresponding sub sampled output

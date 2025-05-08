@@ -69,7 +69,7 @@ def expand_shape_to_4d(shape: Tuple) -> Union[List, np.ndarray]:
 
 
 def batch_norm_fold(weight: np.ndarray, bias: np.ndarray, gamma: np.ndarray, beta: np.ndarray, mu: np.ndarray,
-                    sigma: np.ndarray, fold_backward: bool) -> [np.ndarray, np.ndarray]:
+                    sigma: np.ndarray, fold_backward: bool) -> Tuple[np.ndarray, np.ndarray]:
     """
     :param weight: conv/linear weight
     :param bias: conv/linear bias

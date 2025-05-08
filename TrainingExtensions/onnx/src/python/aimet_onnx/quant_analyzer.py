@@ -403,7 +403,7 @@ class QuantAnalyzer:
         return eval_score_dict
 
     @staticmethod
-    def _get_op_quantizers(op: Op, sim: QuantizationSimModel) -> (List, List, Dict):
+    def _get_op_quantizers(op: Op, sim: QuantizationSimModel) -> Tuple[List, List, Dict]:
         """
         This function returns the enabled input, output and param quantizers of the given connected graph op.
 

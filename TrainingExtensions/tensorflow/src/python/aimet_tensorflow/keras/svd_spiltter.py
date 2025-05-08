@@ -36,6 +36,7 @@
 # =============================================================================
 
 """ Implementation of layer splitting logic for spatial svd schemes """
+from typing import Tuple
 import numpy as np
 import tensorflow as tf
 
@@ -53,7 +54,7 @@ class SpatialSvdModuleSplitter:
     """ Spatial SVD module splitter"""
 
     @staticmethod
-    def split_module(model: tf.keras.Model, layer: Layer, rank: int) -> (tf.keras.layers.Layer, tf.keras.layers.Layer):
+    def split_module(model: tf.keras.Model, layer: Layer, rank: int) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
         """
         :param  model: Keras Model whose layer we want to split
         :param layer: Module to be split
@@ -105,7 +106,7 @@ class SpatialSvdModuleSplitter:
         return conv_a, conv_b
 
     @staticmethod
-    def get_svd_matrices(layer: Layer, rank: int) -> (np.array, np.array):
+    def get_svd_matrices(layer: Layer, rank: int) -> Tuple[np.array, np.array]:
         """
         :param layer: Module to be split
         :param rank: rank for splitting
@@ -135,7 +136,7 @@ class WeightSvdModuleSplitter:
     """ Weight SVD module splitter """
     # pylint: disable=too-many-locals
     @classmethod
-    def split_module(cls, model, layer, rank, svd_lib_ref) -> (tf.keras.layers.Layer, tf.keras.layers.Layer):
+    def split_module(cls, model, layer, rank, svd_lib_ref) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
         """
         Split a given module using weight svd
 
@@ -158,7 +159,7 @@ class WeightSvdModuleSplitter:
 
     @classmethod
     def split_conv_module(cls, model: tf.keras.Model, layer: tf.keras.layers, rank, svd_lib_ref) \
-            -> (tf.keras.layers.Conv2D, tf.keras.layers.Conv2D):
+            -> Tuple[tf.keras.layers.Conv2D, tf.keras.layers.Conv2D]:
         """
         Split a given Conv2D module using weight svd
 
@@ -241,7 +242,7 @@ class WeightSvdModuleSplitter:
         return conv_a, conv_b
 
     @classmethod
-    def split_fc_module(cls, model, layer, rank, svd_lib_ref) -> (tf.keras.layers.Dense, tf.keras.layers.Dense):
+    def split_fc_module(cls, model, layer, rank, svd_lib_ref) -> Tuple[tf.keras.layers.Dense, tf.keras.layers.Dense]:
         """
         Split a given Linear module using weight svd
 

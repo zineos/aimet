@@ -37,7 +37,7 @@
 
 """ Adaround optimizer """
 
-from typing import Callable
+from typing import Callable, Tuple
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
@@ -186,7 +186,7 @@ class AdaroundOptimizer:
 
     @staticmethod
     def optimize_rounding(wrapper: AdaroundWrapper, act_func, all_inp_data: np.ndarray, all_orig_out_data: np.ndarray,
-                          opt_params: AdaroundHyperParameters) -> (np.ndarray, np.ndarray):
+                          opt_params: AdaroundHyperParameters) -> Tuple[np.ndarray, np.ndarray]:
         """
         Optimizes the weight rounding of Adaround wrapper layer and returns soft and hard rounded weight
         :param wrapper: Adaround wrapper

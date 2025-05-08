@@ -37,6 +37,7 @@
 
 """ Implementation of layer splitting logic for spatial and weight svd schemes """
 
+from typing import Tuple
 import abc
 import math
 import numpy as np
@@ -90,7 +91,7 @@ class WeightSvdModuleSplitter(abc.ABC):
     Weight SVD module splitter
     """
     @classmethod
-    def split_module(cls, module: torch.nn.Module, rank: int, **kwargs) -> (torch.nn.Module, torch.nn.Module):
+    def split_module(cls, module: torch.nn.Module, rank: int, **kwargs) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         :param module: Module to be split
         :param rank: rank for splitting
@@ -107,7 +108,7 @@ class WeightSvdModuleSplitter(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def split_conv_module(cls, *args, **kwargs) -> (torch.nn.Module, torch.nn.Module):
+    def split_conv_module(cls, *args, **kwargs) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         :param args:
         :param kwargs:
@@ -116,7 +117,7 @@ class WeightSvdModuleSplitter(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def split_fc_module(cls, *args, **kwargs) -> (torch.nn.Module, torch.nn.Module):
+    def split_fc_module(cls, *args, **kwargs) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         :param args:
         :param kwargs:
@@ -124,7 +125,7 @@ class WeightSvdModuleSplitter(abc.ABC):
         """
 
     @staticmethod
-    def create_conv_modules(module: torch.nn.Module, rank: int) -> (torch.nn.Module, torch.nn.Module):
+    def create_conv_modules(module: torch.nn.Module, rank: int) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         Create conv modules.
 
@@ -148,7 +149,7 @@ class WeightSvdModuleSplitter(abc.ABC):
         return conv_a, conv_b
 
     @staticmethod
-    def create_fc_modules(module: torch.nn.Module, rank: int) -> (torch.nn.Module, torch.nn.Module):
+    def create_fc_modules(module: torch.nn.Module, rank: int) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         Create fc modules.
 
@@ -319,7 +320,7 @@ class PyWeightSvdModuleSplitter(WeightSvdModuleSplitter):
     """
     # pylint:disable=arguments-differ
     @classmethod
-    def split_conv_module(cls, module: torch.nn.Module, rank: int) -> (torch.nn.Module, torch.nn.Module):
+    def split_conv_module(cls, module: torch.nn.Module, rank: int) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         Split a given module using weight svd.
         :param module: Module to be split
@@ -355,7 +356,7 @@ class PyWeightSvdModuleSplitter(WeightSvdModuleSplitter):
 
     # pylint:disable=arguments-differ
     @classmethod
-    def split_fc_module(cls, module: torch.nn.Module, rank: int) -> (torch.nn.Module, torch.nn.Module):
+    def split_fc_module(cls, module: torch.nn.Module, rank: int) -> Tuple[torch.nn.Module, torch.nn.Module]:
         """
         Split a given module using weight svd.
 

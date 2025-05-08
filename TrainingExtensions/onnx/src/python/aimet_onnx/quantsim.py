@@ -601,7 +601,7 @@ class QuantizationSimModel:
         """
         return self.qc_quantize_op_dict
 
-    def get_op_quantizers(self, op: Op) -> (List, List, Dict):
+    def get_op_quantizers(self, op: Op) -> Tuple[List, List, Dict]:
         """
         This function returns the input, output and param quantizers of the given connected graph op.
 

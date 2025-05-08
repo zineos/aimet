@@ -153,7 +153,7 @@ class WeightSvdPruner(Pruner):
         """
 
     @staticmethod
-    def lingalg_weight_svd(weight_tensor: np.ndarray, rank: int) -> (np.ndarray, np.ndarray):
+    def lingalg_weight_svd(weight_tensor: np.ndarray, rank: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         Splits a weight tensor using weight svd
 

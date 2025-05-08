@@ -197,7 +197,7 @@ class DataSubSampler:
     def get_sub_sampled_data(cls, orig_layer: Union[torch.nn.Conv2d, torch.nn.Linear],
                              pruned_layer: Union[torch.nn.Conv2d, torch.nn.Linear],
                              orig_model: torch.nn.Module, comp_model: torch.nn.Module, data_loader: Iterator,
-                             num_reconstruction_samples: int) -> (np.ndarray, np.ndarray):
+                             num_reconstruction_samples: int) -> Tuple[np.ndarray, np.ndarray]:
         # pylint: disable=too-many-locals
         """
         Get all the input data from pruned model and output data from original model

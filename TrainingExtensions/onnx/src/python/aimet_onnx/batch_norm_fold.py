@@ -202,7 +202,7 @@ def is_valid_bn_fold(conv_linear: NodeProto, model: ModelProto, fold_backward: b
     return valid
 
 
-def fold_all_batch_norms_to_weight(model: ModelProto) -> [List]:
+def fold_all_batch_norms_to_weight(model: ModelProto) -> Tuple[List, List]:
     """
     Fold all possible batch_norm layers in a model into the weight of the corresponding conv layers
 

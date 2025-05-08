@@ -37,7 +37,7 @@
 
 """ Curve-fitting code """
 
-from typing import List
+from typing import List, Tuple
 
 import osqp
 import numpy as np
@@ -74,7 +74,7 @@ class MonotonicIncreasingCurveFit:
         return results.x
 
     @classmethod
-    def fit(cls, x_coordinates: Coordinates, y_coordinates: Coordinates) -> (Coordinates, List):
+    def fit(cls, x_coordinates: Coordinates, y_coordinates: Coordinates) -> Tuple[Coordinates, List]:
         """
         Takes a set of points in a 2-d line-graph (described using their x and y coordinates) and
         returns the y-coordinates of a resulting line graph that is constrained to be necessarily monotonically

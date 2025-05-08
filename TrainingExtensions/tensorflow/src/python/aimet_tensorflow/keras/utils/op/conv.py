@@ -45,7 +45,7 @@ from aimet_common.utils import AimetLogger
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
 
-def get_strides_for_split_conv_ops(layer: tf.keras.layers.Layer) -> (Tuple, Tuple):
+def get_strides_for_split_conv_ops(layer: tf.keras.layers.Layer) -> Tuple[Tuple, Tuple]:
     """
     :param layer: Keras Layer (must be a Conv2D) which needs to be split
     :return: (conv_a_strides, conv_b_strides)

@@ -37,6 +37,7 @@
 
 """ This module contains code to reconstruct weights post winnowing for the channel pruning feature """
 
+from typing import Tuple
 import numpy as np
 from sklearn import linear_model
 import torch
@@ -56,7 +57,7 @@ class WeightReconstructor:
 
     @staticmethod
     def _linear_regression(input_data: np.ndarray, output_data: np.ndarray, bias: bool) \
-            -> (np.ndarray, np.ndarray):
+            -> Tuple[np.ndarray, np.ndarray]:
 
         """
         least square linear regression
@@ -128,7 +129,7 @@ class WeightReconstructor:
 
     @classmethod
     def reconstruct_params_for_conv2d(cls, layer: torch.nn.Module, input_data: np.ndarray,
-                                      output_data: np.ndarray) -> (np.ndarray, np.ndarray):
+                                      output_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Reconstruction of conv2d params (weights and biases) is performed using linear regression from sckit -learn.
 

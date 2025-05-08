@@ -199,7 +199,7 @@ def create_layer_to_out_node_map(cur_layer: (tf.keras.Model, tf.keras.layers.Lay
 
 def _submodule_handler_node_to_layer_map(
         cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
-        node_layer_map: Dict) -> (Dict, str, List):
+        node_layer_map: Dict) -> Tuple[Dict, str, List]:
     """
     The utility to extract node_layer_map for the cur_layer submodule and
     provide the connectivity with the outer model.
