@@ -387,6 +387,14 @@ class QcQuantizeOp:
             raise AssertionError(f'Loading LPBQ encodings for tensor name {encoding_dict["name"]} into a non-LPBQ quantizer'
                                  f' is not yet supported. Ensure QuantizationSimModel is set with proper quantizers before '
                                  f'loading.')
+        if encoding_dict['enc_type'] == EncodingType.PER_TENSOR.name:
+            self.enable_per_channel_quantization(False)
+        elif encoding_dict['enc_type'] == EncodingType.PER_CHANNEL.name:
+            self.enable_per_channel_quantization()
+        elif encoding_dict['enc_type'] == EncodingType.PER_BLOCK.name:
+            self._enable_blockwise_quantization(encoding_dict['block_size'])
+        else:
+            raise RuntimeError(f"Cannot load encodings for unknown encoding type {encoding_dict['enc_type']}")
 
         is_symmetric, is_strict_symmetric, is_unsigned_symmetric = _get_symmetric_properties(encoding_dict)
         self.use_symmetric_encodings = is_symmetric
@@ -399,8 +407,6 @@ class QcQuantizeOp:
         if self.use_symmetric_encodings and is_unsigned_symmetric:
             self.use_unsigned_symmetric = is_unsigned_symmetric
 
-        if 'block_size' in encoding_dict and self.quant_info.blockSize != encoding_dict['block_size']:
-            self._enable_blockwise_quantization(encoding_dict['block_size'])
         libpymo_encodings = []
         scales = encoding_dict['scale']
         offsets = encoding_dict['offset']
@@ -743,6 +749,7 @@ class QcQuantizeOp:
             encoding_mismatch_info.enabled_mismatch = (self.enabled, False)
         if not self.enabled and encoding_dict is not None:
             encoding_mismatch_info.enabled_mismatch = (self.enabled, True)
+            return # Other mismatch info is irrelevant
 
         if encoding_dict is not None:
             is_symmetric, is_strict_symmetric, is_unsigned_symmetric = _get_symmetric_properties(encoding_dict)

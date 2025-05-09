@@ -860,6 +860,55 @@ class TestBlockwiseQuantizeOp:
         with pytest.raises(RuntimeError):
             qc_quantize_op.load_encodings([libpymo.TfEncoding()])
 
+    def test_load_encoding_granularity(self):
+        tensor_quantizer_params = TensorQuantizerParams((10, 15), 0, 1)
+        qc_quantize_op = QcQuantizeOp(libquant_info.QcQuantizeInfo(), bitwidth=8, op_mode=OpMode.updateStats,
+                                      tensor_quantizer_params=tensor_quantizer_params)
+        qc_quantize_op.update_encoding_stats(np.random.randn(10, 15))
+        qc_quantize_op.compute_encodings()
+        assert qc_quantize_op._encoding_shape() == ()
+        per_tensor_enc_dict = qc_quantize_op.export_encodings("1.0.0")
+
+        # Enable per-channel quantization and compute encodings
+        qc_quantize_op.enable_per_channel_quantization()
+        qc_quantize_op.update_encoding_stats(np.random.randn(10, 15))
+        qc_quantize_op.compute_encodings()
+        enc_dict = qc_quantize_op.export_encodings("1.0.0")
+        assert enc_dict
+
+        # Create a new per-tensor quantizer
+        qc_quantize_op = QcQuantizeOp(libquant_info.QcQuantizeInfo(), bitwidth=8, op_mode=OpMode.updateStats,
+                                      tensor_quantizer_params=tensor_quantizer_params)
+        assert qc_quantize_op._encoding_shape() == ()
+
+        # After loading encodings, should be in per-channel mode
+        qc_quantize_op._load_encodings_dict(enc_dict)
+        assert len(qc_quantize_op.get_encodings()) == 10
+        assert qc_quantize_op._encoding_shape() == (10, )
+
+        # Enable blockwise quantization and compute encodings
+        qc_quantize_op._enable_blockwise_quantization(block_size=3)
+        assert qc_quantize_op._encoding_shape() == (10, 5)
+        qc_quantize_op.update_encoding_stats(np.random.randn(10, 15))
+        qc_quantize_op.compute_encodings()
+
+        block_enc_dict = qc_quantize_op.export_encodings("1.0.0")
+
+        # Create new per-tensor qc_quantize_op
+        qc_quantize_op = QcQuantizeOp(libquant_info.QcQuantizeInfo(), bitwidth=8, op_mode=OpMode.updateStats,
+                                      tensor_quantizer_params=tensor_quantizer_params)
+        assert qc_quantize_op._encoding_shape() == ()
+
+        # After loading encodings, should be blockwise
+        qc_quantize_op._load_encodings_dict(block_enc_dict)
+        assert len(qc_quantize_op.get_encodings()) == 50
+        assert qc_quantize_op._encoding_shape() == (10, 5)
+
+        # After loading per-tensor encodings, should be per-tensor quantizer
+        qc_quantize_op._load_encodings_dict(per_tensor_enc_dict)
+        assert qc_quantize_op._encoding_shape() == ()
+        assert len(qc_quantize_op.get_encodings()) == 1
+
 class TestLPBQOp:
 
     def test_lpbq_quantize_op(self):
