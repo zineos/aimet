@@ -37,6 +37,7 @@
 # =============================================================================
 
 import pytest
+from unittest.mock import patch
 import torch
 from torch.utils.data import Dataset, DataLoader
 import copy
@@ -51,6 +52,7 @@ from aimet_onnx.sequential_mse.seq_mse import SeqMseParams
 from aimet_onnx.sequential_mse.seq_mse import SequentialMse
 from aimet_common.defs import QuantScheme
 from aimet_onnx.quantsim import QuantizationSimModel
+from aimet_onnx.utils import make_dummy_input
 
 from .models.test_models import single_linear_layer_model
 from .models.test_models import single_conv_layer_model
@@ -249,7 +251,7 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    seq_mse = SequentialMse(sim.model, sim, seq_params, dataloader)
     conv_node = seq_mse.dependency_graph._name_to_node['/conv/Conv']
     seq_mse._run_seq_mse([conv_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(conv_node)
@@ -269,7 +271,8 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
 @pytest.mark.parametrize("param_bw", [2, 31])
 @pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
 @pytest.mark.parametrize("enable_pcq", [True, False])
-def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq):
+@pytest.mark.parametrize("pass_model", [True, False])
+def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
     model = get_single_linear_layer_model()
     sim = QuantizationSimModel(model=copy.deepcopy(model),
                                quant_scheme=QuantScheme.post_training_tf,
@@ -281,7 +284,10 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq):
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_linear_layer())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    if pass_model:
+        seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    else:
+        seq_mse = SequentialMse(None, sim, seq_params, dataloader)
     fc_node = seq_mse.dependency_graph._name_to_node['/fc/MatMul']
     seq_mse._run_seq_mse([fc_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(fc_node)
@@ -478,7 +484,7 @@ def test_model_with_multiple_outputs_value_info():
     dataloader = unlabeled_data_loader(dummy_input_for_model_with_multiple_input())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
 
-    assert 'Conv1_Y' in seq_mse._sim_extractor.vimap
+    assert 'Conv1_Y' in seq_mse._extractor.vimap
 
 def test_concat_model():
 
@@ -501,6 +507,27 @@ def test_concat_model():
             quantizer = seq_mse.sim.qc_quantize_op_dict[param_names[0]]
             assert quantizer.is_encoding_frozen()
 
+
+def test_disable_subgraph_quantizers():
+    model = models_for_tests.build_dummy_model()
+    sim = QuantizationSimModel(model=copy.deepcopy(model), providers=["CPUExecutionProvider"], default_param_bw=4)
+    sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(model)))
+    seq_params = SeqMseParams(num_batches=2)
+    dataloader = [make_dummy_input(model) for _ in range(2)]
+    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    
+    enabled = {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
+    assert enabled
+
+    with seq_mse._disable_subgraph_quantizers(sim.model.model):
+        assert not any(q.enabled for q in sim.qc_quantize_op_dict.values())
+
+    assert enabled == {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
+
+    subgraph = seq_mse._split_onnx_graph(seq_mse._extractor, ["4"], ["output"])
+    with seq_mse._disable_subgraph_quantizers(subgraph):
+        assert not sim.qc_quantize_op_dict["fc_w"].enabled
+        assert not sim.qc_quantize_op_dict["4"].enabled
 
 class TestDependencyGraph:
 

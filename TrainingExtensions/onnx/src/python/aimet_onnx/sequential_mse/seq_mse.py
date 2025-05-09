@@ -49,7 +49,6 @@ import numpy as np
 import onnx
 import onnxruntime
 import torch
-from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from onnx.utils import Extractor
 from aimet_common.libpymo import TensorQuantizerOpMode
 from aimet_common.defs import QuantScheme
@@ -85,58 +84,55 @@ class SequentialMse:
     """
 
     def __init__(self,
-                 model,
+                 model: onnx.ModelProto,
                  sim: QuantizationSimModel,
                  params: SeqMseParams,
                  data_loader: Iterable):
-
         """
         Initialize the sequential mse object
 
         :param model: float model
         :param sim: QuantizationSimModel object
-        :param data_loader: Torch Dataloader
         :param params: Sequential MSE parameters
+        :param data_loader: Torch Dataloader
         """
         # pylint: disable=protected-access
         assert sim._quant_scheme in (QuantScheme.post_training_tf, QuantScheme.training_range_learning_with_tf_init), \
             "Use TF quant-scheme with sequential MSE."
 
         self.sim = sim
-        self.model = model
         self.params = params
-
-        if not isinstance(self.model, ONNXModel):
-            self.model = ONNXModel(self.model)
 
         # Hacky way to get around onnx.shape_inference.infer_shapes call as it doesn't work for model >2GB
         raw_data = {}
         # Store and clear raw_data from initializers
-        for initializer in self.model.model.graph.initializer:
+        for initializer in self.sim.model.model.graph.initializer:
             if initializer.HasField('raw_data'):
                 raw_data[initializer.name] = initializer.raw_data
                 initializer.ClearField("raw_data")
 
-        self._float_extractor = Extractor(self.model.model)
+        # Copy the model without weight data and remove quantizer to allow shape inference
+        model = copy.deepcopy(sim.model)
+        model = sim.remove_quantizers(model).model
+
+        self._extractor = Extractor(model)
 
         # Restore raw_data to initializers
-        for initializer in self.model.model.graph.initializer:
+        for initializer in self.sim.model.model.graph.initializer:
             if initializer.name in raw_data:
                 initializer.raw_data = raw_data[initializer.name]
-        for initializer in self._float_extractor.model.graph.initializer:
+        for initializer in self._extractor.wmap.values():
             if initializer.name in raw_data:
                 initializer.raw_data = raw_data[initializer.name]
         del raw_data
 
-        self._sim_extractor = copy.deepcopy(self._float_extractor)
-
         self._update_value_info()
 
-        self._sim_extractor.model = self.sim.model.model
-        self._sim_extractor.graph = self.sim.model.model.graph
+        self.dependency_graph = DependencyGraph(self._extractor.model, data_loader, params.num_batches)
+        self._extractor.model = self.sim.model.model
+        self._extractor.graph = self.sim.model.model.graph
         self.data_loader = data_loader
 
-        self.dependency_graph = DependencyGraph(self.model, data_loader, params.num_batches)
 
     def _update_value_info_for_output(self, node):
         """
@@ -148,10 +144,10 @@ class SequentialMse:
 
         input_name = node.input[0]
         output_name = node.output[0]
-        if input_name in self._sim_extractor.vimap and output_name not in self._sim_extractor.vimap:
-            value_info_for_output = copy.deepcopy(self._sim_extractor.vimap[input_name])
+        if input_name in self._extractor.vimap and output_name not in self._extractor.vimap:
+            value_info_for_output = copy.deepcopy(self._extractor.vimap[input_name])
             value_info_for_output.name = node.output[0]
-            self._sim_extractor.vimap[node.output[0]] = value_info_for_output
+            self._extractor.vimap[node.output[0]] = value_info_for_output
 
     def _update_value_info_for_input(self, node):
         """
@@ -163,10 +159,10 @@ class SequentialMse:
 
         input_name = node.input[0]
         output_name = node.output[0]
-        if output_name in self._sim_extractor.vimap and input_name not in self._sim_extractor.vimap:
-            value_info_for_input = copy.deepcopy(self._sim_extractor.vimap[output_name])
+        if output_name in self._extractor.vimap and input_name not in self._extractor.vimap:
+            value_info_for_input = copy.deepcopy(self._extractor.vimap[output_name])
             value_info_for_input.name = node.input[0]
-            self._sim_extractor.vimap[node.input[0]] = value_info_for_input
+            self._extractor.vimap[node.input[0]] = value_info_for_input
 
     def _update_value_info_for_graph_output(self):
         """
@@ -175,12 +171,8 @@ class SequentialMse:
 
         :param node: onnx node
         """
-
-        for value_info in self.model.model.graph.output:
-            self._float_extractor.vimap[value_info.name] = value_info
-
         for value_info in self.sim.model.model.graph.output:
-            self._sim_extractor.vimap[value_info.name] = value_info
+            self._extractor.vimap[value_info.name] = value_info
 
     def _update_value_info(self):
         """
@@ -196,7 +188,10 @@ class SequentialMse:
                 self._update_value_info_for_input(node)
 
     @staticmethod
-    def apply_seq_mse(model, sim: QuantizationSimModel, params: SeqMseParams, data_loader):
+    def apply_seq_mse(model: onnx.ModelProto,
+                      sim: QuantizationSimModel,
+                      params: SeqMseParams,
+                      data_loader: Iterable):
         """
         It performs following steps:
         1) creates seq_mse object
@@ -204,8 +199,8 @@ class SequentialMse:
 
         :param model: float model
         :param sim: QuantizationSimModel object
-        :param data_loader: Data loader
         :param params: Sequential MSE parameters
+        :param data_loader: Data loader
         """
         seq_mse = SequentialMse(model, sim, params, data_loader)
         seq_mse.apply_seq_mse_algo()
@@ -265,6 +260,20 @@ class SequentialMse:
         finally:
             for quantizer in quantizers_to_be_disabled:
                 quantizer.enabled = True
+
+    @contextmanager
+    def _disable_subgraph_quantizers(self, model: onnx.ModelProto):
+        quantizer_keys = [node.input[0] for node in model.graph.node if node.op_type == "QcQuantizeOp"]
+        enabled = {name: self.sim.qc_quantize_op_dict[name].enabled for name in quantizer_keys}
+        try:
+            for name in quantizer_keys:
+                self.sim.qc_quantize_op_dict[name].enabled = False
+
+            yield
+
+        finally:
+            for name in quantizer_keys:
+                self.sim.qc_quantize_op_dict[name].enabled = enabled[name]
 
     def _get_min_max_from_weights(self, dependency_node: DependencyNode):
         """
@@ -457,13 +466,11 @@ class SequentialMse:
         sim_inputs = self.dependency_graph.get_sim_data(dep_nodes_to_parallelize)
 
         # Create inference session for subgraph from float model
-        fp_subgraph_model = self._split_onnx_graph(self._float_extractor, subgraph_inp_names, subgraph_outs_names)
-        with self._create_session(fp_subgraph_model) as session:
-            fp_outputs = self._run_onnx_graph(session, sim_inputs)
+        subgraph_model = self._split_onnx_graph(self._extractor, subgraph_inp_names, subgraph_outs_names)
+        with self._create_session(subgraph_model) as session:
+            with self._disable_subgraph_quantizers(subgraph_model):
+                fp_outputs = self._run_onnx_graph(session, sim_inputs)
 
-        # Create inference session for subgraph from sim model
-        sim_subgraph_model = self._split_onnx_graph(self._sim_extractor, subgraph_inp_names, subgraph_outs_names)
-        with self._create_session(sim_subgraph_model) as session:
             for i in range(self.params.num_candidates):
                 _set_candidates(i)
                 sim_outputs = self._run_onnx_graph(session, sim_inputs)
@@ -541,7 +548,7 @@ class SequentialMse:
         assert len(subgraph_inp_names) == len(subgraph_inps)
 
         _logger.debug(f"Subgraph input names: {subgraph_inp_names}, Subgraph output names: {subgraph_out_names}")
-        sim_split_model = self._split_onnx_graph(self._sim_extractor, subgraph_inp_names, subgraph_out_names)
+        sim_split_model = self._split_onnx_graph(self._extractor, subgraph_inp_names, subgraph_out_names)
         with self._create_session(sim_split_model) as session:
             subgraph_outs = self._run_onnx_graph(session, subgraph_inps)
         self.dependency_graph.update_sim_data(subgraph_out_names, subgraph_outs)
