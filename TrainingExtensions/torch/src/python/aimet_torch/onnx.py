@@ -72,10 +72,47 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
            export_int32_bias: bool = True,
            **kwargs):
     """
-    Export QuantizationSimModel to onnx model with
-    QuantizeLinear/DequantizeLinear embedded in the graph.
+    Export :class:`QuantizationSimModel` to onnx model with
+    onnx `QuantizeLinear`_ and `DequantizeLinear`_ embedded in the graph.
 
-    This function takes set of same arguments as torch.onnx.export()
+    This function takes set of same arguments as `torch.onnx.export()`_
+
+    Args:
+        model: The model to be exported
+        args: Same as `torch.onnx.export()`
+        f: Same as `torch.onnx.export()`
+        export_int32_bias (bool, optional):
+            If true, generate and export int32 bias encoding on the fly (default: `True`)
+        **kwargs: Same as `torch.onnx.export()`
+
+
+    .. note::
+        Unlike `torch.onnx.export()`, this function allows up to opset 21.
+        to support 4/16-bit quantization only available in opset 21.
+        However, exporting to opset 21 is a beta feature and not fully stable yet.
+        For robustness, opset 20 or lower is recommended whenever possible.
+
+    .. note::
+        Dynamo-based export (`dynamo=True`) is not supported yet
+
+    .. _torch.onnx.export(): https://docs.pytorch.org/docs/stable/onnx_torchscript.html#torch.onnx.export
+    .. _QuantizeLinear: https://onnx.ai/onnx/operators/onnx__QuantizeLinear.html
+    .. _DequantizeLinear: https://onnx.ai/onnx/operators/onnx__DequantizeLinear.html
+
+    Examples:
+
+        >>> aimet_torch.onnx.export(sim.model, x, f="model.onnx",
+        ...                         input_names=["input"], output_names=["output"],
+        ...                         opset_version=21, export_int32_bias=True)
+        ...
+        >>> import onnxruntime as ort
+        >>> options = ort.SessionOptions()
+        >>> options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        >>> sess = ort.InferenceSession("model.onnx", sess_options=options)
+        >>> onnx_output, = sess.run(None, {"input": x.detach().numpy()})
+        >>> torch.nn.functional.cosine_similarity(torch.from_numpy(onnx_output), sim.model(x))
+        tensor([1.0000, 0.9999, 1.0000,  ..., 1.0000, 1.0000, 1.0000],
+               grad_fn=<AliasBackward0>)
     """
     if isinstance(model, QuantizationSimModel):
         model = model.model

@@ -9,9 +9,10 @@ aimet_torch API
 
     Migrate to aimet_torch 2 <migration_guide>
     aimet_torch.quantsim <quantsim>
-    aimet_torch.adaround <adaround>
     aimet_torch.nn <nn>
     aimet_torch.quantization <quantization>
+    aimet_torch.onnx <onnx>
+    aimet_torch.adaround <adaround>
     aimet_torch.seq_mse <seq_mse>
     aimet_torch.adascale <adascale>
     aimet_torch.quantsim.config_utils <lpbq>
@@ -42,6 +43,7 @@ aimet_torch
 - :ref:`aimet_torch.quantsim <apiref-torch-quantsim>`
 - :ref:`aimet_torch.nn <apiref-torch-nn>`
 - :ref:`aimet_torch.quantization <apiref-torch-quantization>`
+- :ref:`aimet_torch.onnx (beta) <apiref-torch-onnx>`
 - :ref:`aimet_torch.adaround <apiref-torch-adaround>`
 - :ref:`aimet_torch.seq_mse <apiref-torch-seq-mse>`
 - :ref:`aimet_torch.adascale <apiref-torch-adascale>`
