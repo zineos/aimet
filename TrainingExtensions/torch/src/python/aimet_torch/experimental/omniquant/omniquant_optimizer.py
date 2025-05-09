@@ -95,7 +95,7 @@ class Omniquant:
         :return: Model with Omniquant weights.
         """
         num_batch = len(dataloader)
-        num_batch = 40
+
         @contextlib.contextmanager
         def disable_dynamic_cache():
             # Disable dynamic_cache for LET blockwise training, and restore after optimization.
