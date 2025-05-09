@@ -76,17 +76,20 @@ def set_encoding_version(version):
         quantsim_common.encoding_version = old_version
 
 
-@pytest.mark.parametrize("qtzr_cls", [Q.affine.Quantize, Q.affine.QuantizeDequantize])
-@pytest.mark.parametrize("input_shape, scale_shape, block_size", [
-                         ([],          [],          None      ), # per-tensor
-                         ((100, 100),  (1,),        None      ), # per-tensor
-                         ((100, 100),  [],          None      ), # per-tensor
-                         ((100, 100),  (100, 1),    None      ), # per-channel
-                         ((100, 100),  (100, 1),    (1, 100)  ), # per-channel
-                         ((100, 100),  (100, 50),   (1, 2)    ), # blockwise
-                         ((100, 100),  (50, 100),   (2, 1)    ), # blockwise
-                         ((100, 100),  (50, 50),    (2, 2)    ), # blockwise
-                         ((100, 100),  (50, 50),    (-1, -1)  ), # blockwise
+@pytest.mark.parametrize(
+    "qtzr_cls", [Q.affine.Quantize, Q.affine.QuantizeDequantize, Q.affine.Dequantize]
+)
+@pytest.mark.parametrize(
+    "input_shape, scale_shape, block_size", [
+    ([],          [],          None      ), # per-tensor
+    ((100, 100),  (1,),        None      ), # per-tensor
+    ((100, 100),  [],          None      ), # per-tensor
+    ((100, 100),  (100, 1),    None      ), # per-channel
+    ((100, 100),  (100, 1),    (1, 100)  ), # per-channel
+    ((100, 100),  (100, 50),   (1, 2)    ), # blockwise
+    ((100, 100),  (50, 100),   (2, 1)    ), # blockwise
+    ((100, 100),  (50, 50),    (2, 2)    ), # blockwise
+    ((100, 100),  (50, 50),    (-1, -1)  ), # blockwise
 ])
 @pytest.mark.parametrize("symmetric", [True, False])
 def test_quantize_torch_ort_equal(qtzr_cls, input_shape, scale_shape, block_size, symmetric):
@@ -124,10 +127,12 @@ def test_quantize_torch_ort_equal(qtzr_cls, input_shape, scale_shape, block_size
         assert node.name == '/quantize' if qtzr_cls is Q.affine.Quantize else '/quantize_dequantize'
         assert node.attribute[0].name == 'block_size'
         assert node.attribute[0].ints == ([1] if block_size is None else list(np.array(input_shape) // np.array(scale_shape)))
-        assert node.attribute[1].name == 'qmax'
-        assert node.attribute[1].i == (127 if symmetric else 255)
-        assert node.attribute[2].name == 'qmin'
-        assert node.attribute[2].i == (-128 if symmetric else 0)
+
+        if qtzr_cls != Q.affine.Dequantize:
+            assert node.attribute[1].name == 'qmax'
+            assert node.attribute[1].i == (127 if symmetric else 255)
+            assert node.attribute[2].name == 'qmin'
+            assert node.attribute[2].i == (-128 if symmetric else 0)
 
         """
         Then: The saved onnx model should contain exactly one graph node in "aimet" domain
@@ -372,6 +377,8 @@ def test_quantsim_export_resnet18(encoding_version,
 
         with set_encoding_version(encoding_version):
             sim.onnx.export(x, onnx_path, input_names=["input"], output_names=["output"],
+                            dynamic_axes={"input": {0: "batch_size"},
+                                          "output": {0: "batch_size"}},
                             export_int32_bias=export_int32_bias)
 
         """
@@ -468,7 +475,7 @@ def _parse_type(type_str: str) -> tuple[str, int]:
 
 @pytest.mark.parametrize("lpbq", [False])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
-@pytest.mark.parametrize("export_int32_bias", [False, True])
+@pytest.mark.parametrize("export_int32_bias", [True, False])
 @pytest.mark.parametrize(
     "param_dtype, activation_dtype", [
     ("int8",      "uint8"),
@@ -541,6 +548,8 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
         onnx_path = os.path.join(dirname, "torchvision_model.onnx")
         aimet_torch.onnx.export(sim, x, onnx_path, input_names=["input"], output_names=["output"],
                                 opset_version=21,
+                                dynamic_axes={"input": {0: "batch_size"},
+                                              "output": {0: "batch_size"}},
                                 export_int32_bias=export_int32_bias)
 
         """
@@ -595,10 +604,12 @@ def test_quantsim_export_onnx_qdq_resnet18(lpbq: bool,
 @pytest.mark.parametrize("target_opset", range(_constants.ONNX_MIN_OPSET, 22))
 @pytest.mark.parametrize(
     "param_bw, act_bw, per_channel, minimum_required_opset", [
+    (4,        8,      False,       21),
     (4,        16,     False,       21),
     (8,        8,      False,       10),
     (8,        16,     False,       21),
     (16,       16,     False,       21),
+    (4,        8,      False,       21),
     (4,        16,     True,        21),
     (8,        8,      True,        13),
     (8,        16,     True,        21),
@@ -629,7 +640,9 @@ def test_minimum_opset(param_bw: int,
 
         if 9 <= target_opset <= _constants.ONNX_MAX_OPSET:
             # sim.onnx.export (onnx + json export) should always work
-            sim.onnx.export(x, f=full_path, opset_version=target_opset)
+            sim.onnx.export(x, f=full_path, opset_version=target_opset,
+                            dynamic_axes={"input": {0: "batch_size"},
+                                          "output": {0: "batch_size"}})
 
         if target_opset < minimum_required_opset:
             """
@@ -638,7 +651,9 @@ def test_minimum_opset(param_bw: int,
             """
             with pytest.raises(RuntimeError):
                 aimet_torch.onnx.export(sim, x, f=full_path, opset_version=target_opset,
-                                        input_names=["input"], output_names=["output"])
+                                        input_names=["input"], output_names=["output"],
+                                        dynamic_axes={"input": {0: "batch_size"},
+                                                      "output": {0: "batch_size"}})
             return
 
         """
@@ -660,3 +675,53 @@ def test_minimum_opset(param_bw: int,
                                     sess_options=sess_options)
         out, = sess.run(None, {"input": x.detach().numpy()})
         assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)
+
+
+
+@pytest.mark.parametrize(
+    "kwargs", [
+        {"opset_version": 22},
+        {"export_params": False},
+        {"keep_initializers_as_inputs": True},
+        {"dynamo": True},
+        {"do_constant_folding": False},
+        {"export_modules_as_functions": True},
+        {"operator_export_type": torch.onnx.OperatorExportTypes.ONNX_ATEN},
+    ]
+)
+def test_unsupported_args(kwargs):
+    model = torch.nn.Sequential(torch.nn.Linear(10, 10))
+    x = torch.zeros(10, 10)
+    sim = QuantizationSimModel(model, x)
+
+    with pytest.raises((ValueError, RuntimeError, NotImplementedError)):
+        aimet_torch.onnx.export(sim.model, x, f=os.devnull, **kwargs)
+
+
+def test_non_standard_quantizer():
+    """
+    When: Export model with LPBQ quantizer
+    Then: Should throw NotImplementedError
+    """
+    model = torch.nn.Sequential(torch.nn.Linear(16, 16))
+    x = torch.zeros(16, 16)
+    sim = QuantizationSimModel(model, x)
+    set_grouped_blockwise_quantization_for_weights(sim,
+                                                   [sim.model[0]],
+                                                   bitwidth=4,
+                                                   symmetric=True,
+                                                   decompressed_bw=8,
+                                                   block_size=4)
+
+    with pytest.raises(NotImplementedError):
+        aimet_torch.onnx.export(sim.model, x, f=os.devnull)
+
+    """
+    When: Export model with non-standard-bitwidth quantizer
+    Then: Should throw RuntimeError
+    """
+    sim = QuantizationSimModel(model, x)
+    sim.model[0].param_quantizers["weight"].bitwidth = 9
+
+    with pytest.raises(RuntimeError):
+        aimet_torch.onnx.export(sim.model, x, f=os.devnull)

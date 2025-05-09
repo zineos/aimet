@@ -675,7 +675,6 @@ class _QuantizationSimOnnxExport:
     def export(self,
                args: Union[Tuple[Any, ...], torch.Tensor],
                f: Union[str, io.BytesIO],
-               *posargs,
                export_int32_bias: bool = True,
                **kwargs):
         """
@@ -692,11 +691,13 @@ class _QuantizationSimOnnxExport:
         :param f: file object or path where to store exported ONNX mode
         """
         from aimet_torch.onnx import (
+            _check_unsupported_args,
             _concretize_int32_bias_quantizers,
             _remove_fp16_quantizers,
             _to_onnx,
             _temporarily_unfold_param_quantizers,
         )
+        _check_unsupported_args(kwargs)
 
         with contextlib.ExitStack() as stack:
             # Unfold all param quantizers to incorporate QuantizeLinear/DequantizeLinear
@@ -716,7 +717,7 @@ class _QuantizationSimOnnxExport:
             # Remove [b]float16 quantizers
             stack.enter_context(_remove_fp16_quantizers(self.sim.model))
 
-            onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, *posargs, **kwargs)
+            onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, **kwargs)
 
         onnx.save(onnx_model, f)
         encodings_dict = self._to_json(tensor_to_encoding_map)

@@ -39,6 +39,7 @@ import contextlib
 import io
 import os
 import tempfile
+import traceback
 from typing import Any, Mapping, Tuple, Union
 
 import onnx
@@ -50,16 +51,24 @@ from aimet_common.onnx._utils import _add_onnx_qdq_nodes
 from .nn import QuantizationMixin
 from .quantization import DequantizedTensor
 from .quantization.base import EncodingBase
-from .quantization.affine import AffineQuantizerBase
+from .quantization.affine import AffineQuantizerBase, GroupedBlockQuantizeDequantize
 from .quantization.float import FloatQuantizeDequantize
 from .quantsim import QuantizationSimModel
 from .v2.experimental import onnx as _onnx
 
 
+_TORCH_DEFAULT_OPSET = _constants.ONNX_DEFAULT_OPSET
+_TORCH_MIN_OPSET = _constants.ONNX_MIN_OPSET
+_TORCH_MAX_OPSET = _constants.ONNX_MAX_OPSET
+
+# Allow at least up to opset 21 to enable [u]int16 QDQ export
+_AIMET_MAX_OPSET = max(_TORCH_MAX_OPSET, 21)
+
+
 def export(model: Union[torch.nn.Module, QuantizationSimModel],
            args: Union[Tuple[Any, ...], torch.Tensor],
            f: Union[str, io.BytesIO],
-           *posargs,
+           *,
            export_int32_bias: bool = True,
            **kwargs):
     """
@@ -76,21 +85,14 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
             f"aimet_torch.export only supports torch.nn.Module or QuantizationSimModel; got {type(model)}"
         )
 
-    if len(posargs) >= 7:
-        arg0, arg1, arg2, arg3, arg4, arg5, target_version, *others = posargs
-        posargs = (arg0, arg1, arg2, arg3, arg4, arg5,
-                   min(target_version, _constants.ONNX_MAX_OPSET),
-                   *others)
-    else:
-        target_version = kwargs.pop("opset_version", _constants.ONNX_DEFAULT_OPSET)
-        kwargs["opset_version"] = min(target_version, _constants.ONNX_MAX_OPSET)
+    _check_opset_version(kwargs)
+    _check_unsupported_args(kwargs)
+    _check_non_standard_quantizer(model)
+
+    target_version = kwargs.pop("opset_version", _TORCH_DEFAULT_OPSET)
+    kwargs["opset_version"] = min(target_version, _TORCH_MAX_OPSET)
 
     _assert_minimum_required_opset(model, target_version)
-
-    if target_version > 21:
-        raise RuntimeError(
-            f"aimet_torch.onnx.export only supports opset <= 21; got {target_version}"
-        )
 
     with contextlib.ExitStack() as stack:
         # Unfold all param quantizers to incorporate QuantizeLinear/DequantizeLinear
@@ -110,62 +112,177 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
         # Remove [b]float16 quantizers
         stack.enter_context(_remove_fp16_quantizers(model))
 
-        onnx_model, tensor_to_encoding_map = _to_onnx(model, args, *posargs, **kwargs)
+        onnx_model, tensor_to_encoding_map = _to_onnx(model, args, **kwargs)
 
-    current_version = next(
-        opset.version for opset in onnx_model.opset_import if opset.domain == ""
-    )
-    if current_version < target_version:
-        onnx_model = onnx.version_converter.convert_version(onnx_model,
-                                                            target_version)
+    if _TORCH_MAX_OPSET < target_version:
+        try:
+            onnx_model = onnx.version_converter.convert_version(onnx_model,
+                                                                target_version)
+        except Exception as e: # pylint: disable=broad-exception-caught
+            f = io.StringIO()
+            traceback.print_exc(file=f)
+            reason = _why_do_i_need_opset21(model)
+
+            if reason:
+                detail = (
+                    f"torch.onnx.export only supports opset<={_TORCH_MAX_OPSET}, " \
+                    f"but onnx::QuantizeLinear requires opset>={target_version} for {reason}. "\
+                    "As a workaround, we tried to torch.onnx.export your model "\
+                    f"with opset={_TORCH_MAX_OPSET} and convert the onnx model to {target_version}, "\
+                    "but failed with the following error:\n\n"
+                )
+            else:
+                detail = "\n\n"
+
+            msg = (
+                f"Failed to convert onnx model to {target_version} due to {type(e).__name__}. {detail}"
+
+                "==============================================================\n"
+                f"{f.getvalue()}"
+                "==============================================================\n\n"
+            )
+            raise RuntimeError(msg) from e
 
     onnx_qdq_model = _to_onnx_qdq(onnx_model, tensor_to_encoding_map)
     onnx.save(onnx_qdq_model, f)
 
 
-def _assert_minimum_required_opset(model: torch.nn.Module, current_opset_version: int):
-    if current_opset_version < 21 and any(
+def _why_do_i_need_opset21(model: torch.nn.Module) -> str:
+    int4 = False
+    int16 = False
+    bq = False
+
+    for qtzr in model.modules():
+        if not isinstance(qtzr, AffineQuantizerBase):
+            continue
+
+        if qtzr.block_size is not None:
+            bq = True
+
+        if qtzr.bitwidth == 4:
+            int4 = True
+
+        if qtzr.bitwidth == 16:
+            int16 = True
+
+    reasons = []
+
+    if int4 or int16:
+        reasons.append("int4/int16 quantization")
+
+    if bq:
+        reasons.append("blockwise quantization")
+
+    if not reasons:
+        return "" # This should never happen
+
+    if len(reasons) == 1:
+        return reasons[0]
+
+    return f"{reasons[0]} and {reasons[1]}"
+
+
+def _assert_minimum_required_opset(model: torch.nn.Module, target_opset: int):
+    if target_opset < 21 and any(
             qtzr.block_size is not None for qtzr in model.modules()
             if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear with per-block are only supported in opset >= 21;"
-            f" got opset={current_opset_version}"
+            f" got opset={target_opset}"
         )
 
-    if current_opset_version < 21 and any(
-            8 < qtzr.bitwidth <= 16 for qtzr in model.modules()
+    if target_opset < 21 and any(
+            qtzr.bitwidth in (4, 16) for qtzr in model.modules()
             if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
-            "onnx::QuantizeLinear and DequantizeLinear with INT16 are only supported in opset >= 21;"
-            f" got opset={current_opset_version}"
+            "onnx::QuantizeLinear and DequantizeLinear with INT4/INT16 are only supported in opset >= 21;"
+            f" got opset={target_opset}"
         )
 
-    if current_opset_version < 13 and any(
+    if target_opset < 13 and any(
             tuple(qtzr.shape) for qtzr in model.modules()
             if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear with per-channel are only supported in opset >= 13;"
-            f" got opset={current_opset_version}"
+            f" got opset={target_opset}"
         )
 
-    if current_opset_version < 10:
+    if target_opset < 10:
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear are only supported in opset >= 10;"
-            f" got opset={current_opset_version}"
+            f" got opset={target_opset}"
         )
+
+
+def _check_opset_version(kwargs):
+    opset_version = kwargs.get("opset_version", _TORCH_DEFAULT_OPSET)
+
+    if not (_TORCH_MIN_OPSET <= opset_version <= _AIMET_MAX_OPSET):
+        raise ValueError(f"Unsupported ONNX opset version: {opset_version}")
+
+
+def _check_unsupported_args(kwargs):
+    export_params = kwargs.get("export_params", True)
+
+    if not export_params:
+        raise NotImplementedError("export_params=False is not supported yet")
+
+    keep_initializers_as_inputs = kwargs.get("keep_initializers_as_inputs", False)
+
+    if keep_initializers_as_inputs:
+        raise NotImplementedError("keep_initializers_as_inputs=True is not supported yet")
+
+    dynamo = kwargs.get("dynamo", False)
+
+    if dynamo:
+        raise NotImplementedError("dynamo=True is not supported yet")
+
+    do_constant_folding = kwargs.get("do_constant_folding", True)
+
+    if not do_constant_folding:
+        raise NotImplementedError("do_constant_folding=False is not supported yet")
+
+    export_modules_as_functions = kwargs.get("export_modules_as_functions", False)
+
+    if export_modules_as_functions:
+        raise RuntimeError("export_modules_as_functions=True is not supported")
+
+    operator_export_type = kwargs.get("operator_export_type",
+                                      torch.onnx.OperatorExportTypes.ONNX)
+
+    if operator_export_type == torch.onnx.OperatorExportTypes.ONNX_ATEN:
+        raise RuntimeError("operator_export_type=OperatorExportTypes.ONNX_ATEN is not supported")
+
+
+def _check_non_standard_quantizer(model: torch.nn.Module):
+    for name, qtzr in model.named_modules():
+        if not isinstance(qtzr, AffineQuantizerBase):
+            continue
+
+        if isinstance(qtzr, GroupedBlockQuantizeDequantize):
+            raise NotImplementedError(
+                "torch.onnx.exoprt doesn't support GroupedBlockQuantizeDequantize (a.k.a LPBQ) yet; "
+                f"got '{name}' of type GroupedBlockQuantizeDequantize"
+            )
+
+        if qtzr.bitwidth not in (4, 8, 16, 32):
+            raise RuntimeError(
+                "torch.onnx.exoprt only supports 4/8/16/32-bit integers; "
+                f"got '{name}' with bitwidth={qtzr.bitwidth}"
+            )
 
 
 def _to_onnx(model: torch.nn.Module,
              args: Union[Tuple[Any, ...], torch.Tensor],
-             *posargs, **kwargs):
-    _check_unsupported_quantizers(model)
+             **kwargs):
+    _check_float16_quantizers(model)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
-        _onnx.export(model, args, tmp_onnx_path, *posargs, **kwargs)
+        _onnx.export(model, args, tmp_onnx_path, **kwargs)
         onnx_model = onnx.load(tmp_onnx_path)
 
         param_names = {
@@ -314,7 +431,7 @@ def _to_onnx_qdq(onnx_model: onnx.ModelProto,
     return onnx_model
 
 
-def _check_unsupported_quantizers(module: torch.nn.Module):
+def _check_float16_quantizers(module: torch.nn.Module):
     for qtzr in module.modules():
         if isinstance(qtzr, FloatQuantizeDequantize):
             if not qtzr.is_float16() and not qtzr.is_bfloat16():
