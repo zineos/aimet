@@ -180,13 +180,36 @@ if (ENABLE_ONNX)
   file(GLOB_RECURSE ONNXRUNTIME_HEADER_PATH  "/opt/onnxruntime/*onnxruntime_cxx_api.h")
 
   if (ONNXRUNTIME_NOT_FOUND EQUAL 0)
+    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      set(PLATFORM_TAG "linux")
+    else()
+      message(
+        FATAL_ERROR
+        "Unsupported CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}. Only 'Linux' is supported"
+      )
+    endif()
+
+    if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+      set(PLATFORM_TAG "${PLATFORM_TAG}-x64")
+    elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+      set(PLATFORM_TAG "${PLATFORM_TAG}-aarch64")
+    else ()
+      message(
+        FATAL_ERROR
+        "Unsupported CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_PROCESSOR}; expected one of ['x86_64', 'aarch64']"
+      )
+    endif()
+
+    if (ENABLE_CUDA)
+      set(PLATFORM_TAG "${PLATFORM_TAG}-gpu")
+    endif()
+
     if (NOT ONNXRUNTIME_HEADER_PATH)
         message(NOTICE "ONNX Runtime: Fetching from external URL")
-        if (ENABLE_CUDA)
-            set(ONNXRUNTIME_URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-gpu-${ONNXRUNTIME_VERSION}.tgz)
-        else (ENABLE_CUDA)
-            set(ONNXRUNTIME_URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz)
-        endif (ENABLE_CUDA)
+        set(
+          ONNXRUNTIME_URL
+          "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-${PLATFORM_TAG}-${ONNXRUNTIME_VERSION}.tgz"
+        )
         FetchContent_Declare(
           onnxruntime_headers
           URL ${ONNXRUNTIME_URL}
