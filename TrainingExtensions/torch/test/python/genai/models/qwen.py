@@ -44,7 +44,6 @@ from transformers import AutoTokenizer, AutoConfig, PreTrainedTokenizer, PreTrai
 from transformers.models.qwen2 import modeling_qwen2
 
 from aimet_common.defs import QuantScheme
-from aimet_torch.v2.nn import QuantizationMixin
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
 from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import QuantizedQwen2RMSNorm
@@ -53,24 +52,29 @@ from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
 
 
-class Qwen_25_15B(GenAIModel):
+class Qwen_25(GenAIModel):
     """ Generic quantized Qwen 2 """
-    MODEL_ID = "Qwen/Qwen2.5-1.5B"
+    DEFAULT_MODEL_ID = "Qwen/Qwen2.5-1.5B"
 
     @classmethod
-    def _instantiate_model(cls, small_model=False) -> PreTrainedModel:
-        llm_config = AutoConfig.from_pretrained(cls.MODEL_ID, trust_remote_code=True)
+    def _instantiate_model(cls, model_id: str, small_model=False) -> PreTrainedModel:
+        if model_id is None:
+            model_id = cls.DEFAULT_MODEL_ID
+
+        llm_config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
         if small_model:
             llm_config.num_hidden_layers = 2
-        return modeling_qwen2.Qwen2ForCausalLM.from_pretrained(cls.MODEL_ID, config=llm_config)
+        return modeling_qwen2.Qwen2ForCausalLM.from_pretrained(model_id, config=llm_config)
 
     @classmethod
-    def instantiate_tokenizer(cls) -> PreTrainedTokenizer:
-        return AutoTokenizer.from_pretrained(cls.MODEL_ID, use_fast=True, trust_remote_code=True)
+    def instantiate_tokenizer(cls, model_id: str) -> PreTrainedTokenizer:
+        if model_id is None:
+            model_id = cls.DEFAULT_MODEL_ID
+        return AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
 
     @classmethod
-    def instantiate_quantsim(cls, context_length, sequence_length) -> QuantizationSimModel:
-        model = cls._instantiate_model()
+    def instantiate_quantsim(cls, model_id: str, context_length: int, sequence_length: int, small_model: bool = False) -> QuantizationSimModel:
+        model = cls._instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
         traceable_model = TorchExportableModuleWithCache(model)

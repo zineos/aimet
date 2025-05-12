@@ -46,7 +46,6 @@ from transformers import AutoTokenizer, AutoConfig, PreTrainedTokenizer, PreTrai
 from transformers.models.llama import modeling_llama
 
 from aimet_common.defs import QuantScheme
-from aimet_torch.v2.nn import QuantizationMixin
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
 from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
@@ -55,24 +54,30 @@ from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
 
 
-class Llama_32_1B(GenAIModel):
+class Llama_32(GenAIModel):
     """ Generic LLaMa 3.2 """
-    MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
+    DEFAULT_MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
 
     @classmethod
-    def _instantiate_model(cls, small_model: bool = False) -> PreTrainedModel:
-        llm_config = AutoConfig.from_pretrained(cls.MODEL_ID, trust_remote_code=True)
+    def _instantiate_model(cls, model_id: str, small_model: bool = False) -> PreTrainedModel:
+        if model_id is None:
+            model_id = cls.DEFAULT_MODEL_ID
+
+        llm_config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
         if small_model:
             llm_config.num_hidden_layers = 2
-        return modeling_llama.LlamaForCausalLM.from_pretrained(cls.MODEL_ID, config=llm_config)
+        return modeling_llama.LlamaForCausalLM.from_pretrained(model_id, config=llm_config)
 
     @classmethod
-    def instantiate_tokenizer(cls) -> PreTrainedTokenizer:
-        return AutoTokenizer.from_pretrained(cls.MODEL_ID, use_fast=True, trust_remote_code=True)
+    def instantiate_tokenizer(cls, model_id: str) -> PreTrainedTokenizer:
+        if model_id is None:
+            model_id = cls.DEFAULT_MODEL_ID
+
+        return AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
 
     @classmethod
-    def instantiate_quantsim(cls, context_length: int, sequence_length: int) -> QuantizationSimModel:
-        model = cls._instantiate_model()
+    def instantiate_quantsim(cls, model_id: str, context_length: int, sequence_length: int, small_model: bool = False) -> QuantizationSimModel:
+        model = cls._instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
         traceable_model = TorchExportableModuleWithCache(model)
@@ -89,15 +94,6 @@ class Llama_32_1B(GenAIModel):
             sequence_length
         )
 
-        def copy_model_with_shared_weights(source_model):
-            target_model = deepcopy(source_model)
-            for name, source_parameter in source_model.named_parameters():
-                pre, _, post = name.rpartition('.')
-                pre_obj = functools.reduce(getattr, [target_model] + pre.split('.')) if pre else target_model
-                setattr(pre_obj, post, source_parameter)
-            return target_model
-        weight_shared_fp_model = copy_model_with_shared_weights(traceable_model)
-
         quantsim = QuantizationSimModel(
             model=traceable_model,
             quant_scheme=QuantScheme.post_training_tf,
@@ -107,8 +103,6 @@ class Llama_32_1B(GenAIModel):
             in_place=True,
             config_file=cls.get_quantsim_config()
         )
-
-        setattr(quantsim, "weight_shared_fp_model", weight_shared_fp_model)
 
         quantsim.model.orig_forward = quantsim.model.forward
         quantsim.model.forward = types.MethodType(

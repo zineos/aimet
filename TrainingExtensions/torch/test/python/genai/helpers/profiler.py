@@ -59,12 +59,15 @@ def _format_bytes(rawbytes: int, unit: str = 'GB') -> float:
 
 class ResourceProfiler:
     """ Context manager to monitor resource consumption """
-    def __init__(self, sampling_frequency:float = 1.0):
+    def __init__(self, sampling_frequency:float = 1.0, disable_constant_sampling: bool = False):
         self.cuda_memory_allocated = []
         self.cuda_memory_reserved = []
         self.cpu_memory_usage = []
-        self._stop_event = threading.Event()
-        self.sampling_frequency = sampling_frequency
+        self.disable_constant_sampling = disable_constant_sampling
+
+        if not self.disable_constant_sampling:
+            self._stop_event = threading.Event()
+            self.sampling_frequency = sampling_frequency
 
     def _monitor_memory(self):
         while not self._stop_event.is_set():
@@ -75,16 +78,21 @@ class ResourceProfiler:
 
     def __enter__(self):
         # pylint: disable=attribute-defined-outside-init
+        torch.cuda.reset_peak_memory_stats()
         self.start_time = time.perf_counter()
-        self.thread = threading.Thread(target=self._monitor_memory)
-        self.thread.start()
+
+        if not self.disable_constant_sampling:
+            self.thread = threading.Thread(target=self._monitor_memory)
+            self.thread.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # pylint: disable=attribute-defined-outside-init
         self.stop_time = time.perf_counter()
-        self._stop_event.set()
-        self.thread.join()
+
+        if not self.disable_constant_sampling:
+            self._stop_event.set()
+            self.thread.join()
 
     def runtime(self) -> float:
         """ Report time spent inside context manager """
@@ -100,7 +108,7 @@ class ResourceProfiler:
 
     def peak_cuda_usage(self, unit: str = 'GB') -> float:
         """ Report peak CUDA usage inside context manager """
-        return _format_bytes(max(self.cuda_memory_allocated), unit)
+        return _format_bytes(torch.cuda.max_memory_allocated(), unit)
 
     def min_cuda_usage(self, unit: str = 'GB') -> float:
         """ Report min CUDA usage inside context manager """
@@ -116,6 +124,12 @@ class ResourceProfiler:
 
     def as_dict(self, unit: str = 'GB'):
         """ Report all collected stats as dict """
+        if self.disable_constant_sampling:
+            return {
+                "runtime": self.runtime(),
+                "peak_cuda_usage": self.peak_cuda_usage(unit),
+            }
+
         return {
             "runtime": self.runtime(),
             "peak_ram_usage": self.peak_ram_usage(unit),
@@ -135,7 +149,7 @@ def recursive_update(d, u):
             d[k] = v
     return d
 
-def write_stats_to_disk(filename, model_cls, model_params, quant_recipe_cls, stats):
+def write_stats_to_disk(filename, model_cls, model_params, quant_recipe_cls, quant_recipe_params, stats):
     """ Helper function to write collected stats to disk, only overwriting newly collected fields """
 
     # Check if the file exists
@@ -147,9 +161,13 @@ def write_stats_to_disk(filename, model_cls, model_params, quant_recipe_cls, sta
         # If the file does not exist, create an empty dictionary
         data = {}
 
+    quant_params_string_formatted = ', '.join([f'{key}={value}' for key, value in quant_recipe_params.items()])
+    model_params_string_formatted = ', '.join([f'{key}={value}' for key, value in model_params.items()])
+
     # Update the dictionary with x
-    x = {f"{quant_recipe_cls.__name__}": stats}
-    x = {f"{model_params}": x}
+    x = {f"{quant_params_string_formatted}": stats}
+    x = {f"{quant_recipe_cls.__name__}": x}
+    x = {f"{model_params_string_formatted}": x}
     x = {f"{model_cls.__name__}": x}
     recursive_update(data, x)
 

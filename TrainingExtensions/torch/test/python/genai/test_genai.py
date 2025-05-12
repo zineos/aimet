@@ -40,57 +40,67 @@
 import pytest
 import torch
 import gc
-
-from .models import GenAIModel, Llama_32_1B, Qwen_25_15B
-from .helpers.datasets import Dataset, Wikitext
-from .helpers.quant_recipes import QuantizationTechnique, RemoveQuantization, PCQ, LPBQ, AdaScale
-from .helpers.metrics import PPL, MMLU
-from .helpers.profiler import ResourceProfiler, write_stats_to_disk
+import os
+from pathlib import Path
 
 from aimet_torch.utils import place_model
 
-@pytest.mark.skip(reason="This test is currently under development")
-@pytest.mark.parametrize("model, sequence_length, context_length", [
-    [Llama_32_1B, 2048, 4096],
-    [Qwen_25_15B, 2048, 4096],
-])
-@pytest.mark.parametrize("quant_dataset", [Wikitext])
-@pytest.mark.parametrize("quant_technique", [RemoveQuantization, AdaScale, PCQ, LPBQ])
-def test_llm_quantization(model: GenAIModel,
-                          sequence_length: int,
-                          context_length: int,
-                          quant_dataset: Dataset,
-                          quant_technique: QuantizationTechnique):
-    """ GenAI test runner function """
+from .helpers.profiler import ResourceProfiler, write_stats_to_disk
 
-    # Adding this explicitly so that memory is cleared before the test is started, and collected stats are accurate
+@pytest.mark.skipif(lambda test_parameters: test_parameters is None, reason="No GenAI test parameters provided.")
+def test_llm_quantization(test_parameters):
+    print(test_parameters)
+    model_kwargs = test_parameters.pop("model")
+    model_cls = model_kwargs.pop("class")
+    context_length = model_kwargs.pop("context_length")
+    sequence_length = model_kwargs.pop("sequence_length")
+    model_id = model_kwargs.pop("model_id", None)
+
+    dataset_kwargs = test_parameters.pop("dataset")
+    dataset_cls = dataset_kwargs.pop("class")
+
+    recipe_kwargs = test_parameters.pop("recipe")
+    recipe_cls = recipe_kwargs.pop("class")
+
+    profiler_kwargs = test_parameters.pop("profiler")
+
+    metrics = test_parameters.pop("metrics")
+
     gc.collect()
     torch.cuda.empty_cache()
 
     test_statistics = {}
 
-    quantsim = model.instantiate_quantsim(context_length, sequence_length)
-    tokenizer = model.instantiate_tokenizer()
+    quantsim = model_cls.instantiate_quantsim(model_id, context_length, sequence_length, **model_kwargs)
+    tokenizer = model_cls.instantiate_tokenizer(model_id)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     with place_model(quantsim.model, device):
-        with ResourceProfiler() as profiler:
-            train_dataset = quant_dataset.load_encoded_dataset(tokenizer, sequence_length, 'train')
-            quant_technique.apply(quantsim, train_dataset)
-        test_statistics[f"{quant_technique.__name__}+{quant_dataset.__name__}"] = profiler.as_dict()
+        with ResourceProfiler(**profiler_kwargs) as profiler:
+            train_dataset = dataset_cls.load_encoded_dataset(tokenizer, sequence_length, **dataset_kwargs)
+            recipe_cls.apply(quantsim, train_dataset, **recipe_kwargs)
+        test_statistics[f"{recipe_cls.__name__}+{dataset_cls.__name__}"] = profiler.as_dict()
 
         gc.collect()
         torch.cuda.empty_cache()
 
         with torch.no_grad():
-            for metric in (PPL, MMLU):
-                with ResourceProfiler() as profiler:
-                    result = metric.evaluate(quantsim.model, tokenizer, context_length)
-                    print(f"{metric.__name__} result: {result}")
-                test_statistics[f"{metric.__name__}"] = {"result": result} | profiler.as_dict()
+            for metric_kwargs in metrics:
+                metric_cls = metric_kwargs.pop("class")
+                with ResourceProfiler(**profiler_kwargs, disable_constant_sampling=True) as profiler:
+                    result = metric_cls.evaluate(quantsim.model, tokenizer, context_length, **metric_kwargs)
+                    print(f"{metric_cls.__name__} result: {result}")
+                test_statistics[f"{metric_cls.__name__}"] = {"result": result} | profiler.as_dict()
 
-    write_stats_to_disk("../genai_scorecard_data.json",
-                        model,
-                        (sequence_length, context_length),
-                        quant_technique,
+    model_kwargs["context_length"] = context_length
+    model_kwargs["sequence_length"] = sequence_length
+    model_kwargs["model_id"] = model_id if model_id is not None else model_cls.DEFAULT_MODEL_ID
+
+    output_folder = Path(os.getcwd()) / "genai_test_artifacts"
+    output_folder.mkdir(parents=True, exist_ok=True)
+    write_stats_to_disk(str(output_folder / "profiling_data.json"),
+                        model_cls,
+                        model_kwargs,
+                        recipe_cls,
+                        recipe_kwargs,
                         test_statistics)

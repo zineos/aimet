@@ -40,6 +40,8 @@
 from abc import ABC, abstractmethod
 import itertools
 from tqdm import tqdm
+from copy import deepcopy
+import functools
 import torch
 from torch.utils.data import DataLoader
 
@@ -118,13 +120,25 @@ class SeqMSE(QuantizationTechnique):
     @staticmethod
     @torch.no_grad()
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
+        def copy_model_with_shared_weights(source_model):
+            target_model = deepcopy(source_model)
+            for name, source_parameter in source_model.named_parameters():
+                pre, _, post = name.rpartition('.')
+                pre_obj = functools.reduce(getattr, [target_model] + pre.split('.')) if pre else target_model
+                setattr(pre_obj, post, source_parameter)
+            QuantizationSimModel._remove_quantization_wrappers(target_model, list(target_model.modules()))
+            return target_model
+
+        with place_model(quantsim.model, torch.device("cpu")), remove_all_quantizers(quantsim.model):
+            weight_shared_fp_model = copy_model_with_shared_weights(quantsim.model)
+
         params = SeqMseParams(num_batches=20,
                               inp_symmetry='symqt',
                               num_candidates=20,
                               loss_fn='mse',
                               forward_fn=lambda model, inputs: model(**inputs))
-        with place_model(quantsim.weight_shared_fp_model, quantsim.model.device):
-            apply_seq_mse(quantsim.weight_shared_fp_model, quantsim, dataloader, params)
+        with place_model(weight_shared_fp_model, quantsim.model.device):
+            apply_seq_mse(weight_shared_fp_model, quantsim, dataloader, params)
 
         _compute_encodings(quantsim, dataloader, num_iterations=20)
 
@@ -133,7 +147,7 @@ class AdaScale(QuantizationTechnique):
     """ Apply AdaScale to model """
     @staticmethod
     @torch.no_grad()
-    def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
+    def apply(quantsim: QuantizationSimModel, dataloader: DataLoader, num_batches: int = 20, num_epochs: int = 5):
         class LimitedBatchDataLoader:
             """ Internal helper class to reduce number of accessible batches in Dataloader """
             def __init__(self, dataloader, num_batches):
@@ -158,9 +172,9 @@ class AdaScale(QuantizationTechnique):
 
         apply_adascale(
             quantsim,
-            LimitedBatchDataLoader(dataloader, num_batches=20),
+            LimitedBatchDataLoader(dataloader, num_batches=num_batches),
             lambda model, inputs: model(inputs['input_ids'].to(device=model.device), use_cache=False),
-            5,
+            num_epochs,
         )
 
         _compute_encodings(quantsim, dataloader, num_iterations=20)

@@ -64,12 +64,12 @@ class GenAIModel(ABC):
     """ Generic GenAI model """
     @staticmethod
     @abstractmethod
-    def instantiate_quantsim(context_length: int, sequence_length: int) -> QuantizationSimModel:
+    def instantiate_quantsim(model_id: str, context_length: int, sequence_length: int) -> QuantizationSimModel:
         """ Instantiate QuantSim of model """
 
     @staticmethod
     @abstractmethod
-    def instantiate_tokenizer() -> PreTrainedTokenizer:
+    def instantiate_tokenizer(model_id: str) -> PreTrainedTokenizer:
         """ Instantiate model tokenizer """
 
     @staticmethod

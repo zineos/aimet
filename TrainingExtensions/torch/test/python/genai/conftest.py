@@ -35,9 +35,17 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" GenAI models """
+""" pytest config for test_genai.py """
 
-from .genai_model import GenAIModel
-from .llama import Llama_32
-from .qwen import Qwen_25
-from .gemma import Gemma_3
+from .helpers.yaml_config_parser import YAMLConfigParser
+
+def pytest_addoption(parser):
+    parser.addoption("--config", action="store", default=None)
+
+def pytest_generate_tests(metafunc):
+    config_file = metafunc.config.getoption("--config", skip=False)
+
+    test_parameters = list(YAMLConfigParser.parse(config_file)) if config_file else [None]
+    if 'test_parameters' in metafunc.fixturenames:
+        # Generate test cases based on the test parameters list from the config file
+        metafunc.parametrize('test_parameters', test_parameters)
