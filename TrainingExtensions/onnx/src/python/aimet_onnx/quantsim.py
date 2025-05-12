@@ -367,6 +367,18 @@ class QuantizationSimModel:
             if node.name in self.activation_names:
                 node.name += '_updated'
 
+    def _is_quantizable_dtype(self, name: str) -> bool:
+        # Check if the tensor data-type can be quantized
+        if name in self.model.get_initializer_name_set():
+            np_dtype = onnx.helper.tensor_dtype_to_np_dtype(self.model.get_initializer(name).data_type)
+            if np_dtype not in data_types_to_quantize:
+                return False
+        else: # dynamic activation
+            if name not in self.activation_dtypes or self.activation_dtypes[name] not in data_types_to_quantize:
+                return False
+
+        return True
+
     def _is_tensor_quantizable(self, name: str) -> bool:
         """
         Checks whether the given tensor should be quantized
@@ -374,14 +386,8 @@ class QuantizationSimModel:
         :param name: Name of the tensor
         :return: True if the tensor should be quantized
         """
-        # Check if the tensor data-type can be quantized
-        if name in self.model.get_initializer_name_set():  # static activation
-            if self.model.get_initializer(
-                    name).data_type != 1:  # 1 corresponds to float, dictionary can be found by using onnx.TensorProto.DataType.items()
-                return False
-        else:  # dynamic activation
-            if name not in self.activation_dtypes or self.activation_dtypes[name] not in data_types_to_quantize:
-                return False
+        if not self._is_quantizable_dtype(name):
+            return False
 
         # Check if the tensor is param to certain ops (eg: Resize)
         consumer_nodes = self.input_name_to_nodes.get(name)
@@ -467,37 +473,19 @@ class QuantizationSimModel:
         Insert quantization node for each param tensor
         """
         for name in self.param_names:
-            self._replace_input_of_all_nodes(name, name + '_qdq')
+            self._insert_quantizer(name, is_param=True)
 
-            quant_info, tensor_quantizer_params = self._create_quant_info_object_for_param(name)
-            custom_node = helper.make_node(
-                op_type='QcQuantizeOp',
-                inputs=[name],
-                outputs=[name + '_qdq'],
-                name='QcQuantizeOp_' + name,
-                domain=self._op_domain,
-                op_name=name,
-                quant_info=libpymo.PtrToInt64(quant_info),
-            )
-            self.model.add_node(custom_node)
-            self.qc_quantize_op_dict[name] = QcQuantizeOp(quant_info=quant_info,
-                                                          quant_scheme=self._quant_scheme,
-                                                          rounding_mode=self._rounding_mode,
-                                                          op_mode=OpMode.oneShotQuantizeDequantize,
-                                                          bitwidth=self._default_param_bw,
-                                                          use_symmetric_encodings=False,
-                                                          tensor_quantizer_params=tensor_quantizer_params)
-
-    def _create_quant_info_object_for_param(self, param_name: str):
+    def _create_tensor_quantizer_params(self, param_name: str):
         """
-        Creates quant info object for QcQuantizeOp and QDQ node
+        Creates TensorQuantizerParams object for QcQuantizeOp and QDQ node
 
         :param param_name: Name of the parameter for which the quant info object will be created
-        :return: quant info object
+        :return: TensorQuantizerParams object
         """
-        quant_info = libquant_info.QcQuantizeInfo()
-        quant_info.usePerChannelMode = False
         op = get_op_given_param_name(self.connected_graph, param_name)
+        if not op:
+            return None
+
         param_shape = get_param_shape_using_connected_graph(self.connected_graph, param_name)
         tensor_quantizer_params = TensorQuantizerParams(param_shape)
 
@@ -509,7 +497,7 @@ class QuantizationSimModel:
             tensor_quantizer_params.channel_axis = channel_axis
             tensor_quantizer_params.block_axis = block_axis
 
-        return quant_info, tensor_quantizer_params
+        return tensor_quantizer_params
 
     @staticmethod
     def _get_quantization_axes(op: Op) -> Tuple[Optional[int], Optional[int]]:
@@ -537,24 +525,49 @@ class QuantizationSimModel:
         Insert quantization node for each activation tensor
         """
         for name in self.activation_names:
-            self._replace_input_of_all_nodes(name, name + '_updated')
-            quant_info = libquant_info.QcQuantizeInfo()
-            custom_node = helper.make_node(
-                op_type='QcQuantizeOp',
-                inputs=[name],
-                outputs=[name + '_updated'],
-                name='QcQuantizeOp_' + name,
-                domain=self._op_domain,
-                op_name=name,
-                quant_info=libpymo.PtrToInt64(quant_info)
-            )
-            self.model.add_node(custom_node)
-            self.qc_quantize_op_dict[name] = QcQuantizeOp(quant_info=quant_info,
-                                                          quant_scheme=self._quant_scheme,
-                                                          rounding_mode=self._rounding_mode,
-                                                          op_mode=OpMode.updateStats,
-                                                          bitwidth=self._default_activation_bw,
-                                                          use_symmetric_encodings=False)
+            self._insert_quantizer(name, is_param=False)
+
+    def _insert_quantizer(self,
+                          input_name: str,
+                          is_param: bool):
+        """
+        Inserts a quantizer for tensor `input_name` in the graph and adds it to `self.qc_quantize_op_dict`
+
+        self.session must be rebuilt after calling this for changes to take effect.
+        """
+        if input_name in self.qc_quantize_op_dict:
+            raise RuntimeError(f"Quantizer already exists for tensor {input_name}")
+        
+        # TODO: Revisit all tensor/node naming
+        node_name = "QcQuantizeOp_" + input_name
+        if is_param:
+            output_name = input_name + "_qdq"
+            op_mode = OpMode.oneShotQuantizeDequantize
+            bitwidth = self._default_param_bw
+            tensor_quantizer_params = self._create_tensor_quantizer_params(input_name)
+        else:
+            output_name = input_name + "_updated"
+            op_mode = OpMode.updateStats
+            bitwidth = self._default_activation_bw
+            tensor_quantizer_params = None
+
+        quant_info = libquant_info.QcQuantizeInfo()
+        self._replace_input_of_all_nodes(input_name, output_name)
+        custom_node = helper.make_node(
+            op_type='QcQuantizeOp',
+            inputs=[input_name],
+            outputs=[output_name],
+            name=node_name,
+            domain=self._op_domain,
+            op_name=input_name,
+            quant_info=libpymo.PtrToInt64(quant_info)
+        )
+        self.model.add_node(custom_node)
+        self.qc_quantize_op_dict[input_name] = QcQuantizeOp(quant_info=quant_info,
+                                                            quant_scheme=self._quant_scheme,
+                                                            op_mode=op_mode,
+                                                            bitwidth=bitwidth,
+                                                            tensor_quantizer_params=tensor_quantizer_params)
 
     @staticmethod
     def build_session(model: onnx.ModelProto, providers: List, user_onnx_libs: List[str] = None, path: str = None):
@@ -1461,6 +1474,11 @@ def load_encodings_to_sim(quant_sim_model: QuantizationSimModel, onnx_encoding_p
     param_encodings = {encoding['name']: encoding for encoding in encodings['param_encodings']}
     activation_encodings = {encoding['name']: encoding for encoding in encodings['activation_encodings']}
 
+    # If quantizer not in qc_quantize_op_dict, that is equivalent to being disabled
+    missing_quantizers = (param_encodings.keys() | activation_encodings.keys()) - quant_sim_model.qc_quantize_op_dict.keys()
+    for name in missing_quantizers:
+        mismatched_encodings.append(_EncodingMismatchInfo(name, enabled_mismatch=(False, True)))
+
     for quantizer_name, quantizer in quant_sim_model.qc_quantize_op_dict.items():
         if quantizer_name not in param_encodings and quantizer_name not in activation_encodings:
             mismatched_info = get_encoding_mismatch_info(quantizer_name, quantizer, None)
@@ -1478,6 +1496,8 @@ def load_encodings_to_sim(quant_sim_model: QuantizationSimModel, onnx_encoding_p
             mismatched_encodings.append(mismatched_info)
 
     log_and_catch_mismatched_encodings(mismatched_encodings, strict)
+    if missing_quantizers and not strict:
+        _add_missing_quantizers(encodings, quant_sim_model)
 
     # Second pass through quantizers to set quantizer settings
     for quantizer_name, quantizer in quant_sim_model.qc_quantize_op_dict.items():
@@ -1498,7 +1518,7 @@ def load_encodings_to_sim(quant_sim_model: QuantizationSimModel, onnx_encoding_p
 
 def validate_encodings_to_load(encodings_to_load: Dict, quant_sim_model: QuantizationSimModel):
     """
-    Validate that all names of encodings to load are found in the model.
+    Validate that all names of encodings to load correspond to quantizable tensors in the model.
 
     :param encodings_to_load: Encodings to load
     :param quant_sim_model: Quantsim model to check for encoding names.
@@ -1507,15 +1527,60 @@ def validate_encodings_to_load(encodings_to_load: Dict, quant_sim_model: Quantiz
     # that names in encodings_to_load are valid. The reverse check will not work, since quantizers which are disabled
     # will not show up in encodings_to_load.
     encoding_names_not_found = []
+    non_quantizable_tensors_found = set()
     for encoding in itertools.chain(encodings_to_load['activation_encodings'], encodings_to_load['param_encodings']):
-        if encoding['name'] not in quant_sim_model.qc_quantize_op_dict:
-            encoding_names_not_found.append(encoding['name'])
+        name = encoding["name"]
+        # If quantizer already exists, continue
+        if name in quant_sim_model.qc_quantize_op_dict:
+            continue
+        # If name not in connected_graph.get_all_products(), it is not a tensor in the model
+        if name not in quant_sim_model.connected_graph.get_all_products():
+            encoding_names_not_found.append(name)
+        # Check if encoding corresponds to non-quantizable tensor type
+        if not quant_sim_model._is_quantizable_dtype(name): # pylint:disable = protected-access
+            non_quantizable_tensors_found.add(name)
 
     if encoding_names_not_found:
         logger.error('The following encoding names were present in the encodings to load but not found in the model: '
                      '%s', str(encoding_names_not_found))
         raise AssertionError('The following encoding names were present in the encodings to load but not found in the '
                              'model: ' + str(encoding_names_not_found))
+
+    if non_quantizable_tensors_found:
+        msg = "The following encoding names were present in the encodings to load but are of a data-type not supported for quantization " \
+              f"in aimet_onnx:\n{non_quantizable_tensors_found}"
+        logger.error(msg)
+        raise RuntimeError(msg)
+
+def _add_missing_quantizers(encodings_to_load: Dict[str, List], sim: QuantizationSimModel):
+    """
+    Add quantizers for any tensors which are present in encodings_to_load but are not present in
+    sim.qc_quantize_op_dict
+    """
+    # pylint:disable = protected-access
+    act_encodings, param_encodings = encodings_to_load['activation_encodings'], encodings_to_load['param_encodings']
+    added_quantizers = set()
+    # Insert any missing activation quantizers as disabled act quantizers
+    for enc in act_encodings:
+        tensor_name = enc["name"]
+        if tensor_name not in sim.qc_quantize_op_dict:
+            sim._insert_quantizer(tensor_name, is_param=False)
+            sim.qc_quantize_op_dict[tensor_name].enabled = False
+            sim.activation_names.append(tensor_name)
+            added_quantizers.add(tensor_name)
+
+    # Insert any missing param quantizers as disabled param quantizers
+    for enc in param_encodings:
+        tensor_name = enc["name"]
+        if tensor_name not in sim.qc_quantize_op_dict:
+            sim._insert_quantizer(tensor_name, is_param=True)
+            sim.qc_quantize_op_dict[tensor_name].enabled = False
+            sim.param_names.append(tensor_name)
+            added_quantizers.add(tensor_name)
+
+    if added_quantizers:
+        logger.info("Added new quantizers to graph for tensors: %s", str(added_quantizers))
+        sim._rebuild_session()
 
 
 def log_and_catch_mismatched_encodings(mismatched_encodings: List[_EncodingMismatchInfo], strict: bool):

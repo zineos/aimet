@@ -70,7 +70,7 @@ from aimet_onnx.quantsim import (
 )
 import aimet_onnx
 from aimet_onnx.qc_quantize_op import OpMode, GroupedBlockQuantizeDequantize
-from aimet_onnx.utils import make_dummy_input
+from aimet_onnx.utils import make_dummy_input, remove_node
 from .models import models_for_tests, test_models
 from .models.models_for_tests import (
     batchnorm_model,
@@ -603,6 +603,38 @@ class TestQuantSim:
             sim = QuantizationSimModel(model, path=tempdir)
             with pytest.raises(AssertionError):
                 load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'), strict=False)
+
+    def test_load_encodings_with_missing_quantizer(self, tmp_path):
+        model = models_for_tests.conv_relu_model()
+        sim = QuantizationSimModel(copy.deepcopy(model),
+                                   providers=["CPUExecutionProvider"],
+                                   path=tmp_path)
+        dummy_input = make_dummy_input(sim.model.model)
+
+        sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(sim.model.model)))
+        quantized_tensors = {name for name, q in sim.qc_quantize_op_dict.items() if q.enabled}
+        output = sim.session.run(None, dummy_input)
+        sim.export(tmp_path, 'onnx_sim')
+
+        # Create a new quantsim model
+        sim_2 = QuantizationSimModel(copy.deepcopy(model), providers=["CPUExecutionProvider"], path=tmp_path)
+
+        # Clear all quantizers from the sim
+        for node in list(sim_2.model.graph().node):
+            if node.op_type == "QcQuantizeOp":
+                sim_2.model.graph().node.remove(node)
+                sim_2.model.replace_input_of_all_nodes(node.output[0], node.input[0])
+        sim_2.qc_quantize_op_dict = {}
+
+        # Loading encodings with strict=False should re-load all the quantizers
+        load_encodings_to_sim(sim_2, os.path.join(tmp_path, 'onnx_sim.encodings'), strict=False)
+        loaded_quantized_tensors = {name for name, q in sim_2.qc_quantize_op_dict.items() if q.enabled}
+        assert loaded_quantized_tensors == quantized_tensors
+
+        # Outputs should exactly match after loading
+        output_after_load = sim_2.session.run(None, dummy_input)
+        for tensor1, tensor2 in zip(output, output_after_load):
+            assert np.all(tensor1 == tensor2)
 
     @pytest.mark.parametrize('strict', [False, True])
     def test_load_encodings_strict_and_non_strict(self, strict):
