@@ -380,7 +380,7 @@ class AffineEncoding(EncodingBase, _GridMixin):
                                               'supported yet. Export using sim.export() instead.')
             return encoding_dict
 
-        if encoding_version == "2.0.0.beta":
+        if encoding_version == "2.0.0":
             if self._zero_point_shift != 0.0:
                 raise RuntimeError('Nonzero quant shift not supported in AffineEncoding to_qnn_encoding_dict')
             output_dtype = self._get_export_dtype()
@@ -548,7 +548,7 @@ class GroupedBlockEncoding(AffineEncoding):
                 [-2 ** (self.decompressed_bw - 1) for _ in encoding_dict['scale']]
             encoding_dict['enc_type'] = EncodingType.LPBQ.name
             encoding_dict['per_block_int_scale'] = self.per_block_int_scale.to(torch.int32).flatten().tolist()
-        elif encoding_version == "2.0.0.beta":
+        elif encoding_version == "2.0.0":
             del encoding_dict["y_scale"]
             del encoding_dict["output_dtype"]
 

@@ -440,7 +440,7 @@ def _remove_fp16_quantizers(model: torch.nn.Module):
 def _to_onnx_qdq(onnx_model: onnx.ModelProto,
                  tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]) -> onnx.ModelProto:
     qnn_encodings = {
-        name: encoding.to_qnn_encoding_dict("2.0.0.beta")
+        name: encoding.to_qnn_encoding_dict("2.0.0")
         for name, (encoding, _) in tensor_to_encoding_map.items()
     }
     qnn_encodings = {

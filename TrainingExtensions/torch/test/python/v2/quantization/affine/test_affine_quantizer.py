@@ -1834,7 +1834,7 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
                                       qmin, qmax, symmetric, offset, output_dtype,
                                       params):
     """
-    When: Export affine encoding in 2.0.0.beta schema
+    When: Export affine encoding in 2.0.0 schema
     """
     scale = torch.arange(1, np.prod(shape)+1).view(shape) * 0.001
     offset = torch.full_like(scale, offset)
@@ -1848,7 +1848,7 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
         qtzr._reparametrize_to_scale_offset()
 
     qtzr.set_range(scale * (qmin + offset), scale * (qmax + offset))
-    encoding = qtzr.get_encodings().to_qnn_encoding_dict("2.0.0.beta")
+    encoding = qtzr.get_encodings().to_qnn_encoding_dict("2.0.0")
 
     """
     Then: Exported qnn encoding should contain:
@@ -1995,7 +1995,7 @@ def _onnx_LPBQ(input_shape, per_block_int_scale, per_channel_float_scale,
 def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
                                     compressed_bw, decompressed_bw, params):
     """
-    When: Export affine encoding in 2.0.0.beta schema
+    When: Export affine encoding in 2.0.0 schema
     """
     scale = torch.arange(1, np.prod(shape)+1).view(shape) * 0.001
     qmin = -2 ** (decompressed_bw - 1)
@@ -2011,7 +2011,7 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
         qtzr._reparametrize_to_scale_offset()
 
     qtzr.set_range(scale * qmin, scale * qmax)
-    encoding = qtzr.get_encodings().to_qnn_encoding_dict("2.0.0.beta")
+    encoding = qtzr.get_encodings().to_qnn_encoding_dict("2.0.0")
 
     """
     Then: Exported qnn encoding should contain:

@@ -558,7 +558,7 @@ class QcQuantizeOp:
         if encoding_version == "1.0.0":
             return self._export_1_0_0_encodings()
 
-        if encoding_version == "2.0.0.beta":
+        if encoding_version == "2.0.0":
             return self._export_2_0_0_encodings()
 
         raise RuntimeError(f"Unsupported encoding export version: {encoding_version}")

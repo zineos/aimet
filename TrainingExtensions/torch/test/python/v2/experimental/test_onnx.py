@@ -281,7 +281,7 @@ def test_export_torchvision_models(model_factory, input_shape):
 
 
 @torch.no_grad()
-@pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0", "2.0.0.beta"])
+@pytest.mark.parametrize("encoding_version", ["0.6.1", "1.0.0", "2.0.0"])
 @pytest.mark.parametrize("lpbq", [False, True])
 @pytest.mark.parametrize("export_int32_bias", [False, True])
 @pytest.mark.parametrize("fold_param_quantizers", [False, True])
@@ -433,7 +433,7 @@ def test_quantsim_export_resnet18(encoding_version,
                     e["bw"] == expected["bw"]
                     for expected in expected_activation_encodings.values()
                 )
-        elif encoding_version == "2.0.0.beta":
+        elif encoding_version == "2.0.0":
             expected_encodings = expected_param_encodings | expected_activation_encodings
 
             for e in onnx_encodings["encodings"]:

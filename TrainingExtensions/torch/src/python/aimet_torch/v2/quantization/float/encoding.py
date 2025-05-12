@@ -163,7 +163,7 @@ class FloatEncoding(EncodingBase):
         if encoding_version == '1.0.0':
             return {'dtype': 'FLOAT', 'bw': self.bitwidth, 'enc_type': EncodingType.PER_TENSOR.name}
 
-        if encoding_version == "2.0.0.beta":
+        if encoding_version == "2.0.0":
             if self.exponent_bits == 5 and self.mantissa_bits == 10:
                 # float16
                 return {}

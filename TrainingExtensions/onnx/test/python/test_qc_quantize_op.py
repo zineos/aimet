@@ -1168,9 +1168,9 @@ def test_affine_encoding_schema_2_0_0(input_shape, channel_axis, block_axis, blo
     qtzr.compute_encodings()
 
     """
-    When: Export encoding in 2.0.0.beta schema
+    When: Export encoding in 2.0.0 schema
     """
-    encoding = qtzr.export_encodings("2.0.0.beta")
+    encoding = qtzr.export_encodings("2.0.0")
 
     """
     Then: Exported qnn encoding should contain:
@@ -1345,9 +1345,9 @@ def test_lpbq_encoding_schema_2_0_0(input_shape, block_axis, block_size, compres
     qtzr.compute_encodings()
 
     """
-    When: Export encoding in 2.0.0.beta schema
+    When: Export encoding in 2.0.0 schema
     """
-    encoding = qtzr.export_encodings("2.0.0.beta")
+    encoding = qtzr.export_encodings("2.0.0")
 
     """
     Then: Exported qnn encoding should contain:

@@ -2197,9 +2197,9 @@ class TestEncodingPropagation:
 
         sim._concretize_int32_bias_quantizers()
         assert bias_qtzr.enabled
-        bias_scale = np.array(bias_qtzr.export_encodings("2.0.0.beta")["y_scale"]) ,
-        expected = np.array(weight_qtzr.export_encodings("2.0.0.beta")["y_scale"]) * \
-                   np.array(input_qtzr.export_encodings("2.0.0.beta")["y_scale"])
+        bias_scale = np.array(bias_qtzr.export_encodings("2.0.0")["y_scale"]) ,
+        expected = np.array(weight_qtzr.export_encodings("2.0.0")["y_scale"]) * \
+                   np.array(input_qtzr.export_encodings("2.0.0")["y_scale"])
         assert np.allclose(bias_scale, expected)
 
     def test_identity_conv_perchannel(self):
