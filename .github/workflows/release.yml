@@ -52,7 +52,7 @@ jobs:
       - name: Get AIMET version from release branch
         id: set_outputs
         run: |
-          AIMET_VERSION=`cat ${{ env.REPO_DIR }}/packaging/version.txt`
+          AIMET_VERSION=`head -n 1 ${{ env.REPO_DIR }}/packaging/version.txt`
           # write AIMET_VERSION to output
           echo "AIMET_VERSION=${AIMET_VERSION}" >> "$GITHUB_OUTPUT"
 

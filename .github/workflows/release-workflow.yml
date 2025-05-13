@@ -65,6 +65,8 @@ jobs:
     name: Run nightly to build wheels and test basic tests
     secrets: inherit
     uses: ./.github/workflows/nightly-pipeline.yml
+    with:
+      ref_name: ${{ github.ref_name }}
 
   release_aimet_onnx_to_pypi:
     if: ${{ inputs.push_to_pypi }} == true
