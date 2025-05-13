@@ -8,7 +8,7 @@ keras
 matplotlib>=3
 networkx
 numpy<2
-onnx~=1.16.1
+onnx
 onnxruntime~=1.19.0
 onnxscript
 osqp

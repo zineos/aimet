@@ -71,6 +71,7 @@ else:
         When: Create onnx model with opset13 QuantizeLinear
         """
         model = onnx.helper.make_model(
+            ir_version=10,
             opset_imports=[onnx.OperatorSetIdProto(version=13)],
             graph=onnx.helper.make_graph(
                 name="QuantizeLinear",
@@ -186,6 +187,7 @@ else:
         When: Create onnx model with opset13 DequantizeLinear
         """
         model = onnx.helper.make_model(
+            ir_version=10,
             opset_imports=[onnx.OperatorSetIdProto(version=13)],
             graph=onnx.helper.make_graph(
                 name="DequantizeLinear",
@@ -311,6 +313,7 @@ else:
         When: Create onnx model with opset21 QuantizeLinear - DequantizeLinear
         """
         model = onnx.helper.make_model(
+            ir_version=10,
             opset_imports=[onnx.OperatorSetIdProto(version=21)],
             graph=onnx.helper.make_graph(
                 name="QuantizeDequantize",

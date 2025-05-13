@@ -2110,7 +2110,7 @@ def _onnx_QuantizeLinear(
         initializer=[y_scale, y_zero_point] if y_zero_point is not None else [y_scale],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = helper.make_model(onnx_graph, ir_version=10, opset_imports=[op])
     onnx.checker.check_model(model, True)
 
     return model
@@ -2337,7 +2337,7 @@ def _onnx_LPBQ(
         initializer=[per_block_int_scale, per_channel_float_scale],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = helper.make_model(onnx_graph, ir_version=10, opset_imports=[op])
     onnx.checker.check_model(model, True)
 
     return model
