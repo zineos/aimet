@@ -35,51 +35,56 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utils for building GenAI models """
+"""Utils for building GenAI models"""
 
 import torch
 from transformers import PreTrainedModel, DynamicCache
+
 
 class TorchExportableModuleWithCache(torch.nn.Module):
     """
     Helper class to enable Torch JIT trace and ONNX export of HuggingFace models that produce and consume Cache objects
     """
+
     def __init__(self, model: PreTrainedModel):
         super().__init__()
         self.model = model
 
     @property
     def device(self):
-        """ Return model device """
+        """Return model device"""
         return self.model.device
 
     @property
     def dtype(self):
-        """ Return model dtype """
+        """Return model dtype"""
         return self.model.dtype
 
     @property
     def config(self):
-        """ Return model config """
+        """Return model config"""
         return self.model.config
 
     # pylint: disable=keyword-arg-before-vararg
     def forward(
-            self,
-            input_ids: torch.Tensor = None,
-            attention_mask: torch.Tensor = None,
-            position_ids: torch.Tensor = None,
-            past_key_values: DynamicCache = None,
-            *args,
-            **kwargs
+        self,
+        input_ids: torch.Tensor = None,
+        attention_mask: torch.Tensor = None,
+        position_ids: torch.Tensor = None,
+        past_key_values: DynamicCache = None,
+        *args,
+        **kwargs,
     ):
-        """ Redefine model forward to convert to/from Huggingface DynamicCache objects """
+        """Redefine model forward to convert to/from Huggingface DynamicCache objects"""
         past_key_values = DynamicCache.from_legacy_cache(past_key_values)
-        lm_logits, new_past_key_values = self.model(input_ids=input_ids,
-                                                    attention_mask=attention_mask,
-                                                    position_ids=position_ids,
-                                                    past_key_values=past_key_values,
-                                                    num_logits_to_return=0,
-                                                    return_dict=False,
-                                                    *args, **kwargs)
+        lm_logits, new_past_key_values = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            num_logits_to_return=0,
+            return_dict=False,
+            *args,
+            **kwargs,
+        )
         return lm_logits, new_past_key_values.to_legacy_cache()

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Batch normalization fold """
+"""Batch normalization fold"""
 
 import math
 from typing import List, Tuple, Union
@@ -68,8 +68,15 @@ def expand_shape_to_4d(shape: Tuple) -> Union[List, np.ndarray]:
     return _4d_shape
 
 
-def batch_norm_fold(weight: np.ndarray, bias: np.ndarray, gamma: np.ndarray, beta: np.ndarray, mu: np.ndarray,
-                    sigma: np.ndarray, fold_backward: bool) -> Tuple[np.ndarray, np.ndarray]:
+def batch_norm_fold(
+    weight: np.ndarray,
+    bias: np.ndarray,
+    gamma: np.ndarray,
+    beta: np.ndarray,
+    mu: np.ndarray,
+    sigma: np.ndarray,
+    fold_backward: bool,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     :param weight: conv/linear weight
     :param bias: conv/linear bias

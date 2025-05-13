@@ -36,7 +36,7 @@
 # =============================================================================
 
 """
-Contains unit tests to test the visualizations created given a model. """
+Contains unit tests to test the visualizations created given a model."""
 
 import unittest
 import aimet_torch.plots as plots
@@ -46,7 +46,6 @@ import torchvision.models as models
 
 
 class CNNModel(torch.nn.Module):
-
     def __init__(self):
         super(CNNModel, self).__init__()
         # input channel, output channels, 5x5 square convolution
@@ -61,7 +60,6 @@ resnet18 = models.resnet18(False)
 
 
 class VisualizeNetwork(unittest.TestCase):
-
     def test_tensor_input(self):
         # 2 input channels, 6 output channels, 5*5 square convolution
         conv1 = torch.nn.Conv2d(2, 4, 5)

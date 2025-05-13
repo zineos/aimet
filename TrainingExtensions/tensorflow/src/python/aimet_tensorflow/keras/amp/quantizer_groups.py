@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Find quantizer groups in a model """
+"""Find quantizer groups in a model"""
+
 import itertools
 from typing import Dict, List, Tuple
 from collections import defaultdict
@@ -55,11 +56,10 @@ from aimet_tensorflow.keras.quant_sim.tensor_quantizer import TensorQuantizer
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.MixedPrecision)
 
 
-ops_to_skip = ['view', 'NumToTensor', 'Split', 'PythonOp']
-ops_not_to_traverse = ['size']
-INPUT_OPS_STR = 'input_ops'
-OUTPUT_OPS_STR = 'output_ops'
-
+ops_to_skip = ["view", "NumToTensor", "Split", "PythonOp"]
+ops_not_to_traverse = ["size"]
+INPUT_OPS_STR = "input_ops"
+OUTPUT_OPS_STR = "output_ops"
 
 
 @dataclass(frozen=True)
@@ -67,6 +67,7 @@ class QuantizerGroup(QuantizerGroupBase):
     """
     Group of modules and quantizers
     """
+
     input_quantizers: Tuple[str, ...] = field(default_factory=tuple)
     output_quantizers: Tuple[str, ...] = field(default_factory=tuple)
     parameter_quantizers: Tuple[str, ...] = field(default_factory=tuple)
@@ -104,11 +105,15 @@ class QuantizerGroup(QuantizerGroupBase):
                     break
                 break
 
-
-        return (activation_bw, activation_data_type), (parameter_bw, parameter_data_type)
+        return (activation_bw, activation_data_type), (
+            parameter_bw,
+            parameter_data_type,
+        )
 
     @staticmethod
-    def lookup_quantizer(quantizer_name: str, name_to_quantizer_dict: Dict) -> tf.keras.layers.Layer:
+    def lookup_quantizer(
+        quantizer_name: str, name_to_quantizer_dict: Dict
+    ) -> tf.keras.layers.Layer:
         """
         Returns the quantizer layer corresponding to the name
         :quantizer_name: Name of the quantizer
@@ -119,9 +124,9 @@ class QuantizerGroup(QuantizerGroupBase):
         module = name_to_quantizer_dict[quantizer_name]
         return module
 
-    def set_quantizers_to_candidate(self,
-                                    name_to_quantizer_dict: Dict,
-                                    candidate: CANDIDATE_WITH_DTYPE) -> None:
+    def set_quantizers_to_candidate(
+        self, name_to_quantizer_dict: Dict, candidate: CANDIDATE_WITH_DTYPE
+    ) -> None:
         """
         Sets a quantizer group to a given candidate bitwidth
         :param name_to_quantizer_dict: Gets module from module name
@@ -155,20 +160,29 @@ class QuantizerGroup(QuantizerGroupBase):
         :return: List containing input/output quantizers & weight quantizers
         """
         if self.parameter_quantizers:
-            ret_list = list(itertools.chain(
-                (("input", module_name) for module_name in self.input_quantizers),
-                (("output", module_name) for module_name in self.output_quantizers),
-                (("weight", module_name) for module_name in self.parameter_quantizers),
-            ))
+            ret_list = list(
+                itertools.chain(
+                    (("input", module_name) for module_name in self.input_quantizers),
+                    (("output", module_name) for module_name in self.output_quantizers),
+                    (
+                        ("weight", module_name)
+                        for module_name in self.parameter_quantizers
+                    ),
+                )
+            )
         else:
-            ret_list = list(itertools.chain(
-                (("input", module_name) for module_name in self.input_quantizers),
-                (("output", module_name) for module_name in self.output_quantizers),
-            ))
+            ret_list = list(
+                itertools.chain(
+                    (("input", module_name) for module_name in self.input_quantizers),
+                    (("output", module_name) for module_name in self.output_quantizers),
+                )
+            )
         return ret_list
 
-    def get_active_quantizers(self, name_to_quantizer_dict: Dict) -> List[TensorQuantizer]:
-        """ Find all active tensor quantizers associated with this quantizer group """
+    def get_active_quantizers(
+        self, name_to_quantizer_dict: Dict
+    ) -> List[TensorQuantizer]:
+        """Find all active tensor quantizers associated with this quantizer group"""
         quantizers = []
         for module_name in self.input_quantizers:
             module = self.lookup_quantizer(module_name, name_to_quantizer_dict)
@@ -183,10 +197,14 @@ class QuantizerGroup(QuantizerGroupBase):
                 module = self.lookup_quantizer(module_name, name_to_quantizer_dict)
                 quantizers += list(module.param_quantizers.layers)
 
-        return list(set(quantizer for quantizer in quantizers if quantizer.is_enabled()))
+        return list(
+            set(quantizer for quantizer in quantizers if quantizer.is_enabled())
+        )
 
-    def get_active_param_quantizers(self, name_to_quantizer_dict: Dict) -> List[TensorQuantizer]:
-        """ Find all active param tensor quantizers associated with this quantizer group
+    def get_active_param_quantizers(
+        self, name_to_quantizer_dict: Dict
+    ) -> List[TensorQuantizer]:
+        """Find all active param tensor quantizers associated with this quantizer group
         :param name_to_quantizer_dict: Contains mapping of module name to sim.quantizer_config object
         """
         quantizers = []
@@ -194,9 +212,14 @@ class QuantizerGroup(QuantizerGroupBase):
             for module_name in self.parameter_quantizers:
                 module = self.lookup_quantizer(module_name, name_to_quantizer_dict)
                 quantizers += list(module.param_quantizers.layers)
-        return list(set(quantizer for quantizer in quantizers if quantizer.is_enabled()))
+        return list(
+            set(quantizer for quantizer in quantizers if quantizer.is_enabled())
+        )
 
-def find_output_quantizer_groups(op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict):
+
+def find_output_quantizer_groups(
+    op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict
+):
     """
     Finds quantizer groups along the parent to child flow
     :param op: pytorch module
@@ -213,7 +236,9 @@ def find_output_quantizer_groups(op: Op, parent_child_op_groups: Dict, map_for_s
 
             if consumer.type in ops_to_skip:
                 map_for_skipped_ops[consumer.name] = name
-                find_output_quantizer_groups(consumer, parent_child_op_groups, map_for_skipped_ops)
+                find_output_quantizer_groups(
+                    consumer, parent_child_op_groups, map_for_skipped_ops
+                )
             # If there is a one to one connection between quantizers
             else:
                 if name in map_for_skipped_ops:
@@ -222,6 +247,7 @@ def find_output_quantizer_groups(op: Op, parent_child_op_groups: Dict, map_for_s
     else:
         if op.dotted_name in map_for_skipped_ops:
             parent_child_op_groups[map_for_skipped_ops[op.dotted_name]] = []
+
 
 def find_op_groups(graph: ConnectedGraph) -> Dict:
     """
@@ -249,6 +275,7 @@ def find_op_groups(graph: ConnectedGraph) -> Dict:
 
     return parent_child_op_groups
 
+
 def get_module_name_to_module_dict(sim: QuantizationSimModel) -> Dict:
     """
     Creates a dictionary of wrapped module's name to quantizer module
@@ -266,9 +293,12 @@ def get_module_name_to_module_dict(sim: QuantizationSimModel) -> Dict:
 
     return module_name_to_quantizer_dict
 
+
 # pylint: disable-msg=too-many-locals
 # pylint: disable-msg=too-many-branches
-def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[QuantizerGroup]]:
+def find_quantizer_group(
+    sim: QuantizationSimModel,
+) -> Tuple[Dict, List[QuantizerGroup]]:
     """
     Finds quantizer groups in a quantization sim model
     :param sim: Quantization sim
@@ -278,7 +308,9 @@ def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[Quantize
     connected_graph = sim.connected_graph
 
     if connected_graph is None:
-        raise AssertionError('Aborting Auto Mixed Precision, connected graph needs to exist for Auto Mixed precision')
+        raise AssertionError(
+            "Aborting Auto Mixed Precision, connected graph needs to exist for Auto Mixed precision"
+        )
 
     quantizer_groups = []
 
@@ -291,19 +323,23 @@ def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[Quantize
             # Add one quantizer group for each input and it's weight param
             layer = connected_graph.get_layer_from_op_name(child)
             if isinstance(layer, tuple(substitutable_modules.keys())):
-                sub_quantizer_groups = get_quantizers_groups_substituted_layer(sim, layer)
+                sub_quantizer_groups = get_quantizers_groups_substituted_layer(
+                    sim, layer
+                )
                 quantizer_groups.extend(sub_quantizer_groups)
                 continue
 
-            input_quantizer_names, output_quantizer_names, param_quantizer_names = sim.get_quantizer_name_by_layer(layer)
+            input_quantizer_names, output_quantizer_names, param_quantizer_names = (
+                sim.get_quantizer_name_by_layer(layer)
+            )
 
             if input_quantizer_names or param_quantizer_names:
                 quantizer_group = QuantizerGroup(
                     input_quantizers=input_quantizer_names,
-                    parameter_quantizers=param_quantizer_names
+                    parameter_quantizers=param_quantizer_names,
                 )
                 quantizer_groups.append(quantizer_group)
-                logger.debug('\n Quantizer Group Added: %s', quantizer_group)
+                logger.debug("\n Quantizer Group Added: %s", quantizer_group)
 
     # Based on which quantizers are enabled, create a list of quantizer_groups
     for parents in parent_child_op_groups:
@@ -316,21 +352,25 @@ def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[Quantize
         for parent in parents:
             layer = connected_graph.get_layer_from_op_name(parent)
             if isinstance(layer, tuple(substitutable_modules.keys())):
-                sub_quantizer_groups = get_quantizers_groups_substituted_layer(sim, layer)
+                sub_quantizer_groups = get_quantizers_groups_substituted_layer(
+                    sim, layer
+                )
                 quantizer_groups.extend(sub_quantizer_groups)
                 continue
 
-            input_quantizer_names, output_quantizer_names, param_quantizer_names = sim.get_quantizer_name_by_layer(layer)
+            input_quantizer_names, output_quantizer_names, param_quantizer_names = (
+                sim.get_quantizer_name_by_layer(layer)
+            )
 
         # Don't add quantizer group if it is empty
         if input_quantizer_names or output_quantizer_names or param_quantizer_names:
             quantizer_group = QuantizerGroup(
                 input_quantizers=input_quantizer_names,
                 output_quantizers=output_quantizer_names,
-                parameter_quantizers=param_quantizer_names
+                parameter_quantizers=param_quantizer_names,
             )
             quantizer_groups.append(quantizer_group)
-            logger.debug('\n Quantizer Group added: %s', quantizer_group)
+            logger.debug("\n Quantizer Group added: %s", quantizer_group)
 
     if OUTPUT_OPS_STR in parent_child_op_groups:
         for parent in parent_child_op_groups[OUTPUT_OPS_STR]:
@@ -338,26 +378,33 @@ def find_quantizer_group(sim: QuantizationSimModel) -> Tuple[Dict, List[Quantize
 
             layer = connected_graph.get_layer_from_op_name(parent)
             if isinstance(layer, tuple(substitutable_modules.keys())):
-                sub_quantizer_groups = get_quantizers_groups_substituted_layer(sim, layer)
+                sub_quantizer_groups = get_quantizers_groups_substituted_layer(
+                    sim, layer
+                )
                 quantizer_groups.extend(sub_quantizer_groups)
                 continue
 
-            input_quantizer_names, output_quantizer_names, param_quantizer_names = sim.get_quantizer_name_by_layer(layer)
+            input_quantizer_names, output_quantizer_names, param_quantizer_names = (
+                sim.get_quantizer_name_by_layer(layer)
+            )
 
             if output_quantizer_names:
                 quantizer_group = QuantizerGroup(
                     input_quantizers=input_quantizer_names,
                     output_quantizers=output_quantizer_names,
-                    parameter_quantizers=param_quantizer_names
+                    parameter_quantizers=param_quantizer_names,
                 )
                 quantizer_groups.append(quantizer_group)
-                logger.debug('\n Quantizer Group added: %s', quantizer_group)
+                logger.debug("\n Quantizer Group added: %s", quantizer_group)
 
     return quantized_op_name_to_quantizer_dict, quantizer_groups
 
+
 # pylint: disable=protected-access
-def get_quantizers_groups_substituted_layer(sim: QuantizationSimModel, layer) -> List[QuantizerGroup]:
-    """ Helper function to return the quantizer groups for the substituted layers """
+def get_quantizers_groups_substituted_layer(
+    sim: QuantizationSimModel, layer
+) -> List[QuantizerGroup]:
+    """Helper function to return the quantizer groups for the substituted layers"""
     layer = sim._substituted_layer[layer]
     quantizer_groups = []
     for quant_wrapper in layer.quant_wrappers():
@@ -365,24 +412,31 @@ def get_quantizers_groups_substituted_layer(sim: QuantizationSimModel, layer) ->
         output_quantizers = quant_wrapper.output_quantizers
         param_quantizers = quant_wrapper.param_quantizers
 
-
-        input_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(input_quantizers)
-        output_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(output_quantizers)
-        param_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(param_quantizers)
+        input_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(
+            input_quantizers
+        )
+        output_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(
+            output_quantizers
+        )
+        param_quantizer_names = QuantizationSimModel._quantizer_to_name_tuple(
+            param_quantizers
+        )
 
         if input_quantizer_names or output_quantizer_names or param_quantizer_names:
             quantizer_group = QuantizerGroup(
                 input_quantizers=input_quantizer_names,
                 output_quantizers=output_quantizer_names,
-                parameter_quantizers=param_quantizer_names
+                parameter_quantizers=param_quantizer_names,
             )
             quantizer_groups.append(quantizer_group)
-            logger.debug('\n Quantizer Group added: %s', quantizer_group)
+            logger.debug("\n Quantizer Group added: %s", quantizer_group)
 
     return quantizer_groups
 
 
-def find_wrapper_module(op_name: str, module_name_to_quantizer_dict: Dict) -> Tuple[str, tf.keras.layers.Layer]:
+def find_wrapper_module(
+    op_name: str, module_name_to_quantizer_dict: Dict
+) -> Tuple[str, tf.keras.layers.Layer]:
     """
     Finds quantization (wrapping) module corresponding to the wrapper module's dotted name
     :param op_name: Dotted name of op as represented in connected graph
@@ -390,7 +444,7 @@ def find_wrapper_module(op_name: str, module_name_to_quantizer_dict: Dict) -> Tu
     :return: Module name and the corresponding quant-wrapper module in the sim
     """
     # pylint:disable = protected-access
-    module_name = op_name[op_name.find('.') + 1:]
+    module_name = op_name[op_name.find(".") + 1 :]
     if module_name in module_name_to_quantizer_dict:
         return module_name, module_name_to_quantizer_dict[module_name]
     # Else it is a functional op

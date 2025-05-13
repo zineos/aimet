@@ -45,6 +45,7 @@ def _register_signature(signatures):
         sig = inspect.signature(fn)
         signatures.append(sig)
         return fn
+
     return decorator
 
 
@@ -52,23 +53,23 @@ class _GridMixin:
     """
     Collection of helper functions to manage quantzation grid parameters.
     """
+
     qmin: int
     qmax: int
     _init_signatures: Sequence[inspect.Signature]
 
     @classmethod
     def _arg_parsing_error(cls, args, kwargs) -> TypeError:
-        args = (
-            *args,
-            *(f'{key}={value}' for key, value in kwargs.items())
-        )
+        args = (*args, *(f"{key}={value}" for key, value in kwargs.items()))
 
-        msg = "\n".join((
-            "Unexpected arguments. Expected one of:",
-            *("  * " + str(sig) for sig in cls._init_signatures),
-            "",
-            f"  But got: {args}"
-        ))
+        msg = "\n".join(
+            (
+                "Unexpected arguments. Expected one of:",
+                *("  * " + str(sig) for sig in cls._init_signatures),
+                "",
+                f"  But got: {args}",
+            )
+        )
         return TypeError(msg)
 
     def _get_num_steps(self) -> int:
@@ -109,7 +110,7 @@ class _GridMixin:
             if bitwidth == int(bitwidth):
                 return int(bitwidth)
 
-        msg = self._undefined_attr_error_msg('bitwidth')
+        msg = self._undefined_attr_error_msg("bitwidth")
         raise RuntimeError(msg)
 
     def _set_bitwidth(self, bitwidth: int):
@@ -118,9 +119,11 @@ class _GridMixin:
 
         if not isinstance(bitwidth, int):
             clsname = type(self).__qualname__
-            msg = "Setting bitwidth to a non-integer value {.3f:bitwidth} is not supported. "\
-                  "To modify quantization grid with finer granularity, "\
-                 f"please consider setting {clsname}.qmin and .qmax to the desired values."
+            msg = (
+                "Setting bitwidth to a non-integer value {.3f:bitwidth} is not supported. "
+                "To modify quantization grid with finer granularity, "
+                f"please consider setting {clsname}.qmin and .qmax to the desired values."
+            )
             raise TypeError(msg)
 
         if bitwidth < 1:
@@ -128,19 +131,21 @@ class _GridMixin:
 
         if self.qmin + self.qmax == -1:
             # signed
-            self.qmin = -2**(bitwidth - 1)
-            self.qmax = 2**(bitwidth - 1) - 1
+            self.qmin = -(2 ** (bitwidth - 1))
+            self.qmax = 2 ** (bitwidth - 1) - 1
         elif self.qmin == 0:
             # unsigned
-            self.qmin =  0
+            self.qmin = 0
             self.qmax = 2**bitwidth - 1
         else:
             clsname = type(self).__qualname__
-            msg = ' '.join([
-                self._undefined_attr_error_msg('bitwidth'),
-                 "To modify quantization grid with finer granularity, "\
-                f"please consider setting {clsname}.qmin and .qmax to the desired values."
-            ])
+            msg = " ".join(
+                [
+                    self._undefined_attr_error_msg("bitwidth"),
+                    "To modify quantization grid with finer granularity, "
+                    f"please consider setting {clsname}.qmin and .qmax to the desired values.",
+                ]
+            )
             raise RuntimeError(msg)
 
     def _get_signed(self) -> bool:
@@ -164,7 +169,7 @@ class _GridMixin:
         if self.qmin + self.qmax == -1 or self.qmin == 0:
             return self.qmin < 0 <= self.qmax
 
-        msg = self._undefined_attr_error_msg('signed')
+        msg = self._undefined_attr_error_msg("signed")
         raise RuntimeError(msg)
 
     def _set_signed(self, signed: bool):
@@ -182,17 +187,21 @@ class _GridMixin:
             self.qmax -= shift
         else:
             clsname = type(self).__qualname__
-            msg = ' '.join([
-                self._undefined_attr_error_msg('signed'),
-                 "To modify quantization grid with finer granularity, "\
-                f"please consider setting {clsname}.qmin and .qmax to the desired values."
-            ])
+            msg = " ".join(
+                [
+                    self._undefined_attr_error_msg("signed"),
+                    "To modify quantization grid with finer granularity, "
+                    f"please consider setting {clsname}.qmin and .qmax to the desired values.",
+                ]
+            )
             raise RuntimeError(msg)
 
     def _undefined_attr_error_msg(self, attr_name: str):
         clsname = type(self).__qualname__
         qmin = self.qmin
         qmax = self.qmax
-        return f"{clsname}.{attr_name} is undefined in the quantization grid [{qmin}, {qmax}]. "\
-               f"Attribute {attr_name} can be defined if and only if there exists a strictly positive integer `B` such that "\
-               f"the quantization grid can be expressed in the form of [-2**(B-1), 2**(B-1) - 1] or [0, 2**B - 1]."
+        return (
+            f"{clsname}.{attr_name} is undefined in the quantization grid [{qmin}, {qmax}]. "
+            f"Attribute {attr_name} can be defined if and only if there exists a strictly positive integer `B` such that "
+            f"the quantization grid can be expressed in the form of [-2**(B-1), 2**(B-1) - 1] or [0, 2**B - 1]."
+        )

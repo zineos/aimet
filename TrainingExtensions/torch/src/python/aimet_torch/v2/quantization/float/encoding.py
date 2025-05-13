@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=redefined-builtin
-""" Float encoding definition """
+"""Float encoding definition"""
 
 from typing import Union, List, Dict, Optional
 import torch
@@ -53,8 +53,15 @@ class FloatEncoding(EncodingBase):
     """
     Encoding object for float quantization
     """
-    def __init__(self, mantissa_bits: int, exponent_bits: int,
-                 finite: bool, unsigned_zero: bool, maxval: Optional[torch.Tensor]):
+
+    def __init__(
+        self,
+        mantissa_bits: int,
+        exponent_bits: int,
+        finite: bool,
+        unsigned_zero: bool,
+        maxval: Optional[torch.Tensor],
+    ):
         self._finfo = _finfo(exponent_bits, mantissa_bits, finite, unsigned_zero)
         self._maxval = maxval
 
@@ -140,13 +147,20 @@ class FloatEncoding(EncodingBase):
             return self
 
         if dtype and not dtype.is_floating_point:
-            raise RuntimeError(f"Cannot change encoding data dtype to {dtype}, "
-                               "only floating point data types are supported")
+            raise RuntimeError(
+                f"Cannot change encoding data dtype to {dtype}, "
+                "only floating point data types are supported"
+            )
 
         maxval = self._maxval.to(dtype=dtype, device=device)
 
-        return type(self)(self.mantissa_bits, self.exponent_bits,
-                          self.finite, self.unsigned_zero, maxval)
+        return type(self)(
+            self.mantissa_bits,
+            self.exponent_bits,
+            self.finite,
+            self.unsigned_zero,
+            maxval,
+        )
 
     def quantize(self, input: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
@@ -158,10 +172,14 @@ class FloatEncoding(EncodingBase):
         """
         Converts encoding object into QNN encoding
         """
-        if encoding_version == '0.6.1':
-            return [{'bitwidth': self.bitwidth, 'dtype': 'float'}]
-        if encoding_version == '1.0.0':
-            return {'dtype': 'FLOAT', 'bw': self.bitwidth, 'enc_type': EncodingType.PER_TENSOR.name}
+        if encoding_version == "0.6.1":
+            return [{"bitwidth": self.bitwidth, "dtype": "float"}]
+        if encoding_version == "1.0.0":
+            return {
+                "dtype": "FLOAT",
+                "bw": self.bitwidth,
+                "enc_type": EncodingType.PER_TENSOR.name,
+            }
 
         if encoding_version == "2.0.0":
             if self.exponent_bits == 5 and self.mantissa_bits == 10:
@@ -177,4 +195,6 @@ class FloatEncoding(EncodingBase):
                 f"got exponent_bits={self.exponent_bits}, mantissa_bits={self.mantissa_bits}"
             )
 
-        raise AssertionError(f'Export encoding version {encoding_version} not supported.')
+        raise AssertionError(
+            f"Export encoding version {encoding_version} not supported."
+        )

@@ -1,37 +1,37 @@
 # -*- mode: python -*-
 # =============================================================================
 #  @@-COPYRIGHT-START-@@
-#  
+#
 #  Copyright (c) 2019, Qualcomm Innovation Center, Inc. All rights reserved.
-#  
-#  Redistribution and use in source and binary forms, with or without 
+#
+#  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
-#  
-#  1. Redistributions of source code must retain the above copyright notice, 
+#
+#  1. Redistributions of source code must retain the above copyright notice,
 #     this list of conditions and the following disclaimer.
-#  
-#  2. Redistributions in binary form must reproduce the above copyright notice, 
-#     this list of conditions and the following disclaimer in the documentation 
+#
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
 #     and/or other materials provided with the distribution.
-#  
-#  3. Neither the name of the copyright holder nor the names of its contributors 
-#     may be used to endorse or promote products derived from this software 
+#
+#  3. Neither the name of the copyright holder nor the names of its contributors
+#     may be used to endorse or promote products derived from this software
 #     without specific prior written permission.
-#  
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
-#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
-#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
-#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
-#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
-#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+#
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 #  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 #  POSSIBILITY OF SUCH DAMAGE.
-#  
+#
 #  SPDX-License-Identifier: BSD-3-Clause
-#  
+#
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
@@ -42,7 +42,6 @@ import aimet_common.libpymo as libpymo
 
 
 class TestHighBiasFold(unittest.TestCase):
-
     def test_high_bias_fold(self):
         # Generating random numbers from a normal distribution for the weights and biases of the current and prev layer
         np.random.seed(1)
@@ -70,12 +69,17 @@ class TestHighBiasFold(unittest.TestCase):
         curr_layer_params.weight = weight
         curr_layer_params.weightShape = weight_sz
 
-        b_i_1, b_i = fold_high_bias_next_conv_qt(True, beta, gamma,
-                                                 weight.reshape(weight_sz), curr_layer_bias,
-                                                 prev_layer_bias)
+        b_i_1, b_i = fold_high_bias_next_conv_qt(
+            True,
+            beta,
+            gamma,
+            weight.reshape(weight_sz),
+            curr_layer_bias,
+            prev_layer_bias,
+        )
         libpymo.updateBias(prev_layer_params, curr_layer_params, prev_layer_bn_params)
-        assert (np.allclose(b_i_1, prev_layer_params.bias))
-        assert (np.allclose(b_i, curr_layer_params.bias))
+        assert np.allclose(b_i_1, prev_layer_params.bias)
+        assert np.allclose(b_i, curr_layer_params.bias)
 
     def test_high_bias_fold_depthwise_layer(self):
         # Generating random numbers from a normal distribution for the weights and biases of the current and prev layer
@@ -104,15 +108,22 @@ class TestHighBiasFold(unittest.TestCase):
         curr_layer_params.weight = weight
         curr_layer_params.weightShape = weight_sz
 
-        b_i_1, b_i = fold_high_bias_next_conv_qt(True, beta, gamma,
-                                                 weight.reshape(weight_sz), curr_layer_bias,
-                                                 prev_layer_bias)
+        b_i_1, b_i = fold_high_bias_next_conv_qt(
+            True,
+            beta,
+            gamma,
+            weight.reshape(weight_sz),
+            curr_layer_bias,
+            prev_layer_bias,
+        )
         libpymo.updateBias(prev_layer_params, curr_layer_params, prev_layer_bn_params)
-        assert (np.allclose(b_i_1, prev_layer_params.bias))
-        assert (np.allclose(b_i, curr_layer_params.bias))
+        assert np.allclose(b_i_1, prev_layer_params.bias)
+        assert np.allclose(b_i, curr_layer_params.bias)
 
 
-def fold_high_bias_next_conv_qt(activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer):
+def fold_high_bias_next_conv_qt(
+    activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer
+):
     curr_layer_bias = bias_curr_layer
     prev_layer_bias = bias_prev_layer
     if not activation_is_relu:

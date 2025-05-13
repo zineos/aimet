@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Network and per layer cost calculator"""
+
 from decimal import Decimal
 from functools import reduce
 from typing import List, Tuple
@@ -57,23 +58,24 @@ class Cost:
         self.mac = mac_cost
 
     def __str__(self):
-        return '(Cost: memory={}, mac={})'.format(self.memory, self.mac)
+        return "(Cost: memory={}, mac={})".format(self.memory, self.mac)
 
     def __add__(self, another_cost):
-        return Cost(self.memory + another_cost.memory,
-                    self.mac + another_cost.mac)
+        return Cost(self.memory + another_cost.memory, self.mac + another_cost.mac)
 
     def __sub__(self, another_cost):
-        return Cost(self.memory - another_cost.memory,
-                    self.mac - another_cost.mac)
+        return Cost(self.memory - another_cost.memory, self.mac - another_cost.mac)
 
 
 class CostCalculator:
     """
     Utility for calculating per layer cost and network cost
     """
+
     @classmethod
-    def get_compressed_model_cost(cls, layer_db, layer_ratio_list, original_model_cost, cost_metric):
+    def get_compressed_model_cost(
+        cls, layer_db, layer_ratio_list, original_model_cost, cost_metric
+    ):
         """
         computes compressed model cost metric with all layers included
         :param layer: layer data base
@@ -89,14 +91,18 @@ class CostCalculator:
                 layer_ratio_list.append(LayerCompRatioPair(layer, None))
 
         # Calculate compressed model cost
-        compressed_model_cost = cls.calculate_compressed_cost(layer_db,
-                                                              layer_ratio_list,
-                                                              cost_metric)
+        compressed_model_cost = cls.calculate_compressed_cost(
+            layer_db, layer_ratio_list, cost_metric
+        )
 
         if cost_metric == CostMetric.memory:
-            current_comp_ratio = Decimal(compressed_model_cost.memory / original_model_cost.memory)
+            current_comp_ratio = Decimal(
+                compressed_model_cost.memory / original_model_cost.memory
+            )
         else:
-            current_comp_ratio = Decimal(compressed_model_cost.mac / original_model_cost.mac)
+            current_comp_ratio = Decimal(
+                compressed_model_cost.mac / original_model_cost.mac
+            )
 
         return current_comp_ratio
 
@@ -110,9 +116,9 @@ class CostCalculator:
         weight_dim = list(layer.weight_shape)
         additional_act_dim = [layer.output_shape[-1], layer.output_shape[-2]]
 
-        mem_cost = reduce(lambda x, y: x*y, weight_dim)
+        mem_cost = reduce(lambda x, y: x * y, weight_dim)
         mac_dim = weight_dim + additional_act_dim
-        mac_cost = reduce(lambda x, y: x*y, mac_dim)
+        mac_cost = reduce(lambda x, y: x * y, mac_dim)
 
         return Cost(mem_cost, mac_cost)
 
@@ -125,7 +131,6 @@ class CostCalculator:
         network_cost = Cost(0, 0)
 
         for layer in layers.values():
-
             cost = cls.compute_layer_cost(layer)
             network_cost += cost
 
@@ -140,7 +145,6 @@ class CostCalculator:
         network_cost_memory = 0
         network_cost_mac = 0
         for layer in layer_db:
-
             cost = cls.compute_layer_cost(layer)
 
             network_cost_memory += cost.memory
@@ -149,7 +153,9 @@ class CostCalculator:
         return Cost(network_cost_memory, network_cost_mac)
 
     @classmethod
-    def calculate_comp_ratio_given_rank(cls, layer: Layer, rank: int, cost_metric: CostMetric):
+    def calculate_comp_ratio_given_rank(
+        cls, layer: Layer, rank: int, cost_metric: CostMetric
+    ):
         """
         Finds compression ratio for the rounded rank
         :param layer:
@@ -161,14 +167,18 @@ class CostCalculator:
         original_cost = CostCalculator.compute_layer_cost(layer)
         if cost_metric == CostMetric.memory:
             compressed_cost = cls.calculate_cost_given_rank(layer, rank).memory
-            updated_comp_ratio = Decimal(compressed_cost)/Decimal(original_cost.memory)
+            updated_comp_ratio = Decimal(compressed_cost) / Decimal(
+                original_cost.memory
+            )
         else:
             compressed_cost = cls.calculate_cost_given_rank(layer, rank).mac
-            updated_comp_ratio = Decimal(compressed_cost)/Decimal(original_cost.mac)
+            updated_comp_ratio = Decimal(compressed_cost) / Decimal(original_cost.mac)
         return updated_comp_ratio
 
     @classmethod
-    def calculate_rank_given_comp_ratio(cls, layer: Layer, comp_ratio: float, cost_metric: CostMetric) -> int:
+    def calculate_rank_given_comp_ratio(
+        cls, layer: Layer, comp_ratio: float, cost_metric: CostMetric
+    ) -> int:
         """
         Calculates rank to be used for spatial svd splitting to achieve a given compression-ratio
         Note since both mac and memory counts are scaled versions of each other, cost-metric is not a concern
@@ -188,12 +198,15 @@ class CostCalculator:
         current_rank_candidate = cls.calculate_max_rank(layer)
 
         if cost_metric == CostMetric.memory:
-            running_cost = cls.calculate_cost_given_rank(layer, current_rank_candidate).memory
+            running_cost = cls.calculate_cost_given_rank(
+                layer, current_rank_candidate
+            ).memory
         else:
-            running_cost = cls.calculate_cost_given_rank(layer, current_rank_candidate).mac
+            running_cost = cls.calculate_cost_given_rank(
+                layer, current_rank_candidate
+            ).mac
 
         while (running_cost > target_cost) and (current_rank_candidate > 0):
-
             current_rank_candidate -= 1
 
             # Invoke via use of strategy pattern
@@ -210,7 +223,9 @@ class CostCalculator:
         return current_rank_candidate
 
     @classmethod
-    def calculate_per_layer_compressed_cost(cls, layer: Layer, comp_ratio: float, cost_metric: CostMetric) -> Cost:
+    def calculate_per_layer_compressed_cost(
+        cls, layer: Layer, comp_ratio: float, cost_metric: CostMetric
+    ) -> Cost:
         """
         Calculate compressed cost for a layer given a compression ratio
         :param layer: Layer
@@ -226,8 +241,12 @@ class CostCalculator:
         return cost
 
     @classmethod
-    def calculate_compressed_cost(cls, _layer_db: LayerDatabase,
-                                  layer_ratio_list: List[LayerCompRatioPair], cost_metric: CostMetric) -> Cost:
+    def calculate_compressed_cost(
+        cls,
+        _layer_db: LayerDatabase,
+        layer_ratio_list: List[LayerCompRatioPair],
+        cost_metric: CostMetric,
+    ) -> Cost:
         """
         Calculate compressed cost of a model given a list of layer-compression-ratio pairs
         :param _layer_db: Layer database for the original model
@@ -239,8 +258,11 @@ class CostCalculator:
         running_cost = Cost(0, 0)
         for layer_comp_ratio_pair in layer_ratio_list:
             if layer_comp_ratio_pair.comp_ratio is not None:
-                cost = cls.calculate_per_layer_compressed_cost(layer_comp_ratio_pair.layer,
-                                                               layer_comp_ratio_pair.comp_ratio, cost_metric)
+                cost = cls.calculate_per_layer_compressed_cost(
+                    layer_comp_ratio_pair.layer,
+                    layer_comp_ratio_pair.comp_ratio,
+                    cost_metric,
+                )
             else:
                 cost = cls.compute_layer_cost(layer_comp_ratio_pair.layer)
 
@@ -249,8 +271,9 @@ class CostCalculator:
         return running_cost
 
     @classmethod
-    def calculate_compressed_cost_given_ranks(cls, _layer_db: LayerDatabase,
-                                              layer_rank_list: List[Tuple[Layer, int]]) -> Cost:
+    def calculate_compressed_cost_given_ranks(
+        cls, _layer_db: LayerDatabase, layer_rank_list: List[Tuple[Layer, int]]
+    ) -> Cost:
         """
         Calculate compressed cost of a model given a list of layer and rank pairs
         :param _layer_db: Layer database for the original model
@@ -288,11 +311,10 @@ class CostCalculator:
 
 
 class SpatialSvdCostCalculator(CostCalculator):
-    """ Cost calculation utilities for Spatial SVD """
+    """Cost calculation utilities for Spatial SVD"""
 
     @staticmethod
     def calculate_cost_given_rank(layer: Layer, rank: int) -> Cost:
-
         m = layer.weight_shape[1]
         n = layer.weight_shape[0]
 
@@ -303,21 +325,26 @@ class SpatialSvdCostCalculator(CostCalculator):
             # (m, n, kh, kw) is split into (m, rank, kh, 1) and (rank, n, 1, kw)
             mem_cost = (m * rank * kh) + (rank * n * kw)
             output_dim_cost = layer.output_shape[2] * layer.output_shape[3]
-            mac_cost = (m * rank * kh * layer.type_specific_params.stride[1] +
-                        rank * n * kw) * output_dim_cost
+            mac_cost = (
+                m * rank * kh * layer.type_specific_params.stride[1] + rank * n * kw
+            ) * output_dim_cost
 
         else:
             mem_cost = m * rank + rank * n
-            mac_cost = (m * rank + rank * n) * layer.weight_shape[2] * layer.weight_shape[3]
+            mac_cost = (
+                (m * rank + rank * n) * layer.weight_shape[2] * layer.weight_shape[3]
+            )
 
         return Cost(mem_cost, mac_cost)
 
     @staticmethod
     def calculate_max_rank(layer: Layer):
-
         if isinstance(layer.type_specific_params, Conv2dTypeSpecificParams):
             # min(Nic * Kh, Noc * Kw)
-            max_rank = min(layer.weight_shape[1] * layer.weight_shape[2], layer.weight_shape[0] * layer.weight_shape[3])
+            max_rank = min(
+                layer.weight_shape[1] * layer.weight_shape[2],
+                layer.weight_shape[0] * layer.weight_shape[3],
+            )
 
         else:
             max_rank = min(layer.weight_shape[1], layer.weight_shape[0])
@@ -326,16 +353,18 @@ class SpatialSvdCostCalculator(CostCalculator):
 
 
 class WeightSvdCostCalculator(CostCalculator):
-    """ Cost calculation utilities for Weight SVD """
+    """Cost calculation utilities for Weight SVD"""
 
     @staticmethod
     def calculate_cost_given_rank(layer: Layer, rank: int) -> Cost:
-
         if isinstance(layer.type_specific_params, Conv2dTypeSpecificParams):
             m = layer.weight_shape[1]
             n = layer.weight_shape[0]
             kernel_size = layer.weight_shape[2] * layer.weight_shape[3]
-            stride_factor = layer.type_specific_params.stride[0] * layer.type_specific_params.stride[1]
+            stride_factor = (
+                layer.type_specific_params.stride[0]
+                * layer.type_specific_params.stride[1]
+            )
 
         else:
             m = layer.weight_shape[1]
@@ -346,13 +375,16 @@ class WeightSvdCostCalculator(CostCalculator):
         # (m, n, kh, kw) is split into (m, rank, 1, 1) and (rank, n, kh, kw)
         # stride only applied to the 1st layer. And stride has no effect on memory cost
         mem_cost = (m * rank) + (rank * n * kernel_size)
-        mac_cost = (m * rank * stride_factor + rank * n * kernel_size) * layer.output_shape[2] * layer.output_shape[3]
+        mac_cost = (
+            (m * rank * stride_factor + rank * n * kernel_size)
+            * layer.output_shape[2]
+            * layer.output_shape[3]
+        )
 
         return Cost(mem_cost, mac_cost)
 
     @staticmethod
     def calculate_max_rank(layer: Layer):
-
         max_rank = layer.weight_shape[1]
 
         return max_rank

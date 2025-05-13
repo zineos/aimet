@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Defines onnx export API """
+"""Defines onnx export API"""
+
 import contextlib
 import io
 import os
@@ -65,12 +66,14 @@ _TORCH_MAX_OPSET = _constants.ONNX_MAX_OPSET
 _AIMET_MAX_OPSET = max(_TORCH_MAX_OPSET, 21)
 
 
-def export(model: Union[torch.nn.Module, QuantizationSimModel],
-           args: Union[Tuple[Any, ...], torch.Tensor],
-           f: Union[str, io.BytesIO],
-           *,
-           export_int32_bias: bool = True,
-           **kwargs):
+def export(
+    model: Union[torch.nn.Module, QuantizationSimModel],
+    args: Union[Tuple[Any, ...], torch.Tensor],
+    f: Union[str, io.BytesIO],
+    *,
+    export_int32_bias: bool = True,
+    **kwargs,
+):
     """
     Export :class:`QuantizationSimModel` to onnx model with
     onnx `QuantizeLinear`_ and `DequantizeLinear`_ embedded in the graph.
@@ -153,19 +156,20 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
 
     if _TORCH_MAX_OPSET < target_version:
         try:
-            onnx_model = onnx.version_converter.convert_version(onnx_model,
-                                                                target_version)
-        except Exception as e: # pylint: disable=broad-exception-caught
+            onnx_model = onnx.version_converter.convert_version(
+                onnx_model, target_version
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
             f = io.StringIO()
             traceback.print_exc(file=f)
             reason = _why_do_i_need_opset21(model)
 
             if reason:
                 detail = (
-                    f"torch.onnx.export only supports opset<={_TORCH_MAX_OPSET}, " \
-                    f"but onnx::QuantizeLinear requires opset>={target_version} for {reason}. "\
-                    "As a workaround, we tried to torch.onnx.export your model "\
-                    f"with opset={_TORCH_MAX_OPSET} and convert the onnx model to {target_version}, "\
+                    f"torch.onnx.export only supports opset<={_TORCH_MAX_OPSET}, "
+                    f"but onnx::QuantizeLinear requires opset>={target_version} for {reason}. "
+                    "As a workaround, we tried to torch.onnx.export your model "
+                    f"with opset={_TORCH_MAX_OPSET} and convert the onnx model to {target_version}, "
                     "but failed with the following error:\n\n"
                 )
             else:
@@ -173,7 +177,6 @@ def export(model: Union[torch.nn.Module, QuantizationSimModel],
 
             msg = (
                 f"Failed to convert onnx model to {target_version} due to {type(e).__name__}. {detail}"
-
                 "==============================================================\n"
                 f"{f.getvalue()}"
                 "==============================================================\n\n"
@@ -211,7 +214,7 @@ def _why_do_i_need_opset21(model: torch.nn.Module) -> str:
         reasons.append("blockwise quantization")
 
     if not reasons:
-        return "" # This should never happen
+        return ""  # This should never happen
 
     if len(reasons) == 1:
         return reasons[0]
@@ -221,8 +224,9 @@ def _why_do_i_need_opset21(model: torch.nn.Module) -> str:
 
 def _assert_minimum_required_opset(model: torch.nn.Module, target_opset: int):
     if target_opset < 21 and any(
-            qtzr.block_size is not None for qtzr in model.modules()
-            if isinstance(qtzr, AffineQuantizerBase)
+        qtzr.block_size is not None
+        for qtzr in model.modules()
+        if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear with per-block are only supported in opset >= 21;"
@@ -230,8 +234,9 @@ def _assert_minimum_required_opset(model: torch.nn.Module, target_opset: int):
         )
 
     if target_opset < 21 and any(
-            qtzr.bitwidth in (4, 16) for qtzr in model.modules()
-            if isinstance(qtzr, AffineQuantizerBase)
+        qtzr.bitwidth in (4, 16)
+        for qtzr in model.modules()
+        if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear with INT4/INT16 are only supported in opset >= 21;"
@@ -239,8 +244,9 @@ def _assert_minimum_required_opset(model: torch.nn.Module, target_opset: int):
         )
 
     if target_opset < 13 and any(
-            tuple(qtzr.shape) for qtzr in model.modules()
-            if isinstance(qtzr, AffineQuantizerBase)
+        tuple(qtzr.shape)
+        for qtzr in model.modules()
+        if isinstance(qtzr, AffineQuantizerBase)
     ):
         raise RuntimeError(
             "onnx::QuantizeLinear and DequantizeLinear with per-channel are only supported in opset >= 13;"
@@ -270,7 +276,9 @@ def _check_unsupported_args(kwargs):
     keep_initializers_as_inputs = kwargs.get("keep_initializers_as_inputs", False)
 
     if keep_initializers_as_inputs:
-        raise NotImplementedError("keep_initializers_as_inputs=True is not supported yet")
+        raise NotImplementedError(
+            "keep_initializers_as_inputs=True is not supported yet"
+        )
 
     dynamo = kwargs.get("dynamo", False)
 
@@ -287,11 +295,14 @@ def _check_unsupported_args(kwargs):
     if export_modules_as_functions:
         raise RuntimeError("export_modules_as_functions=True is not supported")
 
-    operator_export_type = kwargs.get("operator_export_type",
-                                      torch.onnx.OperatorExportTypes.ONNX)
+    operator_export_type = kwargs.get(
+        "operator_export_type", torch.onnx.OperatorExportTypes.ONNX
+    )
 
     if operator_export_type == torch.onnx.OperatorExportTypes.ONNX_ATEN:
-        raise RuntimeError("operator_export_type=OperatorExportTypes.ONNX_ATEN is not supported")
+        raise RuntimeError(
+            "operator_export_type=OperatorExportTypes.ONNX_ATEN is not supported"
+        )
 
 
 def _check_non_standard_quantizer(model: torch.nn.Module):
@@ -312,9 +323,9 @@ def _check_non_standard_quantizer(model: torch.nn.Module):
             )
 
 
-def _to_onnx(model: torch.nn.Module,
-             args: Union[Tuple[Any, ...], torch.Tensor],
-             **kwargs):
+def _to_onnx(
+    model: torch.nn.Module, args: Union[Tuple[Any, ...], torch.Tensor], **kwargs
+):
     _check_float16_quantizers(model)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -333,7 +344,9 @@ def _to_onnx(model: torch.nn.Module,
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]
     tensor_to_encoding_map = {
         name: (encoding, name in param_names)
-        for name, encoding in _onnx.remove_quantization_nodes_from_onnx_graph(onnx_model).items()
+        for name, encoding in _onnx.remove_quantization_nodes_from_onnx_graph(
+            onnx_model
+        ).items()
     }
     return onnx_model, tensor_to_encoding_map
 
@@ -350,8 +363,8 @@ def _concretize_int32_bias_quantizers(model, args, kwargs=None):
         qmodule: qmodule.param_quantizers["bias"]
         for qmodule in model.modules()
         if isinstance(qmodule, QuantizationMixin)
-           and "bias" in qmodule.param_quantizers
-           and qmodule.bias is not None
+        and "bias" in qmodule.param_quantizers
+        and qmodule.bias is not None
     }
 
     try:
@@ -362,10 +375,13 @@ def _concretize_int32_bias_quantizers(model, args, kwargs=None):
                 # In this case, we honor the custom bias quantizer defined by the user
                 continue
 
-            if "weight" in qmodule.param_quantizers and \
-                    isinstance(qmodule.param_quantizers["weight"], AffineQuantizerBase):
+            if "weight" in qmodule.param_quantizers and isinstance(
+                qmodule.param_quantizers["weight"], AffineQuantizerBase
+            ):
                 # pylint: disable=protected-access
-                handle = qmodule.register_forward_hook(type(qmodule)._create_int32_bias_quantizer)
+                handle = qmodule.register_forward_hook(
+                    type(qmodule)._create_int32_bias_quantizer
+                )
                 handles.append(handle)
         try:
             model(*args, **kwargs)
@@ -385,9 +401,10 @@ def _temporarily_unfold_param_quantizers(model: torch.nn.Module):
     Temporarily re-instantiate param quantizers for ease of export
     """
     modules_with_folded_parameters = [
-        qmodule for qmodule in model.modules()
-        if isinstance(qmodule, QuantizationMixin) and
-           any(isinstance(param, DequantizedTensor) for param in qmodule.parameters())
+        qmodule
+        for qmodule in model.modules()
+        if isinstance(qmodule, QuantizationMixin)
+        and any(isinstance(param, DequantizedTensor) for param in qmodule.parameters())
     ]
 
     try:
@@ -413,20 +430,23 @@ def _remove_fp16_quantizers(model: torch.nn.Module):
                 continue
 
             for name, qtzr in qmodule.param_quantizers.items():
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                if isinstance(qtzr, FloatQuantizeDequantize) and (
+                    qtzr.is_float16() or qtzr.is_bfloat16()
+                ):
                     original_containers[(qmodule.param_quantizers, name)] = qtzr
                     qmodule.param_quantizers[name] = None
 
             for i, qtzr in enumerate(qmodule.input_quantizers):
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                if isinstance(qtzr, FloatQuantizeDequantize) and (
+                    qtzr.is_float16() or qtzr.is_bfloat16()
+                ):
                     original_containers[(qmodule.input_quantizers, i)] = qtzr
                     qmodule.input_quantizers[i] = None
 
             for i, qtzr in enumerate(qmodule.output_quantizers):
-                if isinstance(qtzr, FloatQuantizeDequantize) and \
-                        (qtzr.is_float16() or qtzr.is_bfloat16()):
+                if isinstance(qtzr, FloatQuantizeDequantize) and (
+                    qtzr.is_float16() or qtzr.is_bfloat16()
+                ):
                     original_containers[(qmodule.output_quantizers, i)] = qtzr
                     qmodule.output_quantizers[i] = None
 
@@ -437,8 +457,10 @@ def _remove_fp16_quantizers(model: torch.nn.Module):
             container[key] = qtzr
 
 
-def _to_onnx_qdq(onnx_model: onnx.ModelProto,
-                 tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]) -> onnx.ModelProto:
+def _to_onnx_qdq(
+    onnx_model: onnx.ModelProto,
+    tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
+) -> onnx.ModelProto:
     qnn_encodings = {
         name: encoding.to_qnn_encoding_dict("2.0.0")
         for name, (encoding, _) in tensor_to_encoding_map.items()
@@ -448,19 +470,22 @@ def _to_onnx_qdq(onnx_model: onnx.ModelProto,
     }
 
     qdq_tensor_names = {
-        fp_tensor_name: f"{fp_tensor_name}_qdq"
-        for fp_tensor_name in qnn_encodings
+        fp_tensor_name: f"{fp_tensor_name}_qdq" for fp_tensor_name in qnn_encodings
     }
 
-    onnx_opset_version = next(opset.version for opset in onnx_model.opset_import if opset.domain == "")
+    onnx_opset_version = next(
+        opset.version for opset in onnx_model.opset_import if opset.domain == ""
+    )
 
     # Add onnx QDQ nodes in batch
-    _add_onnx_qdq_nodes(onnx_model,
-                        input_names=qnn_encodings.keys(),
-                        output_names=qdq_tensor_names.values(),
-                        node_name_prefixes=qnn_encodings.keys(),
-                        encodings=qnn_encodings.values(),
-                        onnx_opset=onnx_opset_version)
+    _add_onnx_qdq_nodes(
+        onnx_model,
+        input_names=qnn_encodings.keys(),
+        output_names=qdq_tensor_names.values(),
+        node_name_prefixes=qnn_encodings.keys(),
+        encodings=qnn_encodings.values(),
+        onnx_opset=onnx_opset_version,
+    )
 
     # Restore model output names from "{output}_qdq" to "{output}"
     _restore_model_output_names(onnx_model, qdq_tensor_names)
@@ -472,10 +497,12 @@ def _check_float16_quantizers(module: torch.nn.Module):
     for qtzr in module.modules():
         if isinstance(qtzr, FloatQuantizeDequantize):
             if not qtzr.is_float16() and not qtzr.is_bfloat16():
-                msg = " ".join([
-                    "sim.onnx.export doesn't support exporting floating point encodings",
-                    f"except [b]float16. Got {qtzr.bitwidth}-bit float encoding",
-                ])
+                msg = " ".join(
+                    [
+                        "sim.onnx.export doesn't support exporting floating point encodings",
+                        f"except [b]float16. Got {qtzr.bitwidth}-bit float encoding",
+                    ]
+                )
                 raise RuntimeError(msg)
 
 
@@ -495,7 +522,9 @@ def _rename_outputs(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
                 node.output[i] = new_name
 
 
-def _restore_model_output_names(onnx_model: onnx.ModelProto, new_names: Mapping[str, str]):
+def _restore_model_output_names(
+    onnx_model: onnx.ModelProto, new_names: Mapping[str, str]
+):
     """
     Rename model outputs. Assuming "output" is the model output,
 
@@ -512,9 +541,11 @@ def _restore_model_output_names(onnx_model: onnx.ModelProto, new_names: Mapping[
     }
     _rename_inputs(onnx_model, _new_names)
 
-    _new_names.update({
-        new_names[output.name]: output.name
-        for output in onnx_model.graph.output
-        if output.name in new_names
-    })
+    _new_names.update(
+        {
+            new_names[output.name]: output.name
+            for output in onnx_model.graph.output
+            if output.name in new_names
+        }
+    )
     _rename_outputs(onnx_model, _new_names)

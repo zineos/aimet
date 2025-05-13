@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" AdaRound Nightly Tests """
+"""AdaRound Nightly Tests"""
+
 import json
 import pytest
 import random
@@ -52,10 +53,10 @@ from aimet_torch.v1.adaround.adaround_weight import Adaround, AdaroundParameters
 
 
 def dummy_forward_pass(model, inp_shape):
-    """ Dummy forward pass"""
+    """Dummy forward pass"""
     model.eval()
     with torch.no_grad():
-        model_input = torch.randn(inp_shape).to(torch.device('cuda'))
+        model_input = torch.randn(inp_shape).to(torch.device("cuda"))
         output = model(model_input)
 
     return output
@@ -65,66 +66,97 @@ class TestAdaround:
     """
     AdaRound test cases
     """
+
     @pytest.mark.cuda
     def test_adaround_resnet18_only_weights(self, tmp_path):
-        """ test end to end adaround with only weight quantized """
+        """test end to end adaround with only weight quantized"""
         torch.cuda.empty_cache()
         seed_all(1000)
 
         model = models.resnet18().eval()
-        model = model.to(torch.device('cuda'))
+        model = model.to(torch.device("cuda"))
         input_shape = (1, 3, 224, 224)
-        dummy_input = create_rand_tensors_given_shapes(input_shape, torch.device('cuda'))
+        dummy_input = create_rand_tensors_given_shapes(
+            input_shape, torch.device("cuda")
+        )
 
         orig_output = dummy_forward_pass(model, input_shape)
 
         # create fake data loader with image size (3, 224, 224)
-        data_loader = create_fake_data_loader(dataset_size=64, batch_size=16, image_size=input_shape[1:])
+        data_loader = create_fake_data_loader(
+            dataset_size=64, batch_size=16, image_size=input_shape[1:]
+        )
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=4, default_num_iterations=5,
-                                    default_reg_param=0.01, default_beta_range=(20, 2))
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=4,
+            default_num_iterations=5,
+            default_reg_param=0.01,
+            default_beta_range=(20, 2),
+        )
 
-        adarounded_model = Adaround.apply_adaround(model, dummy_input, params, path=tmp_path, filename_prefix='resnet18',
-                                                   default_param_bw=4,
-                                                   default_quant_scheme=QuantScheme.post_training_tf_enhanced)
+        adarounded_model = Adaround.apply_adaround(
+            model,
+            dummy_input,
+            params,
+            path=tmp_path,
+            filename_prefix="resnet18",
+            default_param_bw=4,
+            default_quant_scheme=QuantScheme.post_training_tf_enhanced,
+        )
 
         ada_output = dummy_forward_pass(adarounded_model, input_shape)
         assert not torch.equal(orig_output, ada_output)
 
         # Test exported encodings JSON file
-        with open(tmp_path / 'resnet18.encodings') as json_file:
-            encoding_data = json.load(json_file)['param_encodings']
+        with open(tmp_path / "resnet18.encodings") as json_file:
+            encoding_data = json.load(json_file)["param_encodings"]
 
         assert isinstance(encoding_data["conv1.weight"], list)
 
     @pytest.mark.cuda
     def test_adaround_resnet18_followed_by_quantsim(self, tmp_path):
-        """ test end to end adaround with weight 4 bits and output activations 8 bits quantized """
+        """test end to end adaround with weight 4 bits and output activations 8 bits quantized"""
         torch.cuda.empty_cache()
         seed_all(1000)
 
         model = models.resnet18().eval()
-        model = model.to(torch.device('cuda'))
+        model = model.to(torch.device("cuda"))
         input_shape = (1, 3, 224, 224)
-        dummy_input = create_rand_tensors_given_shapes(input_shape, torch.device('cuda'))
+        dummy_input = create_rand_tensors_given_shapes(
+            input_shape, torch.device("cuda")
+        )
 
         # create fake data loader with image size (3, 224, 224)
-        data_loader = create_fake_data_loader(dataset_size=64, batch_size=16, image_size=input_shape[1:])
+        data_loader = create_fake_data_loader(
+            dataset_size=64, batch_size=16, image_size=input_shape[1:]
+        )
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=4, default_num_iterations=5,
-                                    default_reg_param=0.01, default_beta_range=(20, 2))
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=4,
+            default_num_iterations=5,
+            default_reg_param=0.01,
+            default_beta_range=(20, 2),
+        )
         # W4A8
         param_bw = 4
         output_bw = 8
         quant_scheme = QuantScheme.post_training_tf_enhanced
 
-        adarounded_model = Adaround.apply_adaround(model, dummy_input, params, path=tmp_path,
-                                                   filename_prefix='resnet18', default_param_bw=param_bw,
-                                                   default_quant_scheme=quant_scheme)
+        adarounded_model = Adaround.apply_adaround(
+            model,
+            dummy_input,
+            params,
+            path=tmp_path,
+            filename_prefix="resnet18",
+            default_param_bw=param_bw,
+            default_quant_scheme=quant_scheme,
+        )
 
         # Read exported param encodings JSON file
         with open(tmp_path / "resnet18.encodings") as json_file:
-            encoding_data = json.load(json_file)['param_encodings']
+            encoding_data = json.load(json_file)["param_encodings"]
 
         encoding = encoding_data["conv1.weight"]
         before_min = np.array([e["min"] for e in encoding])
@@ -133,12 +165,21 @@ class TestAdaround:
         before_offset = np.array([e["offset"] for e in encoding])
 
         # Create QuantSim using adarounded_model, set and freeze parameter encodings and then invoke compute_encodings
-        sim = QuantizationSimModel(adarounded_model, quant_scheme=quant_scheme, default_param_bw=param_bw,
-                                   default_output_bw=output_bw, dummy_input=dummy_input)
-        sim.set_and_freeze_param_encodings(encoding_path=tmp_path / 'resnet18.encodings')
-        sim.compute_encodings(dummy_forward_pass, forward_pass_callback_args=input_shape)
+        sim = QuantizationSimModel(
+            adarounded_model,
+            quant_scheme=quant_scheme,
+            default_param_bw=param_bw,
+            default_output_bw=output_bw,
+            dummy_input=dummy_input,
+        )
+        sim.set_and_freeze_param_encodings(
+            encoding_path=tmp_path / "resnet18.encodings"
+        )
+        sim.compute_encodings(
+            dummy_forward_pass, forward_pass_callback_args=input_shape
+        )
 
-        encoding = sim.model.conv1.param_quantizers['weight'].encoding
+        encoding = sim.model.conv1.param_quantizers["weight"].encoding
         after_min = np.array([e.min for e in encoding])
         after_max = np.array([e.max for e in encoding])
         after_delta = np.array([e.delta for e in encoding])
@@ -158,9 +199,9 @@ class TestAdaround:
 
 
 def seed_all(seed=1029):
-    """ Setup seed """
+    """Setup seed"""
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)

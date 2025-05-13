@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities for working with ModelOptimization C++ library """
+"""Utilities for working with ModelOptimization C++ library"""
+
 from typing import List
 import tensorflow as tf
 import numpy as np
@@ -49,10 +50,16 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
 
 class PymoSvdUtils:
-    """ Utilities for working with SVD ModelOptimization C++ library """
+    """Utilities for working with SVD ModelOptimization C++ library"""
 
     @classmethod
-    def configure_layers_in_pymo_svd(cls, layers: List[Layer], cost_metric: CostMetric, svd_lib_ref, svd_type=pymo.TYPE_SINGLE):
+    def configure_layers_in_pymo_svd(
+        cls,
+        layers: List[Layer],
+        cost_metric: CostMetric,
+        svd_lib_ref,
+        svd_type=pymo.TYPE_SINGLE,
+    ):
         """
         Configure layers with the pymo svd library
         :param layers: List of layers to configure
@@ -83,10 +90,15 @@ class PymoSvdUtils:
             if isinstance(layer.module, tf.keras.layers.Conv2D):
                 # TF Conv weight order [KH,KW,ID,OD]
                 # SVD expects weight matrix of the form [output_channels, input_channels, kernel_height, kernel_width]
-                attr.shape = [weight_shape[3], weight_shape[2], weight_shape[0], weight_shape[1]]
+                attr.shape = [
+                    weight_shape[3],
+                    weight_shape[2],
+                    weight_shape[0],
+                    weight_shape[1],
+                ]
 
                 # activation shape : [height, width]
-                attr.activation_dims = (output_dims[1], output_dims[2])         # (H,W)
+                attr.activation_dims = (output_dims[1], output_dims[2])  # (H,W)
 
                 # CONV weights are stored in the order {H,W,I,O} in Tensorflow
                 # Re-order them to the form {O,I,H,W}
@@ -120,23 +132,24 @@ class PymoSvdUtils:
 
     @staticmethod
     def _get_pymo_layer_type(module: tf.keras.layers):
-
-        if isinstance(module, tf.keras.layers.Conv2D) and \
-                not isinstance(module, (tf.keras.layers.SeparableConv2D, tf.keras.layers.DepthwiseConv2D)):
+        if isinstance(module, tf.keras.layers.Conv2D) and not isinstance(
+            module, (tf.keras.layers.SeparableConv2D, tf.keras.layers.DepthwiseConv2D)
+        ):
             return pymo.LAYER_TYPE_CONV
 
         if isinstance(module, tf.keras.layers.Dense):
             return pymo.LAYER_TYPE_FC
 
-        raise AssertionError("Unsupported layer_type. Only Linear and Conv2D layers are currently supported")
+        raise AssertionError(
+            "Unsupported layer_type. Only Linear and Conv2D layers are currently supported"
+        )
 
     @staticmethod
     def _get_pymo_cost_metric(metric: CostMetric):
-
         if metric == CostMetric.memory:
             return pymo.COST_TYPE_MEMORY
 
         if metric == CostMetric.mac:
             return pymo.COST_TYPE_MAC
 
-        raise AssertionError('Unknown cost metric')
+        raise AssertionError("Unknown cost metric")

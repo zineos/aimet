@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Weight tensor utility"""
+
 import typing
 import numpy as np
 import tensorflow as tf
@@ -46,13 +47,17 @@ class WeightTensorUtils:
     """
     Utility class to handle weight tensor
     """
+
     @staticmethod
-    def transpose_from_libpymo_to_tf_format(tensor: np.ndarray,
-                                            layer: tf.keras.layers.Layer) -> np.ndarray:
+    def transpose_from_libpymo_to_tf_format(
+        tensor: np.ndarray, layer: tf.keras.layers.Layer
+    ) -> np.ndarray:
         """
         Transpose the weight tensor shape from libpymo format to TensorFlow format
         """
-        if isinstance(layer, (tf.keras.layers.Conv2DTranspose, tf.keras.layers.DepthwiseConv2D)):
+        if isinstance(
+            layer, (tf.keras.layers.Conv2DTranspose, tf.keras.layers.DepthwiseConv2D)
+        ):
             # libpymo shape            [out_channels, in_channels, kernel_height, kernel_width] ->
             # TF Conv2DTranspose shape [kernel_height, kernel_width, out_channels, in_channels]
             transposed_tensor = tensor.transpose((2, 3, 0, 1))
@@ -66,12 +71,15 @@ class WeightTensorUtils:
         return transposed_tensor
 
     @staticmethod
-    def transpose_from_tf_to_libpymo_format(tensor: np.ndarray,
-                                            layer: tf.keras.layers.Layer) -> np.ndarray:
+    def transpose_from_tf_to_libpymo_format(
+        tensor: np.ndarray, layer: tf.keras.layers.Layer
+    ) -> np.ndarray:
         """
         Transpose the weight tensor shape from TensorFlow format to libpymo format
         """
-        if isinstance(layer, (tf.keras.layers.Conv2DTranspose, tf.keras.layers.DepthwiseConv2D)):
+        if isinstance(
+            layer, (tf.keras.layers.Conv2DTranspose, tf.keras.layers.DepthwiseConv2D)
+        ):
             # TF Conv2DTranspose shape [kernel_height, kernel_width, out_channels, in_channels] ->
             # libpymo shape            [out_channels, in_channels, kernel_height, kernel_width]
             transposed_tensor = tensor.transpose((2, 3, 0, 1))
@@ -86,7 +94,7 @@ class WeightTensorUtils:
 
     @staticmethod
     def get_max_abs_val_per_channel(
-            layer: tf.keras.layers.Conv2D, axis: typing.Tuple
+        layer: tf.keras.layers.Conv2D, axis: typing.Tuple
     ) -> np.ndarray:
         """
         Conv2D kernel tensor shape ->
@@ -125,7 +133,7 @@ class WeightTensorUtils:
             if isinstance(layer, tf.keras.layers.InputLayer):
                 continue
             if isinstance(layer, QcQuantizeWrapper):
-                layer_to_wrap_weights.extend(layer._layer_to_wrap.get_weights()) #pylint: disable=protected-access
+                layer_to_wrap_weights.extend(layer._layer_to_wrap.get_weights())  # pylint: disable=protected-access
             else:
                 layer_to_wrap_weights.extend(layer.get_weights())
 

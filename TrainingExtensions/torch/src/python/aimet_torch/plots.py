@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Create visualizations on the weights in each conv and linear layer in a model"""
+"""Create visualizations on the weights in each conv and linear layer in a model"""
 
 import os
 import numpy as np
@@ -137,7 +137,7 @@ def visualize_module_lineplot(conv_module, name_str):
     plt.xlabel("Output Channels")
     plt.ylabel("Weight Range")
     plt.title("Conv Module Output Channels")
-    plt.legend(loc='upper right')
+    plt.legend(loc="upper right")
     writer = SummaryWriter("./data")
     writer.add_figure(name_str, fig)
     writer.close()
@@ -174,8 +174,10 @@ def create_table_from_dataframe(dataframe, name_str):
     switch_backend()
     fig = plt.figure(figsize=(20, 20))
     fig.patch.set_visible(False)
-    plt.axis('off') #[Updated pylint is req. for Python 3.8 positional args spec] pylint: disable=too-many-function-args
-    plt.table(cellText=dataframe.values, colLabels=dataframe.columns, loc='top')
+    plt.axis(
+        "off"
+    )  # [Updated pylint is req. for Python 3.8 positional args spec] pylint: disable=too-many-function-args
+    plt.table(cellText=dataframe.values, colLabels=dataframe.columns, loc="top")
     fig.tight_layout()
 
     write_to_data(name_str, "", fig)
@@ -194,7 +196,9 @@ def get_necessary_statistics_from_dataframe(module_weights):
     return described_dataframe
 
 
-def compare_overall_model_changes_violinplot(before_module_weights, after_module_weights, tab_name, subplot_name):
+def compare_overall_model_changes_violinplot(
+    before_module_weights, after_module_weights, tab_name, subplot_name
+):
     """
     Creates two violin plots, one for all weight ranges before quantization and one for after.
 
@@ -212,7 +216,11 @@ def compare_overall_model_changes_violinplot(before_module_weights, after_module
     before_weights_flattened = np.ndarray.flatten(before_module_weights).tolist()
     after_weights_flattened = np.ndarray.flatten(after_module_weights).tolist()
 
-    ax1.violinplot([before_weights_flattened, after_weights_flattened], showmeans=True, showextrema=True)
+    ax1.violinplot(
+        [before_weights_flattened, after_weights_flattened],
+        showmeans=True,
+        showextrema=True,
+    )
 
     ax1.set_xticks([1, 2])
     ax1.set_xticklabels(["before quantization ranges", "after quantization ranges"])
@@ -221,8 +229,12 @@ def compare_overall_model_changes_violinplot(before_module_weights, after_module
     write_to_data(tab_name, subplot_name, fig)
 
 
-def compare_key_stats_scatter_plot(before_module_weights_statistics, after_module_weights_statistics, tab_name,
-                                   subplot_name):
+def compare_key_stats_scatter_plot(
+    before_module_weights_statistics,
+    after_module_weights_statistics,
+    tab_name,
+    subplot_name,
+):
     """
     Plots mean vs standard deviation and min vs max befor and after quantization.
 
@@ -243,44 +255,88 @@ def compare_key_stats_scatter_plot(before_module_weights_statistics, after_modul
     fig, (ax1, ax2) = plt.subplots(2, 2, figsize=(12, 8))
 
     # Row 1: scatter plots before quantization
-    ax1[0].scatter(before_module_weights_statistics.loc['mean'], before_module_weights_statistics.loc['std'], alpha=.3,
-                   color='orange')
-    ax1[0].set(xlabel='mean weights', ylabel='std weights', title='Before Quantization Mean vs Std')
-    ax1[1].scatter(before_module_weights_statistics.loc['min'], before_module_weights_statistics.loc['max'], alpha=.3,
-                   color='steelblue')
-    ax1[1].set(xlabel='min weights', ylabel='max weights', title='Before Quantization Min vs Max')
+    ax1[0].scatter(
+        before_module_weights_statistics.loc["mean"],
+        before_module_weights_statistics.loc["std"],
+        alpha=0.3,
+        color="orange",
+    )
+    ax1[0].set(
+        xlabel="mean weights",
+        ylabel="std weights",
+        title="Before Quantization Mean vs Std",
+    )
+    ax1[1].scatter(
+        before_module_weights_statistics.loc["min"],
+        before_module_weights_statistics.loc["max"],
+        alpha=0.3,
+        color="steelblue",
+    )
+    ax1[1].set(
+        xlabel="min weights",
+        ylabel="max weights",
+        title="Before Quantization Min vs Max",
+    )
 
     # Row 2: scatter plots after quantization
-    ax2[0].scatter(after_module_weights_statistics.loc['mean'], after_module_weights_statistics.loc['std'], alpha=.3,
-                   color='orange')
-    ax2[0].set(xlabel='mean weights', ylabel='std weights', title='After Quantization Mean vs Std')
-    ax2[1].scatter(after_module_weights_statistics.loc['min'], after_module_weights_statistics.loc['max'], alpha=.3,
-                   color='steelblue')
-    ax2[1].set(xlabel='min weights', ylabel='max weights', title='After Quantization Min vs Max')
+    ax2[0].scatter(
+        after_module_weights_statistics.loc["mean"],
+        after_module_weights_statistics.loc["std"],
+        alpha=0.3,
+        color="orange",
+    )
+    ax2[0].set(
+        xlabel="mean weights",
+        ylabel="std weights",
+        title="After Quantization Mean vs Std",
+    )
+    ax2[1].scatter(
+        after_module_weights_statistics.loc["min"],
+        after_module_weights_statistics.loc["max"],
+        alpha=0.3,
+        color="steelblue",
+    )
+    ax2[1].set(
+        xlabel="min weights",
+        ylabel="max weights",
+        title="After Quantization Min vs Max",
+    )
 
-    y_lower_bound = min(np.min(before_module_weights_statistics.loc['max']),
-                        np.min(after_module_weights_statistics.loc['max']))
-    y_upper_bound = max(np.max(before_module_weights_statistics.loc['max']),
-                        np.max(after_module_weights_statistics.loc['max']))
+    y_lower_bound = min(
+        np.min(before_module_weights_statistics.loc["max"]),
+        np.min(after_module_weights_statistics.loc["max"]),
+    )
+    y_upper_bound = max(
+        np.max(before_module_weights_statistics.loc["max"]),
+        np.max(after_module_weights_statistics.loc["max"]),
+    )
 
-    x_lower_bound = min(np.min(before_module_weights_statistics.loc['min']),
-                        np.min(after_module_weights_statistics.loc['min']))
-    x_upper_bound = max(np.max(before_module_weights_statistics.loc['min']),
-                        np.max(after_module_weights_statistics.loc['min']))
+    x_lower_bound = min(
+        np.min(before_module_weights_statistics.loc["min"]),
+        np.min(after_module_weights_statistics.loc["min"]),
+    )
+    x_upper_bound = max(
+        np.max(before_module_weights_statistics.loc["min"]),
+        np.max(after_module_weights_statistics.loc["min"]),
+    )
 
-    ax1[1].set_ylim(y_lower_bound - .1, y_upper_bound + .1)
-    ax1[1].set_xlim(x_lower_bound - .1, x_upper_bound + .1)
+    ax1[1].set_ylim(y_lower_bound - 0.1, y_upper_bound + 0.1)
+    ax1[1].set_xlim(x_lower_bound - 0.1, x_upper_bound + 0.1)
 
-    ax2[1].set_ylim(y_lower_bound - .1, y_upper_bound + .1)
-    ax2[1].set_xlim(x_lower_bound - .1, x_upper_bound + .1)
+    ax2[1].set_ylim(y_lower_bound - 0.1, y_upper_bound + 0.1)
+    ax2[1].set_xlim(x_lower_bound - 0.1, x_upper_bound + 0.1)
 
     plt.tight_layout()
     write_to_data(tab_name, subplot_name, fig)
     return
 
 
-def compare_overall_changes_line_plot(before_module_weights_statistics, after_module_weights_statistics, tab_name,
-                                      subplot_name):
+def compare_overall_changes_line_plot(
+    before_module_weights_statistics,
+    after_module_weights_statistics,
+    tab_name,
+    subplot_name,
+):
     """
     Compares the weight ranges before and after quantization of conv2d and linear modules,
     given pandas dataframes before and after quantization
@@ -299,20 +355,65 @@ def compare_overall_changes_line_plot(before_module_weights_statistics, after_mo
     count_col = before_module_weights_statistics.shape[1]  # count number of columns
 
     output_channels = list(range(count_col))
-    ax1.plot(output_channels, before_module_weights_statistics.loc['min'], color='khaki', label="min")
-    ax1.plot(output_channels, after_module_weights_statistics.loc['min'], color='darkgoldenrod', label="new minimum")
-    ax1.fill_between(output_channels, before_module_weights_statistics.loc['min'], after_module_weights_statistics.loc['min'],
-                     color='orange', alpha=0.2)
+    ax1.plot(
+        output_channels,
+        before_module_weights_statistics.loc["min"],
+        color="khaki",
+        label="min",
+    )
+    ax1.plot(
+        output_channels,
+        after_module_weights_statistics.loc["min"],
+        color="darkgoldenrod",
+        label="new minimum",
+    )
+    ax1.fill_between(
+        output_channels,
+        before_module_weights_statistics.loc["min"],
+        after_module_weights_statistics.loc["min"],
+        color="orange",
+        alpha=0.2,
+    )
 
-    ax1.plot(output_channels, before_module_weights_statistics.loc['mean'], color='steelblue', label="mean")
-    ax1.plot(output_channels, after_module_weights_statistics.loc['mean'], color='darkcyan', label="new mean")
-    ax1.fill_between(output_channels, before_module_weights_statistics.loc['mean'], after_module_weights_statistics.loc['mean'],
-                     color='steelblue', alpha=0.2)
+    ax1.plot(
+        output_channels,
+        before_module_weights_statistics.loc["mean"],
+        color="steelblue",
+        label="mean",
+    )
+    ax1.plot(
+        output_channels,
+        after_module_weights_statistics.loc["mean"],
+        color="darkcyan",
+        label="new mean",
+    )
+    ax1.fill_between(
+        output_channels,
+        before_module_weights_statistics.loc["mean"],
+        after_module_weights_statistics.loc["mean"],
+        color="steelblue",
+        alpha=0.2,
+    )
 
-    ax1.plot(output_channels, before_module_weights_statistics.loc['max'], color='lightgreen', label="max")
-    ax1.plot(output_channels, after_module_weights_statistics.loc['max'], color='green', label="new max")
-    ax1.fill_between(output_channels, before_module_weights_statistics.loc['max'], after_module_weights_statistics.loc['max'],
-                     color='green', alpha=0.2)
+    ax1.plot(
+        output_channels,
+        before_module_weights_statistics.loc["max"],
+        color="lightgreen",
+        label="max",
+    )
+    ax1.plot(
+        output_channels,
+        after_module_weights_statistics.loc["max"],
+        color="green",
+        label="new max",
+    )
+    ax1.fill_between(
+        output_channels,
+        before_module_weights_statistics.loc["max"],
+        after_module_weights_statistics.loc["max"],
+        color="green",
+        alpha=0.2,
+    )
 
     ax1.legend(loc="upper right")
 
@@ -337,7 +438,9 @@ def write_to_data(tab_name, subplot_name, fig):
     writer.close()
 
 
-def compare_boxplots_before_after_quantization(before_data, after_data, tab_name, subplot_name):
+def compare_boxplots_before_after_quantization(
+    before_data, after_data, tab_name, subplot_name
+):
     """
     Compares the weight ranges before and after quantization of conv2d and linear modules, \
     given a 2d numpy array of weights before and after quantization.
@@ -381,7 +484,9 @@ def map_all_module_weights(model):
     """
     module_weights_map = {}
     for name, module in model.named_modules():
-        if isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)):
+        if isinstance(
+            module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)
+        ):
             module_weights = get_weights(module)
             module_weights_map[name] = module_weights
     return module_weights_map
@@ -412,19 +517,38 @@ def before_after_plots_for_quantized_model(before_weights_map, after_weights_map
     for key in before_weights_map.keys():
         before_quantization_data = before_weights_map[key]
         after_quantization_data = after_weights_map[key]
-        compare_boxplots_before_after_quantization(before_quantization_data, after_quantization_data,
-                                                   tab_name=key, subplot_name="Boxplots")
+        compare_boxplots_before_after_quantization(
+            before_quantization_data,
+            after_quantization_data,
+            tab_name=key,
+            subplot_name="Boxplots",
+        )
 
-        before_quantization_as_dataframe = get_necessary_statistics_from_dataframe(before_quantization_data)
-        after_quantization_as_dataframe = get_necessary_statistics_from_dataframe(after_quantization_data)
+        before_quantization_as_dataframe = get_necessary_statistics_from_dataframe(
+            before_quantization_data
+        )
+        after_quantization_as_dataframe = get_necessary_statistics_from_dataframe(
+            after_quantization_data
+        )
 
-        compare_overall_model_changes_violinplot(before_quantization_data, after_quantization_data, tab_name=key,
-                                                 subplot_name="Violin")
-        compare_overall_changes_line_plot(before_quantization_as_dataframe, after_quantization_as_dataframe,
-                                          tab_name=key,
-                                          subplot_name="Line")
-        compare_key_stats_scatter_plot(before_quantization_as_dataframe, after_quantization_as_dataframe, tab_name=key,
-                                       subplot_name="Scatter")
+        compare_overall_model_changes_violinplot(
+            before_quantization_data,
+            after_quantization_data,
+            tab_name=key,
+            subplot_name="Violin",
+        )
+        compare_overall_changes_line_plot(
+            before_quantization_as_dataframe,
+            after_quantization_as_dataframe,
+            tab_name=key,
+            subplot_name="Line",
+        )
+        compare_key_stats_scatter_plot(
+            before_quantization_as_dataframe,
+            after_quantization_as_dataframe,
+            tab_name=key,
+            subplot_name="Scatter",
+        )
 
 
 def clear_event_files(my_path):

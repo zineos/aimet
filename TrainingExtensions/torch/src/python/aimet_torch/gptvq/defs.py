@@ -52,6 +52,7 @@ class GPTVQParameters:
     """
     Data carrier containing GPTVQ parameters
     """
+
     # pylint: disable=too-many-instance-attributes
     data_loader: DataLoader
     forward_fn: Callable[[nn.Module, Any], Any]

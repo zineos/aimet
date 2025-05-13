@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities for mixed precision feature """
+"""Utilities for mixed precision feature"""
 
 from typing import List, Dict
 from collections import defaultdict
@@ -46,13 +46,18 @@ from aimet_common.cost_calculator import CostCalculator
 from aimet_tensorflow.keras.layer_database import LayerDatabase
 from aimet_tensorflow.keras.amp.quantizer_groups import QuantizerGroup
 
-OUTPUT_STR = 'output'
-WEIGHT_STR = 'weight'
-INPUT_STR = 'input'
+OUTPUT_STR = "output"
+WEIGHT_STR = "weight"
+INPUT_STR = "input"
 
 
-def find_bit_ops_reduction(quantizer_group: QuantizerGroup, mac_dict: Dict, read_var_op_parent_op_dict: Dict[str, str],
-                           max_candidate: CANDIDATE_WITH_DTYPE, candidate: CANDIDATE_WITH_DTYPE) -> int:
+def find_bit_ops_reduction(
+    quantizer_group: QuantizerGroup,
+    mac_dict: Dict,
+    read_var_op_parent_op_dict: Dict[str, str],
+    max_candidate: CANDIDATE_WITH_DTYPE,
+    candidate: CANDIDATE_WITH_DTYPE,
+) -> int:
     """
     Find bit ops reduction when Bitwidth changes from max_candidate to candidate
     :param quantizer_group: Quantizer group for which we want to find bit ops reduction
@@ -76,20 +81,29 @@ def find_bit_ops_reduction(quantizer_group: QuantizerGroup, mac_dict: Dict, read
         for quant_name in quantizer_group_dict[WEIGHT_STR]:
             op_name = read_var_op_parent_op_dict[quant_name]
             if op_name in mac_dict:
-                bit_ops_reduction = bit_ops_reduction - mac_dict[op_name] * act_bw * param_bw + \
-                                    mac_dict[op_name] * act_bw_max * param_bw_max
+                bit_ops_reduction = (
+                    bit_ops_reduction
+                    - mac_dict[op_name] * act_bw * param_bw
+                    + mac_dict[op_name] * act_bw_max * param_bw_max
+                )
     elif WEIGHT_STR in quantizer_group_dict:
         for quant_name in quantizer_group_dict[WEIGHT_STR]:
             op_name = read_var_op_parent_op_dict[quant_name]
             if op_name in mac_dict:
-                bit_ops_reduction = bit_ops_reduction - mac_dict[op_name] * act_bw_max * param_bw + \
-                                    mac_dict[op_name] * act_bw_max * param_bw_max
-    if INPUT_STR in quantizer_group_dict  and WEIGHT_STR in quantizer_group_dict:
+                bit_ops_reduction = (
+                    bit_ops_reduction
+                    - mac_dict[op_name] * act_bw_max * param_bw
+                    + mac_dict[op_name] * act_bw_max * param_bw_max
+                )
+    if INPUT_STR in quantizer_group_dict and WEIGHT_STR in quantizer_group_dict:
         for quant_name in quantizer_group_dict[WEIGHT_STR]:
             op_name = read_var_op_parent_op_dict[quant_name]
             if op_name in mac_dict:
-                bit_ops_reduction = bit_ops_reduction - mac_dict[op_name] * act_bw * param_bw_max + \
-                                    mac_dict[op_name] * act_bw_max * param_bw_max
+                bit_ops_reduction = (
+                    bit_ops_reduction
+                    - mac_dict[op_name] * act_bw * param_bw_max
+                    + mac_dict[op_name] * act_bw_max * param_bw_max
+                )
     return bit_ops_reduction
 
 
@@ -102,7 +116,9 @@ def create_mac_dict(model: tf.keras.Model) -> Dict[str, int]:
     mac_dict = {}
     for compressible_layer in layer_db.get_compressible_layers().values():
         module_name = compressible_layer.name
-        mac_dict[module_name] = CostCalculator.compute_layer_cost(compressible_layer).mac
+        mac_dict[module_name] = CostCalculator.compute_layer_cost(
+            compressible_layer
+        ).mac
     return mac_dict
 
 
@@ -124,13 +140,15 @@ def create_quantizer_module_dict(quantizer_group: QuantizerGroup) -> Dict:
     return quantizer_module_dict
 
 
-def calculate_running_bit_ops(mac_dict: Dict[str, int],
-                              quantizer_group: QuantizerGroup,
-                              read_var_op_parent_op_dict: Dict[str, str],
-                              module_bitwidth_dict: Dict[str, List[int]],
-                              max_candidate: CANDIDATE_WITH_DTYPE,
-                              new_candidate: CANDIDATE_WITH_DTYPE,
-                              running_bit_ops: int) -> int:
+def calculate_running_bit_ops(
+    mac_dict: Dict[str, int],
+    quantizer_group: QuantizerGroup,
+    read_var_op_parent_op_dict: Dict[str, str],
+    module_bitwidth_dict: Dict[str, List[int]],
+    max_candidate: CANDIDATE_WITH_DTYPE,
+    new_candidate: CANDIDATE_WITH_DTYPE,
+    running_bit_ops: int,
+) -> int:
     """
     Returns new running bit ops given previous running bit ops value and the current quantizer to change bitwidth of
     :param mac_dict: Dictionary mapping modules to mac count of the module (only Conv and Linear modules are present in
@@ -142,8 +160,11 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int],
     :param new_candidate: New bitwidth and data type for the TensorQuantizer
     :param running_bit_ops: previous running bit ops count
     """
+
     # pylint: disable=too-many-locals
-    def _calculate_bit_ops(quantizer_type: str, running_bit_ops: int, module_name: str) -> int:
+    def _calculate_bit_ops(
+        quantizer_type: str, running_bit_ops: int, module_name: str
+    ) -> int:
         """
         Helper function to compute bit ops for weight or inputs feeding into an op
         """
@@ -155,10 +176,12 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int],
 
                 # Subtract the previous bitops count for this module (will add on the new bitops count for this
                 # module later, taking new bitwidth value into account)
-                running_bit_ops -= (module_bitwidth_dict[module_name][input_index] *
-                                    module_bitwidth_dict[module_name][weight_index] *
-                                    mac_dict[module_name])
-                if quantizer_type == 'input':
+                running_bit_ops -= (
+                    module_bitwidth_dict[module_name][input_index]
+                    * module_bitwidth_dict[module_name][weight_index]
+                    * mac_dict[module_name]
+                )
+                if quantizer_type == "input":
                     module_bitwidth_dict[module_name][input_index] = activation_bw_new
                 else:
                     module_bitwidth_dict[module_name][weight_index] = param_bw_new
@@ -168,16 +191,26 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int],
 
                 # Subtract the previous bitops count for this module (will add on the new bitops count for this
                 # module later, taking new bitwidth value into account)
-                running_bit_ops -= (activation_bw_max * param_bw_max) * mac_dict[module_name]
-                if quantizer_type == 'input':
-                    module_bitwidth_dict[module_name] = [activation_bw_new, param_bw_max]
+                running_bit_ops -= (activation_bw_max * param_bw_max) * mac_dict[
+                    module_name
+                ]
+                if quantizer_type == "input":
+                    module_bitwidth_dict[module_name] = [
+                        activation_bw_new,
+                        param_bw_max,
+                    ]
                 else:
-                    module_bitwidth_dict[module_name] = [activation_bw_max, param_bw_new]
+                    module_bitwidth_dict[module_name] = [
+                        activation_bw_max,
+                        param_bw_new,
+                    ]
             # Add new bitops count to the running bit ops value, taking into account the updated bitwidths for
             # input and weight quantizers.
-            running_bit_ops += (module_bitwidth_dict[module_name][input_index] *
-                                module_bitwidth_dict[module_name][weight_index] *
-                                mac_dict[module_name])
+            running_bit_ops += (
+                module_bitwidth_dict[module_name][input_index]
+                * module_bitwidth_dict[module_name][weight_index]
+                * mac_dict[module_name]
+            )
         return running_bit_ops
 
     input_index = 0
@@ -193,21 +226,27 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int],
     activation_bw_new = get_effective_bitwidth(act_dtype, activation_bw_new)
     param_bw_new = get_effective_bitwidth(param_dtype, param_bw_new)
 
-    if 'output' in quantizer_module_dict and 'weight' in quantizer_module_dict:
+    if "output" in quantizer_module_dict and "weight" in quantizer_module_dict:
         for module_name in quantizer_module_dict[WEIGHT_STR]:
             # Output of previous op is the input to this op
             parent_op_name = read_var_op_parent_op_dict[module_name]
-            running_bit_ops = _calculate_bit_ops('input', running_bit_ops, parent_op_name)
+            running_bit_ops = _calculate_bit_ops(
+                "input", running_bit_ops, parent_op_name
+            )
 
-    if 'input' in quantizer_module_dict:
+    if "input" in quantizer_module_dict:
         for module_name in quantizer_module_dict[WEIGHT_STR]:
             parent_op_name = read_var_op_parent_op_dict[module_name]
-            running_bit_ops = _calculate_bit_ops('input', running_bit_ops, parent_op_name)
+            running_bit_ops = _calculate_bit_ops(
+                "input", running_bit_ops, parent_op_name
+            )
 
-    if 'weight' in quantizer_module_dict:
+    if "weight" in quantizer_module_dict:
         for module_name in quantizer_module_dict[WEIGHT_STR]:
             parent_op_name = read_var_op_parent_op_dict[module_name]
-            running_bit_ops = _calculate_bit_ops('weight', running_bit_ops, parent_op_name)
+            running_bit_ops = _calculate_bit_ops(
+                "weight", running_bit_ops, parent_op_name
+            )
 
     return running_bit_ops
 
@@ -221,8 +260,19 @@ def find_read_var_op_parent_op_dict(model: tf.keras.Model) -> Dict[str, str]:
     read_var_op_parent_op_dict = {}
 
     for layer in model.layers:
-        if isinstance(layer, (tf.keras.layers.Conv2D, tf.keras.layers.Dense, tf.keras.layers.DepthwiseConv2D, tf.keras.layers.BatchNormalization, tf.keras.layers.Normalization, tf.keras.layers.LayerNormalization, tf.keras.layers.UnitNormalization)):
+        if isinstance(
+            layer,
+            (
+                tf.keras.layers.Conv2D,
+                tf.keras.layers.Dense,
+                tf.keras.layers.DepthwiseConv2D,
+                tf.keras.layers.BatchNormalization,
+                tf.keras.layers.Normalization,
+                tf.keras.layers.LayerNormalization,
+                tf.keras.layers.UnitNormalization,
+            ),
+        ):
             for param in layer.weights:
-                param_name = param.name.split(':')[0]
+                param_name = param.name.split(":")[0]
                 read_var_op_parent_op_dict[param_name] = layer.name
     return read_var_op_parent_op_dict

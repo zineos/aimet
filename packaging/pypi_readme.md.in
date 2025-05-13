@@ -10,7 +10,7 @@
 - [Requirements](#requirements)
 - [Why AIMET?](#why-aimet)
 - [Supported features](#supported-features)
-- [What's New](#whats-new)  
+- [What's New](#whats-new)
 - [Results](#results)
 - [Resources](#resources)
 - [Contributions](#contributions)
@@ -25,7 +25,7 @@ This package supports the following environment:
 
 ## Why AIMET?
 - **Supports advanced quantization techniques**: Inference using integer runtimes is significantly faster than using floating-point runtimes. For example, models run
-5x-15x faster on the Qualcomm Hexagon DSP than on the Qualcomm Kyro CPU. In addition, 8-bit precision models have a 4x smaller footprint than 32-bit precision models. However, maintaining model accuracy when quantizing ML models is often challenging.  AIMET solves this using novel techniques like Data-Free Quantization that provide state-of-the-art INT8 results on several popular models. 
+5x-15x faster on the Qualcomm Hexagon DSP than on the Qualcomm Kyro CPU. In addition, 8-bit precision models have a 4x smaller footprint than 32-bit precision models. However, maintaining model accuracy when quantizing ML models is often challenging.  AIMET solves this using novel techniques like Data-Free Quantization that provide state-of-the-art INT8 results on several popular models.
 - **Supports advanced model compression techniques** that enable models to run faster at inference-time and require less memory
 - **AIMET is designed to automate optimization** of neural networks avoiding time-consuming and tedious manual tweaking. AIMET also provides user-friendly APIs that allow users to make calls directly from their [TensorFlow](https://tensorflow.org) or [PyTorch](https://pytorch.org) or [ONNX](https://onnx.ai) pipelines.
 
@@ -54,7 +54,7 @@ Some recently added features include
 - Quantization-aware Training (QAT) for recurrent models (including with RNNs, LSTMs and GRUs)
 
 ## Results
-AIMET can quantize an existing 32-bit floating-point model to an 8-bit fixed-point model without sacrificing much accuracy and without model fine-tuning. 
+AIMET can quantize an existing 32-bit floating-point model to an 8-bit fixed-point model without sacrificing much accuracy and without model fine-tuning.
 
 ### DFQ
 The DFQ method applied to several popular networks, such as MobileNet-v2 and ResNet-50, result in less than 0.9% loss in accuracy all the way down to 8-bit quantization, in an automated way without any training data.

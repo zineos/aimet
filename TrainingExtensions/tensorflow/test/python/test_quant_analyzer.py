@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Test Quant Analyzer"""
+
 import json
 import os
 import tempfile
@@ -50,7 +51,10 @@ from aimet_tensorflow.keras.quant_analyzer import QuantAnalyzer
 from aimet_common.utils import CallbackFunc
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 
-from aimet_tensorflow.examples.test_models import keras_functional_conv_net, keras_sequential_conv_net
+from aimet_tensorflow.examples.test_models import (
+    keras_functional_conv_net,
+    keras_sequential_conv_net,
+)
 
 
 def forward_pass_func(model: tf.keras.Model, dummy_input):
@@ -58,9 +62,11 @@ def forward_pass_func(model: tf.keras.Model, dummy_input):
 
 
 def eval_func(model: tf.keras.Model, dummy_input):
-    model.compile(optimizer=tf.keras.optimizers.Adam(),
-                  loss=tf.keras.losses.CategoricalCrossentropy(),
-                  metrics=tf.keras.metrics.CategoricalAccuracy())
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(),
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=tf.keras.metrics.CategoricalAccuracy(),
+    )
 
     model.evaluate(dummy_input)
     return 0.8
@@ -73,7 +79,7 @@ def clear_session() -> None:
 
 class TestQuantAnalyzer:
     def test_perform_per_layer_analysis_by_enabling_quant_wrappers(self):
-        """ test perform per layer analysis by enabling quant wrappers """
+        """test perform per layer analysis by enabling quant wrappers"""
         model = keras_functional_conv_net()
         layer_names = [layer.name for layer in model.layers]
 
@@ -86,8 +92,11 @@ class TestQuantAnalyzer:
         quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            layer_wise_eval_score_dict = \
-                quant_analyzer.perform_per_layer_analysis_by_enabling_quant_wrappers(sim, results_dir=tmp_dir)
+            layer_wise_eval_score_dict = (
+                quant_analyzer.perform_per_layer_analysis_by_enabling_quant_wrappers(
+                    sim, results_dir=tmp_dir
+                )
+            )
             assert type(layer_wise_eval_score_dict) == dict
             assert len(layer_wise_eval_score_dict) == 7
 
@@ -99,7 +108,7 @@ class TestQuantAnalyzer:
                 assert os.path.isfile(Path(tmp_dir, "per_layer_quant_enabled.html"))
 
     def test_perform_per_layer_analysis_by_disabling_quant_wrappers(self):
-        """ test perform per layer analysis by disabling quant wrappers """
+        """test perform per layer analysis by disabling quant wrappers"""
         model = keras_functional_conv_net()
         layer_names = [layer.name for layer in model.layers]
 
@@ -112,8 +121,11 @@ class TestQuantAnalyzer:
         quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            layer_wise_eval_score_dict = \
-                quant_analyzer.perform_per_layer_analysis_by_disabling_quant_wrappers(sim, results_dir=tmp_dir)
+            layer_wise_eval_score_dict = (
+                quant_analyzer.perform_per_layer_analysis_by_disabling_quant_wrappers(
+                    sim, results_dir=tmp_dir
+                )
+            )
             assert type(layer_wise_eval_score_dict) == dict
             assert len(layer_wise_eval_score_dict) == 7
 
@@ -125,7 +137,7 @@ class TestQuantAnalyzer:
                 assert os.path.isfile(Path(tmp_dir, "per_layer_quant_disabled.html"))
 
     def test_export_per_layer_encoding_min_max_range(self, clear_session):
-        """ test export_per_layer_encoding_min_max_range() """
+        """test export_per_layer_encoding_min_max_range()"""
         model = keras_functional_conv_net()
 
         dummy_input = np.random.rand(1, 28, 28, 3)
@@ -137,32 +149,26 @@ class TestQuantAnalyzer:
         quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            quant_analyzer.export_per_layer_encoding_min_max_range(sim, results_dir=tmp_dir)
+            quant_analyzer.export_per_layer_encoding_min_max_range(
+                sim, results_dir=tmp_dir
+            )
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "weights.html"))
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "activations.html"))
 
     def test_export_per_layer_encoding_min_max_range_per_channel(self, clear_session):
-        """ test export_per_layer_encoding_min_max_range() for per channel quantization """
+        """test export_per_layer_encoding_min_max_range() for per channel quantization"""
         with tempfile.TemporaryDirectory() as tmp_dir:
             quantsim_config = {
                 "defaults": {
-                    "ops": {
-                        "is_output_quantized": "True"
-                    },
-                    "params": {
-                        "is_quantized": "True"
-                    },
+                    "ops": {"is_output_quantized": "True"},
+                    "params": {"is_quantized": "True"},
                     "per_channel_quantization": "True",
                 },
-                "params": {
-                    "bias": {
-                        "is_quantized": "False"
-                    }
-                },
+                "params": {"bias": {"is_quantized": "False"}},
                 "op_type": {"Gemm": {"per_channel_quantization": "False"}},
                 "supergroups": [],
                 "model_input": {},
-                "model_output": {}
+                "model_output": {},
             }
 
             with open(Path(tmp_dir, "quantsim_config.json"), "w") as f:
@@ -171,20 +177,26 @@ class TestQuantAnalyzer:
             model = keras_sequential_conv_net()
 
             dummy_input = np.random.rand(1, 28, 28, 3)
-            sim = QuantizationSimModel(model, config_file=Path(tmp_dir, "quantsim_config.json"))
+            sim = QuantizationSimModel(
+                model, config_file=Path(tmp_dir, "quantsim_config.json")
+            )
             sim.compute_encodings(forward_pass_func, dummy_input)
 
             forward_pass_callback = CallbackFunc(forward_pass_func, dummy_input)
             eval_callback = CallbackFunc(eval_func, dummy_input)
             quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
-            quant_analyzer.export_per_layer_encoding_min_max_range(sim, results_dir=tmp_dir)
+            quant_analyzer.export_per_layer_encoding_min_max_range(
+                sim, results_dir=tmp_dir
+            )
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "activations.html"))
-            assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "conv2d_conv2d-kernel.html"))
+            assert os.path.isfile(
+                Path(tmp_dir, "min_max_ranges", "conv2d_conv2d-kernel.html")
+            )
             # Dense (Gemm) is disabled to per-channel quantization, it should be in weights.html
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "weights.html"))
 
     def test_export_per_layer_stats_histogram(self, clear_session):
-        """ test export_per_layer_stats_histogram() """
+        """test export_per_layer_stats_histogram()"""
         model = keras_functional_conv_net()
 
         dummy_input = np.random.rand(1, 28, 28, 3)
@@ -201,11 +213,17 @@ class TestQuantAnalyzer:
             # Check if it is exported to correct html file.
             assert os.path.exists(Path(tmp_dir, "activations_pdf"))
             assert os.path.exists(Path(tmp_dir, "weights_pdf"))
-            assert os.path.isfile(Path(tmp_dir, "activations_pdf", "p_re_lu_output_q0_0.html"))
-            assert os.path.isfile(Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_0.html"))
+            assert os.path.isfile(
+                Path(tmp_dir, "activations_pdf", "p_re_lu_output_q0_0.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_0.html")
+            )
 
-    def test_export_per_layer_stats_histogram_multiple_activation_quantizers(self, clear_session):
-        """ test export_per_layer_stats_histogram() """
+    def test_export_per_layer_stats_histogram_multiple_activation_quantizers(
+        self, clear_session
+    ):
+        """test export_per_layer_stats_histogram()"""
         input1 = tf.keras.layers.Input(shape=(28, 28, 3))
         input2 = tf.keras.layers.Input(shape=(28, 28, 3))
         output = tf.keras.layers.Add()([input1, input2])
@@ -224,30 +242,26 @@ class TestQuantAnalyzer:
 
             # Check if it is exported to correct html file.
             assert os.path.exists(Path(tmp_dir, "activations_pdf"))
-            assert os.path.isfile(Path(tmp_dir, "activations_pdf", "add_input_q0_0.html"))
-            assert os.path.isfile(Path(tmp_dir, "activations_pdf", "add_input_q1_0.html"))
+            assert os.path.isfile(
+                Path(tmp_dir, "activations_pdf", "add_input_q0_0.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "activations_pdf", "add_input_q1_0.html")
+            )
 
     def test_export_per_layer_stats_histogram_per_channel(self, clear_session):
-        """ test export_per_layer_stats_histogram() for per channel quantization """
+        """test export_per_layer_stats_histogram() for per channel quantization"""
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "per_channel_quantization": "True",
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
-            "op_type": { "Gemm": { "per_channel_quantization": "False" } },
+            "params": {"bias": {"is_quantized": "False"}},
+            "op_type": {"Gemm": {"per_channel_quantization": "False"}},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -257,7 +271,9 @@ class TestQuantAnalyzer:
             model = keras_sequential_conv_net()
 
             dummy_input = np.random.rand(1, 28, 28, 3)
-            sim = QuantizationSimModel(model, config_file=Path(tmp_dir, "quantsim_config.json"))
+            sim = QuantizationSimModel(
+                model, config_file=Path(tmp_dir, "quantsim_config.json")
+            )
             sim.compute_encodings(forward_pass_func, dummy_input)
 
             forward_pass_callback = CallbackFunc(forward_pass_func, dummy_input)
@@ -268,14 +284,24 @@ class TestQuantAnalyzer:
             # Check if it is exported to correct html file.
             assert os.path.exists(Path(tmp_dir, "activations_pdf"))
             assert os.path.exists(Path(tmp_dir, "weights_pdf"))
-            assert os.path.isfile(Path(tmp_dir, "activations_pdf", "average_pooling2d_output_q0_0.html"))
-            assert os.path.isfile(Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_0.html"))
-            assert os.path.isfile(Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_1.html"))
-            assert os.path.isfile(Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_2.html"))
-            assert os.path.isfile(Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_3.html"))
+            assert os.path.isfile(
+                Path(tmp_dir, "activations_pdf", "average_pooling2d_output_q0_0.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_0.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_1.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_2.html")
+            )
+            assert os.path.isfile(
+                Path(tmp_dir, "weights_pdf", "conv2d", "conv2d_conv2d-kernel_3.html")
+            )
 
     def test_export_per_layer_mse_loss(self, clear_session):
-        """ test export_per_layer_mse_loss() """
+        """test export_per_layer_mse_loss()"""
         model = keras_functional_conv_net()
 
         dummy_input = np.random.rand(1, 28, 28, 3)
@@ -286,14 +312,16 @@ class TestQuantAnalyzer:
         eval_callback = CallbackFunc(eval_func, dummy_input)
         quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
 
-        unlabeled_dataset = tf.data.Dataset.from_tensor_slices(np.random.rand(32, 28, 28, 3)).batch(32)
+        unlabeled_dataset = tf.data.Dataset.from_tensor_slices(
+            np.random.rand(32, 28, 28, 3)
+        ).batch(32)
         quant_analyzer.enable_per_layer_mse_loss(unlabeled_dataset, num_batches=4)
         with tempfile.TemporaryDirectory() as tmp_dir:
             quant_analyzer.export_per_layer_mse_loss(sim, results_dir=tmp_dir)
             assert os.path.isfile(Path(tmp_dir, "per_layer_mse_loss.html"))
 
     def test_analyze(self, clear_session):
-        """ test end to end for analyze() method """
+        """test end to end for analyze() method"""
         model = keras_functional_conv_net()
 
         dummy_input = np.random.rand(1, 28, 28, 3)
@@ -304,13 +332,17 @@ class TestQuantAnalyzer:
         eval_callback = CallbackFunc(eval_func, dummy_input)
         quant_analyzer = QuantAnalyzer(model, forward_pass_callback, eval_callback)
 
-        unlabeled_dataset = tf.data.Dataset.from_tensor_slices(np.random.rand(32, 28, 28, 3)).batch(32)
+        unlabeled_dataset = tf.data.Dataset.from_tensor_slices(
+            np.random.rand(32, 28, 28, 3)
+        ).batch(32)
         quant_analyzer.enable_per_layer_mse_loss(unlabeled_dataset, num_batches=4)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            quant_analyzer.analyze(quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                   default_param_bw=8,
-                                   default_output_bw=8,
-                                   results_dir=tmp_dir)
+            quant_analyzer.analyze(
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                default_param_bw=8,
+                default_output_bw=8,
+                results_dir=tmp_dir,
+            )
 
             assert os.path.isfile(Path(tmp_dir, "per_layer_quant_disabled.html"))
             assert os.path.isfile(Path(tmp_dir, "per_layer_quant_enabled.html"))

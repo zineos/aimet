@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for ConnectedGraph """
+"""Utilities for ConnectedGraph"""
+
 import json
 import os
 from typing import List, Dict, Tuple, Set
@@ -103,16 +104,19 @@ def export_connected_graph(conn_graph: ConnectedGraph, path: str, filename_prefi
     ops_list = _serialize_ops(conn_graph)
     activation_products_list, param_products_list = _serialize_products(conn_graph)
     connected_graph_export_dict = {
-        'ops': ops_list,
-        'products': {
-            'activations': activation_products_list,
-            'parameters': param_products_list
-        }
+        "ops": ops_list,
+        "products": {
+            "activations": activation_products_list,
+            "parameters": param_products_list,
+        },
     }
 
-    connected_graph_export_path = os.path.join(path, filename_prefix + '.json')
-    with open(connected_graph_export_path, 'w') as encoding_fp_json:
-        json.dump(connected_graph_export_dict, encoding_fp_json, sort_keys=True, indent=4)
+    connected_graph_export_path = os.path.join(path, filename_prefix + ".json")
+    with open(connected_graph_export_path, "w") as encoding_fp_json:
+        json.dump(
+            connected_graph_export_dict, encoding_fp_json, sort_keys=True, indent=4
+        )
+
 
 def _serialize_ops(conn_graph: ConnectedGraph) -> List[Dict[str, str]]:
     """
@@ -123,16 +127,21 @@ def _serialize_ops(conn_graph: ConnectedGraph) -> List[Dict[str, str]]:
     ops_list = []
     input_ops = get_all_input_ops(conn_graph)
     for op in get_ordered_ops(input_ops):
-        ops_list.append({
-            'name': op.dotted_name,
-            'type': op.type,
-            'inputs': [op.dotted_name for op in op.input_ops],
-            'outputs': [op.dotted_name for op in op.output_ops],
-            'is_functional': op.get_module() is None
-        })
+        ops_list.append(
+            {
+                "name": op.dotted_name,
+                "type": op.type,
+                "inputs": [op.dotted_name for op in op.input_ops],
+                "outputs": [op.dotted_name for op in op.output_ops],
+                "is_functional": op.get_module() is None,
+            }
+        )
     return ops_list
 
-def _serialize_products(conn_graph: ConnectedGraph) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+
+def _serialize_products(
+    conn_graph: ConnectedGraph,
+) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
     """
     Get lists of products serialized as dictionary objects with name and op for parameter products, and name, producer,
     and consumers for activation products.
@@ -143,10 +152,9 @@ def _serialize_products(conn_graph: ConnectedGraph) -> Tuple[List[Dict[str, str]
     activation_products_list = []
     for product in conn_graph.get_all_products().values():
         if product.is_parm:
-            param_products_list.append({
-                'name': product.name,
-                'op': product.consumers[0].dotted_name
-            })
+            param_products_list.append(
+                {"name": product.name, "op": product.consumers[0].dotted_name}
+            )
         else:
             producer_name = None
             if product.producer:
@@ -154,8 +162,7 @@ def _serialize_products(conn_graph: ConnectedGraph) -> Tuple[List[Dict[str, str]
             consumer_names = []
             for consumer in product.consumers:
                 consumer_names.append(consumer.dotted_name)
-            activation_products_list.append({
-                'producer': producer_name,
-                'consumers': consumer_names
-            })
+            activation_products_list.append(
+                {"producer": producer_name, "consumers": consumer_names}
+            )
     return activation_products_list, param_products_list

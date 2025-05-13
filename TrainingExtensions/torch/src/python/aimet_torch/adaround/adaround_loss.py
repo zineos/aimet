@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to base adaround.adaround_loss """
-from .._base.adaround.adaround_loss import * # pylint: disable=wildcard-import, unused-wildcard-import
+"""Alias to base adaround.adaround_loss"""
+
+from .._base.adaround.adaround_loss import *  # pylint: disable=wildcard-import, unused-wildcard-import

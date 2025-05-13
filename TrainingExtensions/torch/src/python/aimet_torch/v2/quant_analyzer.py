@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Quant Analyzer for AIMET v2"""
+"""Quant Analyzer for AIMET v2"""
 
 import os
 import contextlib
@@ -52,7 +52,7 @@ from aimet_torch.v2.quantization.encoding_analyzer import _HistogramObserver, _H
 from aimet_torch.v2.batch_norm_fold import fold_all_batch_norms
 
 
-V1Encoding = namedtuple('V1Encoding', ['min', 'max'])
+V1Encoding = namedtuple("V1Encoding", ["min", "max"])
 
 
 class QuantAnalyzer(QuantAnalyzerBase):
@@ -65,6 +65,7 @@ class QuantAnalyzer(QuantAnalyzerBase):
      4) per PDF analysis and
      5) per layer MSE analysis
     """
+
     @staticmethod
     def _get_quantsim_cls() -> Type[QuantizationSimModel]:
         return QuantizationSimModel
@@ -73,11 +74,12 @@ class QuantAnalyzer(QuantAnalyzerBase):
     def _get_quant_wrapper_type() -> Tuple[Type]:
         return (BaseQuantizationMixin,)
 
-    def _create_and_export_stats_histogram_plot(self,
-                                                quantizer: QuantizerBase,
-                                                results_dir: str,
-                                                title: str,
-                                                ):
+    def _create_and_export_stats_histogram_plot(
+        self,
+        quantizer: QuantizerBase,
+        results_dir: str,
+        title: str,
+    ):
         """
         For given quantizer, create and export histogram (PDF) of statistics in html format.
 
@@ -93,7 +95,9 @@ class QuantAnalyzer(QuantAnalyzerBase):
         encodings = self._get_quantizer_encodings(quantizer)
 
         for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
-            export_stats_histogram_plot(histogram, encoding, results_dir, title=f"{title}_{index}")
+            export_stats_histogram_plot(
+                histogram, encoding, results_dir, title=f"{title}_{index}"
+            )
 
     @staticmethod
     def _enable_disable_quantizers(quantizers: List[QuantizerBase], enabled: bool):
@@ -155,12 +159,16 @@ class QuantAnalyzer(QuantAnalyzerBase):
         flatten_max = encoding.max.flatten()
 
         for encoding_min, encoding_max in zip(flatten_min, flatten_max):
-            v1_encodings.append(V1Encoding(min=encoding_min.item(), max=encoding_max.item()))
+            v1_encodings.append(
+                V1Encoding(min=encoding_min.item(), max=encoding_max.item())
+            )
 
         return v1_encodings
 
     @staticmethod
-    def _get_quantized_modules(sim: QuantizationSimModel) -> Generator[BaseQuantizationMixin, None, None]:
+    def _get_quantized_modules(
+        sim: QuantizationSimModel,
+    ) -> Generator[BaseQuantizationMixin, None, None]:
         for module in sim.model.modules():
             if isinstance(module, BaseQuantizationMixin):
                 yield module

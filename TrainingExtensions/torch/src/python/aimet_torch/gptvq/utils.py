@@ -36,6 +36,7 @@
 # =============================================================================
 # pylint: disable=redefined-outer-name
 """Utility methods for working with GPTVQ"""
+
 import math
 from typing import Optional, List, Tuple, Dict
 
@@ -52,11 +53,13 @@ HESSIAN_WEIGHTED_LOOKUP = False
 DO_CODEBOOK_FINE_TUNING = False
 
 
-def generate_codebook(weight_block: torch.Tensor,
-                      num_of_centroids: int,
-                      inverse_hessian_diagonal: Optional[torch.Tensor] = None,
-                      assignment_chunk_size: Optional[int] = None,
-                      kmeans_iteration: int = 100):
+def generate_codebook(
+    weight_block: torch.Tensor,
+    num_of_centroids: int,
+    inverse_hessian_diagonal: Optional[torch.Tensor] = None,
+    assignment_chunk_size: Optional[int] = None,
+    kmeans_iteration: int = 100,
+):
     """
     Generate and optimize codebook using K-means and return it
 
@@ -70,10 +73,14 @@ def generate_codebook(weight_block: torch.Tensor,
     codebook = hacky_mahalanobis_init(weight_block, num_of_centroids)
     for _ in range(kmeans_iteration):
         # Expectation step
-        assignments = get_assignments(weight_block, codebook, inverse_hessian_diagonal, assignment_chunk_size)
+        assignments = get_assignments(
+            weight_block, codebook, inverse_hessian_diagonal, assignment_chunk_size
+        )
 
         # Maximization step
-        codebook = do_kmeans_maximization(weight_block, codebook, assignments, inverse_hessian_diagonal)
+        codebook = do_kmeans_maximization(
+            weight_block, codebook, assignments, inverse_hessian_diagonal
+        )
     return codebook
 
 
@@ -91,15 +98,18 @@ def hacky_mahalanobis_init(tensor: torch.Tensor, num_of_centroids: int) -> torch
 
     dists = x_centered.pow(2).sum(-1)
     sorted_dists = torch.argsort(dists, dim=1)  # num_blocks_per_column x N
-    idx = torch.round(torch.linspace(0, x_centered.shape[1] - 1, num_of_centroids)).long()  # num_of_centroids
+    idx = torch.round(
+        torch.linspace(0, x_centered.shape[1] - 1, num_of_centroids)
+    ).long()  # num_of_centroids
 
     # num_blocks_per_column x num_of_centroids --> num_blocks_per_column x num_of_centroids x 1 --> num_blocks_per_column x num_of_centroids x vector_dim
-    idx = (sorted_dists[:, idx].unsqueeze(-1).expand(-1, -1, vector_dim))
+    idx = sorted_dists[:, idx].unsqueeze(-1).expand(-1, -1, vector_dim)
     return torch.gather(tensor, dim=1, index=idx)
 
 
-def manipulate_inverse_hessian_diagonal(tensor: torch.Tensor,
-                                        inverse_hessian_diagonal: Optional[torch.Tensor]) -> torch.Tensor:
+def manipulate_inverse_hessian_diagonal(
+    tensor: torch.Tensor, inverse_hessian_diagonal: Optional[torch.Tensor]
+) -> torch.Tensor:
     """
     Manipulate diagonal of inverse Hessian tensor if needed
 
@@ -112,17 +122,18 @@ def manipulate_inverse_hessian_diagonal(tensor: torch.Tensor,
 
     if inverse_hessian_diagonal.ndim > 2:  # should then be 1 x N x vector_dim
         assert (
-                inverse_hessian_diagonal.shape[0] == 1
-                and inverse_hessian_diagonal.shape[1] == tensor.shape[1]
-                and inverse_hessian_diagonal.shape[2] == tensor.shape[2]
+            inverse_hessian_diagonal.shape[0] == 1
+            and inverse_hessian_diagonal.shape[1] == tensor.shape[1]
+            and inverse_hessian_diagonal.shape[2] == tensor.shape[2]
         ), f"{inverse_hessian_diagonal.shape, tensor.shape}"
         return inverse_hessian_diagonal.unsqueeze(2)  # 1 x N x 1 x vector_dim
 
     return inverse_hessian_diagonal
 
 
-def generate_tensor_chunks(tensor: torch.Tensor,
-                           chunk_size: Optional[int]) -> List[torch.Tensor]:
+def generate_tensor_chunks(
+    tensor: torch.Tensor, chunk_size: Optional[int]
+) -> List[torch.Tensor]:
     """
     Generate chunks of torch.Tensor
 
@@ -136,9 +147,9 @@ def generate_tensor_chunks(tensor: torch.Tensor,
     return torch.split(tensor, chunk_size, dim=1)
 
 
-def generate_hessian_chunks(hessian: torch.Tensor,
-                            num_of_tensor_chunks: int,
-                            chunk_size: Optional[int]) -> List[torch.Tensor]:
+def generate_hessian_chunks(
+    hessian: torch.Tensor, num_of_tensor_chunks: int, chunk_size: Optional[int]
+) -> List[torch.Tensor]:
     """
     Generate chunks of diagonal of inverse Hessian tensor
 
@@ -156,9 +167,9 @@ def generate_hessian_chunks(hessian: torch.Tensor,
     return [hessian] * num_of_tensor_chunks
 
 
-def prepare_tensor_and_hessian_chunks(tensor: torch.Tensor,
-                                      hessian: torch.Tensor,
-                                      chunk_size: Optional[int]) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+def prepare_tensor_and_hessian_chunks(
+    tensor: torch.Tensor, hessian: torch.Tensor, chunk_size: Optional[int]
+) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Use chunking for better memory management and return tensor and hessian chunks
 
@@ -173,10 +184,12 @@ def prepare_tensor_and_hessian_chunks(tensor: torch.Tensor,
     return tensor_chunks, hessian_chunks
 
 
-def get_assignments(tensor: torch.Tensor,
-                    centroids: torch.Tensor,
-                    inverse_hessian_diagonal: Optional[torch.Tensor] = None,
-                    chunk_size: Optional[int] = None) -> torch.Tensor:
+def get_assignments(
+    tensor: torch.Tensor,
+    centroids: torch.Tensor,
+    inverse_hessian_diagonal: Optional[torch.Tensor] = None,
+    chunk_size: Optional[int] = None,
+) -> torch.Tensor:
     """
     Calculate nearest centroid index tensor
 
@@ -186,23 +199,33 @@ def get_assignments(tensor: torch.Tensor,
     :param chunk_size: Chunk size for better memory management
     :return: nearest centroid index tensor
     """
-    manipulated_hessian = manipulate_inverse_hessian_diagonal(tensor, inverse_hessian_diagonal)
-    tensor_chunks, hessian_chunks = prepare_tensor_and_hessian_chunks(tensor, manipulated_hessian, chunk_size)
+    manipulated_hessian = manipulate_inverse_hessian_diagonal(
+        tensor, inverse_hessian_diagonal
+    )
+    tensor_chunks, hessian_chunks = prepare_tensor_and_hessian_chunks(
+        tensor, manipulated_hessian, chunk_size
+    )
 
-    centroids = centroids.unsqueeze(1) # num_blocks_per_column x 1 x num_centroids x vector_dim
+    centroids = centroids.unsqueeze(
+        1
+    )  # num_blocks_per_column x 1 x num_centroids x vector_dim
     assignments = []
     for tensor_chunk, hessian_chunk in zip(tensor_chunks, hessian_chunks):
-        tensor_chunk = tensor_chunk.unsqueeze(2) # num_blocks_per_column x N x 1 x vector_dim
+        tensor_chunk = tensor_chunk.unsqueeze(
+            2
+        )  # num_blocks_per_column x N x 1 x vector_dim
         distance = ((tensor_chunk - centroids).pow(2) * hessian_chunk).sum(-1)
         assignments.append(distance.argmin(-1))
 
     return torch.concat(assignments, dim=1)  # num_blocks_per_column x N
 
 
-def do_kmeans_maximization(tensor: torch.Tensor,
-                           centroids: torch.Tensor,
-                           assignments: torch.Tensor,
-                           inverse_hessian_diagonal: Optional[torch.Tensor]) -> torch.Tensor:
+def do_kmeans_maximization(
+    tensor: torch.Tensor,
+    centroids: torch.Tensor,
+    assignments: torch.Tensor,
+    inverse_hessian_diagonal: Optional[torch.Tensor],
+) -> torch.Tensor:
     """
     Do K-means maximization step
 
@@ -241,9 +264,9 @@ def do_kmeans_maximization(tensor: torch.Tensor,
 
 
 def quad_loss_2(
-        weight_tensor: torch.Tensor,
-        quantized_weight_tensor: torch.Tensor,
-        hessian_tensor: torch.Tensor,
+    weight_tensor: torch.Tensor,
+    quantized_weight_tensor: torch.Tensor,
+    hessian_tensor: torch.Tensor,
 ) -> torch.Tensor:
     """
     Compute quad loss
@@ -259,12 +282,12 @@ def quad_loss_2(
 
 # pylint: disable=too-many-locals
 def fine_tune_codebook(
-        original_weight: torch.Tensor,
-        original_hessian: torch.Tensor,
-        codebooks: List,
-        original_assignments: List,
-        gptvq_params: GPTVQParameters,
-        quantizer: nn.Module,
+    original_weight: torch.Tensor,
+    original_hessian: torch.Tensor,
+    codebooks: List,
+    original_assignments: List,
+    gptvq_params: GPTVQParameters,
+    quantizer: nn.Module,
 ):
     """
     Update codebook by fine-tuning
@@ -297,7 +320,9 @@ def fine_tune_codebook(
             for c, a in zip(centroids, assignments):
                 for a_ in a:
                     values = torch.gather(
-                        c, dim=1, index=a_.unsqueeze(-1).expand(-1, -1, gptvq_params.vector_dim)
+                        c,
+                        dim=1,
+                        index=a_.unsqueeze(-1).expand(-1, -1, gptvq_params.vector_dim),
                     )
                     all_values.append(values.view(weight_tensor.shape[0], -1))
             Q = torch.concat(all_values, dim=1)
@@ -351,9 +376,9 @@ def fine_tune_codebook(
     return Q
 
 
-def quantize_dequantize_codebook(codebook: torch.Tensor,
-                                 quantizer: nn.Module,
-                                 num_blocks_per_column: int) -> torch.Tensor:
+def quantize_dequantize_codebook(
+    codebook: torch.Tensor, quantizer: nn.Module, num_blocks_per_column: int
+) -> torch.Tensor:
     """
     Quantize-Dequantize codebook
 
@@ -372,9 +397,9 @@ def quantize_dequantize_codebook(codebook: torch.Tensor,
     return qdq_codebook.reshape(codebook.shape)
 
 
-def get_module_name_to_hessian_tensor(gptvq_params: GPTVQParameters,
-                                      sim: QuantizationSimModel,
-                                      module_names: List[str]) -> Dict[str, torch.Tensor]:
+def get_module_name_to_hessian_tensor(
+    gptvq_params: GPTVQParameters, sim: QuantizationSimModel, module_names: List[str]
+) -> Dict[str, torch.Tensor]:
     """
     Get module name to Hessian tensor dictionary
 
@@ -393,7 +418,9 @@ def get_module_name_to_hessian_tensor(gptvq_params: GPTVQParameters,
     act_sampler = ActivationSampler(sim.model, gptvq_params.forward_fn, module_names)
     n_samples = 0
     for current_data in gptvq_params.data_loader:
-        module_name_to_input_tensor = act_sampler.sample_activation_tensors(current_data)
+        module_name_to_input_tensor = act_sampler.sample_activation_tensors(
+            current_data
+        )
 
         curr_batch_size = 0
         for name, inp_data in module_name_to_input_tensor.items():
@@ -402,7 +429,13 @@ def get_module_name_to_hessian_tensor(gptvq_params: GPTVQParameters,
             curr_batch_size = inp_data.shape[0]
 
             quant_module = sim.model.get_submodule(name)
-            update_hessian(quant_module, inp_data, n_samples, curr_batch_size, name_to_hessian[name])
+            update_hessian(
+                quant_module,
+                inp_data,
+                n_samples,
+                curr_batch_size,
+                name_to_hessian[name],
+            )
 
         n_samples += curr_batch_size
 
@@ -424,6 +457,7 @@ def get_2d_tensor_shape(quant_module: BaseQuantizationMixin) -> torch.Size:
         raise ValueError(f"Unsupported module type {type(quant_module)}")
 
     return tensor_shape
+
 
 def update_hessian(
     quant_module: BaseQuantizationMixin,

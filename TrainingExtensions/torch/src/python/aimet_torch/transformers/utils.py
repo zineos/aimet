@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This file contains utilities needed to support pytorch nn transformer layer """
+"""This file contains utilities needed to support pytorch nn transformer layer"""
 
 import torch
 from aimet_torch import utils
@@ -51,9 +51,11 @@ def get_quantizable_pt_transformer_model(model: torch.nn.Module):
     :return: updates model in-place, as necessary.
     """
     # auto replace PyTorch MHA in given transformer layer with quantizable MHA
-    utils.replace_modules(model,
-                          lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                          create_quantizable_multihead_attention)
+    utils.replace_modules(
+        model,
+        lambda module: isinstance(module, torch.nn.MultiheadAttention),
+        create_quantizable_multihead_attention,
+    )
 
     # auto replace functional activation with module for nn.Transformer layers
     prepare_pt_transformer_for_quantsim(model)

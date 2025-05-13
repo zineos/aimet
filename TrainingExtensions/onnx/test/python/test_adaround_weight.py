@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Unit tests for Adaround Weights """
+"""Unit tests for Adaround Weights"""
+
 import copy
 import os
 import json
@@ -48,7 +49,11 @@ from onnxsim import simplify
 
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_common import libquant_info
-from aimet_onnx.adaround.adaround_weight import Adaround, AdaroundParameters, AdaroundSupportedModules
+from aimet_onnx.adaround.adaround_weight import (
+    Adaround,
+    AdaroundParameters,
+    AdaroundSupportedModules,
+)
 from .models import models_for_tests
 
 
@@ -56,6 +61,7 @@ class TestAdaround:
     """
     AdaRound Weights Unit Test Cases
     """
+
     @pytest.mark.parametrize("use_cuda", (True, False))
     def test_apply_adaround(self, use_cuda):
         if use_cuda and not torch.cuda.is_available():
@@ -64,32 +70,43 @@ class TestAdaround:
         torch.manual_seed(0)
         model = models_for_tests.single_residual_model()
         data_loader = dataloader(input_shape=(1, 3, 32, 32))
-        dummy_input = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+        dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
         sess = build_session(model, None)
         out_before_ada = sess.run(None, dummy_input)
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback, forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
         with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(model, params, tempdir, 'dummy',
-                                                        use_cuda=use_cuda)
+            ada_rounded_model = Adaround.apply_adaround(
+                model, params, tempdir, "dummy", use_cuda=use_cuda
+            )
             sess = build_session(ada_rounded_model, None)
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
-            with open(os.path.join(tempdir, 'dummy.encodings')) as json_file:
+            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
                 encoding_data = json.load(json_file)
 
-            param_names = {encoding['name'] for encoding in encoding_data}
-            params = {node.input[1] for node in model.nodes() if node.op_type in AdaroundSupportedModules}
+            param_names = {encoding["name"] for encoding in encoding_data}
+            params = {
+                node.input[1]
+                for node in model.nodes()
+                if node.op_type in AdaroundSupportedModules
+            }
             assert params.issubset(param_names)
 
-
-
-    @pytest.mark.skip(reason="test requires exact version of torch that the code has built against.")
+    @pytest.mark.skip(
+        reason="test requires exact version of torch that the code has built against."
+    )
     def test_apply_adaround_for_custom_op(self):
         custom_ops_path = os.path.dirname(libquant_info.__file__)
         custom_ops_path = os.path.join(custom_ops_path, "customops")
@@ -99,54 +116,84 @@ class TestAdaround:
         torch.manual_seed(0)
         model = models_for_tests.custom_add_model()
         data_loader = dataloader(input_shape=(1, 3, 64, 64))
-        dummy_input = {'input': np.random.rand(1, 3, 64, 64).astype(np.float32)}
+        dummy_input = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
         sess = build_session(model, [onnx_library])
         out_before_ada = sess.run(None, dummy_input)
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(1, 3, 64, 64).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5, forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
         with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(model, params, tempdir, 'dummy', user_onnx_libs=[onnx_library],
-                                                        use_cuda=torch.cuda.is_available())
+            ada_rounded_model = Adaround.apply_adaround(
+                model,
+                params,
+                tempdir,
+                "dummy",
+                user_onnx_libs=[onnx_library],
+                use_cuda=torch.cuda.is_available(),
+            )
             sess = build_session(ada_rounded_model, [onnx_library])
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
-            with open(os.path.join(tempdir, 'dummy.encodings')) as json_file:
+            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
                 encoding_data = json.load(json_file)
 
             param_keys = encoding_data.keys()
-            params = {node.input[1] for node in model.nodes() if node.op_type in AdaroundSupportedModules}
+            params = {
+                node.input[1]
+                for node in model.nodes()
+                if node.op_type in AdaroundSupportedModules
+            }
             assert params.issubset(param_keys)
 
-    @pytest.mark.parametrize("model, input_shape", [(models_for_tests.weight_gemm_model(10, 20, True), (1, 10)),
-                                                    (models_for_tests.weight_gemm_model(10, 20, False), (1, 10)),
-                                                    (models_for_tests.weight_matmul_model(10, 20), (1, 10, 10)),])
+    @pytest.mark.parametrize(
+        "model, input_shape",
+        [
+            (models_for_tests.weight_gemm_model(10, 20, True), (1, 10)),
+            (models_for_tests.weight_gemm_model(10, 20, False), (1, 10)),
+            (models_for_tests.weight_matmul_model(10, 20), (1, 10, 10)),
+        ],
+    )
     def test_adaround_matmul_gemm(self, model, input_shape, tmpdir):
         data_loader = dataloader(input_shape, input_shape[0])
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(*input_shape).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
-        Adaround.apply_adaround(model, params, tmpdir, 'dummy', use_cuda=False)
+        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
-        with open(os.path.join(tmpdir, 'dummy.encodings')) as json_file:
+        with open(os.path.join(tmpdir, "dummy.encodings")) as json_file:
             encoding_data = json.load(json_file)
 
-        param_names = {encoding['name'] for encoding in encoding_data}
-        assert 'weight' in param_names
+        param_names = {encoding["name"] for encoding in encoding_data}
+        assert "weight" in param_names
 
-    @pytest.mark.parametrize("model, input_shape", [(models_for_tests.weight_gemm_model(10, 20, True), (1, 10)),])
+    @pytest.mark.parametrize(
+        "model, input_shape",
+        [
+            (models_for_tests.weight_gemm_model(10, 20, True), (1, 10)),
+        ],
+    )
     def test_adaround_with_dict_input(self, model, input_shape, tmpdir):
-
         class DictDataLoader:
             """
             Example of a Dataloader which can be used for running AMPv2
@@ -167,78 +214,105 @@ class TestAdaround:
             def __len__(self):
                 return 4
 
-
         data_loader = DictDataLoader((1, 10), "input")
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(*input_shape).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
-        Adaround.apply_adaround(model, params, tmpdir, 'dummy', use_cuda=False)
+        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
-        with open(os.path.join(tmpdir, 'dummy.encodings')) as json_file:
+        with open(os.path.join(tmpdir, "dummy.encodings")) as json_file:
             encoding_data = json.load(json_file)
 
-        param_names = {encoding['name'] for encoding in encoding_data}
-        assert 'weight' in param_names
+        param_names = {encoding["name"] for encoding in encoding_data}
+        assert "weight" in param_names
 
-    @pytest.mark.parametrize("model, input_shape", [(models_for_tests.dynamic_matmul_model(1), (1, 10))])
+    @pytest.mark.parametrize(
+        "model, input_shape", [(models_for_tests.dynamic_matmul_model(1), (1, 10))]
+    )
     def test_adaround_dynamic_matmul(self, model, input_shape, tmpdir):
         """
         AdaRound should not error-out if there is a dynamic matmul
         """
         data_loader = dataloader(input_shape, input_shape[0])
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(*input_shape).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
-        Adaround.apply_adaround(model, params, tmpdir, 'dummy', use_cuda=False)
+        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
-    @pytest.mark.parametrize("model, input_shape", [(models_for_tests.simplifiable_model(1), (1, 10))])
+    @pytest.mark.parametrize(
+        "model, input_shape", [(models_for_tests.simplifiable_model(1), (1, 10))]
+    )
     def test_adaround_simplifiable_model(self, model, input_shape, tmpdir):
         """
         AdaRound should not error-out for models which need simplification
         """
         data_loader = dataloader(input_shape, input_shape[0])
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(*input_shape).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
         model, _ = simplify(model)
-        Adaround.apply_adaround(model, params, tmpdir, 'dummy', use_cuda=False)
+        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
-    @pytest.mark.parametrize("model_factory, input_shape", [(models_for_tests.pointwise_conv1d, (1, 10, 32)),
-                                                            (models_for_tests.pointwise_conv3d, (1, 10, 8, 8, 8)),
-                                                            (models_for_tests.pointwise_convtranspose1d, (1, 10, 32)),
-                                                            (models_for_tests.pointwise_convtranspose3d, (1, 10, 8, 4, 3)),
-                                                            (models_for_tests.padded_convtranspose2d, (1, 10, 32, 32))
-                                                            ])
+    @pytest.mark.parametrize(
+        "model_factory, input_shape",
+        [
+            (models_for_tests.pointwise_conv1d, (1, 10, 32)),
+            (models_for_tests.pointwise_conv3d, (1, 10, 8, 8, 8)),
+            (models_for_tests.pointwise_convtranspose1d, (1, 10, 32)),
+            (models_for_tests.pointwise_convtranspose3d, (1, 10, 8, 4, 3)),
+            (models_for_tests.padded_convtranspose2d, (1, 10, 32, 32)),
+        ],
+    )
     def test_adaround_convNd_model(self, model_factory, input_shape, tmpdir):
         """
         AdaRound should not error-out for non-2d Conv/ConvTranspose layers
         """
         model = model_factory(input_shape)
         data_loader = dataloader(input_shape, input_shape[0])
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(*input_shape).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
-        Adaround.apply_adaround(model, params, tmpdir, 'dummy', use_cuda=False)
+        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
     @pytest.mark.parametrize("use_cuda", (True, False))
     def test_apply_adaround_per_channel(self, use_cuda):
@@ -248,36 +322,54 @@ class TestAdaround:
         torch.manual_seed(0)
         model = models_for_tests.single_residual_model()
         data_loader = dataloader(input_shape=(1, 3, 32, 32))
-        dummy_input = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+        dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
         sess = build_session(model, None)
         out_before_ada = sess.run(None, dummy_input)
 
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5,
-                                    forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
         with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(model, params, tempdir, 'dummy', use_cuda=use_cuda,
-                                                        default_config_file=get_path_for_per_channel_config())
+            ada_rounded_model = Adaround.apply_adaround(
+                model,
+                params,
+                tempdir,
+                "dummy",
+                use_cuda=use_cuda,
+                default_config_file=get_path_for_per_channel_config(),
+            )
             sess = build_session(ada_rounded_model, None)
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
-            with open(os.path.join(tempdir, 'dummy.encodings')) as json_file:
+            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
                 encoding_data = json.load(json_file)
 
-                param_encodings = {encoding['name']: encoding for encoding in encoding_data}
-                assert len(param_encodings['conv3.weight']['scale']) == 8 # out_channels
-                assert len(param_encodings['conv4.weight']['scale']) == 8 # out_channels
+                param_encodings = {
+                    encoding["name"]: encoding for encoding in encoding_data
+                }
+                assert (
+                    len(param_encodings["conv3.weight"]["scale"]) == 8
+                )  # out_channels
+                assert (
+                    len(param_encodings["conv4.weight"]["scale"]) == 8
+                )  # out_channels
+
 
 def dataloader(input_shape: tuple, batch_size=2):
     class DataLoader:
         """
         Example of a Dataloader which can be used for running AMPv2
         """
+
         def __init__(self, batch_size: int, input_shape: tuple):
             """
             :param batch_size: batch size for data loader
@@ -310,6 +402,6 @@ def build_session(model, user_onnx_libs):
     session = InferenceSession(
         path_or_bytes=model.model.SerializeToString(),
         sess_options=sess_options,
-        providers=['CPUExecutionProvider'],
+        providers=["CPUExecutionProvider"],
     )
     return session

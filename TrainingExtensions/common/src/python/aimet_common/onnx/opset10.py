@@ -41,16 +41,22 @@ from typing import Iterable, Mapping, Optional
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
 
+
 class _QdqNodeFactory(ABC):
     OPSET: int
     SUPPORTED_DTYPES: Mapping[str, "TensorProto.DataType"]
 
     @classmethod
     @abstractmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
-        ...
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ): ...
 
     @classmethod
     def _check_dtype(cls, dtype: str):
@@ -66,7 +72,9 @@ class _QdqNodeFactory(ABC):
     def make_zero_point(cls, zero_point: np.ndarray, dtype: str, name: str):
         cls._check_dtype(dtype)
 
-        if (dtype == "int32" or dtype.startswith("float")) and not np.all(zero_point == 0):
+        if (dtype == "int32" or dtype.startswith("float")) and not np.all(
+            zero_point == 0
+        ):
             raise RuntimeError(
                 "DequantizeLinear with type int32 or float8 should have "
                 "no zero point or all zero points should be 0"
@@ -83,7 +91,9 @@ class _QdqNodeFactory(ABC):
         zero_point = zero_point.astype("int8" if dtype == "int4" else "uint8").flatten()
         if zero_point.size % 2 == 1:
             # Add 0 padding to enable int4x2 packing
-            zero_point = np.concatenate((zero_point, np.array([0], dtype=zero_point.dtype)))
+            zero_point = np.concatenate(
+                (zero_point, np.array([0], dtype=zero_point.dtype))
+            )
 
         if sys.byteorder == "little":
             # Little endian:
@@ -123,9 +133,15 @@ class QuantizeLinear(_QdqNodeFactory):
     }
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         if axis is not None:
             raise RuntimeError(
                 f"Per-channel quantization is not supported in opset {cls.OPSET}"
@@ -138,10 +154,9 @@ class QuantizeLinear(_QdqNodeFactory):
 
         cls._check_dtype(dtype)
 
-        return helper.make_node("QuantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output])
+        return helper.make_node(
+            "QuantizeLinear", name=name, inputs=list(inputs), outputs=[output]
+        )
 
 
 class DequantizeLinear(_QdqNodeFactory):
@@ -153,9 +168,15 @@ class DequantizeLinear(_QdqNodeFactory):
     }
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         if axis is not None:
             raise RuntimeError(
                 f"Per-channel quantization is not supported in opset {cls.OPSET}"
@@ -168,7 +189,6 @@ class DequantizeLinear(_QdqNodeFactory):
 
         cls._check_dtype(dtype)
 
-        return helper.make_node("DequantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output])
+        return helper.make_node(
+            "DequantizeLinear", name=name, inputs=list(inputs), outputs=[output]
+        )

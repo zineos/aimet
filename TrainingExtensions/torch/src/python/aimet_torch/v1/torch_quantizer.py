@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities that are used for different quantization simulation features """
+"""Utilities that are used for different quantization simulation features"""
 
 import math
 from typing import Tuple, Union
@@ -45,17 +45,21 @@ from packaging import version
 from aimet_common import libpymo
 from aimet_common.utils import AimetLogger
 from aimet_common.defs import QuantizationDataType
-from aimet_torch.v1.tensor_quantizer import StaticGridTensorQuantizer, LearnedGridTensorQuantizer
+from aimet_torch.v1.tensor_quantizer import (
+    StaticGridTensorQuantizer,
+    LearnedGridTensorQuantizer,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
 torch_quantizer_zero_ponit_data_type = torch.int64
-if version.parse(torch.__version__) > version.parse('1.10.2'):
+if version.parse(torch.__version__) > version.parse("1.10.2"):
     torch_quantizer_zero_ponit_data_type = torch.int32
 
 
-def calc_params_for_native_torch_quantizer(quantizer, ch_axis, device: torch.device) \
-        -> Tuple[Union[torch.Tensor, float], Union[torch.Tensor, int], int, int]:
+def calc_params_for_native_torch_quantizer(
+    quantizer, ch_axis, device: torch.device
+) -> Tuple[Union[torch.Tensor, float], Union[torch.Tensor, int], int, int]:
     """
     This function merely transforms previously computed quant encodings to the expected pytorch function format
     :param quantizer: input or output quantizer
@@ -68,7 +72,7 @@ def calc_params_for_native_torch_quantizer(quantizer, ch_axis, device: torch.dev
     encodings = quantizer.encoding
 
     if quantizer.use_strict_symmetric:
-        error_msg = 'Strict symmetric is not supported by native torch quantizer'
+        error_msg = "Strict symmetric is not supported by native torch quantizer"
         logger.error(error_msg)
         raise ValueError(error_msg)
 
@@ -76,8 +80,9 @@ def calc_params_for_native_torch_quantizer(quantizer, ch_axis, device: torch.dev
         # Per tensor quantization
         scale = float(encodings.delta)
         zero_point = int(-encodings.offset)
-        if quantizer.use_symmetric_encodings and (encodings.min < 0
-                                                  or (not quantizer.use_unsigned_symmetric)):
+        if quantizer.use_symmetric_encodings and (
+            encodings.min < 0 or (not quantizer.use_unsigned_symmetric)
+        ):
             # Symmetric quantization
             q_max = math.floor(numSteps / 2)
             q_min = -math.ceil(numSteps / 2)
@@ -89,13 +94,21 @@ def calc_params_for_native_torch_quantizer(quantizer, ch_axis, device: torch.dev
     else:
         # Per Channel quantization
         scale = torch.tensor([encoding.delta for encoding in encodings], device=device)
-        zero_point = torch.tensor([int(-encoding.offset) for encoding in encodings], device=device, dtype=torch_quantizer_zero_ponit_data_type)
-        if quantizer.use_symmetric_encodings and (all(encoding.min < 0 for encoding in encodings)
-                                                  or (not quantizer.use_unsigned_symmetric)):
+        zero_point = torch.tensor(
+            [int(-encoding.offset) for encoding in encodings],
+            device=device,
+            dtype=torch_quantizer_zero_ponit_data_type,
+        )
+        if quantizer.use_symmetric_encodings and (
+            all(encoding.min < 0 for encoding in encodings)
+            or (not quantizer.use_unsigned_symmetric)
+        ):
             # Symmetric quantization
             q_max = math.floor(numSteps / 2)
             q_min = -math.ceil(numSteps / 2)
-            zero_point = torch.zeros_like(zero_point, dtype=torch_quantizer_zero_ponit_data_type)
+            zero_point = torch.zeros_like(
+                zero_point, dtype=torch_quantizer_zero_ponit_data_type
+            )
         else:
             # Unsigned symmetric
             q_min, q_max = 0, numSteps
@@ -107,8 +120,12 @@ class TorchQuantizer:
     """
     A Quantizer using native torch quantization nodes
     """
-    def __init__(self, quantizer: Union[StaticGridTensorQuantizer, LearnedGridTensorQuantizer],
-                 device: torch.device):
+
+    def __init__(
+        self,
+        quantizer: Union[StaticGridTensorQuantizer, LearnedGridTensorQuantizer],
+        device: torch.device,
+    ):
         """
         Constructor
         :param post_training_module: StaticGridQuantWrapper wrapped module
@@ -122,14 +139,16 @@ class TorchQuantizer:
         self._ch_axis = None
 
         if self.data_type == QuantizationDataType.float and self.bitwidth != 16:
-            raise ValueError('Only FP16 quantizers are supported by TorchQuantizer')
+            raise ValueError("Only FP16 quantizers are supported by TorchQuantizer")
         encodings = quantizer.encoding
         # To aviod quantizer.enabled is True but quantizer.encoding is None
         if quantizer.enabled and quantizer.encoding:
             if not isinstance(encodings, libpymo.TfEncoding):
                 # pylint: disable=protected-access
                 self._ch_axis = quantizer._ch_axis
-            self.scale, self.zero_point, self.q_max, self.q_min = calc_params_for_native_torch_quantizer(quantizer, self._ch_axis, device)
+            self.scale, self.zero_point, self.q_max, self.q_min = (
+                calc_params_for_native_torch_quantizer(quantizer, self._ch_axis, device)
+            )
 
     def quantize_dequantize(self, tensor: torch.Tensor):
         """
@@ -143,10 +162,17 @@ class TorchQuantizer:
                 quantized_tensor = quantized_tensor.float()
                 return quantized_tensor
             if self._ch_axis is None:
-                return torch.fake_quantize_per_tensor_affine(tensor, self.scale, self.zero_point,
-                                                             self.q_min, self.q_max)
+                return torch.fake_quantize_per_tensor_affine(
+                    tensor, self.scale, self.zero_point, self.q_min, self.q_max
+                )
 
-            return torch.fake_quantize_per_channel_affine(tensor, self.scale, self.zero_point,
-                                                          self._ch_axis, self.q_min, self.q_max)
+            return torch.fake_quantize_per_channel_affine(
+                tensor,
+                self.scale,
+                self.zero_point,
+                self._ch_axis,
+                self.q_min,
+                self.q_max,
+            )
 
         return tensor

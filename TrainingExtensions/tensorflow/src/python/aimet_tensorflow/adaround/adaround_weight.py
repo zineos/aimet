@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top level API for Adaptive Rounding - Post-Training Quantization (PTQ) """
+"""Top level API for Adaptive Rounding - Post-Training Quantization (PTQ)"""
 
 from typing import Tuple
 import tensorflow as tf
@@ -45,8 +45,16 @@ class AdaroundParameters:
     """
     Configuration parameters for Adaround
     """
-    def __init__(self, data_set: tf.data.Dataset, num_batches: int, default_num_iterations: int = 10000,
-                 default_reg_param: float = 0.01, default_beta_range: Tuple = (20, 2), default_warm_start: float = 0.2):
+
+    def __init__(
+        self,
+        data_set: tf.data.Dataset,
+        num_batches: int,
+        default_num_iterations: int = 10000,
+        default_reg_param: float = 0.01,
+        default_beta_range: Tuple = (20, 2),
+        default_warm_start: float = 0.2,
+    ):
         """
         :param data_set: TF Data set
         :param num_batches: Number of batches
@@ -65,9 +73,11 @@ class AdaroundParameters:
         self.warm_start = default_warm_start
 
     def __eq__(self, other: "AdaroundParameters"):
-        return self.data_set == other.data_set and\
-               self.num_batches == other.num_batches and\
-               self.num_iterations == other.num_iterations and\
-               self.reg_param == other.reg_param and\
-               self.beta_range == other.beta_range and\
-               self.warm_start == other.warm_start
+        return (
+            self.data_set == other.data_set
+            and self.num_batches == other.num_batches
+            and self.num_iterations == other.num_iterations
+            and self.reg_param == other.reg_param
+            and self.beta_range == other.beta_range
+            and self.warm_start == other.warm_start
+        )

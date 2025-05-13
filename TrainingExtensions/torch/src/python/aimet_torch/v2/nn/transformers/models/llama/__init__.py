@@ -35,6 +35,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base directory to hold quantized transformers Llama modules """
+"""Base directory to hold quantized transformers Llama modules"""
 
 from .modeling_llama import QuantizedLlamaRMSNorm, QuantizedLlamaRotaryEmbedding

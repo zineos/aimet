@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Mixed precision inference """
+"""Mixed precision inference"""
 
 from typing import Any, Callable, Union, Tuple, List
 
@@ -55,16 +55,19 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.MixedPrecision)
 
 
 # pylint: disable=too-many-arguments
-def choose_mixed_precision(sim: QuantizationSimModel,
-                           candidates: List[CANDIDATE_WITH_DTYPE],
-                           eval_callback_for_phase1: Callable[[ort.InferenceSession], float],
-                           eval_callback_for_phase2: Callable[[ort.InferenceSession], float],
-                           allowed_accuracy_drop: Union[None, float],
-                           results_dir: str, clean_start: bool,
-                           forward_pass_callback: Callable[[ort.InferenceSession], Any],
-                           use_all_amp_candidates: bool = False, phase1_optimize: bool = True,
-                           amp_search_algo: AMPSearchAlgo = AMPSearchAlgo.Binary) -> \
-        Union[List[Tuple[int, float, QuantizerGroup, int]], None]:
+def choose_mixed_precision(
+    sim: QuantizationSimModel,
+    candidates: List[CANDIDATE_WITH_DTYPE],
+    eval_callback_for_phase1: Callable[[ort.InferenceSession], float],
+    eval_callback_for_phase2: Callable[[ort.InferenceSession], float],
+    allowed_accuracy_drop: Union[None, float],
+    results_dir: str,
+    clean_start: bool,
+    forward_pass_callback: Callable[[ort.InferenceSession], Any],
+    use_all_amp_candidates: bool = False,
+    phase1_optimize: bool = True,
+    amp_search_algo: AMPSearchAlgo = AMPSearchAlgo.Binary,
+) -> Union[List[Tuple[int, float, QuantizerGroup, int]], None]:
     """
     High-level API to perform in place Mixed Precision evaluation on the given sim model. A pareto list is created and
     a curve for Accuracy vs BitOps is saved under the results directory
@@ -105,20 +108,33 @@ def choose_mixed_precision(sim: QuantizationSimModel,
              100% then a user can use the pareto front curve to pick points and re-run,
              None if we early exit the mixed precision algorithm.
     """
-    mixed_precision_algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_for_phase1,
-                                                    eval_callback_for_phase2, results_dir, clean_start,
-                                                    forward_pass_callback, use_all_amp_candidates, phase1_optimize)
+    mixed_precision_algo = GreedyMixedPrecisionAlgo(
+        sim,
+        candidates,
+        eval_callback_for_phase1,
+        eval_callback_for_phase2,
+        results_dir,
+        clean_start,
+        forward_pass_callback,
+        use_all_amp_candidates,
+        phase1_optimize,
+    )
     mixed_precision_algo.run(allowed_accuracy_drop, amp_search_algo)
 
-    if mixed_precision_algo.accuracy_list is not None and mixed_precision_algo.pareto_list is not None:
+    if (
+        mixed_precision_algo.accuracy_list is not None
+        and mixed_precision_algo.pareto_list is not None
+    ):
         # Print mixed precision stats
         logger.info(mixed_precision_algo)
 
         # Visualize quantizer group sensitivity
-        visualize_quantizer_group_sensitivity(mixed_precision_algo.accuracy_list,
-                                              mixed_precision_algo.baseline_candidate,
-                                              mixed_precision_algo.fp32_accuracy,
-                                              results_dir=results_dir)
+        visualize_quantizer_group_sensitivity(
+            mixed_precision_algo.accuracy_list,
+            mixed_precision_algo.baseline_candidate,
+            mixed_precision_algo.fp32_accuracy,
+            results_dir=results_dir,
+        )
         # Create pareto list curve
         visualize_pareto_curve(mixed_precision_algo.pareto_list, results_dir)
         return mixed_precision_algo.pareto_list

@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Cross Layer Equalization acceptance tests for ResNet model. """
+"""Cross Layer Equalization acceptance tests for ResNet model."""
 
 import os
 import tempfile
@@ -45,16 +45,19 @@ import numpy as np
 from torchvision import models
 
 from aimet_torch import batch_norm_fold
-from aimet_torch.cross_layer_equalization import CrossLayerScaling, HighBiasFold, equalize_model
+from aimet_torch.cross_layer_equalization import (
+    CrossLayerScaling,
+    HighBiasFold,
+    equalize_model,
+)
 from aimet_torch import visualize_model
 from models.mobilenet import MobileNetV2
 
 
 class TestCrossLayerEqualization:
-    """ Acceptance tests related to winnowing ResNet models. """
+    """Acceptance tests related to winnowing ResNet models."""
 
     def test_cross_layer_equalization_resnet(self):
-
         torch.manual_seed(10)
         model = models.resnet18().eval()
 
@@ -89,41 +92,50 @@ class TestCrossLayerEqualization:
 
     def test_cross_layer_equalization_mobilenet_v2(self):
         torch.manual_seed(10)
-        model = MobileNetV2().to(torch.device('cpu'))
+        model = MobileNetV2().to(torch.device("cpu"))
         model = model.eval()
         equalize_model(model, (1, 3, 224, 224))
 
     def test_cross_layer_equalization_vgg(self):
         torch.manual_seed(10)
-        model = models.vgg16().to(torch.device('cpu'))
+        model = models.vgg16().to(torch.device("cpu"))
         model = model.eval()
         equalize_model(model, (1, 3, 224, 224))
 
     @pytest.mark.skip("Takes 1 min 42 secs to run")
     def test_cross_layer_equalization_mobilenet_v2_visualize_after_optimization(self):
         torch.manual_seed(10)
-        model = MobileNetV2().to(torch.device('cpu'))
+        model = MobileNetV2().to(torch.device("cpu"))
         model = model.eval()
         model_copy = copy.deepcopy(model)
-        results_dir = 'artifacts'
-        if not os.path.exists('artifacts'):
-            os.makedirs('artifacts')
+        results_dir = "artifacts"
+        if not os.path.exists("artifacts"):
+            os.makedirs("artifacts")
 
         # model_copy_again = copy.deepcopy(model)
         batch_norm_fold.fold_all_batch_norms(model_copy, (1, 3, 224, 224))
         equalize_model(model, (1, 3, 224, 224))
-        visualize_model.visualize_changes_after_optimization(model_copy, model, results_dir)
+        visualize_model.visualize_changes_after_optimization(
+            model_copy, model, results_dir
+        )
 
-    def test_cross_layer_equalization_resnet18_visualize_to_identify_problem_layers(self):
+    def test_cross_layer_equalization_resnet18_visualize_to_identify_problem_layers(
+        self,
+    ):
         torch.manual_seed(10)
         model = models.resnet18().eval()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            file = os.path.join(tmp_dir, 'visualize_relative_weight_ranges_to_identify_problematic_layers.html')
+            file = os.path.join(
+                tmp_dir,
+                "visualize_relative_weight_ranges_to_identify_problematic_layers.html",
+            )
 
             batch_norm_fold.fold_all_batch_norms(model, (1, 3, 224, 224))
 
-            visualize_model.visualize_relative_weight_ranges_to_identify_problematic_layers(model, tmp_dir)
+            visualize_model.visualize_relative_weight_ranges_to_identify_problematic_layers(
+                model, tmp_dir
+            )
             assert os.path.isfile(file)
 
     def test_cle_transposed_conv2D(self):
@@ -168,10 +180,9 @@ class TestCrossLayerEqualization:
         assert w_shape_2 == model.conv2.weight.shape
 
         output_after_cle = model(random_input).detach().numpy()
-        assert np.allclose(output_before_cle, output_after_cle, rtol=1.e-2)
+        assert np.allclose(output_before_cle, output_after_cle, rtol=1.0e-2)
 
     def test_cle_depthwise_transposed_conv2D(self):
-
         class TransposedConvModel(torch.nn.Module):
             def __init__(self):
                 super(TransposedConvModel, self).__init__()
@@ -219,7 +230,7 @@ class TestCrossLayerEqualization:
         assert w_shape_2 == model.conv2.weight.shape
 
         output_after_cle = model(random_input).detach().numpy()
-        assert np.allclose(output_before_cle, output_after_cle, rtol=1.e-2)
+        assert np.allclose(output_before_cle, output_after_cle, rtol=1.0e-2)
 
     def test_cle_for_maskrcnn(self):
         class JITTraceableWrapper(torch.nn.Module):

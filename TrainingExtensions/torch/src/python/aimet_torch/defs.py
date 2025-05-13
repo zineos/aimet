@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Common type definitions that are used across AIMET """
+"""Common type definitions that are used across AIMET"""
 
 from enum import Enum
 from typing import List, Optional, Union
@@ -63,6 +63,7 @@ class OpToIOTensors:
     """
     Data class to store the input and output tensor names of an operation as a lists.
     """
+
     def __init__(self, node_inputs: List[str], node_outputs: List[str]):
         """
         :param node_inputs: name of inputs to the node
@@ -74,7 +75,7 @@ class OpToIOTensors:
 
 
 class SpatialSvdParameters:
-    """ Configuration parameters for spatial svd compression """
+    """Configuration parameters for spatial svd compression"""
 
     class ManualModeParams:
         """
@@ -92,17 +93,22 @@ class SpatialSvdParameters:
         Configuration parameters for auto-mode compression
         """
 
-        def __init__(self, greedy_select_params: GreedySelectionParameters,
-                     modules_to_ignore: Optional[List[torch.nn.Module]] = None):
+        def __init__(
+            self,
+            greedy_select_params: GreedySelectionParameters,
+            modules_to_ignore: Optional[List[torch.nn.Module]] = None,
+        ):
             """
             :param greedy_select_params: Params for greedy comp-ratio selection algorithm
             :param modules_to_ignore: List of modules to ignore (None indicates nothing to ignore)
             """
             self.greedy_params = greedy_select_params
-            self.modules_to_ignore = [] if modules_to_ignore is None else modules_to_ignore
+            self.modules_to_ignore = (
+                [] if modules_to_ignore is None else modules_to_ignore
+            )
 
     class Mode(Enum):
-        """ Mode enumeration """
+        """Mode enumeration"""
 
         manual = 1
         """ Manual mode """
@@ -110,7 +116,12 @@ class SpatialSvdParameters:
         auto = 2
         """ Auto mode """
 
-    def __init__(self, mode: Mode, params: Union[ManualModeParams, AutoModeParams], multiplicity=1):
+    def __init__(
+        self,
+        mode: Mode,
+        params: Union[ManualModeParams, AutoModeParams],
+        multiplicity=1,
+    ):
         """
         :param mode: Either auto mode or manual mode
         :param params: Parameters for the mode selected
@@ -122,7 +133,7 @@ class SpatialSvdParameters:
 
 
 class ChannelPruningParameters:
-    """ Configuration parameters for channel pruning compression """
+    """Configuration parameters for channel pruning compression"""
 
     class ManualModeParams:
         """
@@ -140,17 +151,22 @@ class ChannelPruningParameters:
         Configuration parameters for auto-mode compression
         """
 
-        def __init__(self, greedy_select_params: GreedySelectionParameters,
-                     modules_to_ignore: Optional[List[torch.nn.Module]] = None):
+        def __init__(
+            self,
+            greedy_select_params: GreedySelectionParameters,
+            modules_to_ignore: Optional[List[torch.nn.Module]] = None,
+        ):
             """
             :param greedy_select_params: Params for greedy comp-ratio selection algorithm
             :param modules_to_ignore: List of modules to ignore (None indicates nothing to ignore)
             """
             self.greedy_params = greedy_select_params
-            self.modules_to_ignore = [] if modules_to_ignore is None else modules_to_ignore
+            self.modules_to_ignore = (
+                [] if modules_to_ignore is None else modules_to_ignore
+            )
 
     class Mode(Enum):
-        """ Mode enumeration """
+        """Mode enumeration"""
 
         manual = 1
         """ Manual mode: User specifies comp-ratio per layer """
@@ -158,9 +174,15 @@ class ChannelPruningParameters:
         auto = 2
         """ Auto mode: AIMET computes optimal comp-ratio per layer """
 
-    def __init__(self, data_loader: torch.utils.data.DataLoader, num_reconstruction_samples: int,
-                 allow_custom_downsample_ops: bool,
-                 mode: Mode, params: Union[ManualModeParams, AutoModeParams], multiplicity=1):
+    def __init__(
+        self,
+        data_loader: torch.utils.data.DataLoader,
+        num_reconstruction_samples: int,
+        allow_custom_downsample_ops: bool,
+        mode: Mode,
+        params: Union[ManualModeParams, AutoModeParams],
+        multiplicity=1,
+    ):
         self.data_loader = data_loader
         self.num_reconstruction_samples = num_reconstruction_samples
         self.allow_custom_downsample_ops = allow_custom_downsample_ops
@@ -170,7 +192,7 @@ class ChannelPruningParameters:
 
 
 class WeightSvdParameters:
-    """ Configuration parameters for weight svd compression """
+    """Configuration parameters for weight svd compression"""
 
     class ManualModeParams:
         """
@@ -188,10 +210,12 @@ class WeightSvdParameters:
         Configuration parameters for auto-mode compression
         """
 
-        def __init__(self,
-                     rank_select_scheme: RankSelectScheme,
-                     select_params: Union[GreedySelectionParameters, ],
-                     modules_to_ignore: Optional[List[torch.nn.Module]] = None):
+        def __init__(
+            self,
+            rank_select_scheme: RankSelectScheme,
+            select_params: Union[GreedySelectionParameters,],
+            modules_to_ignore: Optional[List[torch.nn.Module]] = None,
+        ):
             """
             :param rank_select_scheme: supports two options greedy and tar
             :param select_params: Params for greedy/TAR comp-ratio selection algorithm
@@ -199,10 +223,12 @@ class WeightSvdParameters:
             """
             self.rank_select_scheme = rank_select_scheme
             self.select_params = select_params
-            self.modules_to_ignore = [] if modules_to_ignore is None else modules_to_ignore
+            self.modules_to_ignore = (
+                [] if modules_to_ignore is None else modules_to_ignore
+            )
 
     class Mode(Enum):
-        """ Mode enumeration """
+        """Mode enumeration"""
 
         manual = 1
         """ Manual mode """
@@ -210,7 +236,12 @@ class WeightSvdParameters:
         auto = 2
         """ Auto mode """
 
-    def __init__(self, mode: Mode, params: Union[ManualModeParams, AutoModeParams], multiplicity=1):
+    def __init__(
+        self,
+        mode: Mode,
+        params: Union[ManualModeParams, AutoModeParams],
+        multiplicity=1,
+    ):
         """
         :param mode: Either auto mode or manual mode
         :param params: Parameters for the mode selected
@@ -225,6 +256,7 @@ class PassThroughOp(torch.nn.Module):
     """
     This is a pass-through op, used for purpose of making an op a no-op
     """
+
     # pylint:disable=arguments-differ
     @staticmethod
     def forward(inputx):

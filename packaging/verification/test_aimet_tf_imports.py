@@ -1,4 +1,4 @@
-#==============================================================================
+# ==============================================================================
 #  @@-COPYRIGHT-START-@@
 #
 #  Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
@@ -32,12 +32,13 @@
 #  SPDX-License-Identifier: BSD-3-Clause
 #
 #  @@-COPYRIGHT-END-@@
-#==============================================================================
+# ==============================================================================
 
-""" Import Verification for Aimet Tensorflow """
+"""Import Verification for Aimet Tensorflow"""
 
 from aimet_common.defs import QuantScheme
 import aimet_common.defs as aimet_common_defs
+
 ## import aimet_common.AimetTensorQuantizer
 import aimet_common.libpymo as libpymo
 
@@ -53,4 +54,3 @@ from aimet_tensorflow import bias_correction as aimet_bc
 from aimet_tensorflow import cross_layer_equalization as aimet_cle
 from aimet_tensorflow.adaround.adaround_weight import Adaround, AdaroundParameters
 from aimet_tensorflow.utils.graph_saver import save_and_load_graph
-

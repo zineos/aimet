@@ -50,7 +50,7 @@ def _get_numpy_array(model: ModelProto, param_name: str) -> Optional[np.ndarray]
     returns param value as a numpy array from model if present, otherwise None.
 
     Args:
-        model (ModelProto): source Model 
+        model (ModelProto): source Model
         param_name (str): parameter name to fetch value for
 
     Returns:
@@ -58,7 +58,10 @@ def _get_numpy_array(model: ModelProto, param_name: str) -> Optional[np.ndarray]
     """
     return numpy_helper.to_array(ParamUtils.get_param_by_name(model, param_name))
 
-def is_constant_scalar(model: ModelProto, op_input: Product, expected_value: Union[int | float]) -> bool:
+
+def is_constant_scalar(
+    model: ModelProto, op_input: Product, expected_value: Union[int | float]
+) -> bool:
     """
     Returns True if provided input is constant with scalar value equal to expected value.
 
@@ -75,6 +78,7 @@ def is_constant_scalar(model: ModelProto, op_input: Product, expected_value: Uni
 
     value = _get_numpy_array(model, op_input.name)
     return value.ndim == 0 and value == expected_value
+
 
 def match_pow_2_pattern(op: Op, model: ModelProto) -> bool:
     """
@@ -93,6 +97,7 @@ def match_pow_2_pattern(op: Op, model: ModelProto) -> bool:
         return is_constant_scalar(model, op.inputs[1], 2)
     return False
 
+
 def match_and_get_next_op(op: Op, op_type: str) -> Op:
     """
     Checks if input op and op_type matches and has exact one output_op.
@@ -110,7 +115,10 @@ def match_and_get_next_op(op: Op, op_type: str) -> Op:
 
     return op.output_ops[0]
 
-def check_consecutive_ops(op: Op, op_type_list: List[str], validate_last_op_consumers: bool=True) -> Tuple[bool, List[Op]]:
+
+def check_consecutive_ops(
+    op: Op, op_type_list: List[str], validate_last_op_consumers: bool = True
+) -> Tuple[bool, List[Op]]:
     """
     Check for chain of Ops with provided Op type list
 
@@ -162,6 +170,7 @@ def get_op_from_outputs(op: Op, output_op_type: str) -> Op:
             return output
     return None
 
+
 def get_output_names(op_list: List[Op]) -> List[str]:
     """
     Returns list of output names for all provided ops
@@ -172,7 +181,7 @@ def get_output_names(op_list: List[Op]) -> List[str]:
     Returns:
         List[str]: List of output names for provided ops
     """
-    output_names = [ output.name for op in op_list for output in op.outputs ]
+    output_names = [output.name for op in op_list for output in op.outputs]
     return output_names
 
 
@@ -186,5 +195,7 @@ def get_const_input_names(op_list: List[Op]) -> List[str]:
     Returns:
         List[str]: List of constant input names for provided ops
     """
-    const_input_names = [ input.name for op in op_list for input in op.inputs if input.is_const ]
+    const_input_names = [
+        input.name for op in op_list for input in op.inputs if input.is_const
+    ]
     return const_input_names

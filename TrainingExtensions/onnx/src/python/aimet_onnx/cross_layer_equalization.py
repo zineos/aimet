@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Cross Layer Equalization
+"""Cross Layer Equalization
 
 Some terminology for this code.
 CLS set: Set of layers (2 or 3) that can be used for cross-layer scaling
@@ -51,13 +51,22 @@ from packaging import version
 
 from aimet_common.utils import AimetLogger
 from aimet_common.connected_graph.connectedgraph import get_ordered_ops
-from aimet_common.cross_layer_equalization import GraphSearchUtils, CrossLayerScaling as CLS, ClsSetInfo, \
-    HighBiasFold as HBF
+from aimet_common.cross_layer_equalization import (
+    GraphSearchUtils,
+    CrossLayerScaling as CLS,
+    ClsSetInfo,
+    HighBiasFold as HBF,
+)
 from aimet_common import libpymo
 
 from aimet_onnx.meta.connectedgraph import ConnectedGraph, WEIGHT_INDEX, BIAS_INDEX
 from aimet_onnx.meta.operations import Op
-from aimet_onnx.utils import transpose_tensor, ParamUtils, get_node_attribute, replace_relu6_with_relu
+from aimet_onnx.utils import (
+    transpose_tensor,
+    ParamUtils,
+    get_node_attribute,
+    replace_relu6_with_relu,
+)
 from aimet_onnx.batch_norm_fold import BNLayer, fold_all_batch_norms_to_weight
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -68,11 +77,10 @@ else:
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
-ClsSet = Union[Tuple['Conv', 'Conv'],
-               Tuple['Conv', 'Conv', 'Conv']]
+ClsSet = Union[Tuple["Conv", "Conv"], Tuple["Conv", "Conv", "Conv"]]
 ScaleFactor = Union[np.ndarray, Tuple[np.ndarray]]
-cls_supported_layer_types = ['Conv', 'ConvTranspose']
-cls_supported_activation_types = ['Relu', 'PRelu']
+cls_supported_layer_types = ["Conv", "ConvTranspose"]
+cls_supported_activation_types = ["Relu", "PRelu"]
 
 
 def get_ordered_list_of_conv_modules(list_of_starting_ops: List) -> List:
@@ -82,7 +90,11 @@ def get_ordered_list_of_conv_modules(list_of_starting_ops: List) -> List:
     :return: List of names in graph in order
     """
     module_list = get_ordered_ops(list_of_starting_ops)
-    module_list = [[module.dotted_name, module] for module in module_list if module.type in cls_supported_layer_types]
+    module_list = [
+        [module.dotted_name, module]
+        for module in module_list
+        if module.type in cls_supported_layer_types
+    ]
     return module_list
 
 
@@ -90,6 +102,7 @@ class CrossLayerScaling(CLS):
     """
     Scales a model's layers to equalize the weights between consecutive layers
     """
+
     def __init__(self, model: ModelProto):
         """
         :param model: ONNX model
@@ -106,9 +119,15 @@ class CrossLayerScaling(CLS):
         """
         # Find layer groups
         connected_graph = ConnectedGraph(self._model)
-        ordered_module_list = get_ordered_list_of_conv_modules(connected_graph.starting_ops)
-        graph_search = GraphSearchUtils(connected_graph, ordered_module_list, cls_supported_layer_types,
-                                        cls_supported_activation_types)
+        ordered_module_list = get_ordered_list_of_conv_modules(
+            connected_graph.starting_ops
+        )
+        graph_search = GraphSearchUtils(
+            connected_graph,
+            ordered_module_list,
+            cls_supported_layer_types,
+            cls_supported_activation_types,
+        )
         layer_groups = graph_search.find_layer_groups_to_scale()
 
         # Find cls sets from the layer groups
@@ -121,16 +140,20 @@ class CrossLayerScaling(CLS):
         scale_factors = self.scale_cls_sets(cls_sets)
 
         # Find if there were relu activations between layers of each cls set
-        is_relu_activation_in_cls_sets = graph_search.is_relu_activation_present_in_cls_sets(cls_sets)
+        is_relu_activation_in_cls_sets = (
+            graph_search.is_relu_activation_present_in_cls_sets(cls_sets)
+        )
 
         # Convert to a list of cls-set-info elements
-        cls_set_info_list = CrossLayerScaling.create_cls_set_info_list(cls_sets, scale_factors,
-                                                                       is_relu_activation_in_cls_sets)
+        cls_set_info_list = CrossLayerScaling.create_cls_set_info_list(
+            cls_sets, scale_factors, is_relu_activation_in_cls_sets
+        )
 
         return cls_set_info_list
 
-    def _populate_libpymo_params(self, module: NodeProto,
-                                 layer_param: libpymo.EqualizationParams):
+    def _populate_libpymo_params(
+        self, module: NodeProto, layer_param: libpymo.EqualizationParams
+    ):
         """
         Populates libpymo weight parameter
         """
@@ -145,10 +168,12 @@ class CrossLayerScaling(CLS):
         weight_shape = get_weight_dimensions(np.array(weight.dims))
         layer_param.weightShape = weight_shape
 
-    def _pack_params_for_conv(self,
-                              cls_set,
-                              prev_layer_params: libpymo.EqualizationParams,
-                              curr_layer_params: libpymo.EqualizationParams):
+    def _pack_params_for_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Prepare and pack data structure for previous and current layer in given cls set.
 
@@ -159,14 +184,17 @@ class CrossLayerScaling(CLS):
         self._populate_libpymo_params(cls_set[0].get_module(), prev_layer_params)
         self._populate_libpymo_params(cls_set[1].get_module(), curr_layer_params)
 
-        cls_set_0_bias = ParamUtils.get_param(self._model.model, cls_set[0].get_module(), BIAS_INDEX)
+        cls_set_0_bias = ParamUtils.get_param(
+            self._model.model, cls_set[0].get_module(), BIAS_INDEX
+        )
         if cls_set_0_bias is not None:
             prev_layer_params.bias = numpy_helper.to_array(cls_set_0_bias).reshape(-1)
         else:
             prev_layer_params.isBiasNone = True
 
-    def _update_weight_for_layer_from_libpymo_obj(self, layer_param: libpymo.EqualizationParams,
-                                                  module: NodeProto):
+    def _update_weight_for_layer_from_libpymo_obj(
+        self, layer_param: libpymo.EqualizationParams, module: NodeProto
+    ):
         """
         Update weight parameter from libpymo object
         """
@@ -180,10 +208,12 @@ class CrossLayerScaling(CLS):
         weight_param = ParamUtils.get_param(self._model.model, module, WEIGHT_INDEX)
         weight_param.raw_data = weight.raw_data
 
-    def _update_params_for_conv(self,
-                                cls_set,
-                                prev_layer_params: libpymo.EqualizationParams,
-                                curr_layer_params: libpymo.EqualizationParams):
+    def _update_params_for_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Update weight and biases for cls set using updated data structures.
 
@@ -191,18 +221,28 @@ class CrossLayerScaling(CLS):
         :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
         :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
         """
-        self._update_weight_for_layer_from_libpymo_obj(prev_layer_params, cls_set[0].get_module())
-        self._update_weight_for_layer_from_libpymo_obj(curr_layer_params, cls_set[1].get_module())
+        self._update_weight_for_layer_from_libpymo_obj(
+            prev_layer_params, cls_set[0].get_module()
+        )
+        self._update_weight_for_layer_from_libpymo_obj(
+            curr_layer_params, cls_set[1].get_module()
+        )
 
         if not prev_layer_params.isBiasNone:
-            bias_param = ParamUtils.get_param(self._model.model, cls_set[0].get_module(),
-                                              BIAS_INDEX)
-            bias_param.raw_data = np.asarray(prev_layer_params.bias, dtype=np.float32).tobytes()
+            bias_param = ParamUtils.get_param(
+                self._model.model, cls_set[0].get_module(), BIAS_INDEX
+            )
+            bias_param.raw_data = np.asarray(
+                prev_layer_params.bias, dtype=np.float32
+            ).tobytes()
 
-    def _pack_params_for_depthwise_conv(self, cls_set,
-                                        prev_layer_params: libpymo.EqualizationParams,
-                                        curr_layer_params: libpymo.EqualizationParams,
-                                        next_layer_params: libpymo.EqualizationParams):
+    def _pack_params_for_depthwise_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+        next_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Prepare and pack data structure for previous, current and next layer in given cls set.
 
@@ -216,28 +256,37 @@ class CrossLayerScaling(CLS):
 
         assert cls_set[1].groups > 1
 
-        weight = ParamUtils.get_param(self._model.model, cls_set[1].get_module(), WEIGHT_INDEX)
+        weight = ParamUtils.get_param(
+            self._model.model, cls_set[1].get_module(), WEIGHT_INDEX
+        )
         curr_layer_params.weight = numpy_helper.to_array(weight).reshape(-1)
         curr_layer_params.weightShape = np.array(weight.dims)
 
         self._populate_libpymo_params(cls_set[2].get_module(), next_layer_params)
 
-        cls_set_0_bias = ParamUtils.get_param(self._model.model, cls_set[0].get_module(), BIAS_INDEX)
+        cls_set_0_bias = ParamUtils.get_param(
+            self._model.model, cls_set[0].get_module(), BIAS_INDEX
+        )
         if cls_set_0_bias is not None:
             prev_layer_params.bias = numpy_helper.to_array(cls_set_0_bias).reshape(-1)
         else:
             prev_layer_params.isBiasNone = True
 
-        cls_set_1_bias = ParamUtils.get_param(self._model.model, cls_set[1].get_module(), BIAS_INDEX)
+        cls_set_1_bias = ParamUtils.get_param(
+            self._model.model, cls_set[1].get_module(), BIAS_INDEX
+        )
         if cls_set_1_bias is not None:
             curr_layer_params.bias = numpy_helper.to_array(cls_set_1_bias).reshape(-1)
         else:
             curr_layer_params.isBiasNone = True
 
-    def _update_params_for_depthwise_conv(self, cls_set,
-                                          prev_layer_params: libpymo.EqualizationParams,
-                                          curr_layer_params: libpymo.EqualizationParams,
-                                          next_layer_params: libpymo.EqualizationParams):
+    def _update_params_for_depthwise_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+        next_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Update weight and biases for cls set using updated data structures.
 
@@ -246,35 +295,49 @@ class CrossLayerScaling(CLS):
         :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
         :param next_layer_params: Data structure holding weight and bias for next layer in cls set.
         """
-        self._update_weight_for_layer_from_libpymo_obj(prev_layer_params, cls_set[0].get_module())
-        self._update_weight_for_layer_from_libpymo_obj(curr_layer_params, cls_set[1].get_module())
-        self._update_weight_for_layer_from_libpymo_obj(next_layer_params, cls_set[2].get_module())
+        self._update_weight_for_layer_from_libpymo_obj(
+            prev_layer_params, cls_set[0].get_module()
+        )
+        self._update_weight_for_layer_from_libpymo_obj(
+            curr_layer_params, cls_set[1].get_module()
+        )
+        self._update_weight_for_layer_from_libpymo_obj(
+            next_layer_params, cls_set[2].get_module()
+        )
 
         if not prev_layer_params.isBiasNone:
-            bias_param = ParamUtils.get_param(self._model.model, cls_set[0].get_module(),
-                                              BIAS_INDEX)
-            bias_param.raw_data = np.asarray(prev_layer_params.bias, dtype=np.float32).tobytes()
+            bias_param = ParamUtils.get_param(
+                self._model.model, cls_set[0].get_module(), BIAS_INDEX
+            )
+            bias_param.raw_data = np.asarray(
+                prev_layer_params.bias, dtype=np.float32
+            ).tobytes()
 
         if not curr_layer_params.isBiasNone:
-            bias_param = ParamUtils.get_param(self._model.model, cls_set[1].get_module(),
-                                              BIAS_INDEX)
-            bias_param.raw_data = np.asarray(curr_layer_params.bias, dtype=np.float32).tobytes()
+            bias_param = ParamUtils.get_param(
+                self._model.model, cls_set[1].get_module(), BIAS_INDEX
+            )
+            bias_param.raw_data = np.asarray(
+                curr_layer_params.bias, dtype=np.float32
+            ).tobytes()
 
 
 class HighBiasFold(HBF):
     """
     Code to apply the high-bias-fold technique to a model
     """
+
     def __init__(self, model: ModelProto):
         self._model = model
 
     def _check_if_bias_is_none(self, layer: Op) -> bool:
-        """ Returns if bias is a None for a layer. True if bias is None"""
+        """Returns if bias is a None for a layer. True if bias is None"""
         bias = ParamUtils.get_param(self._model.model, layer.get_module(), BIAS_INDEX)
         return not bias
 
-    def _populate_bn_params_in_libpymo_obj(self, prev_layer_bn_params: libpymo.BNParamsHighBiasFold,
-                                           bn_layer: BNLayer):
+    def _populate_bn_params_in_libpymo_obj(
+        self, prev_layer_bn_params: libpymo.BNParamsHighBiasFold, bn_layer: BNLayer
+    ):
         """
         Populates BatchNorm params in the libpymo object
         :param prev_layer_bn_params: Data structure to pack batch norm parameter
@@ -283,9 +346,12 @@ class HighBiasFold(HBF):
         prev_layer_bn_params.gamma = bn_layer.gamma
         prev_layer_bn_params.beta = bn_layer.beta
 
-    def _pack_previous_and_current_layer_params(self, cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-                                                prev_layer_params: libpymo.LayerParams,
-                                                curr_layer_params: libpymo.LayerParams):
+    def _pack_previous_and_current_layer_params(
+        self,
+        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
+        prev_layer_params: libpymo.LayerParams,
+        curr_layer_params: libpymo.LayerParams,
+    ):
         """
         Helper method to pack information of previous and current layer.
 
@@ -293,10 +359,13 @@ class HighBiasFold(HBF):
         :param prev_layer_params: Data structure to pack previous layer parameters.
         :param curr_layer_params: Data structure to pack current layer parameters.
         """
-        prev_layer_params.activationIsRelu = cls_pair_info.relu_activation_between_layers
+        prev_layer_params.activationIsRelu = (
+            cls_pair_info.relu_activation_between_layers
+        )
 
-        bias = ParamUtils.get_param(self._model.model, cls_pair_info.layer1.get_module(),
-                                    BIAS_INDEX)
+        bias = ParamUtils.get_param(
+            self._model.model, cls_pair_info.layer1.get_module(), BIAS_INDEX
+        )
 
         prev_layer_params.bias = numpy_helper.to_array(bias).reshape(-1)
 
@@ -314,8 +383,9 @@ class HighBiasFold(HBF):
         curr_layer_params.weight = numpy_helper.to_array(weight).reshape(-1)
         curr_layer_params.weightShape = get_weight_dimensions(np.array(weight.dims))
 
-    def _update_bias_for_layer_from_libpymo_obj(self, layer_param: libpymo.LayerParams,
-                                                module: NodeProto):
+    def _update_bias_for_layer_from_libpymo_obj(
+        self, layer_param: libpymo.LayerParams, module: NodeProto
+    ):
         """
         Update bias parameter from libpymo object
         """
@@ -323,9 +393,12 @@ class HighBiasFold(HBF):
 
         bias.raw_data = np.asarray(layer_param.bias, dtype=np.float32).tobytes()
 
-    def _update_previous_and_current_layer_bias(self, cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-                                                prev_layer_params: libpymo.LayerParams,
-                                                curr_layer_params: libpymo.LayerParams):
+    def _update_previous_and_current_layer_bias(
+        self,
+        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
+        prev_layer_params: libpymo.LayerParams,
+        curr_layer_params: libpymo.LayerParams,
+    ):
         """
         Update biases for previous and current layer.
 
@@ -333,8 +406,12 @@ class HighBiasFold(HBF):
         :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
         :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
         """
-        self._update_bias_for_layer_from_libpymo_obj(prev_layer_params, cls_pair_info.layer1.get_module())
-        self._update_bias_for_layer_from_libpymo_obj(curr_layer_params, cls_pair_info.layer2.get_module())
+        self._update_bias_for_layer_from_libpymo_obj(
+            prev_layer_params, cls_pair_info.layer1.get_module()
+        )
+        self._update_bias_for_layer_from_libpymo_obj(
+            curr_layer_params, cls_pair_info.layer2.get_module()
+        )
 
 
 def get_weight_dimensions(weight_shape: np.array) -> np.array:

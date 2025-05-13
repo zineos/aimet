@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for Adaround ONNX """
+"""Utilities for Adaround ONNX"""
+
 from typing import Dict
 from collections import defaultdict
 import onnx
@@ -48,8 +49,10 @@ if version.parse(onnx.__version__) >= version.parse("1.14.0"):
 else:
     from onnx.onnx_pb import ModelProto
 
+
 class ModuleInfo:
-    """ Class object containing information about a module """
+    """Class object containing information about a module"""
+
     def __init__(self):
         self.params = {}
         self.inputs = []
@@ -63,6 +66,7 @@ class ModelData:
     """
     Class to collect data for each module of a class
     """
+
     def __init__(self, model: ModelProto):
         """
         :param model: ONNX Model
@@ -75,10 +79,10 @@ class ModelData:
         cg = ConnectedGraph(self.model)
         for op in cg.ordered_ops:
             self.module_to_info[op.name] = ModuleInfo()
-            if op.type in ['Conv', 'ConvTranspose', 'Gemm', 'MatMul']:
+            if op.type in ["Conv", "ConvTranspose", "Gemm", "MatMul"]:
                 self.module_to_info[op.name].type = op.type
                 self.module_to_info[op.name].transposed_params = op.transposed_params
-                if hasattr(op.get_module(), 'attribute'):
+                if hasattr(op.get_module(), "attribute"):
                     self.module_to_info[op.name].attributes = op.get_module().attribute
             for param, param_type in op.parameters.values():
                 self.module_to_info[op.name].params[param_type] = param
@@ -102,14 +106,14 @@ def read_attributes_for_op(module_info: ModuleInfo) -> Dict:
     """
     attributes = defaultdict(None)
     module_info_attribute = module_info.attributes
-    if module_info.type in ['Conv', 'ConvTranspose']:
+    if module_info.type in ["Conv", "ConvTranspose"]:
         for attribute in module_info_attribute:
-            if attribute.name == 'dilations':
-                attributes['dilations'] = list(attribute.ints)
-            elif attribute.name == 'pads':
-                attributes['pads'] = list(attribute.ints)
-            elif attribute.name == 'strides':
-                attributes['strides'] = list(attribute.ints)
-            elif attribute.name == 'group':
-                attributes['group'] = attribute.i
+            if attribute.name == "dilations":
+                attributes["dilations"] = list(attribute.ints)
+            elif attribute.name == "pads":
+                attributes["pads"] = list(attribute.ints)
+            elif attribute.name == "strides":
+                attributes["strides"] = list(attribute.ints)
+            elif attribute.name == "group":
+                attributes["group"] = attribute.i
     return attributes

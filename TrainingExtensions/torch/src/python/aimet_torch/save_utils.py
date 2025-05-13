@@ -35,13 +35,13 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities to save a models and related parameters """
+"""Utilities to save a models and related parameters"""
 
 from aimet_torch._base.quantsim import _QuantizedModuleProtocol
 
 
 class SaveUtils:
-    """ Utility class to save a models and related parameters """
+    """Utility class to save a models and related parameters"""
 
     @staticmethod
     def remove_quantization_wrappers(module):

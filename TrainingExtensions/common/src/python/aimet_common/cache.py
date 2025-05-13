@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Cache Implementation"""
+
 import abc
 import contextlib
 import functools
@@ -55,7 +56,8 @@ class CacheMiss(FileNotFoundError):
 
 T = TypeVar("T")
 
-class SerializationProtocolBase(abc.ABC, Generic[T]): # pylint: disable
+
+class SerializationProtocolBase(abc.ABC, Generic[T]):  # pylint: disable
     """Serialization protocol for objects of type T.
 
     Invariants:
@@ -92,8 +94,10 @@ class SerializationProtocolBase(abc.ABC, Generic[T]): # pylint: disable
     def _type_error(cls, obj, expected_type):
         """Helper funtion for creating a commonly used type error."""
         obj_type = type(obj)
-        msg = f"{cls.__name__} cannot serialize an object of type {obj_type} "\
-              f"(expected type: {expected_type})."
+        msg = (
+            f"{cls.__name__} cannot serialize an object of type {obj_type} "
+            f"(expected type: {expected_type})."
+        )
         return TypeError(msg)
 
 
@@ -189,14 +193,19 @@ class Cache:
                 filename_prefix = cache_key
                 try:
                     # Try loading the previously evaluated result from cache.
-                    _logger.debug("Loading result of %s from %s.", cache_key, self._cache_dir)
+                    _logger.debug(
+                        "Loading result of %s from %s.", cache_key, self._cache_dir
+                    )
                     return protocol.load(working_dir, filename_prefix)
                 except CacheMiss:
                     _logger.debug("Cache miss.")
                     ret = fn(*args, **kwargs)
-                    _logger.debug("Caching result of %s to %s.", cache_key, self._cache_dir)
+                    _logger.debug(
+                        "Caching result of %s to %s.", cache_key, self._cache_dir
+                    )
                     protocol.save(ret, working_dir, filename_prefix)
                     return ret
+
             return caching_helper
 
         return lambda fn: _wrap(fn, cache_key)
@@ -212,7 +221,9 @@ class Cache:
         try:
             if self._cache_dir is not None:
                 os.makedirs(self._cache_dir, exist_ok=True)
-                _logger.info("AutoQuant caching is enabled. Cache directory: %s", self._cache_dir)
+                _logger.info(
+                    "AutoQuant caching is enabled. Cache directory: %s", self._cache_dir
+                )
             yield
         finally:
             self._cache_dir = None

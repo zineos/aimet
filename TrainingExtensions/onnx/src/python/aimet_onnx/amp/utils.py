@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for mixed precision feature """
+"""Utilities for mixed precision feature"""
 
 from typing import List, Tuple, Dict, Any
 from collections import defaultdict
@@ -61,7 +61,9 @@ def get_activation_shapes(sim: QuantizationSimModel) -> Dict[str, Any]:
         hooks.append(utils.add_hook_to_get_activation(sim.model.model, name))
     dummy_input = utils.make_dummy_input(sim.model.model)
     # pylint: disable=protected-access
-    sess = QuantizationSimModel.build_session(sim.model.model, ["CPUExecutionProvider"], sim._user_onnx_libs)
+    sess = QuantizationSimModel.build_session(
+        sim.model.model, ["CPUExecutionProvider"], sim._user_onnx_libs
+    )
     outputs = sess.run(None, dummy_input)
     activation_shapes = {}
     for idx, node in enumerate(sim.model.graph().output):
@@ -71,33 +73,39 @@ def get_activation_shapes(sim: QuantizationSimModel) -> Dict[str, Any]:
     return activation_shapes
 
 
-allowed_data_types = ['Conv', 'Gemm']
+allowed_data_types = ["Conv", "Gemm"]
 
 
 class Layer:
-    """ Data structure to hold a layer's output shape and weight shape """
+    """Data structure to hold a layer's output shape and weight shape"""
+
     def __init__(self):
         self.weight_shape = []
         self.output_shape = []
 
 
-def find_layer_database_for_mac_calculation(sim: QuantizationSimModel) -> Dict[str, Layer]:
+def find_layer_database_for_mac_calculation(
+    sim: QuantizationSimModel,
+) -> Dict[str, Layer]:
     """
     Finds layer database for allowed ops of type Conv & Linear
 
     :param sim: QuantizationSim model
     :return Dict of op database where key is name of the layer and value is Layer object
     """
+
     def _get_weight_shape(op):
         for param, param_type in op.parameters.values():
-            if param_type == 'weight':
+            if param_type == "weight":
                 return param.shape
         return None
 
     activation_shapes = get_activation_shapes(sim)
     ops = sim.connected_graph.get_all_ops()
     # Either conv or Linear ops are allowed
-    allowed_ops = {op.dotted_name for op in ops.values() if op.type in allowed_data_types}
+    allowed_ops = {
+        op.dotted_name for op in ops.values() if op.type in allowed_data_types
+    }
 
     op_database = {}
     for node in sim.model.model.graph.node:
@@ -108,7 +116,10 @@ def find_layer_database_for_mac_calculation(sim: QuantizationSimModel) -> Dict[s
                 # Append 1, 1 to Linear layer's shape
                 layer.output_shape = list(layer.output_shape) + [1, 1]
             # If _get_weight_shape returns None, weight index is an activation
-            layer.weight_shape = _get_weight_shape(ops[node.name]) or activation_shapes[node.input[WEIGHT_INDEX]]
+            layer.weight_shape = (
+                _get_weight_shape(ops[node.name])
+                or activation_shapes[node.input[WEIGHT_INDEX]]
+            )
             op_database[node.name] = layer
 
     return op_database
@@ -130,7 +141,9 @@ def create_mac_dict(sim: QuantizationSimModel) -> Dict[str, int]:
     return mac_dict
 
 
-def find_param_name_to_parent_name_dict(connected_graph: ConnectedGraph) -> Dict[str, str]:
+def find_param_name_to_parent_name_dict(
+    connected_graph: ConnectedGraph,
+) -> Dict[str, str]:
     """
     Find mapping of op (only Conv and Linear ops) names to their corresponding read variable op names
 
@@ -143,7 +156,7 @@ def find_param_name_to_parent_name_dict(connected_graph: ConnectedGraph) -> Dict
     for op in all_ops.values():
         if op.parameters:
             for param, param_type in op.parameters.values():
-                if param_type == 'weight':
+                if param_type == "weight":
                     param_to_op_name[param.name] = op.dotted_name
 
     return param_to_op_name
@@ -158,17 +171,22 @@ def _create_quantizer_op_dict(quantizer_group: QuantizerGroup) -> Dict[str, List
     """
     quantizer_op_dict = defaultdict(list)
     for op_name in quantizer_group.activation_quantizers:
-        quantizer_op_dict['activation'].append(op_name)
+        quantizer_op_dict["activation"].append(op_name)
     for op_name in quantizer_group.parameter_quantizers:
-        quantizer_op_dict['weight'].append(op_name)
+        quantizer_op_dict["weight"].append(op_name)
 
     return quantizer_op_dict
 
 
-def calculate_running_bit_ops(mac_dict: Dict[str, int], quantizer_group: QuantizerGroup,
-                              param_name_to_parent_name_dict: Dict[str, str], op_bw_dict: Dict[str, List[int]],
-                              max_candidate: CANDIDATE_WITH_DTYPE, new_candidate: CANDIDATE_WITH_DTYPE,
-                              running_bit_ops: int) -> int:
+def calculate_running_bit_ops(
+    mac_dict: Dict[str, int],
+    quantizer_group: QuantizerGroup,
+    param_name_to_parent_name_dict: Dict[str, str],
+    op_bw_dict: Dict[str, List[int]],
+    max_candidate: CANDIDATE_WITH_DTYPE,
+    new_candidate: CANDIDATE_WITH_DTYPE,
+    running_bit_ops: int,
+) -> int:
     """
     Returns new running bit ops given previous running bit ops value and the current quantizer to change bitwidth of
 
@@ -182,8 +200,11 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int], quantizer_group: Quantiz
     :param running_bit_ops: previous running bit ops count
     :return: Current running bit ops count
     """
+
     # pylint: disable=too-many-locals
-    def _calculate_bit_ops(quantizer_type: str, running_bit_ops: int, op_name: str) -> int:
+    def _calculate_bit_ops(
+        quantizer_type: str, running_bit_ops: int, op_name: str
+    ) -> int:
         """
         Helper function to compute bit ops for weight or activation feeding into an op
         """
@@ -195,10 +216,12 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int], quantizer_group: Quantiz
 
                 # Subtract the previous bitops count for this op (will add on the new bit ops count for this
                 # op later, taking new bitwidth value into account)
-                running_bit_ops -= (op_bw_dict[op_name][act_index] *
-                                    op_bw_dict[op_name][weight_index] *
-                                    mac_dict[op_name])
-                if quantizer_type == 'activation':
+                running_bit_ops -= (
+                    op_bw_dict[op_name][act_index]
+                    * op_bw_dict[op_name][weight_index]
+                    * mac_dict[op_name]
+                )
+                if quantizer_type == "activation":
                     op_bw_dict[op_name][act_index] = act_bw_new
                 else:
                     op_bw_dict[op_name][weight_index] = param_bw_new
@@ -209,15 +232,17 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int], quantizer_group: Quantiz
                 # Subtract the previous bitops count for this op (will add on the new bitops count for this
                 # op later, taking new bitwidth value into account)
                 running_bit_ops -= (act_bw_max * param_bw_max) * mac_dict[op_name]
-                if quantizer_type == 'activation':
+                if quantizer_type == "activation":
                     op_bw_dict[op_name] = [act_bw_new, param_bw_max]
                 else:
                     op_bw_dict[op_name] = [act_bw_max, param_bw_new]
             # Add new bitops count to the running bit ops value, taking into account the updated bitwidths for
             # activation and weight quantizers.
-            running_bit_ops += (op_bw_dict[op_name][act_index] *
-                                op_bw_dict[op_name][weight_index] *
-                                mac_dict[op_name])
+            running_bit_ops += (
+                op_bw_dict[op_name][act_index]
+                * op_bw_dict[op_name][weight_index]
+                * mac_dict[op_name]
+            )
         return running_bit_ops
 
     act_index = 0
@@ -233,24 +258,32 @@ def calculate_running_bit_ops(mac_dict: Dict[str, int], quantizer_group: Quantiz
     act_bw_new = get_effective_bitwidth(act_dtype, act_bw_new)
     param_bw_new = get_effective_bitwidth(param_dtype, param_bw_new)
 
-    if 'activation' in quantizer_op_dict and 'weight' in quantizer_op_dict:
-        for quant_op_name in quantizer_op_dict['weight']:
+    if "activation" in quantizer_op_dict and "weight" in quantizer_op_dict:
+        for quant_op_name in quantizer_op_dict["weight"]:
             # Get parent op name from its read variable op name
             parent_op_name = param_name_to_parent_name_dict[quant_op_name]
-            running_bit_ops = _calculate_bit_ops('activation', running_bit_ops, parent_op_name)
+            running_bit_ops = _calculate_bit_ops(
+                "activation", running_bit_ops, parent_op_name
+            )
 
-    if 'weight' in quantizer_op_dict:
-        for quant_op_name in quantizer_op_dict['weight']:
+    if "weight" in quantizer_op_dict:
+        for quant_op_name in quantizer_op_dict["weight"]:
             # Get parent op name from its read variable op name
             parent_op_name = param_name_to_parent_name_dict[quant_op_name]
-            running_bit_ops = _calculate_bit_ops('weight', running_bit_ops, parent_op_name)
+            running_bit_ops = _calculate_bit_ops(
+                "weight", running_bit_ops, parent_op_name
+            )
 
     return running_bit_ops
 
 
-def find_bit_ops_reduction(quantizer_group: QuantizerGroup, mac_dict: Dict[str, int],
-                           param_name_to_parent_dict: Dict[str, str],
-                           max_candidate: Tuple, candidate: CANDIDATE_WITH_DTYPE) -> int:
+def find_bit_ops_reduction(
+    quantizer_group: QuantizerGroup,
+    mac_dict: Dict[str, int],
+    param_name_to_parent_dict: Dict[str, str],
+    max_candidate: Tuple,
+    candidate: CANDIDATE_WITH_DTYPE,
+) -> int:
     """
     Find bit ops reduction when Bitwidth changes from max_candidate to candidate
 
@@ -274,20 +307,25 @@ def find_bit_ops_reduction(quantizer_group: QuantizerGroup, mac_dict: Dict[str, 
     act_bw = get_effective_bitwidth(act_dtype, act_bw)
     param_bw = get_effective_bitwidth(param_dtype, param_bw)
 
-
-    if 'activation' in quantizer_group_dict and 'weight' in quantizer_group_dict:
-        for quant_name in quantizer_group_dict['weight']:
+    if "activation" in quantizer_group_dict and "weight" in quantizer_group_dict:
+        for quant_name in quantizer_group_dict["weight"]:
             parent_op_name = param_name_to_parent_dict[quant_name]
             if parent_op_name in mac_dict:
-                bit_ops_reduction = bit_ops_reduction - mac_dict[parent_op_name] * act_bw * param_bw + \
-                                    mac_dict[parent_op_name] * act_bw_max * param_bw_max
+                bit_ops_reduction = (
+                    bit_ops_reduction
+                    - mac_dict[parent_op_name] * act_bw * param_bw
+                    + mac_dict[parent_op_name] * act_bw_max * param_bw_max
+                )
 
-    elif 'weight' in quantizer_group_dict:
-        for quant_name in quantizer_group_dict['weight']:
+    elif "weight" in quantizer_group_dict:
+        for quant_name in quantizer_group_dict["weight"]:
             parent_op_name = param_name_to_parent_dict[quant_name]
             if parent_op_name in mac_dict:
-                bit_ops_reduction = bit_ops_reduction - mac_dict[parent_op_name] * act_bw_max * param_bw + \
-                                    mac_dict[parent_op_name] * act_bw_max * param_bw_max
+                bit_ops_reduction = (
+                    bit_ops_reduction
+                    - mac_dict[parent_op_name] * act_bw_max * param_bw
+                    + mac_dict[parent_op_name] * act_bw_max * param_bw_max
+                )
     return bit_ops_reduction
 
 
@@ -300,14 +338,16 @@ def get_quantizer_to_op_type_dict(sim: QuantizationSimModel) -> Dict:
     quantizer_to_op_type = {}
     for input_tensor in sim.model.model.graph.input:
         for node in sim.model.model.graph.node:
-            quantized_name = input_tensor.name + '_updated'
+            quantized_name = input_tensor.name + "_updated"
             if quantized_name in node.input:
                 quantizer_to_op_type[input_tensor.name] = [node.op_type]
 
     for node in sim.model.model.graph.node:
         for input_tensor_name in node.input:
-            if 'qdq' in input_tensor_name:
-                product_name = utils.get_product_name_from_quantized_name(input_tensor_name)
+            if "qdq" in input_tensor_name:
+                product_name = utils.get_product_name_from_quantized_name(
+                    input_tensor_name
+                )
                 if product_name in sim.qc_quantize_op_dict:
                     quantizer_to_op_type[product_name] = [node.op_type]
         for output_tensor in node.output:

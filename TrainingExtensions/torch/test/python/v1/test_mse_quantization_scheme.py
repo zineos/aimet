@@ -39,11 +39,12 @@ import torch
 import torch.nn as nn
 from aimet_torch.v1.quantsim import QuantizationSimModel
 
+
 class TestMSESchemeStaticGrid:
-    """ Test MSE quantization scheme """ 
+    """Test MSE quantization scheme"""
 
     def test_model_with_mse_scheme(self):
-        """ Test MSE scheme """
+        """Test MSE scheme"""
 
         class Model(nn.Module):
             def __init__(self):
@@ -71,17 +72,21 @@ class TestMSESchemeStaticGrid:
         # Overwrite the quantization scheme
         import aimet_common.libpymo as libpymo
         from aimet_common.defs import MAP_QUANT_SCHEME_TO_PYMO
-        MAP_QUANT_SCHEME_TO_PYMO['mse'] = libpymo.QuantizationMode.QUANTIZATION_MSE
+
+        MAP_QUANT_SCHEME_TO_PYMO["mse"] = libpymo.QuantizationMode.QUANTIZATION_MSE
 
         for _, quant_wrapper in sim2.quant_wrappers():
             for quantizer in quant_wrapper.input_quantizers:
-                quantizer.quant_scheme = 'mse'
+                quantizer.quant_scheme = "mse"
             for quantizer in quant_wrapper.output_quantizers:
-                quantizer.quant_scheme = 'mse'
+                quantizer.quant_scheme = "mse"
             for param_quantizer in quant_wrapper.param_quantizers.values():
-                param_quantizer.quant_scheme = 'mse'
+                param_quantizer.quant_scheme = "mse"
 
         sim2.compute_encodings(forward_pass, None)
 
         # Compare the encoding max between tf and mse quantization scheme
-        assert sim1.model.conv1.output_quantizers[0].encoding.max != sim2.model.conv1.output_quantizers[0].encoding.max 
+        assert (
+            sim1.model.conv1.output_quantizers[0].encoding.max
+            != sim2.model.conv1.output_quantizers[0].encoding.max
+        )

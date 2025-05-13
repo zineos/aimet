@@ -34,4 +34,4 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Mixed precision inference """
+"""Mixed precision inference"""

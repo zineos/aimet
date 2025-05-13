@@ -46,7 +46,6 @@ def tensor_contains(tensor, value):
 
 
 class TestTrainingExtensionsTensorReduction(unittest.TestCase):
-
     def test_tensor_reduction(self):
         shape = [3, 2, 4]
         tensor = torch.zeros(shape, dtype=torch.int8)

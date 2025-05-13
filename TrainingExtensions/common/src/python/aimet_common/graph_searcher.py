@@ -34,12 +34,14 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Main class for pattern match based graph searcher"""
+"""Main class for pattern match based graph searcher"""
+
 from typing import Optional
 from aimet_common.utils import AimetLogger
 from aimet_common.connected_graph.operation import Op
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
+
 
 class GraphSearcher:
     """
@@ -62,7 +64,7 @@ class GraphSearcher:
                 self.type_to_op_dict[op.type] = [op]
 
     # pylint: disable=too-many-nested-blocks
-    def find_all_patterns_in_graph_apply_actions(self, ignore: Optional[Op]=None):
+    def find_all_patterns_in_graph_apply_actions(self, ignore: Optional[Op] = None):
         """
         Find corresponding op sequences and apply actions.
         :param ignore: List of operations to ignore during searching
@@ -72,7 +74,9 @@ class GraphSearcher:
             ignore = []
 
         # Search patterns starting with longer patterns first
-        for pattern_type in sorted(self._patterns_with_callbacks, key=lambda l: len(l.pattern), reverse=True):
+        for pattern_type in sorted(
+            self._patterns_with_callbacks, key=lambda l: len(l.pattern), reverse=True
+        ):
             if pattern_type.pattern[0] in self.type_to_op_dict:
                 # One or more ops in the graph correspond to the current pattern's starting op type
                 for op in self.type_to_op_dict[pattern_type.pattern[0]]:
@@ -80,7 +84,7 @@ class GraphSearcher:
                     if matched_ops:
                         for matched_ops_list in matched_ops:
                             pattern_type.action(pattern_type, matched_ops_list)
-                            logger.debug('found match: %s', matched_ops_list)
+                            logger.debug("found match: %s", matched_ops_list)
 
     # pylint: disable=too-many-branches, too-many-return-statements
     def _match_pattern(self, op, pattern, ignored_ops):
@@ -106,10 +110,12 @@ class GraphSearcher:
             # Still more to match
             if not op.outputs:
                 return None
-            if len(op.output_ops) > 1: # Can't match patterns with branches
+            if len(op.output_ops) > 1:  # Can't match patterns with branches
                 return None
             for child_op in op.output_ops:
-                matched_child_ops = self._match_pattern(child_op, pattern[1:], ignored_ops)
+                matched_child_ops = self._match_pattern(
+                    child_op, pattern[1:], ignored_ops
+                )
                 if matched_child_ops:
                     if matched_ops is None:
                         matched_ops = []

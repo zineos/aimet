@@ -50,18 +50,19 @@ import aimet_torch._base.nn.modules.custom as aimet_modules
 
 
 class CustomModule(torch.nn.Module):
-
     @staticmethod
     def forward(x):
         return x * F.softplus(x).sigmoid()
 
 
 class Model(torch.nn.Module):
-    """ Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(Model, self).__init__()
-        self.conv1 = torch.nn.Conv2d(3, 8, kernel_size=2, stride=2, padding=2, bias=False)
+        self.conv1 = torch.nn.Conv2d(
+            3, 8, kernel_size=2, stride=2, padding=2, bias=False
+        )
         self.bn1 = torch.nn.BatchNorm2d(8)
         self.relu1 = torch.nn.ReLU(inplace=True)
         self.custom = CustomModule()
@@ -79,10 +80,10 @@ class Model(torch.nn.Module):
 
 
 class TestValidateModel(unittest.TestCase):
-    """ Class for testing model validator """
+    """Class for testing model validator"""
 
     def test_model_validator(self):
-        """ Check that model validator returns correct value """
+        """Check that model validator returns correct value"""
 
         model = test_models.SequentialModel()
         rand_inp = torch.randn(1, 3, 8, 8)
@@ -94,40 +95,46 @@ class TestValidateModel(unittest.TestCase):
 
 
 class TestValidationChecks(unittest.TestCase):
-    """ Class for testing validation check functions """
+    """Class for testing validation check functions"""
 
     def test_validate_for_reused_modules(self):
-        """ Validate the check for reused modules """
+        """Validate the check for reused modules"""
 
         model = test_models.ModelWithReusedNodes()
         rand_inp = torch.randn(1, 3, 32, 32)
         self.assertFalse(validation_checks.validate_for_reused_modules(model, rand_inp))
 
     def test_validate_for_missing_modules(self):
-        """ Validate the check for ops with missing modules """
+        """Validate the check for ops with missing modules"""
 
         model = test_models.ModelWithFunctionalOps()
         rand_inp = torch.randn(1, 3, 32, 32)
-        self.assertFalse(validation_checks.validate_for_missing_modules(model, rand_inp))
+        self.assertFalse(
+            validation_checks.validate_for_missing_modules(model, rand_inp)
+        )
 
     def test_get_filtered_ops_with_missing_modules(self):
-        """ Validate the missing modules check with excluded layers """
+        """Validate the missing modules check with excluded layers"""
         model = Model().eval()
         input_shape = (1, 3, 32, 32)
         dummy_input = torch.rand(input_shape)
         layers_to_exclude = [model.custom]
-        filtered_ops_with_missing_modules = \
-            validation_checks._get_filtered_ops_with_missing_modules(model, dummy_input,
-                                                                     layers_to_exclude=layers_to_exclude)
+        filtered_ops_with_missing_modules = (
+            validation_checks._get_filtered_ops_with_missing_modules(
+                model, dummy_input, layers_to_exclude=layers_to_exclude
+            )
+        )
 
         # Check that only two ops (addition and relu) are flagged
         self.assertEqual(2, len(filtered_ops_with_missing_modules))
 
     def test_get_blacklisted_modules(self):
-        """ Test get_blacklisted_modules utility """
+        """Test get_blacklisted_modules utility"""
         model = test_models.HierarchicalModel()
         layers_to_exclude = {model.nm1, model.nm2}
-        blacklisted_layers = validation_checks._get_blacklisted_layers(layers_to_exclude)
+        blacklisted_layers = validation_checks._get_blacklisted_layers(
+            layers_to_exclude
+        )
         manually_obtained_set = set()
         for module in model.nm1.modules():
             manually_obtained_set.add(module)
@@ -137,10 +144,9 @@ class TestValidationChecks(unittest.TestCase):
 
 
 class TestModelValidatorPreparer:
-
     @pytest.mark.cuda
     def test_model_validator_preparer(self):
-        """ Validate model validator and preparer workflow """
+        """Validate model validator and preparer workflow"""
         model = Model().eval().cuda()
         input_shape = (1, 3, 32, 32)
         dummy_input = torch.rand(input_shape).cuda()
@@ -152,9 +158,13 @@ class TestModelValidatorPreparer:
         print(reused_modules)
         assert len(reused_modules) == 1
 
-        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(model, dummy_input)
+        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(
+            model, dummy_input
+        )
         print(ops_with_missing_modules)
-        assert len(ops_with_missing_modules) == 5 # ['relu_3', 'softplus_5', 'sigmoid_6', 'Mul_7', 'Add_8']
+        assert (
+            len(ops_with_missing_modules) == 5
+        )  # ['relu_3', 'softplus_5', 'sigmoid_6', 'Mul_7', 'Add_8']
 
         # Prepare model and verify the outputs.
         prepared_model = prepare_model(model)
@@ -164,7 +174,8 @@ class TestModelValidatorPreparer:
         assert ModelValidator.validate_model(prepared_model, dummy_input)
 
     def test_model_validator_preparer_using_elementwise_operations(self):
-        """ Validate model validator and preparer workflow for some common elementwise operations """
+        """Validate model validator and preparer workflow for some common elementwise operations"""
+
         class TestModel(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -172,8 +183,11 @@ class TestModelValidatorPreparer:
                 self.conv2 = torch.nn.Conv2d(16, 32, kernel_size=(3, 3))
                 self.conv3 = torch.nn.Conv2d(32, 64, kernel_size=(3, 3))
                 self.conv4 = torch.nn.Conv2d(64, 128, kernel_size=(3, 3))
+
             def forward(self, x: torch.Tensor):
-                x = torch.nn.functional.relu(self.conv1(x) * torch.ones((1, 16, 30, 30)))
+                x = torch.nn.functional.relu(
+                    self.conv1(x) * torch.ones((1, 16, 30, 30))
+                )
                 x = self.conv2(x) - torch.ones((1, 32, 28, 28))
                 x = self.conv3(x) / torch.ones((1, 64, 26, 26))
                 x = torch.nn.functional.max_pool2d(x, 3)
@@ -191,7 +205,9 @@ class TestModelValidatorPreparer:
         assert isinstance(prepared_model.module_sub, aimet_modules.Subtract)
         assert isinstance(prepared_model.module_truediv, aimet_modules.Divide)
         assert isinstance(prepared_model.module_max_pool2d, aimet_modules.MaxPool2d)
-        assert isinstance(prepared_model.module_adaptive_avg_pool2d, aimet_modules.AdaptiveAvgPool2d)
+        assert isinstance(
+            prepared_model.module_adaptive_avg_pool2d, aimet_modules.AdaptiveAvgPool2d
+        )
 
         # ModelValidator check should be True after.
         assert ModelValidator.validate_model(prepared_model, dummy_input)

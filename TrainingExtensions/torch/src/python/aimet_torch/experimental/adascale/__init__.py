@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" adascale subpackage """
+"""adascale subpackage"""
+
 from .adascale_optimizer import apply_adascale

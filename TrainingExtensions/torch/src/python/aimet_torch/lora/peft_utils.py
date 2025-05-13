@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Implementation for handling LoRA adapters added using PEFT """
+"""Implementation for handling LoRA adapters added using PEFT"""
+
 # pylint: disable=import-error
 # pylint: disable=no-name-in-module
 from aimet_torch.quantsim import QuantizationSimModel
@@ -51,6 +52,7 @@ def _get_lora_layer_except_base_layer(sim: QuantizationSimModel):
                     part_of_lora_layer_except_base.add(m)
     return part_of_lora_layer_except_base
 
+
 def _freeze_quantizer(quantizer):
     """
     Disables compute encodings and gradient update for a quantizer
@@ -61,12 +63,14 @@ def _freeze_quantizer(quantizer):
     quantizer._allow_overwrite = False
     quantizer.requires_grad_(False)
 
+
 def freeze_base_model_param_quantizers(sim: QuantizationSimModel):
     """
     Freeze parameter quantizers of base model
 
     :param sim: QuantSim model
     """
+
     def _freeze(module):
         for param_quantizer in module.param_quantizers.values():
             if param_quantizer:
@@ -74,8 +78,12 @@ def freeze_base_model_param_quantizers(sim: QuantizationSimModel):
 
     part_of_lora_layer_except_base = _get_lora_layer_except_base_layer(sim)
     for module in sim.model.modules():
-        if isinstance(module, BaseQuantizationMixin) and module not in part_of_lora_layer_except_base:
+        if (
+            isinstance(module, BaseQuantizationMixin)
+            and module not in part_of_lora_layer_except_base
+        ):
             _freeze(module)
+
 
 def freeze_base_model_activation_quantizers(sim: QuantizationSimModel):
     """
@@ -83,8 +91,11 @@ def freeze_base_model_activation_quantizers(sim: QuantizationSimModel):
 
     :param sim: QuantSim model
     """
+
     def _freeze(module):
-        for input_quantizer, output_quantizer in zip(module.input_quantizers, module.output_quantizers):
+        for input_quantizer, output_quantizer in zip(
+            module.input_quantizers, module.output_quantizers
+        ):
             if input_quantizer:
                 _freeze_quantizer(input_quantizer)
             if output_quantizer:
@@ -92,8 +103,12 @@ def freeze_base_model_activation_quantizers(sim: QuantizationSimModel):
 
     part_of_lora_layer_except_base = _get_lora_layer_except_base_layer(sim)
     for module in sim.model.modules():
-        if isinstance(module, BaseQuantizationMixin) and module not in part_of_lora_layer_except_base:
+        if (
+            isinstance(module, BaseQuantizationMixin)
+            and module not in part_of_lora_layer_except_base
+        ):
             _freeze(module)
+
 
 def freeze_base_model(sim: QuantizationSimModel):
     """

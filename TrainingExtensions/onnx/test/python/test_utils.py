@@ -49,21 +49,22 @@ class TestUtils:
     """
     Test functions in utils
     """
+
     def test_remove_nodes(self):
         """
         Test remove nodes by given type
         """
         model = models_for_tests.build_dummy_model()
         node_ls = [node.op_type for node in model.graph.node]
-        assert node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten', 'Gemm']
+        assert node_ls == ["Conv", "Relu", "MaxPool", "Flatten", "Gemm"]
         # Remove first layer of dummy model
-        utils.remove_nodes_with_type('Conv', model.graph)
+        utils.remove_nodes_with_type("Conv", model.graph)
         new_node_ls = [node.op_type for node in model.graph.node]
-        assert new_node_ls == ['Relu', 'MaxPool', 'Flatten', 'Gemm']
+        assert new_node_ls == ["Relu", "MaxPool", "Flatten", "Gemm"]
         # Remove last layer of dummy model
-        utils.remove_nodes_with_type('Gemm', model.graph)
+        utils.remove_nodes_with_type("Gemm", model.graph)
         new_node_ls = [node.op_type for node in model.graph.node]
-        assert new_node_ls == ['Relu', 'MaxPool', 'Flatten']
+        assert new_node_ls == ["Relu", "MaxPool", "Flatten"]
         # Check connection of each layer
         onnx.checker.check_model(model)
 
@@ -73,11 +74,11 @@ class TestUtils:
         """
         model = models_for_tests.build_dummy_model()
         node_ls = [node.op_type for node in model.graph.node]
-        assert node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten', 'Gemm']
+        assert node_ls == ["Conv", "Relu", "MaxPool", "Flatten", "Gemm"]
 
-        utils.replace_node_with_op('Conv', 'CustomOp', model.graph)
+        utils.replace_node_with_op("Conv", "CustomOp", model.graph)
         new_node_ls = [node.op_type for node in model.graph.node]
-        assert new_node_ls == ['CustomOp', 'Relu', 'MaxPool', 'Flatten', 'Gemm']
+        assert new_node_ls == ["CustomOp", "Relu", "MaxPool", "Flatten", "Gemm"]
 
     def test_get_weights(self):
         """
@@ -102,53 +103,55 @@ class TestUtils:
     def test_weight_utils(self):
         model = models_for_tests.build_dummy_model()
         for node in model.graph.node:
-            if node.op_type == 'Conv':
+            if node.op_type == "Conv":
                 weights = ParamUtils.get_param(model, node, 1)
                 weights_shape = ParamUtils.get_shape(model, node, 1)
                 bias = ParamUtils.get_param(model, node, 2)
                 bias_shape = ParamUtils.get_shape(model, node, 2)
                 assert bias_shape == [1]
                 assert weights_shape == [1, 3, 3, 3]
-                assert weights.name == 'conv_w'
-                assert bias.name == 'conv_b'
+                assert weights.name == "conv_w"
+                assert bias.name == "conv_b"
 
-            if node.op_type == 'Gemm':
+            if node.op_type == "Gemm":
                 weights = ParamUtils.get_param(model, node, 1)
                 weights_shape = ParamUtils.get_shape(model, node, 1)
                 bias = ParamUtils.get_param(model, node, 2)
                 bias_shape = ParamUtils.get_shape(model, node, 2)
                 assert bias_shape == [10]
                 assert weights_shape == [256, 10]
-                assert weights.name == 'fc_w'
-                assert bias.name == 'fc_b'
+                assert weights.name == "fc_w"
+                assert bias.name == "fc_b"
 
     def test_utils_transposed_conv_model(self):
         model = models_for_tests.transposed_conv_model()
         model = model.model
         for node in model.graph.node:
-            if node.op_type == 'ConvTranspose':
+            if node.op_type == "ConvTranspose":
                 weights = ParamUtils.get_param(model, node, 1)
                 weights_shape = ParamUtils.get_shape(model, node, 1)
                 bias = ParamUtils.get_param(model, node, 2)
                 bias_shape = ParamUtils.get_shape(model, node, 2)
                 assert bias_shape == [10]
                 assert weights_shape == [10, 10, 3, 3]
-                assert weights.name == 'conv1.weight'
-                assert bias.name == 'conv1.bias'
+                assert weights.name == "conv1.weight"
+                assert bias.name == "conv1.bias"
                 break
 
     def test_utils_const_param_model(self):
         model = models_for_tests.const_param_model()
         for node in model.graph.node:
-            if node.op_type == 'InstanceNormalization':
+            if node.op_type == "InstanceNormalization":
                 weights = ParamUtils.get_param(model, node, 1)
                 weights_shape = ParamUtils.get_shape(model, node, 1)
                 bias = ParamUtils.get_param(model, node, 2)
                 bias_shape = ParamUtils.get_shape(model, node, 2)
                 assert bias_shape == [32]
                 assert weights_shape == [32]
-                assert weights.name == '/down_blocks.0/resnets.0/norm1/Constant_1_output_0'
-                assert bias.name == '/down_blocks.0/resnets.0/norm1/Constant_2_output_0'
+                assert (
+                    weights.name == "/down_blocks.0/resnets.0/norm1/Constant_1_output_0"
+                )
+                assert bias.name == "/down_blocks.0/resnets.0/norm1/Constant_2_output_0"
                 break
 
     def test_remove_node(self):
@@ -157,12 +160,12 @@ class TestUtils:
         """
         model = models_for_tests.build_dummy_model()
         node_ls = [node.op_type for node in model.graph.node]
-        assert node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten', 'Gemm']
+        assert node_ls == ["Conv", "Relu", "MaxPool", "Flatten", "Gemm"]
         gemm_node = model.graph.node[-1]
         utils.remove_node(gemm_node, model.graph)
 
         new_node_ls = [node.op_type for node in model.graph.node]
-        assert new_node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten']
+        assert new_node_ls == ["Conv", "Relu", "MaxPool", "Flatten"]
         assert model.graph.output[0].name in model.graph.node[-1].output
 
     def test_remove_node_for_initializer_pruning(self):
@@ -178,8 +181,8 @@ class TestUtils:
 
         # Initializers should be removed from both the lists- inputs and initializers.
         # Missing this will lead to failure in ORT Inference Session creation.
-        assert all([not inp.startswith('bn_') for inp in model_input])
-        assert all([not init.startswith('bn_') for init in model_init])
+        assert all([not inp.startswith("bn_") for inp in model_input])
+        assert all([not init.startswith("bn_") for init in model_init])
 
     def test_get_attribute(self):
         """
@@ -196,16 +199,16 @@ class TestUtils:
             relu6_count = 0
             original_relu_count = 0
             for node in model.model.graph.node:
-                if node.op_type == 'Clip':
+                if node.op_type == "Clip":
                     relu6_count += 1
-                if node.op_type == 'Relu':
+                if node.op_type == "Relu":
                     original_relu_count += 1
 
             utils.replace_relu6_with_relu(model)
 
             relu_count = 0
             for node in model.model.graph.node:
-                if node.op_type == 'Relu':
+                if node.op_type == "Relu":
                     relu_count += 1
 
             assert relu_count - original_relu_count == relu6_count

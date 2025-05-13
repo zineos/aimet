@@ -41,7 +41,10 @@ from torch import nn
 import torch.nn.functional as F
 from aimet_torch.v2.quantization.affine.backends import quantize_dequantize
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
-from aimet_torch.v2.nn.fake_quant._legacy_impl import FakeQuantizedLinear, FakeQuantizationMixin
+from aimet_torch.v2.nn.fake_quant._legacy_impl import (
+    FakeQuantizedLinear,
+    FakeQuantizationMixin,
+)
 from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
 
 
@@ -49,13 +52,14 @@ from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
 def input():
     return torch.arange(-5, 5) / 10
 
+
 class TestFakeQuantizedLinear:
     def test_no_spec(self, input):
         quant_linear = FakeQuantizedLinear(10, 10)
         assert quant_linear.input_quantizers[0] is None
         assert quant_linear.output_quantizers[0] is None
-        assert quant_linear.param_quantizers['weight'] is None
-        assert quant_linear.param_quantizers['bias'] is None
+        assert quant_linear.param_quantizers["weight"] is None
+        assert quant_linear.param_quantizers["bias"] is None
 
         expected_output = F.linear(input, quant_linear.weight, quant_linear.bias)
         assert torch.equal(quant_linear(input), expected_output)
@@ -65,16 +69,18 @@ class TestFakeQuantizedLinear:
         Given: Instantiate a fake-quantized module with input quantizer spec specified
         """
         quant_linear = FakeQuantizedLinear(10, 10)
-        quant_linear.input_quantizers[0] = QuantizeDequantize((),
-                                                              bitwidth=8,
-                                                              symmetric=False,
-                                                              encoding_analyzer=MinMaxEncodingAnalyzer(()))
+        quant_linear.input_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
         """
         When: Inspect `input_quantizer` attribute.
         Then: `input_quantizer` is set to `QuantizeDequantize` as a submodule
         """
-        assert quant_linear.param_quantizers['weight'] is None
-        assert quant_linear.param_quantizers['bias'] is None
+        assert quant_linear.param_quantizers["weight"] is None
+        assert quant_linear.param_quantizers["bias"] is None
         assert quant_linear.output_quantizers[0] is None
 
         """
@@ -107,18 +113,20 @@ class TestFakeQuantizedLinear:
         Given: Instantiate a fake-quantized module with output quantizer spec specified
         """
         quant_linear = FakeQuantizedLinear(10, 10)
-        quant_linear.output_quantizers[0] = QuantizeDequantize((),
-                                                               bitwidth=8,
-                                                               symmetric=False,
-                                                               encoding_analyzer=MinMaxEncodingAnalyzer(()))
+        quant_linear.output_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
 
         """
         When: Inspect `output_quantizer` attribute.
         Then: `output_quantizer` is set to `QuantizeDequantize` as a submodule
         """
         assert quant_linear.input_quantizers[0] is None
-        assert quant_linear.param_quantizers['weight'] is None
-        assert quant_linear.param_quantizers['bias'] is None
+        assert quant_linear.param_quantizers["weight"] is None
+        assert quant_linear.param_quantizers["bias"] is None
 
         """
         When: Invoke forward before the encodings are initialized with `compute_encodings()`
@@ -145,16 +153,18 @@ class TestFakeQuantizedLinear:
         expected_output = quantize_dequantize(fp_output, scale, offset, bitwidth)
         assert torch.equal(quant_output, expected_output)
 
-    @pytest.mark.parametrize('bias', [True, False])
+    @pytest.mark.parametrize("bias", [True, False])
     def test_param_qtzn(self, input, bias):
         """
         Given: Instantiate a fake-quantized module with weight quantizer spec specified
         """
         quant_linear = FakeQuantizedLinear(10, 10, bias=bias)
-        quant_linear.param_quantizers['weight'] = QuantizeDequantize((10,),
-                                                                     bitwidth=4,
-                                                                     symmetric=True,
-                                                                     encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+        quant_linear.param_quantizers["weight"] = QuantizeDequantize(
+            (10,),
+            bitwidth=4,
+            symmetric=True,
+            encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+        )
 
         """
         When: Inspect `weight_quantizer` attribute.
@@ -175,9 +185,9 @@ class TestFakeQuantizedLinear:
         quant_output = quant_linear(input)
 
         weight = quant_linear.weight
-        scale = quant_linear.param_quantizers['weight'].get_scale()
-        offset = quant_linear.param_quantizers['weight'].get_offset()
-        bitwidth = quant_linear.param_quantizers['weight'].bitwidth
+        scale = quant_linear.param_quantizers["weight"].get_scale()
+        offset = quant_linear.param_quantizers["weight"].get_offset()
+        bitwidth = quant_linear.param_quantizers["weight"].bitwidth
         weight_qdq = quantize_dequantize(weight, scale, offset, bitwidth, signed=True)
 
         expected_output = F.linear(input, weight_qdq, quant_linear.bias)
@@ -189,18 +199,24 @@ class TestFakeQuantizedLinear:
         """
         fp_linear = nn.Linear(10, 10)
         quant_linear = FakeQuantizationMixin.from_module(fp_linear)
-        quant_linear.input_quantizers[0] = QuantizeDequantize((),
-                                                              bitwidth=8,
-                                                              symmetric=False,
-                                                              encoding_analyzer=MinMaxEncodingAnalyzer(()))
-        quant_linear.output_quantizers[0] = QuantizeDequantize((),
-                                                               bitwidth=8,
-                                                               symmetric=False,
-                                                               encoding_analyzer=MinMaxEncodingAnalyzer(()))
-        quant_linear.param_quantizers['weight'] = QuantizeDequantize((10,),
-                                                                     bitwidth=4,
-                                                                     symmetric=True,
-                                                                     encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+        quant_linear.input_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
+        quant_linear.output_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
+        quant_linear.param_quantizers["weight"] = QuantizeDequantize(
+            (10,),
+            bitwidth=4,
+            symmetric=True,
+            encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+        )
         with quant_linear.compute_encodings():
             _ = quant_linear(input)
 
@@ -218,9 +234,9 @@ class TestFakeQuantizedLinear:
         input_qdq = quantize_dequantize(input, scale, offset, bitwidth)
 
         weight = quant_linear.weight
-        scale = quant_linear.param_quantizers['weight'].get_scale()
-        offset = quant_linear.param_quantizers['weight'].get_offset()
-        bitwidth = quant_linear.param_quantizers['weight'].bitwidth
+        scale = quant_linear.param_quantizers["weight"].get_scale()
+        offset = quant_linear.param_quantizers["weight"].get_offset()
+        bitwidth = quant_linear.param_quantizers["weight"].bitwidth
         weight_qdq = quantize_dequantize(weight, scale, offset, bitwidth, signed=True)
 
         scale = quant_linear.output_quantizers[0].get_scale()

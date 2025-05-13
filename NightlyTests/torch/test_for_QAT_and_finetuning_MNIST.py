@@ -43,12 +43,16 @@ import numpy as np
 import copy
 from aimet_common.quantsim_config.utils import get_path_for_per_tensor_config
 from aimet_common.defs import QuantScheme, QuantizationDataType
-from aimet_torch.v1.quantsim import QuantizationSimModel, load_checkpoint, save_checkpoint
+from aimet_torch.v1.quantsim import (
+    QuantizationSimModel,
+    load_checkpoint,
+    save_checkpoint,
+)
 import models.mnist_torch_model as mnist_model
 from aimet_torch.v1.qc_quantize_op import StaticGridQuantWrapper
 
-path = str('../data')
-filename_prefix = 'quantized_mnist'
+path = str("../data")
+filename_prefix = "quantized_mnist"
 
 
 def check_if_layer_weights_are_updating(model, batch_idx):
@@ -65,23 +69,24 @@ def check_if_layer_weights_are_updating(model, batch_idx):
     conv1_w_value = model.conv1._module_to_wrap.weight
 
     if batch_idx != 0:
-        assert not np.allclose(conv1_w_value.cpu().detach().numpy(), f.conv1_w_value_old.cpu().detach().numpy())
+        assert not np.allclose(
+            conv1_w_value.cpu().detach().numpy(),
+            f.conv1_w_value_old.cpu().detach().numpy(),
+        )
     else:
         f.conv1_w_value_old = conv1_w_value.clone()
 
 
 class QuantizationSimAcceptanceTests(unittest.TestCase):
-
     @staticmethod
     def forward_pass(model, iterations):
         mnist_model.evaluate(model=model, iterations=iterations, use_cuda=True)
 
     @pytest.mark.cuda
     def test_with_finetuning(self):
-
         torch.cuda.empty_cache()
 
-        model = mnist_model.Net().to(torch.device('cuda'))
+        model = mnist_model.Net().to(torch.device("cuda"))
         mnist_model.evaluate(model=model, iterations=None, use_cuda=True)
 
         sim = QuantizationSimModel(model, dummy_input=torch.rand(1, 1, 28, 28).cuda())
@@ -93,56 +98,75 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
         mnist_model.evaluate(model=sim.model, iterations=None, use_cuda=True)
 
         # train the model again
-        mnist_model.train(sim.model, epochs=1, num_batches=3,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            sim.model,
+            epochs=1,
+            num_batches=3,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
     @pytest.mark.cuda
     def test_retraining_on_quantized_model_first_step(self):
-
         torch.cuda.empty_cache()
 
-        model = mnist_model.Net().to(torch.device('cuda'))
+        model = mnist_model.Net().to(torch.device("cuda"))
 
-        sim = QuantizationSimModel(model,
-                                   default_output_bw=4,
-                                   default_param_bw=4,
-                                   dummy_input=torch.rand(1, 1, 28, 28).cuda())
+        sim = QuantizationSimModel(
+            model,
+            default_output_bw=4,
+            default_param_bw=4,
+            dummy_input=torch.rand(1, 1, 28, 28).cuda(),
+        )
 
         # Quantize the untrained MNIST model
         sim.compute_encodings(self.forward_pass, forward_pass_callback_args=5)
 
         # train the model for entire one epoch
-        mnist_model.train(model=sim.model, epochs=1, num_batches=3,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            model=sim.model,
+            epochs=1,
+            num_batches=3,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
         # Checkpoint the model
-        save_checkpoint(sim, os.path.join(path, 'checkpoint.pt'))
+        save_checkpoint(sim, os.path.join(path, "checkpoint.pt"))
 
     @pytest.mark.cuda
     def test_retraining_on_quantized_model_second_step(self):
-
         torch.cuda.empty_cache()
 
-        sim = load_checkpoint(os.path.join(path, 'checkpoint.pt'))
+        sim = load_checkpoint(os.path.join(path, "checkpoint.pt"))
 
         # re-train the model for entire one epoch
-        mnist_model.train(model=sim.model, epochs=1, num_batches=3,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            model=sim.model,
+            epochs=1,
+            num_batches=3,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
     # TODO: Revisit to resolve error when wrapping stand alone op
     @unittest.skip
     def test_manual_mode(self):
-
         torch.cuda.empty_cache()
 
         net = mnist_model.Net()
 
-        model = net.to(torch.device('cuda'))
+        model = net.to(torch.device("cuda"))
         # Adding wrapper to first convolution layer
         for module_name, module_ref in model.named_children():
-            if module_name is 'conv1':
-                quantized_module = StaticGridQuantWrapper(module_ref, weight_bw=8, activation_bw=8, round_mode='nearest',
-                                                          quant_scheme=QuantScheme.post_training_tf)
+            if module_name is "conv1":
+                quantized_module = StaticGridQuantWrapper(
+                    module_ref,
+                    weight_bw=8,
+                    activation_bw=8,
+                    round_mode="nearest",
+                    quant_scheme=QuantScheme.post_training_tf,
+                )
                 setattr(model, module_name, quantized_module)
 
         sim = QuantizationSimModel(model, dummy_input=torch.rand(1, 1, 28, 28).cuda())
@@ -154,27 +178,38 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
         mnist_model.evaluate(model=sim.model, iterations=100, use_cuda=True)
 
         # train the model again
-        mnist_model.train(model=sim.model, epochs=1, num_batches=3,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            model=sim.model,
+            epochs=1,
+            num_batches=3,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
     @pytest.mark.cuda
     def test_retraining_on_quantized_model_fp16(self):
-
         torch.cuda.empty_cache()
 
-        model = mnist_model.Net().to(torch.device('cuda'))
+        model = mnist_model.Net().to(torch.device("cuda"))
 
-        sim = QuantizationSimModel(model,
-                                   default_output_bw=16,
-                                   default_param_bw=16,
-                                   dummy_input=torch.rand(1, 1, 28, 28).cuda(),
-                                   default_data_type=QuantizationDataType.float)
+        sim = QuantizationSimModel(
+            model,
+            default_output_bw=16,
+            default_param_bw=16,
+            dummy_input=torch.rand(1, 1, 28, 28).cuda(),
+            default_data_type=QuantizationDataType.float,
+        )
 
         sim.compute_encodings(self.forward_pass, forward_pass_callback_args=5)
 
         # train the model for entire one epoch
-        mnist_model.train(model=sim.model, epochs=1, num_batches=3,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            model=sim.model,
+            epochs=1,
+            num_batches=3,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
     @pytest.mark.cuda
     def test_range_learning_for_qat_tf_init(self):
@@ -185,9 +220,13 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
         model = mnist_model.Net().to(torch.device(device="cuda"))
         mnist_model.evaluate(model=model, iterations=None, use_cuda=True)
 
-        sim = QuantizationSimModel(model, quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                   dummy_input=dummy_input, config_file=get_path_for_per_tensor_config())
-        sim.model.conv1.param_quantizers['bias'].enabled = True
+        sim = QuantizationSimModel(
+            model,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            dummy_input=dummy_input,
+            config_file=get_path_for_per_tensor_config(),
+        )
+        sim.model.conv1.param_quantizers["bias"].enabled = True
 
         # Quantize the untrained MNIST model
         sim.compute_encodings(self.forward_pass, forward_pass_callback_args=5)
@@ -197,18 +236,23 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
 
         sim.model.train()
 
-        mnist_model.train(sim.model, epochs=1, num_batches=100,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            sim.model,
+            epochs=1,
+            num_batches=100,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
         # Checking if few parameters got updated
         self.assertTrue(l1_w_min != sim.model.conv1.weight_encoding_min.data)
         self.assertTrue(l1_b_max != sim.model.conv1.bias_encoding_max.data)
         self.assertTrue(l2_w_min != sim.model.conv2.weight_encoding_min.data)
 
-        path = './data'
+        path = "./data"
         if not os.path.exists(path):
             os.mkdir(path)
-        sim.export(path, 'mnist', dummy_input=dummy_input.cpu())
+        sim.export(path, "mnist", dummy_input=dummy_input.cpu())
 
     @pytest.mark.cuda
     def test_range_learning_for_qat_tf_enhanced_init(self):
@@ -219,9 +263,13 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
         model = mnist_model.Net().to(torch.device(device="cuda"))
         mnist_model.evaluate(model=model, iterations=None, use_cuda=True)
 
-        sim = QuantizationSimModel(model, quant_scheme=QuantScheme.training_range_learning_with_tf_enhanced_init,
-                                   dummy_input=dummy_input, config_file=get_path_for_per_tensor_config())
-        sim.model.conv1.param_quantizers['bias'].enabled = True
+        sim = QuantizationSimModel(
+            model,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_enhanced_init,
+            dummy_input=dummy_input,
+            config_file=get_path_for_per_tensor_config(),
+        )
+        sim.model.conv1.param_quantizers["bias"].enabled = True
 
         # Quantize the untrained MNIST model
         sim.compute_encodings(self.forward_pass, forward_pass_callback_args=5)
@@ -231,8 +279,13 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
 
         sim.model.train()
 
-        mnist_model.train(sim.model, epochs=1, num_batches=100,
-                          batch_callback=check_if_layer_weights_are_updating, use_cuda=True)
+        mnist_model.train(
+            sim.model,
+            epochs=1,
+            num_batches=100,
+            batch_callback=check_if_layer_weights_are_updating,
+            use_cuda=True,
+        )
 
         # Checking if few parameters got updated
         self.assertTrue(l1_w_min != sim.model.conv1.weight_encoding_min.data)
@@ -247,9 +300,9 @@ class QuantizationSimAcceptanceTests(unittest.TestCase):
 
 
 def seed_all(seed=1029):
-    """ Setup seed """
+    """Setup seed"""
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)

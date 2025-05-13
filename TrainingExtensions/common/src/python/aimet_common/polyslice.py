@@ -35,8 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 #
 #  =============================================================================
-""" Module to keep track of information related to channels in a layer
-    that have zero planes. """
+"""Module to keep track of information related to channels in a layer
+that have zero planes."""
 
 from collections import OrderedDict
 
@@ -53,7 +53,7 @@ class PolySlice:
             self.set(dim, index)
 
     def __repr__(self):
-        """ Printable representation of the object. """
+        """Printable representation of the object."""
         slices_by_dim = self.get_all()
         repr_str = ""
         for dim, indices in slices_by_dim.items():
@@ -62,8 +62,8 @@ class PolySlice:
         return repr_str
 
     def __eq__(self, poly_slice):
-        """ Compares the argument PolySlice with the self PolySlice and
-         returns True if they are equal. Otherwise, returns False. """
+        """Compares the argument PolySlice with the self PolySlice and
+        returns True if they are equal. Otherwise, returns False."""
         return poly_slice._slices_by_dim == self._slices_by_dim  # pylint: disable=protected-access
 
     def set(self, dim, index):
@@ -82,20 +82,20 @@ class PolySlice:
 
     @property
     def num_dims(self):
-        """ Returns the number of dimensions of the PolySlice object. """
+        """Returns the number of dimensions of the PolySlice object."""
         return len(self._slices_by_dim)
 
     def get_dims(self):
-        """ Returns the dimensions which have zero channels """
+        """Returns the dimensions which have zero channels"""
         return sorted(self._slices_by_dim)
 
     def get_slices(self, dim):
-        """ Returns the indices which have zero channels. """
+        """Returns the indices which have zero channels."""
         return sorted(self._slices_by_dim[dim])
 
     def get_all(self):
-        """ Returns all the dimensions and the corresponding channels
-        with zero planes. """
+        """Returns all the dimensions and the corresponding channels
+        with zero planes."""
         result = OrderedDict()
         for dim in sorted(self._slices_by_dim):
             result[dim] = sorted(list(self._slices_by_dim[dim]))

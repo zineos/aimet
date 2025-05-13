@@ -47,13 +47,21 @@ import torch
 from packaging import version
 
 from aimet_onnx.quantsim import QuantizationSimModel
-from aimet_onnx.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo, _compute_sqnr, EvalCallbackFactory
+from aimet_onnx.amp.mixed_precision_algo import (
+    GreedyMixedPrecisionAlgo,
+    _compute_sqnr,
+    EvalCallbackFactory,
+)
 from aimet_onnx.defs import DataLoader
 from aimet_onnx.utils import make_dummy_input
 from aimet_onnx.mixed_precision import choose_mixed_precision
 
 from aimet_common.defs import QuantizationDataType, CallbackFunc
-from aimet_common.amp.mixed_precision_algo import interpolation_search, brute_force_search, binary_search
+from aimet_common.amp.mixed_precision_algo import (
+    interpolation_search,
+    brute_force_search,
+    binary_search,
+)
 from aimet_common.amp.utils import calculate_starting_bit_ops, AMPSearchAlgo
 
 from .models.test_models import single_residual_model
@@ -61,10 +69,11 @@ from .models import models_for_tests
 
 INPUT_SHAPE = (1, 3, 32, 32)
 
+
 def forward_fn(session, _):
     np.random.seed(0)
     test_data = np.random.randn(*INPUT_SHAPE).astype(np.float32)
-    session.run(None, {'input': test_data})
+    session.run(None, {"input": test_data})
 
 
 @pytest.fixture
@@ -86,11 +95,9 @@ phase1_eval_score_lookup_table = {
     ("fp32", W8A8): 0.85,
     ("fp32", W16A8): 0.9,
     ("fp32", W8A16): 0.91,
-
     (W8A8, "fp32"): 0.92,
     (W16A8, "fp32"): 0.93,
     (W8A16, "fp32"): 0.94,
-
     ("fp32", "fp32"): 1.0,
 }
 
@@ -99,50 +106,49 @@ phase1_eval_score_lookup_table = {
 # 1. Quantizer group 2 is more sensitive than 1
 # 2. Activation quantizers are more sensitive then weight quantizers
 phase2_eval_score_lookup_table = {
-    (W8A8,   W8A8): 0.8,
-    (W8A16,  W8A8): 0.81,
-    (W16A8,  W8A8): 0.82,
+    (W8A8, W8A8): 0.8,
+    (W8A16, W8A8): 0.81,
+    (W16A8, W8A8): 0.82,
     (W16A16, W8A8): 0.83,
-
-    (W8A8,   W16A8): 0.84,
-    (W16A8,  W16A8): 0.85,
-    (W8A16,  W16A8): 0.86,
+    (W8A8, W16A8): 0.84,
+    (W16A8, W16A8): 0.85,
+    (W8A16, W16A8): 0.86,
     (W16A16, W16A8): 0.87,
-
-    (W8A8,   W8A16): 0.88,
-    (W16A8,  W8A16): 0.89,
-    (W8A16,  W8A16): 0.90,
+    (W8A8, W8A16): 0.88,
+    (W16A8, W8A16): 0.89,
+    (W8A16, W8A16): 0.90,
     (W16A16, W8A16): 0.91,
-
-    (W8A8,   W16A16): 0.92,
-    (W16A8,  W16A16): 0.93,
-    (W8A16,  W16A16): 0.94,
+    (W8A8, W16A16): 0.92,
+    (W16A8, W16A16): 0.93,
+    (W8A16, W16A16): 0.94,
     (W16A16, W16A16): 0.95,
-
     ("fp32", "fp32"): 1.0,
 }
+
 
 def eval_func(model, args):
     eval_score_lookup_table, sim = args
     # quantizer group 1
-    input_quantizer = sim.qc_quantize_op_dict['input']
+    input_quantizer = sim.qc_quantize_op_dict["input"]
 
-    conv0_param_quantizer = sim.qc_quantize_op_dict[sim.connected_graph.ordered_ops[0].inputs[1].name]
+    conv0_param_quantizer = sim.qc_quantize_op_dict[
+        sim.connected_graph.ordered_ops[0].inputs[1].name
+    ]
     if input_quantizer.enabled and conv0_param_quantizer.enabled:
         quantizer_1 = (
             (input_quantizer.bitwidth, QuantizationDataType.int),
-            (conv0_param_quantizer.bitwidth, QuantizationDataType.int)
+            (conv0_param_quantizer.bitwidth, QuantizationDataType.int),
         )
     else:
         quantizer_1 = "fp32"
 
     # quantizer group 2
-    fc_weight_quantizer = sim.qc_quantize_op_dict['fc.weight']
-    fc_output_quantizer = sim.qc_quantize_op_dict['/avgpool/AveragePool_output_0']
+    fc_weight_quantizer = sim.qc_quantize_op_dict["fc.weight"]
+    fc_output_quantizer = sim.qc_quantize_op_dict["/avgpool/AveragePool_output_0"]
     if fc_weight_quantizer.enabled and fc_output_quantizer.enabled:
         quantizer_2 = (
             (fc_output_quantizer.bitwidth, QuantizationDataType.int),
-            (fc_weight_quantizer.bitwidth, QuantizationDataType.int)
+            (fc_weight_quantizer.bitwidth, QuantizationDataType.int),
         )
     else:
         quantizer_2 = "fp32"
@@ -166,9 +172,11 @@ def candidates():
     # ((activation bitwidth, activation data type), (param bitwidth, param data type))
     return [W16A16, W8A16, W16A8]
 
+
 @pytest.fixture
 def model():
     return single_residual_model()
+
 
 @pytest.fixture
 def sim(model):
@@ -176,59 +184,39 @@ def sim(model):
     sim = QuantizationSimModel(model)
     return sim
 
+
 @pytest.fixture
 def sim_supported_kernel():
     model = single_residual_model()
     quantsim_config = {
         "defaults": {
-            "ops": {
-                "is_output_quantized": "True"
-            },
-            "params": {
-                "is_quantized": "True"
-            },
+            "ops": {"is_output_quantized": "True"},
+            "params": {"is_quantized": "True"},
             "supported_kernels": [
                 {
-                    "activation": {
-                        "bitwidth": 16,
-                        "dtype": "int"
-                    },
-                    "param": {
-                        "bitwidth": 16,
-                        "dtype": "int"
-                    }
+                    "activation": {"bitwidth": 16, "dtype": "int"},
+                    "param": {"bitwidth": 16, "dtype": "int"},
                 },
                 {
-                    "activation": {
-                        "bitwidth": 16,
-                        "dtype": "float"
-                    },
-                    "param": {
-                        "bitwidth": 16,
-                        "dtype": "float"
-                    }
-                }
-            ]
+                    "activation": {"bitwidth": 16, "dtype": "float"},
+                    "param": {"bitwidth": 16, "dtype": "float"},
+                },
+            ],
         },
-        "params": {
-            "bias": {
-                "is_quantized": "False"
-            }
-        },
+        "params": {"bias": {"is_quantized": "False"}},
         "op_type": {},
-        "supergroups": [
-        ],
-        "model_input": {
-            "is_input_quantized": "True"
-        },
-        "model_output": {}
+        "supergroups": [],
+        "model_input": {"is_input_quantized": "True"},
+        "model_output": {},
     }
 
     with tempfile.TemporaryDirectory() as tempdir:
-        with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+        with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
             json.dump(quantsim_config, f)
 
-        sim = QuantizationSimModel(model, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+        sim = QuantizationSimModel(
+            model, config_file=os.path.join(tempdir, "quantsim_config.json")
+        )
         return sim
 
 
@@ -239,13 +227,16 @@ def results_dir():
         yield tempdir
         shutil.rmtree(tempdir)
 
+
 def _get_quantizer_name_op_type(sim):
     """
     Get quantizer_name -> Connected_graph_op type map.
     """
     quantizer_to_op_type = {}
     for cg_op in sim.connected_graph.ordered_ops:
-        input_quantizers, output_quantizers, param_quantizers = sim.get_op_quantizers(cg_op)
+        input_quantizers, output_quantizers, param_quantizers = sim.get_op_quantizers(
+            cg_op
+        )
         print(input_quantizers, output_quantizers, param_quantizers)
         if input_quantizers:
             for inp_qtz in input_quantizers:
@@ -266,18 +257,31 @@ def _get_quantizer_name_op_type(sim):
 
 
 class TestAMPv1:
-    def test_phase1(self, sim, candidates, forward_pass_callback, eval_callback_phase1, results_dir):
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, unittest.mock.MagicMock(),
-                                        results_dir, True, forward_pass_callback)
+    def test_phase1(
+        self, sim, candidates, forward_pass_callback, eval_callback_phase1, results_dir
+    ):
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            unittest.mock.MagicMock(),
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.set_baseline()
 
-        input_group = [qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers][0]
+        input_group = [
+            qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers
+        ][0]
         candidate = input_group.get_candidate(algo._module_name_dict)
         # Check if quantizer group is set to maximum bitwidth
         assert algo.baseline_candidate == candidate
 
         active_quantizers = {
-            quantizer_group: quantizer_group.get_active_quantizers(algo._module_name_dict)
+            quantizer_group: quantizer_group.get_active_quantizers(
+                algo._module_name_dict
+            )
             for quantizer_group in algo.quantizer_groups
         }
 
@@ -289,7 +293,9 @@ class TestAMPv1:
             found_quantizer_groups = []
             for quantizer_group in algo.quantizer_groups:
                 if quantizer_group.get_active_quantizers(algo._module_name_dict):
-                    found_quantizer_groups.append(quantizer_group.get_active_quantizers(algo._module_name_dict))
+                    found_quantizer_groups.append(
+                        quantizer_group.get_active_quantizers(algo._module_name_dict)
+                    )
 
             if call_count < len(algo.quantizer_groups) * (len(candidates) - 1):
                 # During phase 1 loop, only one quantizer group can be activated at a time
@@ -306,24 +312,34 @@ class TestAMPv1:
                 # The below check should be removed when the above bug is fixed. The check is to make sure that the only
                 # case when found_quantizer_groups has more than one entry is the known issue.
                 if len(found_quantizer_groups) == 2:
-                    avgpool_output_name = algo._sim.connected_graph.get_all_ops()['AveragePool_12'].get_module().output[0]
-                    avgpool_quantizer = algo._sim.qc_quantize_op_dict[avgpool_output_name]
-                    fc_weight_quantizer = algo._sim.qc_quantize_op_dict['fc.weight']
+                    avgpool_output_name = (
+                        algo._sim.connected_graph.get_all_ops()["AveragePool_12"]
+                        .get_module()
+                        .output[0]
+                    )
+                    avgpool_quantizer = algo._sim.qc_quantize_op_dict[
+                        avgpool_output_name
+                    ]
+                    fc_weight_quantizer = algo._sim.qc_quantize_op_dict["fc.weight"]
                     assert [fc_weight_quantizer] in found_quantizer_groups
-                    assert [avgpool_quantizer, fc_weight_quantizer] in found_quantizer_groups
+                    assert [
+                        avgpool_quantizer,
+                        fc_weight_quantizer,
+                    ] in found_quantizer_groups
 
             call_count += 1
 
         with unittest.mock.patch(
-                'aimet_onnx.amp.mixed_precision_algo.EvalCallbackFactory.sqnr',
-                side_effect=assert_only_one_quantizer_group_enabled
+            "aimet_onnx.amp.mixed_precision_algo.EvalCallbackFactory.sqnr",
+            side_effect=assert_only_one_quantizer_group_enabled,
         ):
             accuracy_list = algo._create_and_save_accuracy_list(algo.baseline_candidate)
 
         # All the active quantizers should be still active
         for quantizer_group in algo.quantizer_groups:
-            assert active_quantizers[quantizer_group] == \
-                   quantizer_group.get_active_quantizers(algo._module_name_dict)
+            assert active_quantizers[
+                quantizer_group
+            ] == quantizer_group.get_active_quantizers(algo._module_name_dict)
 
         assert len(accuracy_list) == 20
         # Check if accuracy list is in descending order
@@ -333,61 +349,124 @@ class TestAMPv1:
         assert accuracy_list[3][2] >= accuracy_list[4][2]
         assert accuracy_list[4][2] >= accuracy_list[5][2]
 
-    def test_phase2_brute_force(self, sim, candidates, forward_pass_callback,
-                                eval_callback_phase1, eval_callback_phase2, results_dir):
-
+    def test_phase2_brute_force(
+        self,
+        sim,
+        candidates,
+        forward_pass_callback,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        results_dir,
+    ):
         allowed_accuracy_drop = 0.12
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.set_baseline()
-        pareto_front_list = self._run_phase2(algo, allowed_accuracy_drop, brute_force_search)
+        pareto_front_list = self._run_phase2(
+            algo, allowed_accuracy_drop, brute_force_search
+        )
 
         # Test 1. Check number of data points visited
         assert len(pareto_front_list) == 4
 
         # Test 2. Check final accuracy
-        eval_score = eval_callback_phase2.func(sim.model, [phase2_eval_score_lookup_table, sim])
+        eval_score = eval_callback_phase2.func(
+            sim.model, [phase2_eval_score_lookup_table, sim]
+        )
         assert eval_score == algo._final_eval_score
         assert eval_score >= 1.0 - allowed_accuracy_drop
 
         # Test 3. Check bitops
         starting_bit_ops = calculate_starting_bit_ops(
-            algo._mac_dict, ((16, QuantizationDataType.int), (16, QuantizationDataType.int))
+            algo._mac_dict,
+            ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
         )
-        running_bit_ops = starting_bit_ops - algo._mac_dict['/conv1/Conv'] * 16 * 16 + \
-                          algo._mac_dict['/conv1/Conv'] * 8 * 16
+        running_bit_ops = (
+            starting_bit_ops
+            - algo._mac_dict["/conv1/Conv"] * 16 * 16
+            + algo._mac_dict["/conv1/Conv"] * 8 * 16
+        )
         relative_bit_ops = running_bit_ops / starting_bit_ops
 
         assert relative_bit_ops == pareto_front_list[0][0]
         assert relative_bit_ops == pareto_front_list[1][0]
 
-        running_bit_ops = running_bit_ops - algo._mac_dict['/fc/Gemm'] * 16 * 16 + algo._mac_dict['/fc/Gemm'] * 8 * 16
+        running_bit_ops = (
+            running_bit_ops
+            - algo._mac_dict["/fc/Gemm"] * 16 * 16
+            + algo._mac_dict["/fc/Gemm"] * 8 * 16
+        )
         relative_bit_ops = running_bit_ops / starting_bit_ops
         assert relative_bit_ops == pareto_front_list[2][0]
 
-    @pytest.mark.parametrize("allowed_accuracy_drop, len_of_pareto_list", [(0.13, 3), (0.1, 4)])
-    def test_phase2_interpolation(self, sim, candidates, forward_pass_callback,
-                                  eval_callback_phase1, eval_callback_phase2, results_dir,
-                                  allowed_accuracy_drop, len_of_pareto_list):
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+    @pytest.mark.parametrize(
+        "allowed_accuracy_drop, len_of_pareto_list", [(0.13, 3), (0.1, 4)]
+    )
+    def test_phase2_interpolation(
+        self,
+        sim,
+        candidates,
+        forward_pass_callback,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        results_dir,
+        allowed_accuracy_drop,
+        len_of_pareto_list,
+    ):
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
 
-        pareto_front_list = self._run_phase2(algo, allowed_accuracy_drop, interpolation_search)
+        pareto_front_list = self._run_phase2(
+            algo, allowed_accuracy_drop, interpolation_search
+        )
 
         # Test 1. Check number of data points visited
         assert len(pareto_front_list) == len_of_pareto_list
 
         # Test 2. Check final accuracy
-        eval_score = eval_callback_phase2.func(sim.model, [phase2_eval_score_lookup_table, sim])
+        eval_score = eval_callback_phase2.func(
+            sim.model, [phase2_eval_score_lookup_table, sim]
+        )
         assert eval_score == algo._final_eval_score
         assert eval_score >= 1.0 - allowed_accuracy_drop
 
-    @pytest.mark.parametrize("allowed_accuracy_drop, len_of_pareto_list", [(0.055, 2), (0.1, 4)])
-    def test_phase2_binary(self, sim, candidates, forward_pass_callback,
-                           eval_callback_phase1, eval_callback_phase2, results_dir, allowed_accuracy_drop,
-                           len_of_pareto_list):
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+    @pytest.mark.parametrize(
+        "allowed_accuracy_drop, len_of_pareto_list", [(0.055, 2), (0.1, 4)]
+    )
+    def test_phase2_binary(
+        self,
+        sim,
+        candidates,
+        forward_pass_callback,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        results_dir,
+        allowed_accuracy_drop,
+        len_of_pareto_list,
+    ):
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
 
         pareto_front_list = self._run_phase2(algo, allowed_accuracy_drop, binary_search)
 
@@ -395,7 +474,9 @@ class TestAMPv1:
         assert len(pareto_front_list) == len_of_pareto_list
 
         # Test 2. Check final accuracy
-        eval_score = eval_callback_phase2.func(sim.model, [phase2_eval_score_lookup_table, sim])
+        eval_score = eval_callback_phase2.func(
+            sim.model, [phase2_eval_score_lookup_table, sim]
+        )
         assert eval_score == algo._final_eval_score
         assert eval_score >= 1.0 - allowed_accuracy_drop
 
@@ -404,35 +485,65 @@ class TestAMPv1:
         algo.min_candidate = W16A8
         fp32_acc = 1.0
 
-        input_group = [qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers][0]
-        fc_group = [qg for qg in algo.quantizer_groups if "fc.weight" in qg.parameter_quantizers][0]
+        input_group = [
+            qg for qg in algo.quantizer_groups if "input" in qg.activation_quantizers
+        ][0]
+        fc_group = [
+            qg for qg in algo.quantizer_groups if "fc.weight" in qg.parameter_quantizers
+        ][0]
         accuracy_list = [
             (input_group, W8A16, phase1_eval_score_lookup_table[(W8A16, "fp32")], 100),
             (input_group, W16A8, phase1_eval_score_lookup_table[(W16A8, "fp32")], 90),
             (fc_group, W8A16, phase1_eval_score_lookup_table[("fp32", W8A16)], 80),
             (fc_group, W16A8, phase1_eval_score_lookup_table[("fp32", W16A8)], 70),
         ]
-        return algo._create_pareto_front_list(allowed_accuracy_drop, accuracy_list, fp32_acc,
-                                              algo.baseline_candidate, algo.min_candidate, search_algo, phase2_reverse = False)
+        return algo._create_pareto_front_list(
+            allowed_accuracy_drop,
+            accuracy_list,
+            fp32_acc,
+            algo.baseline_candidate,
+            algo.min_candidate,
+            search_algo,
+            phase2_reverse=False,
+        )
 
     def test_supported_candidates_1(
-            self, sim_supported_kernel, candidates, forward_pass_callback, eval_callback_phase1, eval_callback_phase2, results_dir
+        self,
+        sim_supported_kernel,
+        candidates,
+        forward_pass_callback,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        results_dir,
     ):
         """
         Pass in vanilla config file without any specialized supported_kernels and verify the generated candidates in
         quantizer_groups of GreedyMixedPrecisionAlgo object
         """
         # Create an accuracy list
-        algo = GreedyMixedPrecisionAlgo(sim_supported_kernel, candidates, eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback, use_all_amp_candidates=False)
+        algo = GreedyMixedPrecisionAlgo(
+            sim_supported_kernel,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+            use_all_amp_candidates=False,
+        )
 
         assert len(algo._supported_candidates_per_quantizer_group.keys()) == 13
 
-        default_supported_kernels = [((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                                     ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                                     ((8, QuantizationDataType.float), (16, QuantizationDataType.float))]
+        default_supported_kernels = [
+            ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((8, QuantizationDataType.float), (16, QuantizationDataType.float)),
+        ]
 
-        for quantizer, quantizer_candidates in algo._supported_candidates_per_quantizer_group.items():
+        for (
+            quantizer,
+            quantizer_candidates,
+        ) in algo._supported_candidates_per_quantizer_group.items():
             # verify to make sure the candidates returned is always part of amp_candidates and they are part of
             # "Defaults"
             for c in quantizer_candidates:
@@ -440,7 +551,12 @@ class TestAMPv1:
                 assert c in candidates
 
     def test_supported_candidates_2(
-            self, candidates, forward_pass_callback, eval_callback_phase1, eval_callback_phase2, results_dir
+        self,
+        candidates,
+        forward_pass_callback,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        results_dir,
     ):
         """
         Pass in vanilla config file without any specialized supported_kernels and verify the generated candidates in
@@ -449,120 +565,95 @@ class TestAMPv1:
         model = single_residual_model()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 8, "dtype": "int"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 8, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
+                    },
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                            {
-                                "activation": {
-                                    "bitwidth": 8,
-                                    "dtype": "int"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "int"
-                                }
-                            },
-                        ],
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                        {
+                            "activation": {"bitwidth": 8, "dtype": "int"},
+                            "param": {"bitwidth": 16, "dtype": "int"},
+                        },
+                    ],
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
-                    }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
+                    },
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
-
-        with open(os.path.join(results_dir, 'quantsim_config.json'), 'w') as f:
+        with open(os.path.join(results_dir, "quantsim_config.json"), "w") as f:
             json.dump(quantsim_config, f)
 
-        sim = QuantizationSimModel(model, config_file=os.path.join(results_dir, 'quantsim_config.json'))
+        sim = QuantizationSimModel(
+            model, config_file=os.path.join(results_dir, "quantsim_config.json")
+        )
 
         # Create an accuracy list
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback, use_all_amp_candidates=False)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+            use_all_amp_candidates=False,
+        )
 
         assert len(algo._supported_candidates_per_quantizer_group.keys()) == 13
 
         # default_supported_kernels and conv_supported_kernels are the configurations added in the json file above.
-        default_supported_kernels = [((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                                     ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                                     ((8, QuantizationDataType.int), (16, QuantizationDataType.int))]
+        default_supported_kernels = [
+            ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
+        ]
 
-        conv_supported_kernels = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                                  ((8, QuantizationDataType.int), (16, QuantizationDataType.int))]
+        conv_supported_kernels = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
+        ]
         quantizer_to_op_type = _get_quantizer_name_op_type(sim)
-        quantizer_to_op_type['output'] = ['Gemm']
+        quantizer_to_op_type["output"] = ["Gemm"]
 
-        for quantizer, quantizer_candidates in algo._supported_candidates_per_quantizer_group.items():
-            quantizers = sorted(set(itertools.chain(quantizer.activation_quantizers,
-                                                    quantizer.parameter_quantizers)))
+        for (
+            quantizer,
+            quantizer_candidates,
+        ) in algo._supported_candidates_per_quantizer_group.items():
+            quantizers = sorted(
+                set(
+                    itertools.chain(
+                        quantizer.activation_quantizers, quantizer.parameter_quantizers
+                    )
+                )
+            )
             onnx_types = []
 
             for q in quantizers:
@@ -571,25 +662,39 @@ class TestAMPv1:
             # verify to make sure the candidates returned is always part of amp_candidates and they are part of
             # "Defaults" or "Conv" appropriately
             for c in quantizer_candidates:
-                if ['Conv'] in onnx_types:
+                if ["Conv"] in onnx_types:
                     assert c in conv_supported_kernels
                 else:
                     assert c in default_supported_kernels
 
-    def test_respect_frozen_encodings(self, sim, forward_pass_callback, eval_callback_phase1, results_dir):
-        quantizer = [q for name, q in sim.qc_quantize_op_dict.items() if name in sim.param_names and q.enabled][0]
+    def test_respect_frozen_encodings(
+        self, sim, forward_pass_callback, eval_callback_phase1, results_dir
+    ):
+        quantizer = [
+            q
+            for name, q in sim.qc_quantize_op_dict.items()
+            if name in sim.param_names and q.enabled
+        ][0]
         quantizer.set_bitwidth(4)
         sim.compute_encodings(forward_pass_callback.func, forward_pass_callback.args)
         quantizer.freeze_encodings()
         candidates = [W8A8, W8A16]
-        algo = GreedyMixedPrecisionAlgo(sim, candidates, eval_callback_phase1, unittest.mock.MagicMock(),
-                                        results_dir, True, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            unittest.mock.MagicMock(),
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.run(0.01, AMPSearchAlgo.Binary)
         assert quantizer.bitwidth == 4
 
-
-    @pytest.mark.parametrize("model", (
-            single_residual_model().model, 
+    @pytest.mark.parametrize(
+        "model",
+        (
+            single_residual_model().model,
             models_for_tests.dynamic_matmul_model(10),
             models_for_tests.matmul_with_constant_first_input(),
             models_for_tests.weight_matmul_model(),
@@ -598,15 +703,20 @@ class TestAMPv1:
             models_for_tests.depthwise_transposed_conv_model().model,
             models_for_tests.model_with_split_matmul(),
             models_for_tests.hierarchical_model().model,
-            ))
+        ),
+    )
     def test_choose_mixed_precision(self, model, tmpdir):
         np.random.seed(0)
 
-        sim = QuantizationSimModel(model, default_activation_bw=8, default_param_bw=8, config_file="htp_v73")
+        sim = QuantizationSimModel(
+            model, default_activation_bw=8, default_param_bw=8, config_file="htp_v73"
+        )
         enabled_quantizers = {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
         total_bits = 16 * len(enabled_quantizers)
 
-        forward_callback = CallbackFunc(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
+        forward_callback = CallbackFunc(
+            lambda sess, _: sess.run(None, make_dummy_input(model)), None
+        )
 
         def phase_2_callback(sess, _):
             bits = sum(q.bitwidth if q.enabled else 16 for q in enabled_quantizers)
@@ -616,18 +726,31 @@ class TestAMPv1:
         eval_callback_phase1 = CallbackFunc(lambda sess, _: np.random.rand())
         eval_callback_phase2 = CallbackFunc(phase_2_callback, None)
 
-        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                      ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                      ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
 
         # Apply mixed precision
-        choose_mixed_precision(sim, candidates, eval_callback_phase1, eval_callback_phase2, 0.4, tmpdir, True,
-                               forward_callback)
-        
+        choose_mixed_precision(
+            sim,
+            candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            0.4,
+            tmpdir,
+            True,
+            forward_callback,
+        )
+
         # Assert that no param quantizers are in int16 (not a valid candidate)
         for name in sim.param_names:
             quantizer = sim.qc_quantize_op_dict[name]
-            assert not (quantizer.bitwidth == 16 and quantizer.data_type == QuantizationDataType.int)
+            assert not (
+                quantizer.bitwidth == 16
+                and quantizer.data_type == QuantizationDataType.int
+            )
 
         # Assert that the final result meets the accuracy metric
         assert sum(q.bitwidth for q in enabled_quantizers) <= total_bits
@@ -638,7 +761,10 @@ class TestAMPv1:
             if not op.type in ("MatMul", "Gemm"):
                 continue
 
-            q1, q2 = sim._get_closest_enabled_quantizer(op.inputs[0]), sim._get_closest_enabled_quantizer(op.inputs[1])
+            q1, q2 = (
+                sim._get_closest_enabled_quantizer(op.inputs[0]),
+                sim._get_closest_enabled_quantizer(op.inputs[1]),
+            )
             if not q1 or not q2:
                 continue
 
@@ -653,12 +779,12 @@ class TestAMPv1:
 
 class TestAMPv2:
     def test_compute_sqnr(self):
-        """ Verify _compute_sqnr() method """
+        """Verify _compute_sqnr() method"""
         for noise in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]:
             orig_tensor = np.random.randn(10, 10)
             noisy_tensor = orig_tensor + noise
             sqnr = _compute_sqnr(orig_tensor, noisy_tensor)
-            expected_sqnr = np.power(orig_tensor, 2).mean() / (noise ** 2 + 0.0001)
+            expected_sqnr = np.power(orig_tensor, 2).mean() / (noise**2 + 0.0001)
             assert np.isclose(sqnr, expected_sqnr)
 
         orig_tensor = np.ones((10, 10))
@@ -686,6 +812,7 @@ class TestAMPv2:
         class _Dataset(DataLoader):
             def __init__(self):
                 super(_Dataset, self).__init__(dummy_input, 32, 1)
+
             def __iter__(self):
                 yield dummy_input
 

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module contains a common utility class for saving outputs of intermediate layers to disk """
+"""This module contains a common utility class for saving outputs of intermediate layers to disk"""
 
 import os
 from typing import Union, List, Tuple
@@ -44,7 +44,7 @@ import numpy as np
 
 
 class SaveInputOutput:
-    """ This class saves the input instance and corresponding layer-outputs to the disk. """
+    """This class saves the input instance and corresponding layer-outputs to the disk."""
 
     def __init__(self, dir_path: str):
         """
@@ -53,7 +53,6 @@ class SaveInputOutput:
         """
         self.dir_path = dir_path
         self.input_cntr = 0
-
 
     @staticmethod
     def save_raw_tensor(numpy_tensor: np.ndarray, file_name: str, dir_path: str):
@@ -64,12 +63,16 @@ class SaveInputOutput:
         :param dir_path: Directory wherein the file has to be stored.
         :return:
         """
-        file_path = os.path.join(dir_path, file_name + '.raw')
+        file_path = os.path.join(dir_path, file_name + ".raw")
 
-        with open(file_path, 'wb') as fptr:
+        with open(file_path, "wb") as fptr:
             numpy_tensor.tofile(fptr)
 
-    def save(self, input_instance: Union[np.ndarray, List[np.ndarray], Tuple[np.ndarray]], layer_output: dict):
+    def save(
+        self,
+        input_instance: Union[np.ndarray, List[np.ndarray], Tuple[np.ndarray]],
+        layer_output: dict,
+    ):
         """
         This function saves the input and layer-outputs in the form of raw files. Separate directories are used to store inputs
         and outputs. The correspondence between input and output is obtained using an identical number which is used for naming.
@@ -78,24 +81,28 @@ class SaveInputOutput:
         :param layer_output: Dictionary where key is output-name and value is output(s).
         :return:
         """
-        input_dir = os.path.join(self.dir_path, 'inputs')
-        output_dir = os.path.join(self.dir_path, 'outputs')
+        input_dir = os.path.join(self.dir_path, "inputs")
+        output_dir = os.path.join(self.dir_path, "outputs")
         os.makedirs(input_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
 
         if isinstance(input_instance, (List, Tuple)):
-            multi_input_dir = os.path.join(input_dir, 'input_' + str(self.input_cntr))
+            multi_input_dir = os.path.join(input_dir, "input_" + str(self.input_cntr))
             os.makedirs(multi_input_dir, exist_ok=True)
             for i, ith_input in enumerate(input_instance):
                 SaveInputOutput.save_raw_tensor(ith_input, str(i), multi_input_dir)
         else:
-            input_file_name = 'input_' + str(self.input_cntr)
+            input_file_name = "input_" + str(self.input_cntr)
             SaveInputOutput.save_raw_tensor(input_instance, input_file_name, input_dir)
 
-        layer_output_dir = os.path.join(output_dir, 'layer_outputs_' + str(self.input_cntr))
+        layer_output_dir = os.path.join(
+            output_dir, "layer_outputs_" + str(self.input_cntr)
+        )
         os.makedirs(layer_output_dir, exist_ok=True)
         for layer_output_name in layer_output:
-            SaveInputOutput.save_raw_tensor(layer_output[layer_output_name], layer_output_name, layer_output_dir)
+            SaveInputOutput.save_raw_tensor(
+                layer_output[layer_output_name], layer_output_name, layer_output_dir
+            )
 
         self.input_cntr += 1
 
@@ -108,6 +115,6 @@ def save_layer_output_names(layer_output_names: list, dir_path: str):
     :return:
     """
     os.makedirs(dir_path, exist_ok=True)
-    json_file_path = os.path.join(dir_path, 'layer_output_name_order.json')
-    with open(json_file_path, 'w') as fptr:
-        json.dump({'layer_output_names': layer_output_names}, fptr, indent=4)
+    json_file_path = os.path.join(dir_path, "layer_output_name_order.json")
+    with open(json_file_path, "w") as fptr:
+        json.dump({"layer_output_names": layer_output_names}, fptr, indent=4)

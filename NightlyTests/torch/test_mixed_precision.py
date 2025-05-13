@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Test top level mixed precision api """
+"""Test top level mixed precision api"""
 
 import os
 import pathlib
@@ -60,143 +60,95 @@ from aimet_torch.amp.mixed_precision_algo import EvalCallbackFactory
 from aimet_torch.v1.qc_quantize_op import QcQuantizeWrapper
 from aimet_common.amp.utils import AMPSearchAlgo, calculate_starting_bit_ops
 
+
 def get_config(config_dir: str):
     quantsim_config = {
-        "defaults":
-            {
-                "ops":
-                    {
-                        "is_output_quantized": "True"
-                    },
-                "params":
-                    {
-                        "is_quantized": "True",
-                        "is_symmetric": "True"
-                    },
-                "per_channel_quantization": "True",
-                "strict_symmetric": "False",
-                "unsigned_symmetric": "False"
-            },
-
-        "params":
-            {
-                "bias":
-                    {
-                        "is_quantized": "False"
-                    }
-            },
-
-        "op_type":
-            {
-                "Dropout":
-                    {
-                        "is_output_quantized": "False"
-                    },
-                "Reshape":
-                    {
-                        "is_output_quantized": "False"
-                    },
-                "Gemm":
-                    {
-                        "per_channel_quantization": "False"
-                    },
-                "MaxPool":
-                    {
-                        "is_output_quantized": "False"
-                    },
-                "Sigmoid":
-                    {
-                        "encoding_constraints":
-                            {
-                                "min": 0.0,
-                                "max": 1.0
-                            }
-                    },
-                "Softmax":
-                    {
-                        "encoding_constraints":
-                            {
-                                "min": 0.0,
-                                "max": 1.0
-                            }
-                    },
-                "Transpose":
-                    {
-                        "is_output_quantized": "False"
-                    }
-            },
-
-        "supergroups":
-            [
-                {
-                    "op_list": ["Add", "Relu"]
-                },
-                {
-                    "op_list": ["Conv", "Clip"]
-                },
-                {
-                    "op_list": ["Conv", "HardSwish"]
-                },
-                {
-                    "op_list": ["Conv", "PRelu"]
-                },
-                {
-                    "op_list": ["Conv", "Relu"]
-                },
-                {
-                    "op_list": ["ConvTranspose", "Relu"]
-                },
-                {
-                    "op_list": ["Gemm", "Relu"]
-                }
-            ],
-
-        "model_input":
-            {
-                "is_input_quantized": "True"
-            },
-
-        "model_output":
-            {}
+        "defaults": {
+            "ops": {"is_output_quantized": "True"},
+            "params": {"is_quantized": "True", "is_symmetric": "True"},
+            "per_channel_quantization": "True",
+            "strict_symmetric": "False",
+            "unsigned_symmetric": "False",
+        },
+        "params": {"bias": {"is_quantized": "False"}},
+        "op_type": {
+            "Dropout": {"is_output_quantized": "False"},
+            "Reshape": {"is_output_quantized": "False"},
+            "Gemm": {"per_channel_quantization": "False"},
+            "MaxPool": {"is_output_quantized": "False"},
+            "Sigmoid": {"encoding_constraints": {"min": 0.0, "max": 1.0}},
+            "Softmax": {"encoding_constraints": {"min": 0.0, "max": 1.0}},
+            "Transpose": {"is_output_quantized": "False"},
+        },
+        "supergroups": [
+            {"op_list": ["Add", "Relu"]},
+            {"op_list": ["Conv", "Clip"]},
+            {"op_list": ["Conv", "HardSwish"]},
+            {"op_list": ["Conv", "PRelu"]},
+            {"op_list": ["Conv", "Relu"]},
+            {"op_list": ["ConvTranspose", "Relu"]},
+            {"op_list": ["Gemm", "Relu"]},
+        ],
+        "model_input": {"is_input_quantized": "True"},
+        "model_output": {},
     }
 
-    with open(os.path.join(config_dir, 'quantsim_config.json'), 'w') as f:
+    with open(os.path.join(config_dir, "quantsim_config.json"), "w") as f:
         json.dump(quantsim_config, f)
-    return os.path.join(config_dir, 'quantsim_config.json')
+    return os.path.join(config_dir, "quantsim_config.json")
 
 
 class TestMixedPrecision:
-    """ Test case for mixed precision api """
-
+    """Test case for mixed precision api"""
 
     @pytest.mark.cuda
     def test_quantize_with_mixed_precision(self):
-        """ Test top level quantize_with_mixed_precision api """
+        """Test top level quantize_with_mixed_precision api"""
 
         torch.manual_seed(0)
 
-        model = torch.load('data/mnist_trained_on_GPU.pth')
+        model = torch.load("data/mnist_trained_on_GPU.pth")
         input_shape = (1, 1, 28, 28)
         dummy_input = torch.randn(1, 1, 28, 28).cuda()
         default_bitwidth = 16
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                     ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                     ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = None
 
         # Quantize the model to default bitwidth
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_output_bw=default_bitwidth,
-                                       dummy_input=dummy_input, config_file=get_config(tempdir))
-            sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-            eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=default_bitwidth,
+                default_output_bw=default_bitwidth,
+                dummy_input=dummy_input,
+                config_file=get_config(tempdir),
+            )
+            sim.compute_encodings(
+                forward_pass_callback, forward_pass_callback_args=input_shape
+            )
+            eval_callback = CallbackFunc(
+                eval_function(num_candidates=len(candidates)), None
+            )
             fp32_accuracy = eval_callback.func(model, None)
             forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
-            pareto_front_list = choose_mixed_precision(sim, dummy_input, candidates, eval_callback, eval_callback,
-                                                       allowed_accuracy_drop, tempdir, True, forward_pass_call_back,
-                                                       amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                dummy_input,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
             assert len(pareto_front_list) == 18
             # Test that final eval score is still within allowable accuracy range
@@ -215,50 +167,83 @@ class TestMixedPrecision:
 
         torch.manual_seed(0)
 
-        model = torch.load('data/mnist_trained_on_GPU.pth')
+        model = torch.load("data/mnist_trained_on_GPU.pth")
         input_shape = (1, 1, 28, 28)
         dummy_input = torch.randn(1, 1, 28, 28).cuda()
         default_bitwidth = 16
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.int), (32, QuantizationDataType.int)),
-                      ((16, QuantizationDataType.float), (16, QuantizationDataType.float))]
+        candidates = [
+            ((16, QuantizationDataType.int), (32, QuantizationDataType.int)),
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+        ]
         allowed_accuracy_drop = None
 
         # Quantize the model to default bitwidth
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_output_bw=default_bitwidth,
-                                       dummy_input=dummy_input, config_file=get_config(tempdir))
-            sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-            eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=default_bitwidth,
+                default_output_bw=default_bitwidth,
+                dummy_input=dummy_input,
+                config_file=get_config(tempdir),
+            )
+            sim.compute_encodings(
+                forward_pass_callback, forward_pass_callback_args=input_shape
+            )
+            eval_callback = CallbackFunc(
+                eval_function(num_candidates=len(candidates)), None
+            )
             forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
-            pareto_front_list = choose_mixed_precision(sim, dummy_input, candidates, eval_callback, eval_callback,
-                                                       allowed_accuracy_drop, tempdir, True, forward_pass_call_back,
-                                                       amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                dummy_input,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
-            sim.export(tempdir, 'test_quantize_with_mixed_precision_fp16_1', torch.randn(1, 1, 28, 28))
+            sim.export(
+                tempdir,
+                "test_quantize_with_mixed_precision_fp16_1",
+                torch.randn(1, 1, 28, 28),
+            )
 
             assert len(pareto_front_list) == 9
 
-            with open(os.path.join(tempdir, 'test_quantize_with_mixed_precision_fp16_1.encodings'), "r") as encodings_file:
+            with open(
+                os.path.join(
+                    tempdir, "test_quantize_with_mixed_precision_fp16_1.encodings"
+                ),
+                "r",
+            ) as encodings_file:
                 encodings = json.load(encodings_file)
 
-            activation_encodings = {encoding['name']: encoding for encoding in encodings['activation_encodings']}
-            param_encodings = {encoding['name']: encoding for encoding in encodings['param_encodings']}
+            activation_encodings = {
+                encoding["name"]: encoding
+                for encoding in encodings["activation_encodings"]
+            }
+            param_encodings = {
+                encoding["name"]: encoding for encoding in encodings["param_encodings"]
+            }
 
             assert len(activation_encodings.keys()) == 8
             assert len(param_encodings.keys()) == 4
 
             for name in activation_encodings:
                 layer_encoding_dict = activation_encodings[name]
-                assert layer_encoding_dict['dtype'] == 'FLOAT'
-                assert layer_encoding_dict['bw'] == 16
+                assert layer_encoding_dict["dtype"] == "FLOAT"
+                assert layer_encoding_dict["bw"] == 16
 
             for name in param_encodings:
                 layer_encoding_dict = param_encodings[name]
-                assert layer_encoding_dict['dtype'] == 'FLOAT'
-                assert layer_encoding_dict['bw'] == 16
-
+                assert layer_encoding_dict["dtype"] == "FLOAT"
+                assert layer_encoding_dict["bw"] == 16
 
     @pytest.mark.cuda
     def test_quantize_with_mixed_precision_fp16_2(self):
@@ -271,34 +256,53 @@ class TestMixedPrecision:
 
         torch.manual_seed(0)
 
-        model = torch.load('data/mnist_trained_on_GPU.pth')
+        model = torch.load("data/mnist_trained_on_GPU.pth")
         input_shape = (1, 1, 28, 28)
         dummy_input = torch.randn(1, 1, 28, 28).cuda()
         default_bitwidth = 16
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                      ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                      ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = None
 
         # Quantize the model to default bitwidth
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_output_bw=default_bitwidth,
-                                       dummy_input=dummy_input, config_file=get_config(tempdir))
-            sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-            eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=default_bitwidth,
+                default_output_bw=default_bitwidth,
+                dummy_input=dummy_input,
+                config_file=get_config(tempdir),
+            )
+            sim.compute_encodings(
+                forward_pass_callback, forward_pass_callback_args=input_shape
+            )
+            eval_callback = CallbackFunc(
+                eval_function(num_candidates=len(candidates)), None
+            )
             fp32_accuracy = eval_callback.func(model, None)
             forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
-            pareto_front_list = choose_mixed_precision(sim, dummy_input, candidates, eval_callback, eval_callback,
-                                                       allowed_accuracy_drop, tempdir, True, forward_pass_call_back,
-                                                       amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                dummy_input,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
             assert len(pareto_front_list) == 18
             # Test that final eval score is still within allowable accuracy range
             _, eval_score, _, _ = pareto_front_list[-1]
             assert fp32_accuracy - eval_score < 0.01
-
 
     @pytest.mark.cuda
     def test_quantize_with_mixed_precision_fp16_3(self):
@@ -314,67 +318,111 @@ class TestMixedPrecision:
 
         torch.manual_seed(0)
 
-        model = torch.load('data/mnist_trained_on_GPU.pth')
+        model = torch.load("data/mnist_trained_on_GPU.pth")
         input_shape = (1, 1, 28, 28)
         dummy_input = torch.randn(1, 1, 28, 28).cuda()
         default_bitwidth = 16
 
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                      ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                      ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((8, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = None
 
         # Quantize the model to default bitwidth
         with tempfile.TemporaryDirectory() as tempdir:
-            sim_fp16 = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_output_bw=default_bitwidth,
-                                            dummy_input=dummy_input, default_data_type=QuantizationDataType.float,
-                                            config_file=get_config(tempdir))
-            sim_fp16.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-            eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+            sim_fp16 = QuantizationSimModel(
+                model,
+                default_param_bw=default_bitwidth,
+                default_output_bw=default_bitwidth,
+                dummy_input=dummy_input,
+                default_data_type=QuantizationDataType.float,
+                config_file=get_config(tempdir),
+            )
+            sim_fp16.compute_encodings(
+                forward_pass_callback, forward_pass_callback_args=input_shape
+            )
+            eval_callback = CallbackFunc(
+                eval_function(num_candidates=len(candidates)), None
+            )
             fp32_accuracy_fp16 = eval_callback.func(sim_fp16.model, None)
             forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
-            pareto_front_list_fp16 = choose_mixed_precision(sim_fp16, dummy_input, candidates, eval_callback, eval_callback,
-                                                            allowed_accuracy_drop, tempdir, True, forward_pass_call_back,
-                                                            amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list_fp16 = choose_mixed_precision(
+                sim_fp16,
+                dummy_input,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
             # Test that final eval score is still within allowable accuracy range
             _, eval_score, _, _ = pareto_front_list_fp16[-1]
             assert fp32_accuracy_fp16 - eval_score < 0.01
 
-
-            sim_int = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_output_bw=default_bitwidth,
-                                            dummy_input=dummy_input, default_data_type=QuantizationDataType.int,
-                                            config_file=get_config(tempdir))
-            sim_int.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-            eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+            sim_int = QuantizationSimModel(
+                model,
+                default_param_bw=default_bitwidth,
+                default_output_bw=default_bitwidth,
+                dummy_input=dummy_input,
+                default_data_type=QuantizationDataType.int,
+                config_file=get_config(tempdir),
+            )
+            sim_int.compute_encodings(
+                forward_pass_callback, forward_pass_callback_args=input_shape
+            )
+            eval_callback = CallbackFunc(
+                eval_function(num_candidates=len(candidates)), None
+            )
             fp32_accuracy_int = eval_callback.func(sim_int.model, None)
 
-            pareto_front_list_int = choose_mixed_precision(sim_int, dummy_input, candidates, eval_callback, eval_callback,
-                                                           allowed_accuracy_drop, tempdir, True,
-                                                           forward_pass_call_back, amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list_int = choose_mixed_precision(
+                sim_int,
+                dummy_input,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
             # Test that final eval score is still within allowable accuracy range
             _, eval_score, _, _ = pareto_front_list_int[-1]
             assert fp32_accuracy_int - eval_score < 0.01
 
             # we expect the same behavior for both the QuantSimModel started with float and the int default_data_type
-            assert len(pareto_front_list_int) == len(pareto_front_list_fp16),\
-                    "Length of the int pareto front list is not equal to the fp16 pareto front list"
+            assert len(pareto_front_list_int) == len(pareto_front_list_fp16), (
+                "Length of the int pareto front list is not equal to the fp16 pareto front list"
+            )
 
             # check if pareto front list generated for both int QuantSimModel and fp16 QuantSimModel are the same
             # (relative_bit_ops, eval_score, quantizer_group, candidate)
             for i in range(0, len(pareto_front_list_int)):
-                relative_bit_ops_fp16, _, quantizer_group_fp16, candidate_fp16 = pareto_front_list_fp16[i]
-                relative_bit_ops_int, _, quantizer_group_int, candidate_int = pareto_front_list_int[i]
-                assert relative_bit_ops_fp16 == relative_bit_ops_int,\
-                        "relative bit ops differ between int and fp16 pareto lists"
-                assert candidate_fp16 == candidate_int,\
-                        "candidates differ between int and fp16 pareto lists"
-                assert quantizer_group_fp16 == quantizer_group_int,\
-                        "quantizer groups differ between int and fp16 pareto lists"
-
+                relative_bit_ops_fp16, _, quantizer_group_fp16, candidate_fp16 = (
+                    pareto_front_list_fp16[i]
+                )
+                relative_bit_ops_int, _, quantizer_group_int, candidate_int = (
+                    pareto_front_list_int[i]
+                )
+                assert relative_bit_ops_fp16 == relative_bit_ops_int, (
+                    "relative bit ops differ between int and fp16 pareto lists"
+                )
+                assert candidate_fp16 == candidate_int, (
+                    "candidates differ between int and fp16 pareto lists"
+                )
+                assert quantizer_group_fp16 == quantizer_group_int, (
+                    "quantizer groups differ between int and fp16 pareto lists"
+                )
 
     def test_dummy(self):
         # pytest has a 'feature' that returns an error code when all tests for a given suite are not selected
@@ -385,10 +433,10 @@ class TestMixedPrecision:
     @pytest.mark.cuda
     @pytest.mark.parametrize(
         "search_algo",
-        (AMPSearchAlgo.BruteForce, AMPSearchAlgo.Interpolation, AMPSearchAlgo.Binary)
+        (AMPSearchAlgo.BruteForce, AMPSearchAlgo.Interpolation, AMPSearchAlgo.Binary),
     )
     def test_quantize_with_mixed_precision_v2(self, search_algo):
-        """ Test top level quantize_with_mixed_precision api """
+        """Test top level quantize_with_mixed_precision api"""
         torch.manual_seed(0)
 
         model = resnet18().cuda()
@@ -401,20 +449,27 @@ class TestMixedPrecision:
 
         default_bitwidth = 16
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
-                     ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                     ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = 0.1
 
         # Quantize the model to default bitwidth
-        sim = QuantizationSimModel(model, default_param_bw=default_bitwidth,
-                                   default_output_bw=default_bitwidth,
-                                   dummy_input=dummy_input)
-        sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
+        sim = QuantizationSimModel(
+            model,
+            default_param_bw=default_bitwidth,
+            default_output_bw=default_bitwidth,
+            dummy_input=dummy_input,
+        )
+        sim.compute_encodings(
+            forward_pass_callback, forward_pass_callback_args=input_shape
+        )
 
         class _Dataset(Dataset):
             def __getitem__(self, _):
-                return dummy_input[0,:].clone()
+                return dummy_input[0, :].clone()
 
             def __len__(self):
                 return 1
@@ -433,16 +488,26 @@ class TestMixedPrecision:
         forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
         with tempfile.TemporaryDirectory() as tempdir:
-            pareto_front_list = choose_mixed_precision(sim, dummy_input, candidates,
-                                                       eval_callback_phase1, eval_callback_phase2,
-                                                       allowed_accuracy_drop, tempdir, True,
-                                                       forward_pass_call_back, search_algo)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                dummy_input,
+                candidates,
+                eval_callback_phase1,
+                eval_callback_phase2,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                search_algo,
+            )
             assert pareto_front_list
 
             eval_score = eval_function_v2(sim.model, args)
 
             # Check pareto curve contains the final eval score
-            pareto_eval_scores = [eval_score for _, eval_score, _, _ in pareto_front_list]
+            pareto_eval_scores = [
+                eval_score for _, eval_score, _, _ in pareto_front_list
+            ]
             assert eval_score in pareto_eval_scores
 
             # Check final eval score is within tolerable range
@@ -450,7 +515,7 @@ class TestMixedPrecision:
 
 
 def forward_pass_callback(model, inp_shape):
-    """ Call mnist_evaluate setting use_cuda to True, iterations=5 """
+    """Call mnist_evaluate setting use_cuda to True, iterations=5"""
 
     model.eval()
     with torch.no_grad():
@@ -506,7 +571,6 @@ def eval_function_v2(model, args):
 
 
 def eval_function(num_candidates=3):
-
     eval_scores = []
     first_val = 0.71
     for i in range(0, 1000):

@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Quantizer utility"""
+
 import os.path
 from typing import List, Optional, Union
 
@@ -44,11 +45,15 @@ import tensorflow as tf
 from aimet_common.utils import AimetLogger
 
 from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import QcQuantizeWrapper
-from aimet_tensorflow.keras.quant_sim.tensor_quantizer import ParamPerChannelQuantizer, ParamPerTensorQuantizer, \
-    TensorQuantizer
+from aimet_tensorflow.keras.quant_sim.tensor_quantizer import (
+    ParamPerChannelQuantizer,
+    ParamPerTensorQuantizer,
+    TensorQuantizer,
+)
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
+
 
 def get_enabled_param_quantizers(sim: QuantizationSimModel) -> List[TensorQuantizer]:
     """
@@ -65,7 +70,9 @@ def get_enabled_param_quantizers(sim: QuantizationSimModel) -> List[TensorQuanti
     return enabled_param_quantizers
 
 
-def get_enabled_activation_quantizers(sim: QuantizationSimModel) -> List[TensorQuantizer]:
+def get_enabled_activation_quantizers(
+    sim: QuantizationSimModel,
+) -> List[TensorQuantizer]:
     """
     For given quantsim model, get all enabled activation quantizers.
     :param sim: Quantsim model.
@@ -84,8 +91,7 @@ def get_enabled_activation_quantizers(sim: QuantizationSimModel) -> List[TensorQ
     return enabled_activation_quantizers
 
 
-def enable_disable_quantizers(quantizers: List[TensorQuantizer],
-                              enabled: bool):
+def enable_disable_quantizers(quantizers: List[TensorQuantizer], enabled: bool):
     """
     For given list of quantizers, set (enable/disable) quantizer's enabled.
     :param quantizers: List of quantizers.
@@ -100,15 +106,25 @@ def enable_disable_quantizers(quantizers: List[TensorQuantizer],
 
 
 # pylint: disable=protected-access
-def get_wrappers_weight_quantizer(param_quantizers: Union[List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]]) -> \
-    Union[ParamPerTensorQuantizer, ParamPerChannelQuantizer, List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]]:
+def get_wrappers_weight_quantizer(
+    param_quantizers: Union[
+        List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]
+    ],
+) -> Union[
+    ParamPerTensorQuantizer,
+    ParamPerChannelQuantizer,
+    List[ParamPerTensorQuantizer],
+    List[ParamPerChannelQuantizer],
+]:
     """
     Helper function to get a given wrappers weight quantizer. Raises an AttributeError if not found.
 
     :param param_quantizers: ParamQuantizers to check.
     :return: The weight quantizer.
     """
-    if isinstance(param_quantizers[0]._original_layer, tf.keras.layers.BatchNormalization):
+    if isinstance(
+        param_quantizers[0]._original_layer, tf.keras.layers.BatchNormalization
+    ):
         quantizers_to_return = []
         for quantizer in param_quantizers:
             # To align with Torch side
@@ -120,15 +136,25 @@ def get_wrappers_weight_quantizer(param_quantizers: Union[List[ParamPerTensorQua
         return quantizers_to_return
 
     for quantizer in param_quantizers:
-        if 'kernel' in quantizer._name:
+        if "kernel" in quantizer._name:
             return quantizer
 
     raise AttributeError("Unable to find kernel quantizer.")
 
 
 # pylint: disable=protected-access
-def get_wrappers_bias_quantizer(param_quantizers: Union[List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]]) -> \
-    Optional[Union[ParamPerTensorQuantizer, ParamPerChannelQuantizer, List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]]]:
+def get_wrappers_bias_quantizer(
+    param_quantizers: Union[
+        List[ParamPerTensorQuantizer], List[ParamPerChannelQuantizer]
+    ],
+) -> Optional[
+    Union[
+        ParamPerTensorQuantizer,
+        ParamPerChannelQuantizer,
+        List[ParamPerTensorQuantizer],
+        List[ParamPerChannelQuantizer],
+    ]
+]:
     """
     Helper function to get a given wrappers bias quantizer, if it's available. Will raise an AttributeError for Batch
     Normalization layers if moving_mean and moving_variance are not found.
@@ -136,7 +162,9 @@ def get_wrappers_bias_quantizer(param_quantizers: Union[List[ParamPerTensorQuant
     :param param_quantizers: The ParamQuantizers to check.
     :return: The bias quantizer.
     """
-    if isinstance(param_quantizers[0]._original_layer, tf.keras.layers.BatchNormalization):
+    if isinstance(
+        param_quantizers[0]._original_layer, tf.keras.layers.BatchNormalization
+    ):
         quantizers_to_return = []
         for quantizer in param_quantizers:
             # To align with Torch side
@@ -150,7 +178,7 @@ def get_wrappers_bias_quantizer(param_quantizers: Union[List[ParamPerTensorQuant
     # Bias weight might not be present. For example, if a user has made a Conv2D layer with no bias.
     # i.e. tf.keras.layers.Conv2D(10, 2, use_bias=False)
     for quantizer in param_quantizers:
-        if 'bias' in quantizer._name:
+        if "bias" in quantizer._name:
             return quantizer
     return None
 
@@ -163,14 +191,25 @@ def model_contains_only_quantize_wrappers(model: tf.keras.Model) -> bool:
     :return: Boolean result if the model only contains quantize wrappers
     """
 
-    return np.all(np.vectorize(lambda x: isinstance(x, (tf.keras.layers.InputLayer, QcQuantizeWrapper)))(model.layers))
+    return np.all(
+        np.vectorize(
+            lambda x: isinstance(x, (tf.keras.layers.InputLayer, QcQuantizeWrapper))
+        )(model.layers)
+    )
 
 
 class SaveModelWithoutQuantsimWrappersCallback(tf.keras.callbacks.Callback):
     """
     Keras Callback Class to save QuantSim models during QAT
     """
-    def __init__(self, sim: QuantizationSimModel, save_path: str, filename_prefix: str, custom_objects: dict = None):
+
+    def __init__(
+        self,
+        sim: QuantizationSimModel,
+        save_path: str,
+        filename_prefix: str,
+        custom_objects: dict = None,
+    ):
         super().__init__()
         self.sim = sim
         self.save_path = os.path.abspath(save_path)
@@ -178,8 +217,10 @@ class SaveModelWithoutQuantsimWrappersCallback(tf.keras.callbacks.Callback):
         self.custom_objects = custom_objects
 
     def on_epoch_end(self, epoch, logs=None):
-        self.sim.export(self.save_path,
-                        f"{self.filename_prefix}_epoch_{epoch}",
-                        self.custom_objects,
-                        convert_to_pb=False)
+        self.sim.export(
+            self.save_path,
+            f"{self.filename_prefix}_epoch_{epoch}",
+            self.custom_objects,
+            convert_to_pb=False,
+        )
         _logger.info("End epoch %s; successfully exported model.", epoch)

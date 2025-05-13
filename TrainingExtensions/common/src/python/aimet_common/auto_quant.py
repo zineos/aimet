@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Automatic Post-Training Quantization"""
+
 import abc
 from typing import Any, List, Union
 
@@ -70,8 +71,7 @@ class Diagnostics:
     def contains_bokeh(self):
         """Return True if and only if the diagnostics contains a bokeh model object."""
         return any(
-            isinstance(content, _BokehModelContent)
-            for content in self._contents
+            isinstance(content, _BokehModelContent) for content in self._contents
         )
 
     def __bool__(self):
@@ -83,6 +83,7 @@ class Diagnostics:
 
 class _DiagnosticsContent(abc.ABC):
     """Content of diagnostics."""
+
     def __init__(self, content: Any):
         self._content = content
 
@@ -96,6 +97,7 @@ class _DiagnosticsContent(abc.ABC):
 
 class _PlainTextContent(_DiagnosticsContent):
     """Content of diagnostics in plain text."""
+
     def get_html_elem(self) -> str:
         content = self._content.replace("\n", "<br/>\n")
         return f"<div> {content} </div>"
@@ -103,6 +105,7 @@ class _PlainTextContent(_DiagnosticsContent):
 
 class _BokehModelContent(_DiagnosticsContent):
     """Content of diagnostics as a bokeh model object."""
+
     def get_html_elem(self) -> str:
         bokeh_model = self._content
         script, div = bokeh.embed.components(bokeh_model)

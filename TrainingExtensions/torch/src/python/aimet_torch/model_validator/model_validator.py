@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utility for validating pytorch models prior to using AIMET features """
+"""Utility for validating pytorch models prior to using AIMET features"""
 
 from typing import Tuple, Union, Callable
 import torch
@@ -50,9 +50,10 @@ class ModelValidator:
     """
     ModelValidator object for validating that AIMET features can be applied on the Pytorch model.
     """
+
     _validation_checks = [
         val_checks.validate_for_reused_modules,
-        val_checks.validate_for_missing_modules
+        val_checks.validate_for_missing_modules,
     ]
 
     @staticmethod
@@ -66,7 +67,9 @@ class ModelValidator:
         ModelValidator._validation_checks.append(validation_check)
 
     @staticmethod
-    def validate_model(model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple], **kwargs) -> bool:
+    def validate_model(
+        model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple], **kwargs
+    ) -> bool:
         """
         Validate the pytorch model by running all validation check functions and returning True if all pass, False
         otherwise.
@@ -81,16 +84,16 @@ class ModelValidator:
         is_valid_model = True
         failed_val_checks = set()
         for val_check in ModelValidator._validation_checks:
-            logger.info('Running validator check %s', val_check)
+            logger.info("Running validator check %s", val_check)
             val_check_result = val_check(model, model_input, **kwargs)
             if not val_check_result:
                 failed_val_checks.add(val_check)
             is_valid_model = is_valid_model and val_check_result
         if not is_valid_model:
-            logger.info('The following validator checks failed:')
+            logger.info("The following validator checks failed:")
             for val_check in failed_val_checks:
-                logger.info('\t%s', val_check)
+                logger.info("\t%s", val_check)
             return is_valid_model
 
-        logger.info('All validation checks passed.')
+        logger.info("All validation checks passed.")
         return is_valid_model

@@ -34,24 +34,30 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Model connections utility """
+"""Model connections utility"""
+
 import typing
 from collections import OrderedDict
 from enum import Enum
 import tensorflow as tf
 from tensorflow.python.keras.engine.keras_tensor import KerasTensor
 
+
 class ModelLayerConnectionsProperties(Enum):
     """
     Enum class for model layer connections dict keys and it's type
     """
-    INBOUND_NODES = 'inbound_nodes'
-    OUTPUT_TENSORS = 'output_tensors'
-    CALL_ARGS = 'call_args'
-    CALL_KWARGS = 'call_kwargs'
-    LAYER_OUTPUT_TENSOR_MAP = 'layer_output_tensor_map'
-    TYPE = typing.Dict[typing.Dict[str, typing.List[str]],
-                       typing.Dict[str, typing.Union[KerasTensor, typing.List[KerasTensor]]]]
+
+    INBOUND_NODES = "inbound_nodes"
+    OUTPUT_TENSORS = "output_tensors"
+    CALL_ARGS = "call_args"
+    CALL_KWARGS = "call_kwargs"
+    LAYER_OUTPUT_TENSOR_MAP = "layer_output_tensor_map"
+    TYPE = typing.Dict[
+        typing.Dict[str, typing.List[str]],
+        typing.Dict[str, typing.Union[KerasTensor, typing.List[KerasTensor]]],
+    ]
+
 
 class ModelLayerConnections:
     """
@@ -69,11 +75,21 @@ class ModelLayerConnections:
         """
         # Dictionary for mapping layers inbound_nodes, call_args, call_kwargs, and output_tensors
         model_layer_connections = OrderedDict()
-        model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES] = OrderedDict()
-        model_layer_connections[ModelLayerConnectionsProperties.OUTPUT_TENSORS] = OrderedDict()
-        model_layer_connections[ModelLayerConnectionsProperties.CALL_ARGS] = OrderedDict()
-        model_layer_connections[ModelLayerConnectionsProperties.CALL_KWARGS] = OrderedDict()
-        model_layer_connections[ModelLayerConnectionsProperties.LAYER_OUTPUT_TENSOR_MAP] = OrderedDict()
+        model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES] = (
+            OrderedDict()
+        )
+        model_layer_connections[ModelLayerConnectionsProperties.OUTPUT_TENSORS] = (
+            OrderedDict()
+        )
+        model_layer_connections[ModelLayerConnectionsProperties.CALL_ARGS] = (
+            OrderedDict()
+        )
+        model_layer_connections[ModelLayerConnectionsProperties.CALL_KWARGS] = (
+            OrderedDict()
+        )
+        model_layer_connections[
+            ModelLayerConnectionsProperties.LAYER_OUTPUT_TENSOR_MAP
+        ] = OrderedDict()
 
         for current_layer in model.layers:
             # Handling the case where there's multiple outbound nodes with same outbound layer
@@ -83,52 +99,71 @@ class ModelLayerConnections:
                 output_tensors = [output_tensors]
             if not isinstance(input_tensors, typing.List):
                 input_tensors = [input_tensors]
-            model_layer_connections[ModelLayerConnectionsProperties.LAYER_OUTPUT_TENSOR_MAP][current_layer.name] = \
-                [tensor.name for tensor in output_tensors if hasattr(tensor, "name")]
+            model_layer_connections[
+                ModelLayerConnectionsProperties.LAYER_OUTPUT_TENSOR_MAP
+            ][current_layer.name] = [
+                tensor.name for tensor in output_tensors if hasattr(tensor, "name")
+            ]
 
             for outbound_node in current_layer.outbound_nodes:
                 outbound_layers_name = outbound_node.outbound_layer.name
 
                 # Get the inbound nodes for a given outbound layer
-                model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES].update(
+                model_layer_connections[
+                    ModelLayerConnectionsProperties.INBOUND_NODES
+                ].update(
                     {
                         outbound_layers_name: [
-                            *model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES].get(outbound_layers_name, []), current_layer.name
+                            *model_layer_connections[
+                                ModelLayerConnectionsProperties.INBOUND_NODES
+                            ].get(outbound_layers_name, []),
+                            current_layer.name,
                         ]
                     }
                 )
 
                 # Get call args and kwargs for a given layer
-                model_layer_connections[ModelLayerConnectionsProperties.CALL_ARGS].update(
-                    {outbound_node.layer.name: outbound_node.call_args}
-                )
-                model_layer_connections[ModelLayerConnectionsProperties.CALL_KWARGS].update(
-                    {outbound_node.layer.name: outbound_node.call_kwargs}
-                )
+                model_layer_connections[
+                    ModelLayerConnectionsProperties.CALL_ARGS
+                ].update({outbound_node.layer.name: outbound_node.call_args})
+                model_layer_connections[
+                    ModelLayerConnectionsProperties.CALL_KWARGS
+                ].update({outbound_node.layer.name: outbound_node.call_kwargs})
 
         # After having all the inbound nodes for a given layer, we go back through and for any layers that
         # have multi input, we sort the inputs based on the original call args.
         KERAS_SYMBOLIC_TENSOR_INDEX = 0
-        for layer_name, inbound_nodes in model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES].items():
+        for layer_name, inbound_nodes in model_layer_connections[
+            ModelLayerConnectionsProperties.INBOUND_NODES
+        ].items():
             # If the original keras symbolic tensors for a given layer are a List, then we set the `original_keras_symbolic_tensors_order`
             # param and sort the layers inbound nodes.
             if isinstance(
-                    original_keras_symbolic_tensors_order :=
-                    model_layer_connections[ModelLayerConnectionsProperties.CALL_ARGS][layer_name][KERAS_SYMBOLIC_TENSOR_INDEX],
-                    typing.List):
+                original_keras_symbolic_tensors_order := model_layer_connections[
+                    ModelLayerConnectionsProperties.CALL_ARGS
+                ][layer_name][KERAS_SYMBOLIC_TENSOR_INDEX],
+                typing.List,
+            ):
                 ordered_inputs = {
-                    k._keras_history.layer.name: v #pylint: disable=protected-access
+                    k._keras_history.layer.name: v  # pylint: disable=protected-access
                     for v, k in enumerate(original_keras_symbolic_tensors_order)
                 }
 
-                correctly_ordered_inbound_nodes = sorted(inbound_nodes, key=lambda current_input, oi=ordered_inputs: oi[current_input])
+                correctly_ordered_inbound_nodes = sorted(
+                    inbound_nodes,
+                    key=lambda current_input, oi=ordered_inputs: oi[current_input],
+                )
 
-                model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES][layer_name] = correctly_ordered_inbound_nodes
+                model_layer_connections[ModelLayerConnectionsProperties.INBOUND_NODES][
+                    layer_name
+                ] = correctly_ordered_inbound_nodes
 
         return model_layer_connections
 
     @staticmethod
-    def merge_model_layers_connections(model_layers_connections1: typing.Dict, model_layers_connections2: typing.Dict) -> typing.Dict:
+    def merge_model_layers_connections(
+        model_layers_connections1: typing.Dict, model_layers_connections2: typing.Dict
+    ) -> typing.Dict:
         """
         Merge two network dictionaries
 

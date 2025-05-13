@@ -36,56 +36,60 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Creating an alias for function/classes/methods to use AIMET without MO library  """
+"""Creating an alias for function/classes/methods to use AIMET without MO library"""
 
 import enum
 
 IMPORT_ERROR: ImportError = ImportError()
 
+
 def _error_message():
-    return f'libpymo import failed with the following error:\n\n{IMPORT_ERROR}\n\n' \
-           'Please check that libpymo has been built and is compatible with your ' \
-           'current environment.' \
+    return (
+        f"libpymo import failed with the following error:\n\n{IMPORT_ERROR}\n\n"
+        "Please check that libpymo has been built and is compatible with your "
+        "current environment."
+    )
+
 
 libpymo_classes = [
-    'ModelOpDefParser',
-    'TfEncoding',
-    'Quantizer',
-    'QuantizationEncodingAnalyzer',
-    'LayerAttributes',
-    'EncodingAnalyzerForPython',
-    'TensorQuantizationSimForPython',
-    'TensorQuantizer',
-    'Svd',
-    'CrossLayerScaling',
-    'RescalingParamsVectors',
-    'EqualizationParams',
-    'BatchNormFold',
-    'BNParams',
-    'TensorParams',
-    'HighBiasFold',
-    'LayerParams',
-    'BNParamsHighBiasFold',
-    'TensorParamBiasCorrection',
-    'BiasCorrection',
-    'BnBasedBiasCorrection',
-    'BnParamsBiasCorr',
-    'BlockTensorQuantizer'
+    "ModelOpDefParser",
+    "TfEncoding",
+    "Quantizer",
+    "QuantizationEncodingAnalyzer",
+    "LayerAttributes",
+    "EncodingAnalyzerForPython",
+    "TensorQuantizationSimForPython",
+    "TensorQuantizer",
+    "Svd",
+    "CrossLayerScaling",
+    "RescalingParamsVectors",
+    "EqualizationParams",
+    "BatchNormFold",
+    "BNParams",
+    "TensorParams",
+    "HighBiasFold",
+    "LayerParams",
+    "BNParamsHighBiasFold",
+    "TensorParamBiasCorrection",
+    "BiasCorrection",
+    "BnBasedBiasCorrection",
+    "BnParamsBiasCorr",
+    "BlockTensorQuantizer",
 ]
 
 libpymo_functions = [
-    'str_to_dtype',
-    'str_to_rank',
-    'GetQuantizationInstance',
-    'GetQuantizationEncodingAnalyzerInstance',
-    'PtrToInt64',
-    'GetSVDInstance',
-    'scaleLayerParams',
-    'scaleDepthWiseSeparableLayer',
-    'fold',
-    'updateBias',
-    'getScaleFactor',
-    'getRescaledOutputAndBias'
+    "str_to_dtype",
+    "str_to_rank",
+    "GetQuantizationInstance",
+    "GetQuantizationEncodingAnalyzerInstance",
+    "PtrToInt64",
+    "GetSVDInstance",
+    "scaleLayerParams",
+    "scaleDepthWiseSeparableLayer",
+    "fold",
+    "updateBias",
+    "getScaleFactor",
+    "getRescaledOutputAndBias",
 ]
 
 
@@ -93,19 +97,24 @@ def create_unavailable_class(class_name: str):
     """
     Create unavailable class to lazily throw error when user tries to use the class.
     """
+
     class _MetaUnavailableClass(type):
         @classmethod
         def __getattr__(mcs, name):
-            raise RuntimeError(f"Unable to access attribute {name} of class {class_name}: {_error_message()}")
-
+            raise RuntimeError(
+                f"Unable to access attribute {name} of class {class_name}: {_error_message()}"
+            )
 
     class _UnavailableClass(metaclass=_MetaUnavailableClass):
         def __init__(self, *args, **kwargs):
-            raise RuntimeError(f"Unable to initialize class {class_name}: {_error_message()}")
+            raise RuntimeError(
+                f"Unable to initialize class {class_name}: {_error_message()}"
+            )
 
         def __getattr__(self, name):
-            raise RuntimeError(f"Unable to access attribute {name} of class {class_name}: {_error_message()}")
-
+            raise RuntimeError(
+                f"Unable to access attribute {name} of class {class_name}: {_error_message()}"
+            )
 
     return type(class_name, (_UnavailableClass,), {})
 
@@ -118,6 +127,7 @@ def create_unavailable_function(method_name: str):
     """
     Create unavailable function to lazily throw error when user tries to use the function.
     """
+
     def unavailable_function(*args, **kwargs):
         raise RuntimeError(f"Unable to run function {method_name}: {_error_message()}")
 
@@ -132,6 +142,7 @@ class COMPRESS_LAYER_TYPE(enum.Enum):
     """
     COMPRESS_LAYER_TYPE
     """
+
     LAYER_TYPE_OTHER = 0
     LAYER_TYPE_CONV = 1
     LAYER_TYPE_FC = 2
@@ -141,6 +152,7 @@ class ComputationMode(enum.Enum):
     """
     ComputationMode
     """
+
     COMP_MODE_CPU = 0
     COMP_MODE_GPU = 1
 
@@ -149,6 +161,7 @@ class LayerInOut(enum.Enum):
     """
     LayerInOut
     """
+
     LAYER_INPUT = 0
     LAYER_OUTPUT = 1
 
@@ -157,6 +170,7 @@ class NETWORK_COST_METRIC(enum.Enum):
     """
     NETWORK_COST_METRIC
     """
+
     COST_TYPE_MEMORY = 0
     COST_TYPE_MAC = 1
 
@@ -165,6 +179,7 @@ class QuantizationMode(enum.Enum):
     """
     QuantizationMode
     """
+
     QUANTIZATION_TF = 0
     QUANTIZATION_TF_ENHANCED = 1
     QUANTIZATION_RANGE_LEARNING = 2
@@ -177,6 +192,7 @@ class RoundingMode(enum.Enum):
     """
     RoundingMode
     """
+
     ROUND_NEAREST = 0
     ROUND_STOCHASTIC = 1
 
@@ -185,6 +201,7 @@ class SVD_COMPRESS_TYPE(enum.Enum):
     """
     SVD_COMPRESS_TYPE
     """
+
     TYPE_NONE = 0
     TYPE_SINGLE = 1
     TYPE_SUCCESSIVE = 2
@@ -194,6 +211,7 @@ class QnnDatatype(enum.Enum):
     """
     QnnDatatype
     """
+
     QNN_DATATYPE_INT_8 = 0
     QNN_DATATYPE_INT_16 = 1
     QNN_DATATYPE_INT_32 = 2
@@ -219,6 +237,7 @@ class TensorQuantizerOpMode(enum.Enum):
     """
     TensorQuantizerOpMode
     """
+
     updateStats = 0
     oneShotQuantizeDequantize = 1
     quantizeDequantize = 2
@@ -229,6 +248,7 @@ class QnnRank(enum.Enum):
     """
     QnnRank
     """
+
     QNN_SCALAR = 0
     QNN_RANK_1 = 1
     QNN_RANK_2 = 2
@@ -243,6 +263,7 @@ class ActivationType(enum.Enum):
     """
     ActivationType
     """
+
     noActivation = 0
     relu = 1
     relu6 = 2

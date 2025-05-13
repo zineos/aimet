@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Common type definitions that are used across aimet """
+"""Common type definitions that are used across aimet"""
 
 from enum import Enum
 from typing import List, Optional, Union
@@ -51,6 +51,7 @@ class AxisHandling(Enum):
     Enum for axis handling used as input variable to QcQuantizePerChannelOp. This defines how to interpret the
     number of output channels from the weight dimensions.
     """
+
     LAST_AXIS = 0
     LAST_TWO_AXES = 1
 
@@ -69,7 +70,7 @@ class ModuleCompRatioPair:
 
 
 class SpatialSvdParameters:
-    """ Configuration parameters for spatial svd compression """
+    """Configuration parameters for spatial svd compression"""
 
     class ManualModeParams:
         """
@@ -87,17 +88,22 @@ class SpatialSvdParameters:
         Configuration parameters for auto-mode compression
         """
 
-        def __init__(self, greedy_select_params: GreedySelectionParameters,
-                     modules_to_ignore: Optional[List[tf.Operation]] = None):
+        def __init__(
+            self,
+            greedy_select_params: GreedySelectionParameters,
+            modules_to_ignore: Optional[List[tf.Operation]] = None,
+        ):
             """
             :param greedy_select_params: Params for greedy comp-ratio selection algorithm
             :param modules_to_ignore: List of modules to ignore (None indicates nothing to ignore)
             """
             self.greedy_params = greedy_select_params
-            self.modules_to_ignore = [] if modules_to_ignore is None else modules_to_ignore
+            self.modules_to_ignore = (
+                [] if modules_to_ignore is None else modules_to_ignore
+            )
 
     class Mode(Enum):
-        """ Mode enumeration """
+        """Mode enumeration"""
 
         manual = 1
         """ Manual mode """
@@ -105,8 +111,14 @@ class SpatialSvdParameters:
         auto = 2
         """ Auto mode """
 
-    def __init__(self, input_op_names: List[str], output_op_names: List[str], mode: Mode,
-                 params: Union[ManualModeParams, AutoModeParams], multiplicity=1):
+    def __init__(
+        self,
+        input_op_names: List[str],
+        output_op_names: List[str],
+        mode: Mode,
+        params: Union[ManualModeParams, AutoModeParams],
+        multiplicity=1,
+    ):
         """
         :param input_op_names: list of input op names to the model
         :param output_op_names: List of output op names of the model

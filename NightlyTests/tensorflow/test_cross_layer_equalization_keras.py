@@ -38,8 +38,12 @@ import numpy as np
 import tensorflow as tf
 
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms
-from aimet_tensorflow.keras.cross_layer_equalization import CrossLayerScaling, GraphSearchUtils, equalize_model, \
-    HighBiasFold
+from aimet_tensorflow.keras.cross_layer_equalization import (
+    CrossLayerScaling,
+    GraphSearchUtils,
+    equalize_model,
+    HighBiasFold,
+)
 from aimet_tensorflow.keras.utils.weight_tensor_utils import WeightTensorUtils
 
 
@@ -106,8 +110,12 @@ def test_cross_layer_scaling_resnet50():
     assert not np.array_equal(conv4_weight_before_scaling, conv4_weight_after_scaling)
 
     # Test the distribution of the output channel of previous layer and input channel of next layer
-    conv3_output_range = WeightTensorUtils.get_max_abs_val_per_channel(conv3, axis=(2, 0, 1))
-    conv4_input_range = WeightTensorUtils.get_max_abs_val_per_channel(conv4, axis=(3, 0, 1))
+    conv3_output_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv3, axis=(2, 0, 1)
+    )
+    conv4_input_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv4, axis=(3, 0, 1)
+    )
     assert np.allclose(conv3_output_range, conv4_input_range)
 
 
@@ -128,16 +136,28 @@ def test_cross_layer_scaling_mobile_net_v2():
     dw_conv1_weight_after_scaling = model.layers[21].get_weights()[0]
 
     assert not np.array_equal(conv1_weight_before_scaling, conv1_weight_after_scaling)
-    assert not np.array_equal(dw_conv1_weight_before_scaling, dw_conv1_weight_after_scaling)
+    assert not np.array_equal(
+        dw_conv1_weight_before_scaling, dw_conv1_weight_after_scaling
+    )
 
     # Test the distribution of the output channel of previous layer and input channel of next layer
-    conv1_output_range = WeightTensorUtils.get_max_abs_val_per_channel(conv1, axis=(2, 0, 1))
-    conv2_input_range = WeightTensorUtils.get_max_abs_val_per_channel(conv2, axis=(3, 0, 1))
+    conv1_output_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv1, axis=(2, 0, 1)
+    )
+    conv2_input_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv2, axis=(3, 0, 1)
+    )
     assert np.allclose(conv1_output_range, conv2_input_range)
 
-    conv3_output_range = WeightTensorUtils.get_max_abs_val_per_channel(conv3, axis=(2, 0, 1))
-    depthwise_conv1_output_range = WeightTensorUtils.get_max_abs_val_per_channel(dw_conv1, axis=(3, 0, 1))
-    conv4_input_range = WeightTensorUtils.get_max_abs_val_per_channel(conv4, axis=(3, 0, 1))
+    conv3_output_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv3, axis=(2, 0, 1)
+    )
+    depthwise_conv1_output_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        dw_conv1, axis=(3, 0, 1)
+    )
+    conv4_input_range = WeightTensorUtils.get_max_abs_val_per_channel(
+        conv4, axis=(3, 0, 1)
+    )
     assert np.allclose(conv3_output_range, depthwise_conv1_output_range)
     assert np.allclose(depthwise_conv1_output_range, conv4_input_range)
 

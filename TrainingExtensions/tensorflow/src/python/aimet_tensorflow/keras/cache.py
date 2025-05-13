@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Defines Keras-specific serialization protocols for cache"""
+
 import os
 
 import tensorflow as tf
@@ -44,6 +45,7 @@ from aimet_common.cache import SerializationProtocolBase, T, CacheMiss
 
 class KerasModelSerializationProtocol(SerializationProtocolBase[tf.keras.Model]):
     """Serialization protocol for tf.keras.Model objects"""
+
     def save(self, obj: T, working_dir: str, filename_prefix: str) -> None:
         """
         Save a tf.keras.Model object.

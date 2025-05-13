@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Optimization code to fold batch-norm layers """
+"""Optimization code to fold batch-norm layers"""
 
 from typing import List, Tuple, Iterable
 import torch
@@ -49,7 +49,10 @@ from aimet_torch import utils
 from aimet_torch.v1.quantsim import QuantizationSimModel
 from aimet_torch.v1.qc_quantize_op import QcQuantizeWrapper
 from aimet_torch.v1.tensor_quantizer import LearnedGridTensorQuantizer
-from aimet_torch._base.batch_norm_fold import BatchNormFoldBase, _BatchNormFoldingNotSupported
+from aimet_torch._base.batch_norm_fold import (
+    BatchNormFoldBase,
+    _BatchNormFoldingNotSupported,
+)
 
 __all__ = [
     "fold_all_batch_norms",
@@ -58,7 +61,7 @@ __all__ = [
     "_is_valid_bn_fold",
     "_find_all_batch_norms_to_fold",
     "find_standalone_batchnorm_ops",
-    "find_all_batch_norms_to_fold"
+    "find_all_batch_norms_to_fold",
 ]
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.BatchNormFolding)
@@ -69,7 +72,8 @@ class BatchNormFold(BatchNormFoldBase):
 
     @classmethod
     def fold_all_batch_norms_to_scale(
-            cls, sim: QuantizationSimModel,
+        cls,
+        sim: QuantizationSimModel,
     ) -> List[Tuple[QcQuantizeWrapper, QcQuantizeWrapper]]:
         """
         Fold all batch_norm layers in a model into the quantization scale parameter
@@ -89,7 +93,9 @@ class BatchNormFold(BatchNormFoldBase):
             quant_wrapper._module_to_wrap: quant_wrapper
             for _, quant_wrapper in sim.quant_wrappers()
         }
-        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(
+            connected_graph
+        )
         # print(conv_bn_pairs)
         conv_bn_pairs = [
             (quant_wrappers[conv], quant_wrappers[bn]) for conv, bn in conv_bn_pairs
@@ -109,10 +115,12 @@ class BatchNormFold(BatchNormFoldBase):
         super().fold_given_batch_norms(model, layer_pairs)
 
     @classmethod
-    def _fold_given_batch_norms(cls,
-                                model,
-                                conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
-                                bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]]):
+    def _fold_given_batch_norms(
+        cls,
+        model,
+        conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+        bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+    ):
         """
         Fold a given set of batch_norm layers into conv layers
 
@@ -124,15 +132,21 @@ class BatchNormFold(BatchNormFoldBase):
         # pylint: disable=protected-access
         for bn, conv in bn_conv_pairs:
             if isinstance(conv, QcQuantizeWrapper):
-                raise RuntimeError(f"Forward folding to scale is not possible. Got {conv}")
+                raise RuntimeError(
+                    f"Forward folding to scale is not possible. Got {conv}"
+                )
 
         bn_modules = []
 
         def _fold(conv, bn, fold_backward):
-            is_wrapped = isinstance(conv, QcQuantizeWrapper) or isinstance(bn, QcQuantizeWrapper)
+            is_wrapped = isinstance(conv, QcQuantizeWrapper) or isinstance(
+                bn, QcQuantizeWrapper
+            )
             try:
                 if is_wrapped:
-                    assert isinstance(conv, QcQuantizeWrapper) and isinstance(bn, QcQuantizeWrapper)
+                    assert isinstance(conv, QcQuantizeWrapper) and isinstance(
+                        bn, QcQuantizeWrapper
+                    )
                     cls._fold_to_scale(conv, bn)
                     bn_modules.append(bn._module_to_wrap)
                 else:
@@ -146,7 +160,6 @@ class BatchNormFold(BatchNormFoldBase):
             else:
                 bn_modules.append(bn._module_to_wrap if is_wrapped else bn)
 
-
         with utils.in_eval_mode(model), torch.no_grad():
             for conv, bn in conv_bn_pairs:
                 _fold(conv, bn, fold_backward=True)
@@ -157,7 +170,9 @@ class BatchNormFold(BatchNormFoldBase):
             cls._delete_bn_from_model(model, bn_modules)
 
     @classmethod
-    def _fold_to_scale(cls, conv_wrapper: QcQuantizeWrapper, bn_wrapper: QcQuantizeWrapper):
+    def _fold_to_scale(
+        cls, conv_wrapper: QcQuantizeWrapper, bn_wrapper: QcQuantizeWrapper
+    ):
         """
         Fold BatchNorm into the scale and bias of the given layer.
 
@@ -216,7 +231,7 @@ class BatchNormFold(BatchNormFoldBase):
             sigma = torch.sqrt(bn.running_var + bn.eps)
 
             new_encodings = []
-            for old_encoding, c in zip(encodings, gamma/sigma):
+            for old_encoding, c in zip(encodings, gamma / sigma):
                 new_encoding = libpymo.TfEncoding()
                 new_encoding.delta = old_encoding.delta * abs(c)
                 if c >= 0:
@@ -232,43 +247,45 @@ class BatchNormFold(BatchNormFoldBase):
             weight_quantizer.encoding = new_encodings
 
         # Copy batchnorm's output quantizers to conv output quantizers
-        for conv_output_quantizer, bn_output_quantizer in\
-                zip(conv_wrapper.output_quantizers, bn_wrapper.output_quantizers):
+        for conv_output_quantizer, bn_output_quantizer in zip(
+            conv_wrapper.output_quantizers, bn_wrapper.output_quantizers
+        ):
             conv_output_quantizer.enabled = bn_output_quantizer.enabled
 
             if bn_output_quantizer.encoding is not None:
                 encoding = libpymo.TfEncoding()
-                encoding.delta  = bn_output_quantizer.encoding.delta
-                encoding.max    = bn_output_quantizer.encoding.max
-                encoding.min    = bn_output_quantizer.encoding.min
+                encoding.delta = bn_output_quantizer.encoding.delta
+                encoding.max = bn_output_quantizer.encoding.max
+                encoding.min = bn_output_quantizer.encoding.min
                 encoding.offset = bn_output_quantizer.encoding.offset
-                encoding.bw     = bn_output_quantizer.encoding.bw
+                encoding.bw = bn_output_quantizer.encoding.bw
                 conv_output_quantizer.encoding = encoding
 
             bn_output_quantizer.enabled = False
 
         if "bias" not in conv_wrapper.param_quantizers:
-            bias_quantizer = LearnedGridTensorQuantizer(weight_quantizer.bitwidth,
-                                                        weight_quantizer.round_mode,
-                                                        weight_quantizer.quant_scheme,
-                                                        weight_quantizer.use_symmetric_encodings,
-                                                        enabled_by_default=False,
-                                                        data_type=weight_quantizer.data_type)
+            bias_quantizer = LearnedGridTensorQuantizer(
+                weight_quantizer.bitwidth,
+                weight_quantizer.round_mode,
+                weight_quantizer.quant_scheme,
+                weight_quantizer.use_symmetric_encodings,
+                enabled_by_default=False,
+                data_type=weight_quantizer.data_type,
+            )
             bias_quantizer._ch_axis = weight_quantizer._ch_axis
             conv_wrapper.param_quantizers["bias"] = bias_quantizer
 
     @classmethod
     def _is_batchnorm(cls, module: torch.nn.Module) -> bool:
         if isinstance(module, QcQuantizeWrapper):
-            module = module._module_to_wrap # pylint: disable=protected-access
+            module = module._module_to_wrap  # pylint: disable=protected-access
         return super()._is_batchnorm(module)
 
     @classmethod
     def _is_conv_linear(cls, module: torch.nn.Module) -> bool:
         if isinstance(module, QcQuantizeWrapper):
-            module = module._module_to_wrap # pylint: disable=protected-access
+            module = module._module_to_wrap  # pylint: disable=protected-access
         return super()._is_conv_linear(module)
-
 
 
 # Global variables for compatibility

@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Qwen model class """
+"""Qwen model class"""
 
 import types
 import torch
@@ -46,14 +46,17 @@ from transformers.models.qwen2 import modeling_qwen2
 from aimet_common.defs import QuantScheme
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
-from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import QuantizedQwen2RMSNorm
+from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import (
+    QuantizedQwen2RMSNorm,
+)
 
 from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
 
 
 class Qwen_25(GenAIModel):
-    """ Generic quantized Qwen 2 """
+    """Generic quantized Qwen 2"""
+
     DEFAULT_MODEL_ID = "Qwen/Qwen2.5-1.5B"
 
     @classmethod
@@ -64,16 +67,26 @@ class Qwen_25(GenAIModel):
         llm_config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
         if small_model:
             llm_config.num_hidden_layers = 2
-        return modeling_qwen2.Qwen2ForCausalLM.from_pretrained(model_id, config=llm_config)
+        return modeling_qwen2.Qwen2ForCausalLM.from_pretrained(
+            model_id, config=llm_config
+        )
 
     @classmethod
     def instantiate_tokenizer(cls, model_id: str) -> PreTrainedTokenizer:
         if model_id is None:
             model_id = cls.DEFAULT_MODEL_ID
-        return AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
+        return AutoTokenizer.from_pretrained(
+            model_id, use_fast=True, trust_remote_code=True
+        )
 
     @classmethod
-    def instantiate_quantsim(cls, model_id: str, context_length: int, sequence_length: int, small_model: bool = False) -> QuantizationSimModel:
+    def instantiate_quantsim(
+        cls,
+        model_id: str,
+        context_length: int,
+        sequence_length: int,
+        small_model: bool = False,
+    ) -> QuantizationSimModel:
         model = cls._instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
@@ -88,7 +101,7 @@ class Qwen_25(GenAIModel):
             dummy_attention_mask,
             {"past_key_values": None},
             context_length,
-            sequence_length
+            sequence_length,
         )
 
         quantsim = QuantizationSimModel(
@@ -98,17 +111,16 @@ class Qwen_25(GenAIModel):
             default_output_bw=16,
             default_param_bw=4,
             in_place=True,
-            config_file=cls.get_quantsim_config()
+            config_file=cls.get_quantsim_config(),
         )
 
         quantsim.model.orig_forward = quantsim.model.forward
         quantsim.model.forward = types.MethodType(
             cls.create_static_graph_forward(context_length, sequence_length),
-            quantsim.model
+            quantsim.model,
         )
         quantsim.model.prepare_inputs_for_generation = types.MethodType(
-            cls.static_graph_prepare_inputs_for_generation,
-            quantsim.model
+            cls.static_graph_prepare_inputs_for_generation, quantsim.model
         )
 
         remove_param_quantizers(quantsim.model.model.model.embed_tokens)

@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """GPTVQ optimizer"""
+
 import dataclasses
 from typing import Optional, Tuple
 
@@ -65,7 +66,12 @@ class GPTVQOptimizer:
 
     # pylint: disable=too-many-locals, too-many-statements
     @classmethod
-    def weight_update(cls, module: BaseQuantizationMixin, gptvq_params: GPTVQParameters, hessian: torch.Tensor):
+    def weight_update(
+        cls,
+        module: BaseQuantizationMixin,
+        gptvq_params: GPTVQParameters,
+        hessian: torch.Tensor,
+    ):
         """
         Update the weights of module via GPTVQ optimization
 
@@ -81,7 +87,9 @@ class GPTVQOptimizer:
             original_hessian = hessian
 
         num_rows, num_cols = get_2d_tensor_shape(module)
-        assert num_rows % gptvq_params.rows_per_block == 0, f"The number of rows in weight (#: {num_rows}) should be divided by rows per block (#: {gptvq_params.rows_per_block})"
+        assert num_rows % gptvq_params.rows_per_block == 0, (
+            f"The number of rows in weight (#: {num_rows}) should be divided by rows per block (#: {gptvq_params.rows_per_block})"
+        )
         columns_per_block = gptvq_params.cols_per_block
         num_blocks_per_column = num_rows // gptvq_params.rows_per_block
 
@@ -104,7 +112,7 @@ class GPTVQOptimizer:
         hessian_inv = cls.compute_inverse(hessian)
 
         vector_dim = gptvq_params.vector_dim
-        num_of_centroids = 2 ** gptvq_params.index_bw
+        num_of_centroids = 2**gptvq_params.index_bw
         rounded_weight = module.weight.float()
         codebook = None
         codebooks = []
@@ -115,19 +123,37 @@ class GPTVQOptimizer:
 
             rounded_weight_block = rounded_weight[:, block_start_idx:block_end_idx]
             error_block = torch.zeros_like(rounded_weight_block)
-            hessian_inverse_block = hessian_inv[block_start_idx:block_end_idx, block_start_idx:block_end_idx]
+            hessian_inverse_block = hessian_inv[
+                block_start_idx:block_end_idx, block_start_idx:block_end_idx
+            ]
 
             for i in range(count):
                 if (block_start_idx + i) % columns_per_block == 0:
-                    weight_block_for_codebook = rounded_weight[:, (block_start_idx + i):(block_start_idx + i + columns_per_block)]
-                    weight_block_for_codebook = weight_block_for_codebook.reshape(num_blocks_per_column, -1, vector_dim)
+                    weight_block_for_codebook = rounded_weight[
+                        :,
+                        (block_start_idx + i) : (
+                            block_start_idx + i + columns_per_block
+                        ),
+                    ]
+                    weight_block_for_codebook = weight_block_for_codebook.reshape(
+                        num_blocks_per_column, -1, vector_dim
+                    )
 
-                    hessian_diagonal = torch.diag(hessian_inv)[(block_start_idx + i):(block_start_idx + i + columns_per_block)]
-                    inverse_hessian_diagonal = cls._get_inverse_hessian_diagonal(hessian_diagonal, gptvq_params)
-                    codebook = generate_codebook(weight_block_for_codebook, num_of_centroids,
-                                                 inverse_hessian_diagonal=inverse_hessian_diagonal,
-                                                 assignment_chunk_size=gptvq_params.assignment_chunk_size,
-                                                 kmeans_iteration=gptvq_params.num_of_kmeans_iterations)
+                    hessian_diagonal = torch.diag(hessian_inv)[
+                        (block_start_idx + i) : (
+                            block_start_idx + i + columns_per_block
+                        )
+                    ]
+                    inverse_hessian_diagonal = cls._get_inverse_hessian_diagonal(
+                        hessian_diagonal, gptvq_params
+                    )
+                    codebook = generate_codebook(
+                        weight_block_for_codebook,
+                        num_of_centroids,
+                        inverse_hessian_diagonal=inverse_hessian_diagonal,
+                        assignment_chunk_size=gptvq_params.assignment_chunk_size,
+                        kmeans_iteration=gptvq_params.num_of_kmeans_iterations,
+                    )
 
                     codebook = quantize_dequantize_codebook(
                         codebook,
@@ -138,11 +164,16 @@ class GPTVQOptimizer:
                     assignments.append([])
 
                 if i % vector_dim == 0:
-                    original_weight_chunk = rounded_weight_block[:, i:i + vector_dim]
-                    diagonal = torch.diag(hessian_inverse_block)[i:i+vector_dim].unsqueeze(0)
+                    original_weight_chunk = rounded_weight_block[:, i : i + vector_dim]
+                    diagonal = torch.diag(hessian_inverse_block)[
+                        i : i + vector_dim
+                    ].unsqueeze(0)
 
-                    if gptvq_params.vector_dim > 1 and gptvq_utils.HESSIAN_WEIGHTED_LOOKUP:
-                        inverse_hessian_diagonal = 1. / diagonal
+                    if (
+                        gptvq_params.vector_dim > 1
+                        and gptvq_utils.HESSIAN_WEIGHTED_LOOKUP
+                    ):
+                        inverse_hessian_diagonal = 1.0 / diagonal
                     else:
                         inverse_hessian_diagonal = None
 
@@ -159,14 +190,18 @@ class GPTVQOptimizer:
                     err = (original_weight_chunk - updated_weight_chunk) / diagonal
                     update = torch.bmm(
                         err.transpose(0, 1).unsqueeze(-1),
-                        hessian_inverse_block[i:i + vector_dim, i + vector_dim:].unsqueeze(1)
+                        hessian_inverse_block[
+                            i : i + vector_dim, i + vector_dim :
+                        ].unsqueeze(1),
                     ).sum(0)
-                    rounded_weight_block[:, i:i + vector_dim] = updated_weight_chunk
-                    rounded_weight_block[:, i + vector_dim:] -= update
-                    error_block[:, i:i + vector_dim] = err
+                    rounded_weight_block[:, i : i + vector_dim] = updated_weight_chunk
+                    rounded_weight_block[:, i + vector_dim :] -= update
+                    error_block[:, i : i + vector_dim] = err
 
             rounded_weight[:, block_start_idx:block_end_idx] = rounded_weight_block
-            rounded_weight[:, block_end_idx:] -= error_block.matmul(hessian_inv[block_start_idx:block_end_idx, block_end_idx:])
+            rounded_weight[:, block_end_idx:] -= error_block.matmul(
+                hessian_inv[block_start_idx:block_end_idx, block_end_idx:]
+            )
 
         if gptvq_utils.DO_CODEBOOK_FINE_TUNING:
             rounded_weight = fine_tune_codebook(
@@ -231,12 +266,12 @@ class GPTVQOptimizer:
 
     @staticmethod
     def _update_weight_block(
-            weight_block: torch.Tensor,
-            codebook: torch.Tensor,
-            vector_dim: int,
-            num_blocks_per_column: int,
-            inverse_hessian_diagonal: Optional[torch.Tensor] = None,
-            assignment_chunk_size: Optional[int] = None,
+        weight_block: torch.Tensor,
+        codebook: torch.Tensor,
+        vector_dim: int,
+        num_blocks_per_column: int,
+        inverse_hessian_diagonal: Optional[torch.Tensor] = None,
+        assignment_chunk_size: Optional[int] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Update weight block using codebook
@@ -251,7 +286,9 @@ class GPTVQOptimizer:
         # Before: num_rows x vector_dim -> After: num_blocks_per_column x N x vector_dim
         sliced_weight = weight_block.reshape(num_blocks_per_column, -1, vector_dim)
 
-        indices = get_assignments(sliced_weight, codebook, inverse_hessian_diagonal, assignment_chunk_size)
+        indices = get_assignments(
+            sliced_weight, codebook, inverse_hessian_diagonal, assignment_chunk_size
+        )
 
         centroids = torch.gather(
             codebook,
@@ -276,7 +313,9 @@ class GPTVQOptimizer:
         return hessian
 
     @staticmethod
-    def _get_inverse_hessian_diagonal(hessian_diagonal: torch.Tensor, gptvq_params: GPTVQParameters) -> Optional[torch.Tensor]:
+    def _get_inverse_hessian_diagonal(
+        hessian_diagonal: torch.Tensor, gptvq_params: GPTVQParameters
+    ) -> Optional[torch.Tensor]:
         """
         Get manipulated inverse of Hessian diagonal tensor for codebook generation
 

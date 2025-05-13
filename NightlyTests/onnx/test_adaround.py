@@ -64,74 +64,97 @@ def model_eval_onnx(session, val_loader):
 
     corr = 0
     total = 0
-    for (i, batch) in enumerate(val_loader):
+    for i, batch in enumerate(val_loader):
         x, y = batch[0].numpy(), batch[1].numpy()
-        in_tensor = {'input': x}
+        in_tensor = {"input": x}
         out = session.run(None, in_tensor)[0]
         corr += np.sum(np.argmax(out, axis=1) == y)
         total += x.shape[0]
-    print(f'Accuracy: {corr / total}')
+    print(f"Accuracy: {corr / total}")
     return corr / total
 
 
 class TestAdaroundAcceptance:
-    """ Acceptance test for AIMET ONNX """
+    """Acceptance test for AIMET ONNX"""
+
     @pytest.mark.cuda
     def test_adaround(self):
         np.random.seed(0)
         torch.manual_seed(0)
         model = get_model()
         data_loader = dataloader()
-        dummy_input = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+        dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
         sess = build_session(model)
         out_before_ada = sess.run(None, dummy_input)
+
         def callback(session, args):
-            in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
             session.run(None, in_tensor)
 
-        params = AdaroundParameters(data_loader=data_loader, num_batches=1, default_num_iterations=5, forward_fn=callback,
-                                    forward_pass_callback_args=None)
+        params = AdaroundParameters(
+            data_loader=data_loader,
+            num_batches=1,
+            default_num_iterations=5,
+            forward_fn=callback,
+            forward_pass_callback_args=None,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            ada_rounded_model = Adaround.apply_adaround(model, params, tmpdir, 'dummy')
+            ada_rounded_model = Adaround.apply_adaround(model, params, tmpdir, "dummy")
             sess = build_session(ada_rounded_model)
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
-            with open(os.path.join(tmpdir, 'dummy.encodings')) as json_file:
+            with open(os.path.join(tmpdir, "dummy.encodings")) as json_file:
                 encoding_data = json.load(json_file)
 
-            sim = QuantizationSimModel(ada_rounded_model, dummy_input, quant_scheme=QuantScheme.post_training_tf, default_param_bw=8,
-                                       default_activation_bw=8, use_cuda=True)
-            sim.set_and_freeze_param_encodings(os.path.join(tmpdir, 'dummy.encodings'))
+            sim = QuantizationSimModel(
+                ada_rounded_model,
+                dummy_input,
+                quant_scheme=QuantScheme.post_training_tf,
+                default_param_bw=8,
+                default_activation_bw=8,
+                use_cuda=True,
+            )
+            sim.set_and_freeze_param_encodings(os.path.join(tmpdir, "dummy.encodings"))
             sim.compute_encodings(callback, None)
 
-            param_encodings = {encoding['name']: encoding for encoding in encoding_data}
-            assert sim.qc_quantize_op_dict['fc.weight'].encodings[0].delta == param_encodings['fc.weight']['scale'][0]
+            param_encodings = {encoding["name"]: encoding for encoding in encoding_data}
+            assert (
+                sim.qc_quantize_op_dict["fc.weight"].encodings[0].delta
+                == param_encodings["fc.weight"]["scale"][0]
+            )
+
 
 def get_model():
     model = models.resnet18(pretrained=False, num_classes=10)
     if torch.cuda.is_available():
-        device = torch.device('cuda:0')
+        device = torch.device("cuda:0")
         model.to(device)
 
-    torch.onnx.export(model, torch.rand(batch_size, 3, 32, 32).cuda(), './resnet18.onnx',
-                      training=torch.onnx.TrainingMode.EVAL,
-                      input_names=['input'], output_names=['output'],
-                      dynamic_axes={
-                          'input': {0: 'batch_size'},
-                          'output': {0: 'batch_size'},
-                      }
-                      )
+    torch.onnx.export(
+        model,
+        torch.rand(batch_size, 3, 32, 32).cuda(),
+        "./resnet18.onnx",
+        training=torch.onnx.TrainingMode.EVAL,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={
+            "input": {0: "batch_size"},
+            "output": {0: "batch_size"},
+        },
+    )
 
-    onnx_model = ONNXModel(load_model('./resnet18.onnx'))
+    onnx_model = ONNXModel(load_model("./resnet18.onnx"))
     return onnx_model
+
 
 def dataloader():
     class DataLoader:
         """
         Example of a Dataloader which can be used for running AMPv2
         """
+
         def __init__(self, batch_size: int):
             """
             :param batch_size: batch size for data loader
@@ -160,6 +183,6 @@ def build_session(model):
     session = InferenceSession(
         path_or_bytes=model.model.SerializeToString(),
         sess_options=sess_options,
-        providers=['CPUExecutionProvider'],
+        providers=["CPUExecutionProvider"],
     )
     return session

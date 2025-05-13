@@ -34,9 +34,10 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Main class for pattern matcher"""
+"""Main class for pattern matcher"""
 
 from aimet_common.utils import AimetLogger
+
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
 
@@ -44,6 +45,7 @@ class PatternType:
     """
     structure to hold pattern data type
     """
+
     def __init__(self, pattern, action):
         """
         PatternType class holds a pattern with a corresponding actions

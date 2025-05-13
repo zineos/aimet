@@ -35,35 +35,67 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Models for use in unit testing """
+"""Models for use in unit testing"""
+
 from typing import Optional, List, Tuple
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Conv2D, BatchNormalization, Flatten, AvgPool2D, MaxPool2D, Input, Layer
+from tensorflow.keras.layers import (
+    Dense,
+    Conv2D,
+    BatchNormalization,
+    Flatten,
+    AvgPool2D,
+    MaxPool2D,
+    Input,
+    Layer,
+)
 
 
 def keras_model():
-    """ Function for returning a basic keras model """
+    """Function for returning a basic keras model"""
 
-    model = Sequential([
-        Conv2D(8, (2, 2), input_shape=(16, 16, 3,)),
-        BatchNormalization(momentum=.3, epsilon=.65),
-        AvgPool2D(),
-        MaxPool2D(),
-        BatchNormalization(momentum=.4, epsilon=.25),
-        Conv2D(4, (2, 2), activation=tf.nn.tanh, kernel_regularizer=tf.keras.regularizers.l2(0.5)),
-        Flatten(),
-        Dense(2, activation='softmax', name="keras_model")])
+    model = Sequential(
+        [
+            Conv2D(
+                8,
+                (2, 2),
+                input_shape=(
+                    16,
+                    16,
+                    3,
+                ),
+            ),
+            BatchNormalization(momentum=0.3, epsilon=0.65),
+            AvgPool2D(),
+            MaxPool2D(),
+            BatchNormalization(momentum=0.4, epsilon=0.25),
+            Conv2D(
+                4,
+                (2, 2),
+                activation=tf.nn.tanh,
+                kernel_regularizer=tf.keras.regularizers.l2(0.5),
+            ),
+            Flatten(),
+            Dense(2, activation="softmax", name="keras_model"),
+        ]
+    )
     return model
 
 
 def single_residual():
-    """ Function for returning single residual model """
+    """Function for returning single residual model"""
 
-    inputs = tf.keras.Input(shape=(16, 16, 3,))
+    inputs = tf.keras.Input(
+        shape=(
+            16,
+            16,
+            3,
+        )
+    )
     x = tf.keras.layers.Conv2D(16, (3, 3))(inputs)
-    x = tf.keras.layers.BatchNormalization(momentum=.3, epsilon=.65)(x)
+    x = tf.keras.layers.BatchNormalization(momentum=0.3, epsilon=0.65)(x)
     x = tf.nn.relu(x)
     x = tf.keras.layers.MaxPool2D()(x)
     residual = x
@@ -72,14 +104,16 @@ def single_residual():
 
     x = tf.keras.layers.Conv2D(8, (1, 1))(x)
     x = tf.keras.layers.Conv2D(8, (1, 1))(x)
-    x = tf.keras.layers.BatchNormalization(momentum=.4, epsilon=.25)(x)
+    x = tf.keras.layers.BatchNormalization(momentum=0.4, epsilon=0.25)(x)
     x = tf.add(x, residual)
     x = tf.nn.relu(x)
 
     x = tf.keras.layers.Conv2D(8, (3, 3))(x)
     x = tf.keras.layers.AvgPool2D()(x)
     x = tf.keras.layers.Flatten()(x)
-    outputs = tf.keras.layers.Dense(2, activation=tf.nn.softmax, name="single_residual")(x)
+    outputs = tf.keras.layers.Dense(
+        2, activation=tf.nn.softmax, name="single_residual"
+    )(x)
 
     return outputs
 
@@ -149,6 +183,7 @@ def multi_input_subclassing():
     """
     Multi input subclassing model
     """
+
     class MultiInputSubclassing(tf.keras.Model):
         """
         Multi input network implemented by subclassing
@@ -177,6 +212,7 @@ def residual_subclassing():
     """
     Residual connection subclassing model
     """
+
     class Residual(tf.keras.Model):
         """The Residual block"""
 
@@ -265,7 +301,14 @@ def nested_sequential_model(num_classes=3):
     """
     inner_seq = tf.keras.Sequential(
         [
-            tf.keras.layers.Conv2D(16, kernel_size=2, strides=2, padding="same", use_bias=False, input_shape=(32, 32, 3)),
+            tf.keras.layers.Conv2D(
+                16,
+                kernel_size=2,
+                strides=2,
+                padding="same",
+                use_bias=False,
+                input_shape=(32, 32, 3),
+            ),
             tf.keras.layers.BatchNormalization(),
         ]
     )
@@ -287,6 +330,7 @@ def nested_functional_model():
     """
     Nested Functional model implemented by Functional style
     """
+
     def inner_block1(inp):
         blk = tf.keras.layers.Conv2D(
             16, kernel_size=2, strides=2, padding="same", use_bias=False
@@ -340,13 +384,17 @@ def tiny_conv_net():
     x = tf.keras.layers.Conv2D(
         32, kernel_size=2, strides=2, padding="same", use_bias=False
     )(inputs)
-    x = tf.keras.layers.BatchNormalization(beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform")(x)
+    x = tf.keras.layers.BatchNormalization(
+        beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform"
+    )(x)
     x = tf.keras.layers.ReLU()(x)
     x = tf.keras.layers.MaxPooling2D(strides=2, padding="same")(x)
     x = tf.keras.layers.Conv2D(
         16, kernel_size=2, strides=1, padding="same", use_bias=False
     )(x)
-    x = tf.keras.layers.BatchNormalization(beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform")(x)
+    x = tf.keras.layers.BatchNormalization(
+        beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform"
+    )(x)
     x = tf.keras.layers.ReLU()(x)
     x = tf.keras.layers.Conv2D(
         8, kernel_size=2, strides=1, padding="same", use_bias=False
@@ -385,11 +433,13 @@ def get_custom_objects_based_model(size, fill_value):
     """
     Sample Keras model with custom_objects
     """
+
     class ConstantOfShapeTF(Layer):
         """
         ConstantOfShape Layer
         """
-        def __init__(self, name: str = 'const_of_shape_tf', **kwargs):
+
+        def __init__(self, name: str = "const_of_shape_tf", **kwargs):
             super().__init__(**kwargs)
             self.op_name = name
 
@@ -398,9 +448,11 @@ def get_custom_objects_based_model(size, fill_value):
             config required to serialize custom modules
             """
             config = super().get_config()
-            config.update({
-                "name": self.op_name,
-            })
+            config.update(
+                {
+                    "name": self.op_name,
+                }
+            )
             return config
 
         def call(self, size, fill_value):
@@ -414,13 +466,12 @@ def get_custom_objects_based_model(size, fill_value):
     const = const_shape(size, fill_value)
     output_tensor = input_tensor + const
     model = tf.keras.Model(inputs=input_tensor, outputs=output_tensor)
-    return model, {'ConstantOfShapeTF': ConstantOfShapeTF}
+    return model, {"ConstantOfShapeTF": ConstantOfShapeTF}
 
 
 def get_model_with_pack_unpack(input_shape, axis):
-
     class PackUnPack(tf.keras.layers.Layer):
-        def __init__(self, axis: int, name: str = 'pack_tf', **kwargs):
+        def __init__(self, axis: int, name: str = "pack_tf", **kwargs):
             super().__init__(**kwargs)
             self.op_name = name
             self.axis = axis
@@ -436,14 +487,19 @@ def get_model_with_pack_unpack(input_shape, axis):
             """
             ip1, ip2, ip3 = inputs
             output = tf.stack([ip1, ip2, ip3], axis=self.axis, name=self.op_name)
-            out1 = tf.unstack(output, axis=self.axis, name="un"+self.op_name)
+            out1 = tf.unstack(output, axis=self.axis, name="un" + self.op_name)
             return output, out1
 
-    input1, input2 = tf.keras.Input(shape=input_shape, batch_size=1), tf.keras.Input(shape=input_shape, batch_size=1)
+    input1, input2 = (
+        tf.keras.Input(shape=input_shape, batch_size=1),
+        tf.keras.Input(shape=input_shape, batch_size=1),
+    )
     input3 = tf.keras.Input(shape=input_shape, batch_size=1)
     pack_unpack_layer = PackUnPack(axis)
     out_tensor = pack_unpack_layer((input1, input2, input3))
-    model = tf.keras.Model(inputs=[input1, input2, input3], outputs=out_tensor, name="pack_unpack_model")
+    model = tf.keras.Model(
+        inputs=[input1, input2, input3], outputs=out_tensor, name="pack_unpack_model"
+    )
     custom_object = {"PackUnPack": PackUnPack}
 
     return model, custom_object
@@ -457,11 +513,19 @@ def model_with_space_to_batch(input_shape, block_shape, pad_amount):
     :param pad_amount: pad_amount param to instantiate SpaceToBatch layer
     :return: returns Keras model along with custom_objects
     """
+
     class SpaceToBatchTF(tf.keras.layers.Layer):
         """
         Keras Layer implementation of SpaceToBatch
         """
-        def __init__(self, block_shape: list, pad_amount: list, name: str = 'space_to_batch_tf', **kwargs):
+
+        def __init__(
+            self,
+            block_shape: list,
+            pad_amount: list,
+            name: str = "space_to_batch_tf",
+            **kwargs,
+        ):
             super().__init__(**kwargs)
             self.block_shape = block_shape
             self.pad_amount = pad_amount if pad_amount is not None else [[0, 0], [0, 0]]
@@ -469,18 +533,22 @@ def model_with_space_to_batch(input_shape, block_shape, pad_amount):
 
         def get_config(self):
             config = super().get_config()
-            config.update({
-                "block_shape": self.block_shape,
-                "pad_amount": self.pad_amount,
-                "name": self.op_name,
-            })
+            config.update(
+                {
+                    "block_shape": self.block_shape,
+                    "pad_amount": self.pad_amount,
+                    "name": self.op_name,
+                }
+            )
             return config
 
         def call(self, inputs, *args, **kwargs):
             """
             Forward-pass routine for SpaceToBatch Keras Layer
             """
-            output = tf.space_to_batch(inputs, self.block_shape, self.pad_amount, name=self.op_name)
+            output = tf.space_to_batch(
+                inputs, self.block_shape, self.pad_amount, name=self.op_name
+            )
             return output
 
     input_tensor = tf.keras.layers.Input(shape=input_shape)
@@ -499,8 +567,9 @@ def model_with_space_to_batch(input_shape, block_shape, pad_amount):
     outputs = x + 2
 
     model = tf.keras.Model(inputs=input_tensor, outputs=outputs)
-    custom_objects = {'SpaceToBatchTF': SpaceToBatchTF}
+    custom_objects = {"SpaceToBatchTF": SpaceToBatchTF}
     return model, custom_objects
+
 
 def model_with_batch_to_space(input_shape, block_shape, crops):
     """
@@ -510,11 +579,19 @@ def model_with_batch_to_space(input_shape, block_shape, crops):
     :param crops: pad_amount param to instantiate BatchToSpace layer
     :return: returns Keras model along with custom_objects
     """
+
     class BatchToSpaceTF(tf.keras.layers.Layer):
         """
         Keras Layer implementation of BatchToSpace
         """
-        def __init__(self, block_shape: list, crops: list, name: str = 'batch_to_space_tf', **kwargs):
+
+        def __init__(
+            self,
+            block_shape: list,
+            crops: list,
+            name: str = "batch_to_space_tf",
+            **kwargs,
+        ):
             super().__init__(**kwargs)
             self.block_shape = block_shape
             self.crops = crops if crops is not None else [[0, 0], [0, 0]]
@@ -522,18 +599,22 @@ def model_with_batch_to_space(input_shape, block_shape, crops):
 
         def get_config(self):
             config = super().get_config()
-            config.update({
-                "block_shape": self.block_shape,
-                "crops": self.crops,
-                "name": self.op_name,
-            })
+            config.update(
+                {
+                    "block_shape": self.block_shape,
+                    "crops": self.crops,
+                    "name": self.op_name,
+                }
+            )
             return config
 
         def call(self, inputs, *args, **kwargs):
             """
             Forward-pass routine for BatchToSpace Keras Layer
             """
-            output = tf.batch_to_space(inputs, self.block_shape, self.crops, name=self.op_name)
+            output = tf.batch_to_space(
+                inputs, self.block_shape, self.crops, name=self.op_name
+            )
             return output
 
     input_tensor = tf.keras.layers.Input(shape=input_shape)
@@ -552,14 +633,12 @@ def model_with_batch_to_space(input_shape, block_shape, crops):
     outputs = x + 2
 
     model = tf.keras.Model(inputs=input_tensor, outputs=outputs)
-    custom_objects = {'BatchToSpaceTF': BatchToSpaceTF}
+    custom_objects = {"BatchToSpaceTF": BatchToSpaceTF}
     return model, custom_objects
 
 
 def get_model_with_moments(input_shape, axes, keep_dims):
-
     class Moments(tf.keras.layers.Layer):
-
         def __init__(self, axes: int, keep_dims: bool, **kwargs):
             super().__init__(**kwargs)
             self.axes = axes
@@ -574,7 +653,9 @@ def get_model_with_moments(input_shape, axes, keep_dims):
             """
             Call Forward-pass
             """
-            y = tf.nn.moments(inputs, self.axes, shift=None, keepdims=self.keep_dims, name=None)
+            y = tf.nn.moments(
+                inputs, self.axes, shift=None, keepdims=self.keep_dims, name=None
+            )
             return y
 
     input1 = tf.keras.Input(shape=input_shape)
@@ -586,7 +667,9 @@ def get_model_with_moments(input_shape, axes, keep_dims):
     return model, custom_object
 
 
-def get_model_with_crop_and_resize(batch_size, image_shape, crop_size, interpolation_mode, extrapolation_value):
+def get_model_with_crop_and_resize(
+    batch_size, image_shape, crop_size, interpolation_mode, extrapolation_value
+):
     """
     Sample Keras model with tf.image.crop_and_resize
     """
@@ -594,7 +677,9 @@ def get_model_with_crop_and_resize(batch_size, image_shape, crop_size, interpola
     input_2 = tf.keras.Input(shape=(4))
     input_3 = tf.keras.Input(shape=(), dtype=tf.int32)
 
-    x = tf.image.crop_and_resize(input_1, input_2, input_3, crop_size, interpolation_mode, extrapolation_value)
+    x = tf.image.crop_and_resize(
+        input_1, input_2, input_3, crop_size, interpolation_mode, extrapolation_value
+    )
     x = tf.keras.layers.Conv2D(
         32, kernel_size=3, strides=1, padding="same", use_bias=False
     )(x)
@@ -602,11 +687,13 @@ def get_model_with_crop_and_resize(batch_size, image_shape, crop_size, interpola
     x = tf.keras.layers.ReLU()(x)
     output_tensor = x + 2
 
-    model = tf.keras.Model(inputs = (input_1, input_2, input_3), outputs=output_tensor)
+    model = tf.keras.Model(inputs=(input_1, input_2, input_3), outputs=output_tensor)
     return model, None
 
 
-def get_model_with_data_movement_custom_ops(batch_size, image_shape, block_shape, crops_pad_amount):
+def get_model_with_data_movement_custom_ops(
+    batch_size, image_shape, block_shape, crops_pad_amount
+):
     input_1 = tf.keras.Input(shape=image_shape, batch_size=batch_size)
 
     x = tf.keras.layers.Conv2D(
@@ -620,4 +707,3 @@ def get_model_with_data_movement_custom_ops(batch_size, image_shape, block_shape
 
     model = tf.keras.Model(inputs=input_1, outputs=output_tensor)
     return model
-

@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Implementation for handling LoRA adapters added using PEFT """
+"""Implementation for handling LoRA adapters added using PEFT"""
+
 from typing import Dict, Type
 import os
 import pickle
@@ -60,6 +61,7 @@ class LoraLayer(torch.nn.Module):
     """
     Quantizable lora layer
     """
+
     # pylint: disable=too-many-instance-attributes
     def __init__(self, lora_layer: PeftLoraLayer):
         """
@@ -69,8 +71,12 @@ class LoraLayer(torch.nn.Module):
         self.base_layer = lora_layer.base_layer
         self.r = lora_layer.r
         self.lora_alpha = lora_layer.lora_alpha
-        self.scaling = [torch.nn.Parameter(torch.as_tensor(scale), requires_grad=False).to(self.base_layer.weight.device)
-                        for scale in lora_layer.scaling.values()]
+        self.scaling = [
+            torch.nn.Parameter(torch.as_tensor(scale), requires_grad=False).to(
+                self.base_layer.weight.device
+            )
+            for scale in lora_layer.scaling.values()
+        ]
         self.lora_dropout = nn.ModuleList({})
         self.adapter_name_to_index = {}
         self.index_to_adapter_name = {}
@@ -97,7 +103,7 @@ class LoraLayer(torch.nn.Module):
             self.index_to_adapter_name[idx] = adapter_name
 
     def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        """ Forward pass for replaced layer"""
+        """Forward pass for replaced layer"""
         result = self.base_layer(x, *args, **kwargs)
         torch_result_dtype = result.dtype
         for active_adapter in self.active_adapters:
@@ -109,7 +115,9 @@ class LoraLayer(torch.nn.Module):
             scaling = self.scaling[self.adapter_name_to_index[active_adapter]]
             x = x.to(lora_A.weight.dtype)
 
-            result = self.add_lora_to_res(result, lora_B(self.mul_scale(lora_A(dropout(x)), scaling.detach())))
+            result = self.add_lora_to_res(
+                result, lora_B(self.mul_scale(lora_A(dropout(x)), scaling.detach()))
+            )
 
         result = result.to(torch_result_dtype)
         return result
@@ -121,9 +129,9 @@ def replace_lora_layers_with_quantizable_layers(model: torch.nn.Module):
 
     :param model: PEFT model
     """
-    replace_modules(model,
-                    lambda module: isinstance(module, (PeftLoraLayer, PeftConv2d)),
-                    LoraLayer)
+    replace_modules(
+        model, lambda module: isinstance(module, (PeftLoraLayer, PeftConv2d)), LoraLayer
+    )
 
 
 class AdapterMetaData:
@@ -132,6 +140,7 @@ class AdapterMetaData:
     Attributes:
         lora_A, lora_B, alpha
     """
+
     def __init__(self):
         self.lora_A = []
         self.lora_B = []
@@ -139,8 +148,12 @@ class AdapterMetaData:
         self.mul_scale = []
 
 
-def track_lora_meta_data(model: torch.nn.Module, path: str, filename_prefix: str,
-                         replaced_module_type: Type[torch.nn.Module] = None) -> Dict[str, AdapterMetaData]:
+def track_lora_meta_data(
+    model: torch.nn.Module,
+    path: str,
+    filename_prefix: str,
+    replaced_module_type: Type[torch.nn.Module] = None,
+) -> Dict[str, AdapterMetaData]:
     """
     Utility to track and save meta data for adapters. The meta data has adapter names and corresponding lora layers & alphas
 
@@ -159,22 +172,31 @@ def track_lora_meta_data(model: torch.nn.Module, path: str, filename_prefix: str
     for name, module in model.named_modules():
         if isinstance(module, LoraLayer):
             for index, lora_layer in enumerate(module.lora_A):
-                if replaced_module_type and isinstance(lora_layer, replaced_module_type):
+                if replaced_module_type and isinstance(
+                    lora_layer, replaced_module_type
+                ):
                     lora_layer = lora_layer.conv2d
-                adapter_name_to_meta_data[module.index_to_adapter_name[index]].lora_A.append(
-                    module_to_name_d[lora_layer])
+                adapter_name_to_meta_data[
+                    module.index_to_adapter_name[index]
+                ].lora_A.append(module_to_name_d[lora_layer])
             for index, lora_layer in enumerate(module.lora_B):
-                if replaced_module_type and isinstance(lora_layer, replaced_module_type):
+                if replaced_module_type and isinstance(
+                    lora_layer, replaced_module_type
+                ):
                     lora_layer = lora_layer.conv2d
-                adapter_name_to_meta_data[module.index_to_adapter_name[index]].lora_B.append(
-                    module_to_name_d[lora_layer])
+                adapter_name_to_meta_data[
+                    module.index_to_adapter_name[index]
+                ].lora_B.append(module_to_name_d[lora_layer])
             for lora_adapter_name in module.lora_alpha:
-                adapter_name_to_meta_data[lora_adapter_name].alpha = module.lora_alpha[lora_adapter_name]
-            adapter_name_to_meta_data[module.index_to_adapter_name[index]].mul_scale.append(module_to_name_d[module.mul_scale])
-
+                adapter_name_to_meta_data[lora_adapter_name].alpha = module.lora_alpha[
+                    lora_adapter_name
+                ]
+            adapter_name_to_meta_data[
+                module.index_to_adapter_name[index]
+            ].mul_scale.append(module_to_name_d[module.mul_scale])
 
     file_name = os.path.join(path, f"{filename_prefix}.pkl")
-    with open(file_name, 'wb') as file:
+    with open(file_name, "wb") as file:
         pickle.dump(adapter_name_to_meta_data, file)
     return adapter_name_to_meta_data
 
@@ -183,7 +205,12 @@ class PeftQuantUtils:
     """
     Utilities for quantizing peft model
     """
-    def __init__(self, adapater_name_to_meta_data: Dict[str, AdapterMetaData], name_to_module_dict=None):
+
+    def __init__(
+        self,
+        adapater_name_to_meta_data: Dict[str, AdapterMetaData],
+        name_to_module_dict=None,
+    ):
         """
         Init for Peft utilities for quantization
 
@@ -193,10 +220,14 @@ class PeftQuantUtils:
         self.adapter_name_to_meta_data = adapater_name_to_meta_data
         self.lora_layers = self._get_lora_layers()
         self.pt_name_to_prepared_name, self.prepared_name_to_pt_name = None, None
-        self.pt_to_lora_name = dict.fromkeys(self.lora_layers, '')
+        self.pt_to_lora_name = dict.fromkeys(self.lora_layers, "")
         if name_to_module_dict:
-            self.pt_name_to_prepared_name, self.prepared_name_to_pt_name = self._get_pytorch_name_to_prepared_name(name_to_module_dict)
-            self.lora_to_pt_name, self.pt_to_lora_name = self._get_lora_name_to_pytorch_name()
+            self.pt_name_to_prepared_name, self.prepared_name_to_pt_name = (
+                self._get_pytorch_name_to_prepared_name(name_to_module_dict)
+            )
+            self.lora_to_pt_name, self.pt_to_lora_name = (
+                self._get_lora_name_to_pytorch_name()
+            )
             self.mul_names = self._get_prepared_name_for_mul()
 
     @staticmethod
@@ -220,12 +251,19 @@ class PeftQuantUtils:
         for adapter_name in self.adapter_name_to_meta_data:
             adapter_data = self.adapter_name_to_meta_data[adapter_name]
             for index, _ in enumerate(adapter_data.mul_scale):
-                lora_prepared_name = self.pt_name_to_prepared_name[self.lora_to_pt_name[adapter_data.lora_A[index]]]
-                prepared_name = lora_prepared_name[0:lora_prepared_name.find('_lora_A')] + '_mul_scale_Mul'
+                lora_prepared_name = self.pt_name_to_prepared_name[
+                    self.lora_to_pt_name[adapter_data.lora_A[index]]
+                ]
+                prepared_name = (
+                    lora_prepared_name[0 : lora_prepared_name.find("_lora_A")]
+                    + "_mul_scale_Mul"
+                )
                 names.add(prepared_name)
         return names
 
-    def quantize_lora_scale_with_fixed_range(self, sim, bitwidth, scale_min=0, scale_max=1e-5):
+    def quantize_lora_scale_with_fixed_range(
+        self, sim, bitwidth, scale_min=0, scale_max=1e-5
+    ):
         """
         Add input quantizer for scale(alpha/rank) and provide min max values to it
 
@@ -292,7 +330,10 @@ class PeftQuantUtils:
         """
         for module_name, module in sim.model.named_modules():
             module_name = self._get_module_name(module_name)
-            if isinstance(module, BaseQuantizationMixin) and module_name not in self.pt_to_lora_name:
+            if (
+                isinstance(module, BaseQuantizationMixin)
+                and module_name not in self.pt_to_lora_name
+            ):
                 for _, param_quantizer in module.param_quantizers.items():
                     if param_quantizer:
                         self._freeze_quantizer(param_quantizer)
@@ -305,8 +346,13 @@ class PeftQuantUtils:
         """
         for module_name, module in sim.model.named_modules():
             module_name = self._get_module_name(module_name)
-            if isinstance(module, BaseQuantizationMixin) and module_name not in self.pt_to_lora_name:
-                for input_quantizer, output_quantizer in zip(module.input_quantizers, module.output_quantizers):
+            if (
+                isinstance(module, BaseQuantizationMixin)
+                and module_name not in self.pt_to_lora_name
+            ):
+                for input_quantizer, output_quantizer in zip(
+                    module.input_quantizers, module.output_quantizers
+                ):
                     if input_quantizer:
                         self._freeze_quantizer(input_quantizer)
                     if output_quantizer:
@@ -321,8 +367,9 @@ class PeftQuantUtils:
         self.freeze_base_model_activation_quantizers(sim)
         self.freeze_base_model_param_quantizers(sim)
 
-    def set_bitwidth_for_lora_adapters(self, sim: QuantizationSimModel,
-                                       output_bw: int, param_bw: int):
+    def set_bitwidth_for_lora_adapters(
+        self, sim: QuantizationSimModel, output_bw: int, param_bw: int
+    ):
         """
         Sets output and param bitwidth for all Lora adapters added to the model
 
@@ -332,7 +379,10 @@ class PeftQuantUtils:
         """
         for module_name, module in sim.model.named_modules():
             module_name = self._get_module_name(module_name)
-            if isinstance(module, BaseQuantizationMixin) and module_name in self.pt_to_lora_name:
+            if (
+                isinstance(module, BaseQuantizationMixin)
+                and module_name in self.pt_to_lora_name
+            ):
                 self._set_bitwidth_for_module(module, output_bw, param_bw)
 
     def _get_module_name(self, module_name: str) -> str:
@@ -340,7 +390,10 @@ class PeftQuantUtils:
         Gets module name from prepared model's names if prepared model is being used, else returns the pytorch name
         :param module_name: pytorch name
         """
-        if self.prepared_name_to_pt_name and module_name in self.prepared_name_to_pt_name:
+        if (
+            self.prepared_name_to_pt_name
+            and module_name in self.prepared_name_to_pt_name
+        ):
             module_name = self.prepared_name_to_pt_name[module_name]
         return module_name
 
@@ -356,7 +409,10 @@ class PeftQuantUtils:
         """
         for module_name, module in sim.model.named_modules():
             module_name = self._get_module_name(module_name)
-            if isinstance(module, BaseQuantizationMixin) and module_name in self.pt_to_lora_name:
+            if (
+                isinstance(module, BaseQuantizationMixin)
+                and module_name in self.pt_to_lora_name
+            ):
                 yield module_name, module
 
     def get_fp_lora_layer(self, model):
@@ -371,7 +427,9 @@ class PeftQuantUtils:
                 yield module_name, module
 
     @staticmethod
-    def _set_bitwidth_for_module(module: BaseQuantizationMixin, output_bw: int, param_bw: int):
+    def _set_bitwidth_for_module(
+        module: BaseQuantizationMixin, output_bw: int, param_bw: int
+    ):
         """
         Sets bitwidth for a QcQuantizeWrapper module
 
@@ -384,7 +442,9 @@ class PeftQuantUtils:
         for _, param_quantizer in module.param_quantizers.items():
             param_quantizer.bitwidth = param_bw
 
-    def export_adapter_weights(self, sim: QuantizationSimModel, path: str, filename_prefix: str):
+    def export_adapter_weights(
+        self, sim: QuantizationSimModel, path: str, filename_prefix: str
+    ):
         """
         Exports adapter weights to safetensor format
 
@@ -403,15 +463,19 @@ class PeftQuantUtils:
                 module_name = self.pt_to_lora_name[pt_name]
             if module_name in self.lora_layers:
                 for param_name, param in module.named_parameters():
-                    if param_name in ['weight', 'bias']:
-                        tensor_name = org_name + '.' + param_name
+                    if param_name in ["weight", "bias"]:
+                        tensor_name = org_name + "." + param_name
                         tensors[tensor_name] = param
-        filename_prefix = filename_prefix + '.safetensor'
+        filename_prefix = filename_prefix + ".safetensor"
         model_params_path = os.path.join(path, filename_prefix)
         save_file(tensors, model_params_path)
 
-    def enable_adapter_and_load_weights(self, sim: QuantizationSimModel, adapter_weights_path,
-                                        use_safetensor: bool = True):
+    def enable_adapter_and_load_weights(
+        self,
+        sim: QuantizationSimModel,
+        adapter_weights_path,
+        use_safetensor: bool = True,
+    ):
         """
         Enables adapter effect on base model by loading weights to model
 
@@ -424,14 +488,20 @@ class PeftQuantUtils:
         onnx_names_tensors = {}
         for key in tensors.keys():
             tensor_name = key
-            temp_key = key[0:key.find('.weight')]
+            temp_key = key[0 : key.find(".weight")]
             if self.prepared_name_to_pt_name:
-                tensor_name = self.pt_name_to_prepared_name[self.lora_to_pt_name[temp_key]] + '.weight'
+                tensor_name = (
+                    self.pt_name_to_prepared_name[self.lora_to_pt_name[temp_key]]
+                    + ".weight"
+                )
             lora_layer_names_set.remove(temp_key)
             onnx_names_tensors[tensor_name] = tensors[key]
 
         if lora_layer_names_set:
-            raise KeyError("Lora layer weights missing for the following names", lora_layer_names_set)
+            raise KeyError(
+                "Lora layer weights missing for the following names",
+                lora_layer_names_set,
+            )
 
         sim.model.load_state_dict(onnx_names_tensors, strict=False)
 
@@ -449,8 +519,8 @@ class PeftQuantUtils:
                 module_name = self.pt_to_lora_name[pt_name]
             if module_name in self.lora_layers:
                 for param_name, param in module.named_parameters():
-                    if param_name in ['weight', 'bias']:
-                        tensor_name = org_name + '.' + param_name
+                    if param_name in ["weight", "bias"]:
+                        tensor_name = org_name + "." + param_name
                         tensors[tensor_name] = torch.zeros_like(param)
 
         sim.model.load_state_dict(tensors, strict=False)

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Curve-fitting code """
+"""Curve-fitting code"""
 
 from typing import List, Tuple
 
@@ -68,13 +68,22 @@ class MonotonicIncreasingCurveFit:
         solver = osqp.OSQP()
         upper_constraint = np.inf * np.ones(g.shape[0])
         lower_constraint = np.zeros(g.shape[0])
-        solver.setup(csc_matrix(p), -q, csc_matrix(g), lower_constraint, upper_constraint, verbose=False)
+        solver.setup(
+            csc_matrix(p),
+            -q,
+            csc_matrix(g),
+            lower_constraint,
+            upper_constraint,
+            verbose=False,
+        )
         results = solver.solve()
 
         return results.x
 
     @classmethod
-    def fit(cls, x_coordinates: Coordinates, y_coordinates: Coordinates) -> Tuple[Coordinates, List]:
+    def fit(
+        cls, x_coordinates: Coordinates, y_coordinates: Coordinates
+    ) -> Tuple[Coordinates, List]:
         """
         Takes a set of points in a 2-d line-graph (described using their x and y coordinates) and
         returns the y-coordinates of a resulting line graph that is constrained to be necessarily monotonically
@@ -104,15 +113,17 @@ class MonotonicIncreasingCurveFit:
         polynomial_degree = 8
 
         # Here we construct th phi and psi matrices as described in the HLD
-        phi = (x_coordinates ** 0).reshape(-1, 1)
+        phi = (x_coordinates**0).reshape(-1, 1)
         psi = np.zeros((len(constraints_x_coordinates), 1))
 
         for i in range(1, polynomial_degree):
-            #TODO The following lines needed to be excluded from PyLint since it crashes with the
+            # TODO The following lines needed to be excluded from PyLint since it crashes with the
             # following error: "RecursionError: maximum recursion depth exceeded"
-            phi = np.hstack((phi, (x_coordinates ** i).reshape(-1, 1))) # pylint: disable=all
-            psi = np.hstack((psi, i * (constraints_x_coordinates ** (i - 1)).reshape(-1, 1))) # pylint: disable=all
-        
+            phi = np.hstack((phi, (x_coordinates**i).reshape(-1, 1)))  # pylint: disable=all
+            psi = np.hstack(
+                (psi, i * (constraints_x_coordinates ** (i - 1)).reshape(-1, 1))
+            )  # pylint: disable=all
+
         # Next we calculate G = (phi.T) * phi and a = (phi.T) * Y
         # where Y is the list of y-coordinate points, and * represents a dot product
 

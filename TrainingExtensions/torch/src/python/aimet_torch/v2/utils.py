@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=redefined-builtin
-""" Common utility functions """
+"""Common utility functions"""
+
 from typing import Callable, Tuple, Any
 import functools
 import itertools
@@ -43,8 +44,7 @@ import itertools
 import torch
 
 
-def _is_expandable(src_shape: Tuple[int, ...],
-                   target_shape: Tuple[int, ...]) -> bool:
+def _is_expandable(src_shape: Tuple[int, ...], target_shape: Tuple[int, ...]) -> bool:
     """
     Returns true if source shape can be expanded as target shape
     """
@@ -58,8 +58,7 @@ def _is_expandable(src_shape: Tuple[int, ...],
     return True
 
 
-def _is_reducible(src_shape: Tuple[int, ...],
-                  target_shape: Tuple[int, ...]) -> bool:
+def _is_reducible(src_shape: Tuple[int, ...], target_shape: Tuple[int, ...]) -> bool:
     """
     Returns true if source shape can be reduced as target shape
     """
@@ -79,15 +78,14 @@ def reduce(input: torch.Tensor, shape: Tuple[int, ...], reduce_op: Callable):
             f"Input of shape {list(input.shape)} can't be reduced to shape {list(shape)}"
         )
 
-    padded_shape = (
-        *itertools.repeat(1, len(input.shape) - len(shape)),
-        *shape
-    )
+    padded_shape = (*itertools.repeat(1, len(input.shape) - len(shape)), *shape)
     reduce_dims = tuple(axis for axis, dim in enumerate(padded_shape) if dim == 1)
     other_dims = tuple(axis for axis, dim in enumerate(padded_shape) if dim > 1)
     permute_dims = reduce_dims + other_dims
 
-    return reduce_op(input.permute(permute_dims).reshape(-1, *shape), dim=0, keepdim=False)
+    return reduce_op(
+        input.permute(permute_dims).reshape(-1, *shape), dim=0, keepdim=False
+    )
 
 
 class _ContextManager:
@@ -107,15 +105,16 @@ class _ContextManager:
         def wrapper(*args, **kwargs):
             with self:
                 return fn(*args, **kwargs)
+
         return wrapper
 
 
-def patch_attr(obj, attr_name, new_attr)-> _ContextManager:
+def patch_attr(obj, attr_name, new_attr) -> _ContextManager:
     """
     Temporarily overwrite object attribute
     """
     if isinstance(obj, torch.nn.Module):
-        if attr_name in obj._parameters or attr_name in obj._buffers: # pylint: disable=protected-access
+        if attr_name in obj._parameters or attr_name in obj._buffers:  # pylint: disable=protected-access
             return _patch_param_or_buffer(obj, attr_name, new_attr)
 
     class _NullAttribute:
@@ -136,9 +135,11 @@ def patch_attr(obj, attr_name, new_attr)-> _ContextManager:
     return _ContextManager(action, cleanup)
 
 
-def _patch_param_or_buffer(module: torch.nn.Module,
-                           param_or_buffer_name: str,
-                           new_param_or_buffer: torch.Tensor):
+def _patch_param_or_buffer(
+    module: torch.nn.Module,
+    param_or_buffer_name: str,
+    new_param_or_buffer: torch.Tensor,
+):
     """
     Temporarily substitute the reference to the a parameter with the quantized parameter.
     Under the scope of this function, ``getattr(module, param_or_buffer_name)`` will return
@@ -162,7 +163,9 @@ def _patch_param_or_buffer(module: torch.nn.Module,
         # Some non-standard modules (e.g. replicas of torch.nn.DataParallel) store their parameters
         container = module.__dict__
     else:
-        raise RuntimeError(f"'{param_or_buffer_name}' is not a valid name of parameter of buffer of {type(module)}.")
+        raise RuntimeError(
+            f"'{param_or_buffer_name}' is not a valid name of parameter of buffer of {type(module)}."
+        )
 
     action = lambda: container.update({param_or_buffer_name: new_param_or_buffer})
     cleanup = lambda: container.update({param_or_buffer_name: orig_param_or_buffer})
@@ -170,9 +173,9 @@ def _patch_param_or_buffer(module: torch.nn.Module,
     return _ContextManager(action, cleanup)
 
 
-class _StraightThroughEstimator(torch.autograd.Function): # pylint: disable=abstract-method
+class _StraightThroughEstimator(torch.autograd.Function):  # pylint: disable=abstract-method
     @staticmethod
-    def forward(ctx, op, *args, **kwargs): # pylint:disable=arguments-differ, unused-argument
+    def forward(ctx, op, *args, **kwargs):  # pylint:disable=arguments-differ, unused-argument
         return op(*args, **kwargs)
 
     @staticmethod
@@ -186,10 +189,11 @@ def ste_round(*args, **kwargs):
     """
     return _StraightThroughEstimator.apply(torch.round, *args, **kwargs)
 
+
 class StatisticsNotFoundError(RuntimeError):
-    '''
+    """
     Error raised when compute_encodings() is invoked without statistics
-    '''
+    """
 
 
 _ENABLE_RECOMPUTE = False
@@ -199,11 +203,11 @@ def _set_enable_recompute(mode: bool):
     original_mode = _ENABLE_RECOMPUTE
 
     def action():
-        global _ENABLE_RECOMPUTE # pylint: disable=global-statement
+        global _ENABLE_RECOMPUTE  # pylint: disable=global-statement
         _ENABLE_RECOMPUTE = mode
 
     def cleanup():
-        global _ENABLE_RECOMPUTE # pylint: disable=global-statement
+        global _ENABLE_RECOMPUTE  # pylint: disable=global-statement
         _ENABLE_RECOMPUTE = original_mode
 
     return _ContextManager(action, cleanup)
@@ -235,19 +239,25 @@ def allow_recompute(fn):
     Allow recomputation of activation of the given function during training
     if recompute is enabled.
     """
+
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         if is_recompute_enabled():
             # Enable activation recompute (a.k.a. activataion checkpointing)
             # to reduce memory footprint of training
-            return torch.utils.checkpoint.checkpoint(fn, *args, use_reentrant=False, **kwargs)
+            return torch.utils.checkpoint.checkpoint(
+                fn, *args, use_reentrant=False, **kwargs
+            )
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 def flatten_nn_module_list(module):
     """
     Flatten nested list of nn.Modules into a flat list
     """
+
     def flat_iter(mod):
         if isinstance(mod, (list, tuple, torch.nn.ModuleList)):
             for x in mod:
@@ -262,9 +272,11 @@ def docstring(doc: str):
     """
     Helper function to attach docstring
     """
+
     def decorator(fn_or_cls: Callable):
         fn_or_cls.__doc__ = doc
         return fn_or_cls
+
     return decorator
 
 
@@ -272,8 +284,12 @@ def _map_qmodule(modules, func):
     # pylint: disable=import-outside-toplevel
     # pylint: disable=protected-access, cyclic-import
     from aimet_torch.v2.nn import BaseQuantizationMixin
+
     contexts = []
-    ctx = _ContextManager(action=lambda: None, cleanup=lambda:[context._cleanup() for context in contexts])
+    ctx = _ContextManager(
+        action=lambda: None,
+        cleanup=lambda: [context._cleanup() for context in contexts],
+    )
 
     if isinstance(modules, torch.nn.Module):
         modules = [modules]
@@ -290,32 +306,35 @@ def _map_qmodule(modules, func):
 
     return ctx
 
+
 def remove_input_quantizers(modules):
-    '''
+    """
     Removes input quantizers for the modules provided
-    '''
+    """
     # pylint: disable=protected-access
     return _map_qmodule(modules, lambda qmodule: qmodule._remove_input_quantizers())
 
+
 def remove_output_quantizers(modules):
-    '''
+    """
     Removes output quantizers for the modules provided
-    '''
+    """
     # pylint: disable=protected-access
     return _map_qmodule(modules, lambda qmodule: qmodule._remove_output_quantizers())
 
 
 def remove_param_quantizers(modules):
-    '''
+    """
     Removes parameter quantizers for the modules provided
-    '''
+    """
     # pylint: disable=protected-access
     return _map_qmodule(modules, lambda qmodule: qmodule._remove_param_quantizers())
 
+
 def remove_activation_quantizers(modules):
-    '''
+    """
     Removes activation quantizers for the modules provided
-    '''
+    """
     if not isinstance(modules, torch.nn.Module):
         # Shallow copy in case modules is an iterator
         modules = list(modules)
@@ -323,13 +342,16 @@ def remove_activation_quantizers(modules):
     context_1 = remove_input_quantizers(modules)
     context_2 = remove_output_quantizers(modules)
     # pylint: disable=protected-access
-    return _ContextManager(action=lambda: None,
-                           cleanup=lambda: (context_1._cleanup(), context_2._cleanup()))
+    return _ContextManager(
+        action=lambda: None,
+        cleanup=lambda: (context_1._cleanup(), context_2._cleanup()),
+    )
+
 
 def remove_all_quantizers(modules):
-    '''
+    """
     Removes all quantizers for the modules provided
-    '''
+    """
     if not isinstance(modules, torch.nn.Module):
         # Shallow copy in case modules is an iterator
         modules = list(modules)
@@ -337,39 +359,56 @@ def remove_all_quantizers(modules):
     context_1 = remove_activation_quantizers(modules)
     context_2 = remove_param_quantizers(modules)
     # pylint: disable=protected-access
-    return _ContextManager(action=lambda: None,
-                           cleanup=lambda: (context_1._cleanup(), context_2._cleanup()))
+    return _ContextManager(
+        action=lambda: None,
+        cleanup=lambda: (context_1._cleanup(), context_2._cleanup()),
+    )
+
 
 def has_no_quantizers(module, ignore_params: bool = False) -> bool:
     """
     Helper function to check if a module has any quantizers enabled
     """
-    return (all(inp_qtzr is None for inp_qtzr in module.input_quantizers) and
-            all(out_qtzr is None for out_qtzr in module.output_quantizers) and
-            (ignore_params or all(param_qtzr is None for param_qtzr in module.param_quantizers.values())))
+    return (
+        all(inp_qtzr is None for inp_qtzr in module.input_quantizers)
+        and all(out_qtzr is None for out_qtzr in module.output_quantizers)
+        and (
+            ignore_params
+            or all(
+                param_qtzr is None for param_qtzr in module.param_quantizers.values()
+            )
+        )
+    )
+
 
 def rgetattr(obj, attr):
-    """ Drop in replacement for __getattr__ that can handle dotted attribute strings """
-    return functools.reduce(getattr, [obj] + attr.split('.'))
+    """Drop in replacement for __getattr__ that can handle dotted attribute strings"""
+    return functools.reduce(getattr, [obj] + attr.split("."))
+
 
 def rsetattr(obj, attr, val):
-    """ Drop in replacement for __setattr__ that can handle dotted attribute strings """
-    pre, _, post = attr.rpartition('.')
+    """Drop in replacement for __setattr__ that can handle dotted attribute strings"""
+    pre, _, post = attr.rpartition(".")
     pre_obj = rgetattr(obj, pre) if pre else obj
     return setattr(pre_obj, post, val)
 
+
 def apply_fn_recursively_to_all_elems(fn, container):
-    """ Apply fn to all elements in recursively composed container """
+    """Apply fn to all elements in recursively composed container"""
     if container is None:
         return None
     if isinstance(container, (list, tuple)):
         return [apply_fn_recursively_to_all_elems(fn, elem) for elem in container]
     if isinstance(container, dict):
-        return {key: apply_fn_recursively_to_all_elems(fn, elem) for key, elem in container.items()}
+        return {
+            key: apply_fn_recursively_to_all_elems(fn, elem)
+            for key, elem in container.items()
+        }
     return fn(container)
 
+
 def flatten_list(container):
-    """ Helper function to flatten nested list/tuple into 1D """
+    """Helper function to flatten nested list/tuple into 1D"""
     if not container:
         return container
     if not isinstance(container, (list, tuple)):
@@ -379,6 +418,7 @@ def flatten_list(container):
     if len(container) == 1:
         return container
     return container[:1] + flatten_list(container[1:])
+
 
 def default_forward_fn(model, inputs):
     """

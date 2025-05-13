@@ -47,7 +47,10 @@ import os
 from onnx.utils import Extractor
 import logging
 from aimet_common.utils import AimetLogger
-from aimet_onnx.sequential_mse.dependency_graph import DependencyGraph, SUPPORTED_MODULES
+from aimet_onnx.sequential_mse.dependency_graph import (
+    DependencyGraph,
+    SUPPORTED_MODULES,
+)
 from aimet_onnx.sequential_mse.seq_mse import SeqMseParams
 from aimet_onnx.sequential_mse.seq_mse import SequentialMse
 from aimet_common.defs import QuantScheme
@@ -65,6 +68,7 @@ from .models.test_models_onnx import model_with_multiple_outputs
 np.random.seed(0)
 torch.manual_seed(42)
 AimetLogger.set_level_for_all_areas(logging.DEBUG)
+
 
 def unlabeled_data_loader(dummy_inputs):
     class MyDataset(Dataset):
@@ -84,11 +88,14 @@ def unlabeled_data_loader(dummy_inputs):
                 return len(self.data)
 
     if isinstance(dummy_inputs, list):
-        dataset = MyDataset([[value[0, :] for _ in range(10)] for value in dummy_inputs])
+        dataset = MyDataset(
+            [[value[0, :] for _ in range(10)] for value in dummy_inputs]
+        )
     else:
         dataset = MyDataset([dummy_inputs[0, :] for _ in range(10)])
 
     return DataLoader(dataset)
+
 
 def dummy_input_for_linear_layer():
     return torch.randn((1, 100, 100))
@@ -130,8 +137,10 @@ def get_model_with_multiple_outputs():
     return model_with_multiple_outputs()
 
 
-def _get_config_file(is_symmetric: bool, strict_symmetric: bool, unsigned_symmetric:bool, pcq: bool) -> str:
-    """ Temporary fix until the config file can be read from beq_config directory"""
+def _get_config_file(
+    is_symmetric: bool, strict_symmetric: bool, unsigned_symmetric: bool, pcq: bool
+) -> str:
+    """Temporary fix until the config file can be read from beq_config directory"""
 
     def get_bool_str(in_bool: bool) -> str:
         if in_bool:
@@ -143,66 +152,32 @@ def _get_config_file(is_symmetric: bool, strict_symmetric: bool, unsigned_symmet
         "defaults": {
             "ops": {
                 "is_output_quantized": "True",
-                "is_symmetric": get_bool_str(is_symmetric)
+                "is_symmetric": get_bool_str(is_symmetric),
             },
             "params": {
                 "is_quantized": "True",
-                "is_symmetric": get_bool_str(is_symmetric)
+                "is_symmetric": get_bool_str(is_symmetric),
             },
             "strict_symmetric": get_bool_str(strict_symmetric),
             "unsigned_symmetric": get_bool_str(unsigned_symmetric),
-            "per_channel_quantization": get_bool_str(pcq)
+            "per_channel_quantization": get_bool_str(pcq),
         },
-        "params": {
-            "bias": {
-                "is_quantized": "True"
-            }
-        },
-        "op_type": {
-            "PRelu": {
-                "params": {
-                    "weight": {
-                        "is_quantized": "False"
-                    }
-                }
-            }
-        },
+        "params": {"bias": {"is_quantized": "True"}},
+        "op_type": {"PRelu": {"params": {"weight": {"is_quantized": "False"}}}},
         "supergroups": [
-            {
-                "op_list": [
-                    "Gemm",
-                    "PRelu"
-                ]
-            },
-            {
-                "op_list": [
-                    "Gemm",
-                    "Sigmoid"
-                ]
-            },
-            {
-                "op_list": [
-                    "Conv",
-                    "PRelu"
-                ]
-            },
-            {
-                "op_list": [
-                    "Conv",
-                    "Sigmoid"
-                ]
-            }
+            {"op_list": ["Gemm", "PRelu"]},
+            {"op_list": ["Gemm", "Sigmoid"]},
+            {"op_list": ["Conv", "PRelu"]},
+            {"op_list": ["Conv", "Sigmoid"]},
         ],
-        "model_input": {
-            "is_input_quantized": "True"
-        },
-        "model_output": {}
+        "model_input": {"is_input_quantized": "True"},
+        "model_output": {},
     }
 
     if not os.path.exists("data"):
         os.mkdir("data")
-    file_name = './data/beq_per_channel_config.json'
-    with open(file_name, 'w') as f:
+    file_name = "./data/beq_per_channel_config.json"
+    with open(file_name, "w") as f:
         json.dump(beq_per_channel_config, f)
 
     return file_name
@@ -223,36 +198,45 @@ def _build_session(model):
     Build and return onnxruntime inference session
     :param providers: providers to execute onnxruntime
     """
-    from onnxruntime import SessionOptions, InferenceSession,GraphOptimizationLevel
+    from onnxruntime import SessionOptions, InferenceSession, GraphOptimizationLevel
+
     sess_options = SessionOptions()
     sess_options.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
     session = InferenceSession(
         path_or_bytes=model.SerializeToString(),
         sess_options=sess_options,
-        providers=['CPUExecutionProvider'],
+        providers=["CPUExecutionProvider"],
     )
     return session
+
 
 def data_loader(dummy_input):
     return [dummy_input for _ in range(10)]
 
+
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
     model = single_conv_layer_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=enable_pcq))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=enable_pcq,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
     seq_mse = SequentialMse(sim.model, sim, seq_params, dataloader)
-    conv_node = seq_mse.dependency_graph._name_to_node['/conv/Conv']
+    conv_node = seq_mse.dependency_graph._name_to_node["/conv/Conv"]
     seq_mse._run_seq_mse([conv_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(conv_node)
     if not enable_pcq:
@@ -269,18 +253,24 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
 
 
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 @pytest.mark.parametrize("pass_model", [True, False])
 def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
     model = get_single_linear_layer_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_linear_layer())
@@ -288,7 +278,7 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
         seq_mse = SequentialMse(model, sim, seq_params, dataloader)
     else:
         seq_mse = SequentialMse(None, sim, seq_params, dataloader)
-    fc_node = seq_mse.dependency_graph._name_to_node['/fc/MatMul']
+    fc_node = seq_mse.dependency_graph._name_to_node["/fc/MatMul"]
     seq_mse._run_seq_mse([fc_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(fc_node)
     weight_name = seq_mse.dependency_graph.get_param_name(fc_node)
@@ -300,64 +290,85 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
     else:
         assert not np.all(np.isclose(encodings_max, per_channel_max))
 
+
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_apply_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
     model = get_single_conv_layer_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
     seq_mse.apply_seq_mse_algo()
-    weight_quantizer = seq_mse.sim.qc_quantize_op_dict['conv.weight']
+    weight_quantizer = seq_mse.sim.qc_quantize_op_dict["conv.weight"]
     assert weight_quantizer._is_encoding_frozen
 
+
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_static_apply_seq_mse(param_bw, loss_fn, enable_pcq):
     model = get_single_conv_layer_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
     SequentialMse.apply_seq_mse(model, sim, seq_params, dataloader)
 
+
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
     model = get_model_with_split()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_dependency_graph())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
     seq_mse.apply_seq_mse_algo()
 
-    weight_quantizer_conv_1 = seq_mse.sim.qc_quantize_op_dict['conv1.weight']
-    weight_quantizer_conv_2 = seq_mse.sim.qc_quantize_op_dict['conv2.weight']
-    weight_quantizer_conv_3 = seq_mse.sim.qc_quantize_op_dict['conv3.weight']
+    weight_quantizer_conv_1 = seq_mse.sim.qc_quantize_op_dict["conv1.weight"]
+    weight_quantizer_conv_2 = seq_mse.sim.qc_quantize_op_dict["conv2.weight"]
+    weight_quantizer_conv_3 = seq_mse.sim.qc_quantize_op_dict["conv3.weight"]
 
     assert weight_quantizer_conv_1.is_encoding_frozen()
     assert weight_quantizer_conv_2.is_encoding_frozen()
@@ -366,78 +377,125 @@ def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
 
 def test_dependency_graph():
     model = get_model_with_split()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=4,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=4,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     dataloader = unlabeled_data_loader(dummy_input_for_dependency_graph())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
 
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].in_degree == 0
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].out_degree == 2
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].op_input_names == ['input']
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].op_output_names == ['/conv1/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].in_degree == 0
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].out_degree == 2
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].op_input_names == [
+        "input"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].op_output_names == [
+        "/conv1/Conv_output_0"
+    ]
 
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].in_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].out_degree == 0
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].op_input_names == ['/conv1/Conv_output_0']
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].op_output_names == ['/conv2/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].in_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].out_degree == 0
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].op_input_names == [
+        "/conv1/Conv_output_0"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].op_output_names == [
+        "/conv2/Conv_output_0"
+    ]
 
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].in_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].out_degree == 0
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].op_input_names == ['/conv1/Conv_output_0']
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].op_output_names == ['/conv3/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].in_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].out_degree == 0
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].op_input_names == [
+        "/conv1/Conv_output_0"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].op_output_names == [
+        "/conv3/Conv_output_0"
+    ]
 
 
 def test_residual_model_dependency_graph():
     model = single_residual_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=4,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=4,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     dataloader = unlabeled_data_loader(dummy_input_for_residual_model())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
 
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].in_degree == 0
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].out_degree == 2
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].op_input_names == ['input']
-    assert seq_mse.dependency_graph._name_to_node['/conv1/Conv'].op_output_names == ['/conv1/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].in_degree == 0
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].out_degree == 2
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].op_input_names == [
+        "input"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].op_output_names == [
+        "/conv1/Conv_output_0"
+    ]
 
-    assert seq_mse.dependency_graph._name_to_node['/conv4/Conv'].in_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv4/Conv'].out_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv4/Conv'].op_input_names == ['/maxpool/MaxPool_output_0']
-    assert seq_mse.dependency_graph._name_to_node['/conv4/Conv'].op_output_names == ['/conv4/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv4/Conv"].in_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv4/Conv"].out_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv4/Conv"].op_input_names == [
+        "/maxpool/MaxPool_output_0"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv4/Conv"].op_output_names == [
+        "/conv4/Conv_output_0"
+    ]
 
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].in_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].out_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].op_input_names == ['/maxpool/MaxPool_output_0']
-    assert seq_mse.dependency_graph._name_to_node['/conv2/Conv'].op_output_names == ['/conv2/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].in_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].out_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].op_input_names == [
+        "/maxpool/MaxPool_output_0"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv2/Conv"].op_output_names == [
+        "/conv2/Conv_output_0"
+    ]
 
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].in_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].out_degree == 1
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].op_input_names == ['/relu2/Relu_output_0']
-    assert seq_mse.dependency_graph._name_to_node['/conv3/Conv'].op_output_names == ['/conv3/Conv_output_0']
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].in_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].out_degree == 1
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].op_input_names == [
+        "/relu2/Relu_output_0"
+    ]
+    assert seq_mse.dependency_graph._name_to_node["/conv3/Conv"].op_output_names == [
+        "/conv3/Conv_output_0"
+    ]
+
 
 @pytest.mark.parametrize("param_bw", [2, 31])
-@pytest.mark.parametrize("loss_fn", ['mse', 'l1', 'sqnr'])
+@pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_apply_seq_mse_for_residual_model(param_bw, loss_fn, enable_pcq):
     model = single_residual_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=param_bw,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=enable_pcq))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=param_bw,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=enable_pcq,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=2)
     seq_params.loss_fn = loss_fn
     dataloader = unlabeled_data_loader(dummy_input_for_residual_model())
@@ -446,63 +504,101 @@ def test_apply_seq_mse_for_residual_model(param_bw, loss_fn, enable_pcq):
 
     for conn_graph_op in seq_mse.dependency_graph.conn_graph.ordered_ops:
         if conn_graph_op.type in SUPPORTED_MODULES:
-            param_names = [param_name for param_name, (_, param_type) in conn_graph_op.parameters.items() if param_type == "weight"]
+            param_names = [
+                param_name
+                for param_name, (_, param_type) in conn_graph_op.parameters.items()
+                if param_type == "weight"
+            ]
             assert len(param_names) == 1
             quantizer = seq_mse.sim.qc_quantize_op_dict[param_names[0]]
             assert quantizer.is_encoding_frozen()
 
-def test_model_with_multiple_inputs_dependency_graph_utils():
 
+def test_model_with_multiple_inputs_dependency_graph_utils():
     model = get_model_with_multiple_inputs()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=4,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=4,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     dataloader = unlabeled_data_loader(dummy_input_for_model_with_multiple_input())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
 
-    starting_ops_names = [op.name_op for op in seq_mse.dependency_graph.conn_graph.starting_ops]
+    starting_ops_names = [
+        op.name_op for op in seq_mse.dependency_graph.conn_graph.starting_ops
+    ]
 
     assert starting_ops_names == ["Conv1"]
-    assert seq_mse.dependency_graph._op_names_with_model_inputs == ["Conv1", "ADD_0", "ADD_1"]
+    assert seq_mse.dependency_graph._op_names_with_model_inputs == [
+        "Conv1",
+        "ADD_0",
+        "ADD_1",
+    ]
+
 
 def test_model_with_multiple_outputs_value_info():
-
     model = get_model_with_multiple_outputs()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=4,
-                               providers=["CPUExecutionProvider"],
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=4,
+        providers=["CPUExecutionProvider"],
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
     dataloader = unlabeled_data_loader(dummy_input_for_model_with_multiple_input())
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
 
-    assert 'Conv1_Y' in seq_mse._extractor.vimap
+    assert "Conv1_Y" in seq_mse._extractor.vimap
+
 
 def test_concat_model():
-
     model = models_for_tests.concat_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model),
-                               quant_scheme=QuantScheme.post_training_tf,
-                               default_activation_bw=8,
-                               default_param_bw=4,
-                               use_cuda=False,
-                               config_file=_get_config_file(is_symmetric=True, strict_symmetric=False,
-                                                            unsigned_symmetric=False, pcq=True))
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        quant_scheme=QuantScheme.post_training_tf,
+        default_activation_bw=8,
+        default_param_bw=4,
+        use_cuda=False,
+        config_file=_get_config_file(
+            is_symmetric=True,
+            strict_symmetric=False,
+            unsigned_symmetric=False,
+            pcq=True,
+        ),
+    )
     seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader([torch.randn((1, 3, 8, 8)), torch.randn((1, 3, 8, 8)), torch.randn((1, 3, 8, 8))])
+    dataloader = unlabeled_data_loader(
+        [
+            torch.randn((1, 3, 8, 8)),
+            torch.randn((1, 3, 8, 8)),
+            torch.randn((1, 3, 8, 8)),
+        ]
+    )
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
     seq_mse.apply_seq_mse_algo()
     for cg_op in seq_mse.dependency_graph.conn_graph.ordered_ops:
         if cg_op.type in SUPPORTED_MODULES:
-            param_names = [param_name for param_name, (_, param_type) in cg_op.parameters.items() if param_type == "weight"]
+            param_names = [
+                param_name
+                for param_name, (_, param_type) in cg_op.parameters.items()
+                if param_type == "weight"
+            ]
             assert len(param_names) == 1
             quantizer = seq_mse.sim.qc_quantize_op_dict[param_names[0]]
             assert quantizer.is_encoding_frozen()
@@ -510,12 +606,16 @@ def test_concat_model():
 
 def test_disable_subgraph_quantizers():
     model = models_for_tests.build_dummy_model()
-    sim = QuantizationSimModel(model=copy.deepcopy(model), providers=["CPUExecutionProvider"], default_param_bw=4)
+    sim = QuantizationSimModel(
+        model=copy.deepcopy(model),
+        providers=["CPUExecutionProvider"],
+        default_param_bw=4,
+    )
     sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(model)))
     seq_params = SeqMseParams(num_batches=2)
     dataloader = [make_dummy_input(model) for _ in range(2)]
     seq_mse = SequentialMse(model, sim, seq_params, dataloader)
-    
+
     enabled = {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
     assert enabled
 
@@ -529,24 +629,42 @@ def test_disable_subgraph_quantizers():
         assert not sim.qc_quantize_op_dict["fc_w"].enabled
         assert not sim.qc_quantize_op_dict["4"].enabled
 
-class TestDependencyGraph:
 
-    @pytest.mark.parametrize("model, cached_data", [(models_for_tests.single_residual_model(),
-                                                    {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}),
-                                                    (models_for_tests.concat_model(),
-                                                     {"input1": np.random.randn(1, 3, 8, 8).astype(np.float32),
-                                                      "input2": np.random.randn(1, 3, 8, 8).astype(np.float32),
-                                                      "input3": np.random.randn(1, 3, 8, 8).astype(np.float32)}),
-                                                    (models_for_tests.multi_input_model(),
-                                                     {"input1": np.random.randn(32, 1, 28, 28).astype(np.float32),
-                                                      "input2": np.random.randn(32, 1, 28, 28).astype(np.float32)}),
-                                                    (models_for_tests.mobilenetv2(),
-                                                     {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}),
-                                                    (models_for_tests.resnet18(),
-                                                     {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)})
-                                                    ])
+class TestDependencyGraph:
+    @pytest.mark.parametrize(
+        "model, cached_data",
+        [
+            (
+                models_for_tests.single_residual_model(),
+                {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)},
+            ),
+            (
+                models_for_tests.concat_model(),
+                {
+                    "input1": np.random.randn(1, 3, 8, 8).astype(np.float32),
+                    "input2": np.random.randn(1, 3, 8, 8).astype(np.float32),
+                    "input3": np.random.randn(1, 3, 8, 8).astype(np.float32),
+                },
+            ),
+            (
+                models_for_tests.multi_input_model(),
+                {
+                    "input1": np.random.randn(32, 1, 28, 28).astype(np.float32),
+                    "input2": np.random.randn(32, 1, 28, 28).astype(np.float32),
+                },
+            ),
+            (
+                models_for_tests.mobilenetv2(),
+                {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)},
+            ),
+            (
+                models_for_tests.resnet18(),
+                {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)},
+            ),
+        ],
+    )
     def test_dependency_graph(self, model, cached_data):
-        """ Compare the one-shot and iterative outputs """
+        """Compare the one-shot and iterative outputs"""
         dl = data_loader(tuple(cached_data.values()))
         dep_graph = DependencyGraph(model, dl, 1)
 
@@ -560,11 +678,15 @@ class TestDependencyGraph:
         # provide them as inputs to the subsequent subgraph.
         extractor = Extractor(model.model)
         for i in range(1, len(sorted_nodes)):
-            subgraph_inp_names, subgraph_out_names = dep_graph.get_subgraph_inp_out_names(sorted_nodes[i])
+            subgraph_inp_names, subgraph_out_names = (
+                dep_graph.get_subgraph_inp_out_names(sorted_nodes[i])
+            )
             model_ = extractor.extract_model(subgraph_inp_names, subgraph_out_names)
             session = _build_session(model_)
             input_dict = _create_input_dict(subgraph_inp_names, cached_data)
-            cached_data[subgraph_out_names[0]] = session.run(None, input_feed=input_dict)[0]
+            cached_data[subgraph_out_names[0]] = session.run(
+                None, input_feed=input_dict
+            )[0]
 
         # Final subgraph extraction and session run
         subgraph_inp_names = subgraph_out_names

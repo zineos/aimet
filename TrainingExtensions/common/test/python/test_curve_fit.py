@@ -41,7 +41,6 @@ from aimet_common.curve_fit import MonotonicIncreasingCurveFit
 
 
 class TestCommonCurveFit(unittest.TestCase):
-
     def test_curve_fit(self):
         x = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
         y = [0.1, 0.12, 0.18, 0.22, 0.4, 0.8, 0.7, 0.87, 0.7, 0.92]

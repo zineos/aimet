@@ -35,20 +35,22 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=redefined-builtin
-""" Base encoding definition """
+"""Base encoding definition"""
+
 import abc
 import copy
 
 import torch
 
 
-__all__ = ['EncodingBase']
+__all__ = ["EncodingBase"]
 
 
 class EncodingBase(abc.ABC):
     """
     Quantizer encoding base class
     """
+
     @property
     @abc.abstractmethod
     def bitwidth(self) -> int:

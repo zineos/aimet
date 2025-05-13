@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module implements the convert op overhead reduction stage of AMP """
+"""This module implements the convert op overhead reduction stage of AMP"""
+
 import enum
 from collections import defaultdict
 from typing import List, Dict, Tuple
@@ -47,29 +48,40 @@ from torch import Tensor
 from aimet_common.utils import AimetLogger
 from aimet_common.defs import QuantizationDataType
 from aimet_common.amp.quantizer_groups import QuantizerGroupBase
-from aimet_common.amp.convert_ops_reduction import ReduceConvertOps as BaseReduceConvertOps
+from aimet_common.amp.convert_ops_reduction import (
+    ReduceConvertOps as BaseReduceConvertOps,
+)
 
 from aimet_torch.meta.connectedgraph import ConnectedGraph
 from aimet_torch.meta.operation import Op
 from aimet_torch._base.quantsim import _QuantizationSimModelInterface
-from aimet_torch._base.amp.quantizer_groups import ops_not_to_traverse, get_module_name_to_module_dict, find_wrapper_module
+from aimet_torch._base.amp.quantizer_groups import (
+    ops_not_to_traverse,
+    get_module_name_to_module_dict,
+    find_wrapper_module,
+)
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.MixedPrecision)
 
 
 class ReduceConvertOps(BaseReduceConvertOps):
-    """ This class implements Convert Ops reduction algo"""
+    """This class implements Convert Ops reduction algo"""
 
     class TensorAxis(enum.Enum):
-        """ Enum to find the axis index for tensor dimensions"""
+        """Enum to find the axis index for tensor dimensions"""
+
         N = 0
         C = 1
         H = 2
         W = 3
 
-    def __init__(self, aimet_sim: _QuantizationSimModelInterface,
-                 quantizer_groups: List[QuantizerGroupBase],
-                 candidates: List, mac_dict: Dict):
+    def __init__(
+        self,
+        aimet_sim: _QuantizationSimModelInterface,
+        quantizer_groups: List[QuantizerGroupBase],
+        candidates: List,
+        mac_dict: Dict,
+    ):
         """
         :param aimet_sim: Sim object with loaded quantizer settings
         :param quantizer_groups: List of quantizer groups of aimet_sim
@@ -90,14 +102,23 @@ class ReduceConvertOps(BaseReduceConvertOps):
             if len(qgroup.input_quantizers) == 1 and not qgroup.output_quantizers:
                 # TODO: (temporary fix for now) conv1_Conv_input_quantizer_idx_0_input --> conv1_Conv_input
                 # quantizer_group2node_index[qgroup.input_quantizers[0]+"_input"] = counter
-                quantizer_group2node_index[qgroup.get_input_quantizer_modules()[0] + "_input"] = counter
+                quantizer_group2node_index[
+                    qgroup.get_input_quantizer_modules()[0] + "_input"
+                ] = counter
                 counter += 1
             elif len(qgroup.output_quantizers) == 1:
-                quantizer_group2node_index[qgroup.output_quantizers[0] + "_output"] = counter
+                quantizer_group2node_index[qgroup.output_quantizers[0] + "_output"] = (
+                    counter
+                )
                 counter += 1
-            elif not qgroup.input_quantizers and not qgroup.output_quantizers and len(
-                    qgroup.parameter_quantizers) >= 1:
-                quantizer_group2node_index[qgroup.parameter_quantizers[0] + "_weights_only"] = counter
+            elif (
+                not qgroup.input_quantizers
+                and not qgroup.output_quantizers
+                and len(qgroup.parameter_quantizers) >= 1
+            ):
+                quantizer_group2node_index[
+                    qgroup.parameter_quantizers[0] + "_weights_only"
+                ] = counter
                 counter += 1
             else:
                 raise RuntimeError("Issue with this quantizer group:{}".format(qgroup))
@@ -133,14 +154,22 @@ class ReduceConvertOps(BaseReduceConvertOps):
 
         # Rename nodes from op dotted name to quantizer-group name
         module_name_to_module_dict = get_module_name_to_module_dict(self._sim)
-        G = self.rename_nodes(G, module_name_to_module_dict, dotted_name2op_name, ops_dict, find_wrapper_module)
+        G = self.rename_nodes(
+            G,
+            module_name_to_module_dict,
+            dotted_name2op_name,
+            ops_dict,
+            find_wrapper_module,
+        )
         _logger.info("Networkx Graph nodes renamed to QuantizerGroup names")
 
         # Tensor dimension correction (needed because of the transpose ops, which have either "nchw" or "nhwc" in their names)
         for node in G.nodes:
             if "tensor_dims" in G.nodes[node]:
                 if "nhwc" in node:
-                    G.nodes[node]["tensor_dims"] = self.permute_tensor_dims(G.nodes[node]["tensor_dims"], "nhwc")
+                    G.nodes[node]["tensor_dims"] = self.permute_tensor_dims(
+                        G.nodes[node]["tensor_dims"], "nhwc"
+                    )
 
         # Identify the nodes in the graph that represents a quantizer-group
         self.mark_qg_nodes(G, quantizer_group2node_index)
@@ -149,9 +178,9 @@ class ReduceConvertOps(BaseReduceConvertOps):
         # Identify the nodes in the graph who has parameters
         nx.set_node_attributes(G, False, "has_weight")
         for i_para in parameter_quantizers:
-            op_name = i_para + '_output'
+            op_name = i_para + "_output"
             if op_name in G:
-                G.nodes[op_name]['has_weight'] = True
+                G.nodes[op_name]["has_weight"] = True
             else:
                 raise RuntimeError(f"check the weight quantizer {i_para}")
 
@@ -166,8 +195,12 @@ class ReduceConvertOps(BaseReduceConvertOps):
         return quantizer_group_graph, op_graph
 
     @staticmethod
-    def find_output_quantizer_groups_all(op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict,
-                                         ops_to_skip_local: List):
+    def find_output_quantizer_groups_all(
+        op: Op,
+        parent_child_op_groups: Dict,
+        map_for_skipped_ops: Dict,
+        ops_to_skip_local: List,
+    ):
         """
         This function is the same as the function find_output_quantizer_groups_all; except that it takes ops_to_skip_local as an arg.
         """
@@ -182,8 +215,12 @@ class ReduceConvertOps(BaseReduceConvertOps):
                     dotted_name = map_for_skipped_ops[op.dotted_name]
                 if consumer.type in ops_to_skip_local:
                     map_for_skipped_ops[consumer.dotted_name] = dotted_name
-                    ReduceConvertOps.find_output_quantizer_groups_all(consumer, parent_child_op_groups,
-                                                                      map_for_skipped_ops, ops_to_skip_local)
+                    ReduceConvertOps.find_output_quantizer_groups_all(
+                        consumer,
+                        parent_child_op_groups,
+                        map_for_skipped_ops,
+                        ops_to_skip_local,
+                    )
                 # If there is a one to one connection between quantizers
                 else:
                     parent_child_op_groups[dotted_name].append(consumer.dotted_name)
@@ -199,19 +236,21 @@ class ReduceConvertOps(BaseReduceConvertOps):
         parent_child_op_groups = defaultdict(list)
         map_for_skipped_ops = {}
 
-        ops_to_skip_local = ['Split']
+        ops_to_skip_local = ["Split"]
 
         for op in graph.ordered_ops:
             # Add 1st op as child
             if not op.input_ops:
-                parent_child_op_groups['input_ops'].append(op.dotted_name)
+                parent_child_op_groups["input_ops"].append(op.dotted_name)
             # Add output op as child to put output of model as a quantizer group
             if not op.outputs:
-                parent_child_op_groups['output_ops'].append(op.dotted_name)
+                parent_child_op_groups["output_ops"].append(op.dotted_name)
         for op in graph.get_all_ops().values():
             if op.type in ops_to_skip_local or op.type in ops_not_to_traverse:
                 continue
-            ReduceConvertOps.find_output_quantizer_groups_all(op, parent_child_op_groups, map_for_skipped_ops, ops_to_skip_local)
+            ReduceConvertOps.find_output_quantizer_groups_all(
+                op, parent_child_op_groups, map_for_skipped_ops, ops_to_skip_local
+            )
 
         return parent_child_op_groups
 
@@ -221,8 +260,8 @@ class ReduceConvertOps(BaseReduceConvertOps):
         This function returns the phase 2 solution i.e. the act bw of each quantizer-group
         :param qg_graph: quantizer-group graph
         """
-        QUANTIZER_TYPE_INPUT = 'input'
-        QUANTIZER_TYPE_OUTPUT = 'output'
+        QUANTIZER_TYPE_INPUT = "input"
+        QUANTIZER_TYPE_OUTPUT = "output"
 
         solution_dict = {}
         # pylint: disable=protected-access
@@ -261,26 +300,46 @@ class ReduceConvertOps(BaseReduceConvertOps):
         """
         qg_candidates = []
         for quantizer_group in self._quantizer_groups:
-            if len(quantizer_group.input_quantizers) == 1 and not quantizer_group.output_quantizers:
+            if (
+                len(quantizer_group.input_quantizers) == 1
+                and not quantizer_group.output_quantizers
+            ):
                 # bitwidth = phase_three_sol[quantizer_group.input_quantizers[0] + "_input"] TODO: (temporary fix for now) conv1_Conv_input_quantizer_idx_0_input --> conv1_Conv_input
-                bitwidth = phase_three_sol[quantizer_group.get_input_quantizer_modules()[0] + "_input"]
+                bitwidth = phase_three_sol[
+                    quantizer_group.get_input_quantizer_modules()[0] + "_input"
+                ]
             elif len(quantizer_group.output_quantizers) == 1:
-                bitwidth = phase_three_sol[quantizer_group.output_quantizers[0] + "_output"]  ## Example: conv1_output = 8 bits (followed by conv2)
-            elif not quantizer_group.input_quantizers and not quantizer_group.output_quantizers and len(
-                    quantizer_group.parameter_quantizers) == 1:
-                param_bitwidth_candidates = [candidate[1][0] for candidate in self._candidates]
+                bitwidth = phase_three_sol[
+                    quantizer_group.output_quantizers[0] + "_output"
+                ]  ## Example: conv1_output = 8 bits (followed by conv2)
+            elif (
+                not quantizer_group.input_quantizers
+                and not quantizer_group.output_quantizers
+                and len(quantizer_group.parameter_quantizers) == 1
+            ):
+                param_bitwidth_candidates = [
+                    candidate[1][0] for candidate in self._candidates
+                ]
                 all_eight_bits = [i == 8 for i in param_bitwidth_candidates]
                 if all(all_eight_bits):
                     bitwidth = 8
                 else:
-                    raise RuntimeError("Candidate parameter bandwidths are not all 8 bits -- unsupported.")
+                    raise RuntimeError(
+                        "Candidate parameter bandwidths are not all 8 bits -- unsupported."
+                    )
             else:
                 raise RuntimeError("Unexpected quantizer group type.")
 
             if bitwidth == 8:
-                candidate = ((8, QuantizationDataType.int), (8, QuantizationDataType.int))
+                candidate = (
+                    (8, QuantizationDataType.int),
+                    (8, QuantizationDataType.int),
+                )
             elif bitwidth == 16:
-                candidate = ((16, QuantizationDataType.int), (8, QuantizationDataType.int))
+                candidate = (
+                    (16, QuantizationDataType.int),
+                    (8, QuantizationDataType.int),
+                )
             else:
                 raise NotImplementedError
 
@@ -299,7 +358,7 @@ class ReduceConvertOps(BaseReduceConvertOps):
                 dummy_input_cpu.append(input_i.cpu())
             dummy_input_cpu = tuple(dummy_input_cpu)
         elif isinstance(dummy_input[0], torch.Tensor):
-            dummy_input_cpu = dummy_input.cpu() # used for the export function below
+            dummy_input_cpu = dummy_input.cpu()  # used for the export function below
         else:
             raise RuntimeError("Unsupported type for dummy_input.")
         return dummy_input_cpu

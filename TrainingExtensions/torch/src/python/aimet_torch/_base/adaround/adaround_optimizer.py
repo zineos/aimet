@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Adaround optimizer """
+"""Adaround optimizer"""
 
 from typing import Union, Tuple, Callable, Any
 from functools import reduce
@@ -51,7 +51,10 @@ from aimet_common.utils import AimetLogger
 from aimet_torch import utils
 from aimet_torch._base.quantsim import _QuantizedModuleProtocol
 from aimet_torch._base.adaround.activation_sampler import ActivationSampler
-from aimet_torch._base.adaround.adaround_loss import AdaroundLoss, AdaroundHyperParameters
+from aimet_torch._base.adaround.adaround_loss import (
+    AdaroundLoss,
+    AdaroundHyperParameters,
+)
 from aimet_torch._base.adaround.adaround_wrapper import AdaroundWrapperBase
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
@@ -63,14 +66,22 @@ class AdaroundOptimizer:
     """
     Optimizes the weight rounding of quantized wrapper module
     """
+
     is_activation_caching_enabled = True
 
     @classmethod
-    def adaround_module(cls, module: torch.nn.Module, quant_module: _QuantizedModuleProtocol,
-                        orig_model: torch.nn.Module, quant_model: torch.nn.Module,
-                        act_func: Union[torch.nn.Module, None], cached_dataset: Dataset,
-                        forward_fn: Callable[[torch.nn.Module, Any], Any],
-                        opt_params: AdaroundHyperParameters, cached_quant_dataset: Dataset = None):
+    def adaround_module(
+        cls,
+        module: torch.nn.Module,
+        quant_module: _QuantizedModuleProtocol,
+        orig_model: torch.nn.Module,
+        quant_model: torch.nn.Module,
+        act_func: Union[torch.nn.Module, None],
+        cached_dataset: Dataset,
+        forward_fn: Callable[[torch.nn.Module, Any], Any],
+        opt_params: AdaroundHyperParameters,
+        cached_quant_dataset: Dataset = None,
+    ):
         """
         Adaround module
         :param module: Original module
@@ -85,41 +96,75 @@ class AdaroundOptimizer:
         :param opt_params: Optimization parameters
         """
         # pylint: disable=too-many-locals, too-many-arguments
-        assert isinstance(quant_module, AdaroundWrapperBase), '%s is not adaround wrapper module.' % quant_module
+        assert isinstance(quant_module, AdaroundWrapperBase), (
+            "%s is not adaround wrapper module." % quant_module
+        )
 
         # Get input and output data of batch size to compute reconstruction error of output activations
         # before and after optimization
-        act_sampler = ActivationSampler(module, quant_module, orig_model, quant_model, forward_fn)
+        act_sampler = ActivationSampler(
+            module, quant_module, orig_model, quant_model, forward_fn
+        )
         if cached_quant_dataset:
             args, kwargs = cached_quant_dataset[0]
-            inp_data, _ = act_sampler.sample_acts(args, kwargs, collect_input=True, collect_output=False)
+            inp_data, _ = act_sampler.sample_acts(
+                args, kwargs, collect_input=True, collect_output=False
+            )
             args, kwargs = cached_dataset[0]
-            _, out_data = act_sampler.sample_acts(args, kwargs, collect_input=False, collect_output=True)
+            _, out_data = act_sampler.sample_acts(
+                args, kwargs, collect_input=False, collect_output=True
+            )
         else:
             args, kwargs = cached_dataset[0]
             inp_data, out_data = act_sampler.sample_acts(args, kwargs)
 
-        recons_err_hard, recons_err_soft = cls._compute_recons_metrics(quant_module, act_func, inp_data, out_data)
-        logger.debug("Before opt, Recons. error metrics using soft rounding=%f and hard rounding=%f", recons_err_soft,
-                     recons_err_hard)
+        recons_err_hard, recons_err_soft = cls._compute_recons_metrics(
+            quant_module, act_func, inp_data, out_data
+        )
+        logger.debug(
+            "Before opt, Recons. error metrics using soft rounding=%f and hard rounding=%f",
+            recons_err_soft,
+            recons_err_hard,
+        )
 
         # Optimize weight rounding
-        cls._optimize_rounding(module, quant_module, orig_model, quant_model, act_func, cached_dataset, forward_fn,
-                               opt_params, cached_quant_dataset)
+        cls._optimize_rounding(
+            module,
+            quant_module,
+            orig_model,
+            quant_model,
+            act_func,
+            cached_dataset,
+            forward_fn,
+            opt_params,
+            cached_quant_dataset,
+        )
 
-        recons_err_hard, recons_err_soft = cls._compute_recons_metrics(quant_module, act_func, inp_data, out_data)
-        logger.debug("After opt, Recons. error metrics using soft rounding=%f and hard rounding=%f", recons_err_soft,
-                     recons_err_hard)
+        recons_err_hard, recons_err_soft = cls._compute_recons_metrics(
+            quant_module, act_func, inp_data, out_data
+        )
+        logger.debug(
+            "After opt, Recons. error metrics using soft rounding=%f and hard rounding=%f",
+            recons_err_soft,
+            recons_err_hard,
+        )
 
         # After optimization, set the optimized layer's rounding mode to "Hard rounding"
         quant_module.use_soft_rounding = False
 
     @classmethod
-    def _optimize_rounding(cls, module: torch.nn.Module, quant_module: AdaroundWrapperBase,
-                           orig_model: torch.nn.Module, quant_model: torch.nn.Module,
-                           act_func: Union[torch.nn.Module, None], cached_dataset: Dataset,
-                           forward_fn: Callable[[torch.nn.Module, Any], Any],
-                           opt_params: AdaroundHyperParameters, cached_quant_dataset: Dataset = None):
+    def _optimize_rounding(
+        cls,
+        module: torch.nn.Module,
+        quant_module: AdaroundWrapperBase,
+        orig_model: torch.nn.Module,
+        quant_model: torch.nn.Module,
+        act_func: Union[torch.nn.Module, None],
+        cached_dataset: Dataset,
+        forward_fn: Callable[[torch.nn.Module, Any], Any],
+        opt_params: AdaroundHyperParameters,
+        cached_quant_dataset: Dataset = None,
+    ):
         """
         Optimizes the weight rounding of quantized wrapper module.
 
@@ -152,34 +197,46 @@ class AdaroundOptimizer:
         if cached_quant_dataset is not None:
             cached_quant_dataset = Subset(cached_quant_dataset, indices=indices)
 
-        assert isinstance(quant_module, AdaroundWrapperBase), '%s is not adaround wrapper module.' % quant_module
-        assert quant_module.use_soft_rounding, 'optimization should use soft rounding only.'
-        assert quant_module.alpha is not None, 'alpha parameter should be initialized.'
+        assert isinstance(quant_module, AdaroundWrapperBase), (
+            "%s is not adaround wrapper module." % quant_module
+        )
+        assert quant_module.use_soft_rounding, (
+            "optimization should use soft rounding only."
+        )
+        assert quant_module.alpha is not None, "alpha parameter should be initialized."
 
         # Create and set up Adam optimizer with parameter 'alpha' to be optimized
         optimizer = torch.optim.Adam([quant_module.alpha])
 
         for group in optimizer.param_groups:
-            group['lr'] *= world_size # Scale up learning rate by world_size
+            group["lr"] *= world_size  # Scale up learning rate by world_size
 
         # Check if we can cache intermediate activation data.
         args, kwargs = cached_dataset[0]
-        act_sampler = ActivationSampler(module, quant_module, orig_model, quant_model, forward_fn)
+        act_sampler = ActivationSampler(
+            module, quant_module, orig_model, quant_model, forward_fn
+        )
         inp_data, out_data = act_sampler.sample_acts(args, kwargs)
-        use_cache_acts_data = cls._can_cache_acts_data(len(cached_dataset), inp_data.shape, out_data.shape,
-                                                       inp_data.dtype)
+        use_cache_acts_data = cls._can_cache_acts_data(
+            len(cached_dataset), inp_data.shape, out_data.shape, inp_data.dtype
+        )
         del inp_data, out_data
 
         device = utils.get_device(module)
         if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
-            all_inp_data, all_orig_out_data = act_sampler.sample_and_place_all_acts_on_cpu(cached_dataset,
-                                                                                           cached_quant_dataset)
+            all_inp_data, all_orig_out_data = (
+                act_sampler.sample_and_place_all_acts_on_cpu(
+                    cached_dataset, cached_quant_dataset
+                )
+            )
             # Place both the models temporarily to CPU
             # Try to put all cached activations data on GPU for faster optimization if possible.
-            if 'cuda' in str(device):
+            if "cuda" in str(device):
                 orig_model.cpu()
                 quant_model.cpu()
-                all_inp_data, all_orig_out_data = cls._place_cached_acts_data(all_inp_data, all_orig_out_data, device)
+                all_inp_data, all_orig_out_data = cls._place_cached_acts_data(
+                    all_inp_data, all_orig_out_data, device
+                )
 
         for iteration in range(opt_params.num_iterations // world_size):
             if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
@@ -194,21 +251,34 @@ class AdaroundOptimizer:
             optimizer.zero_grad()
 
             try:
-                quant_out_data = cls._compute_output_with_adarounded_weights(quant_module, inp_data)
+                quant_out_data = cls._compute_output_with_adarounded_weights(
+                    quant_module, inp_data
+                )
                 if act_func is not None:
                     orig_out_data = act_func(orig_out_data)
                     quant_out_data = act_func(quant_out_data)
 
                 # Calculate total loss
-                recon_loss = AdaroundLoss.compute_recon_loss(quant_out_data, orig_out_data)
-                round_loss = AdaroundLoss.compute_round_loss(quant_module.alpha, opt_params, iteration)
+                recon_loss = AdaroundLoss.compute_recon_loss(
+                    quant_out_data, orig_out_data
+                )
+                round_loss = AdaroundLoss.compute_round_loss(
+                    quant_module.alpha, opt_params, iteration
+                )
                 total_loss = recon_loss + round_loss
                 total_loss.backward()
 
             except RuntimeError as error:
-                if use_cache_acts_data and 'cuda' in str(device) and AdaroundOptimizer.enable_caching_acts_data():
-                    logger.debug("Not enough CUDA memory for adaround optimization."
-                                 " Placed cached activations data on CPU. RuntimeError: %s", str(error))
+                if (
+                    use_cache_acts_data
+                    and "cuda" in str(device)
+                    and AdaroundOptimizer.enable_caching_acts_data()
+                ):
+                    logger.debug(
+                        "Not enough CUDA memory for adaround optimization."
+                        " Placed cached activations data on CPU. RuntimeError: %s",
+                        str(error),
+                    )
                     all_inp_data = all_inp_data.cpu()
                     all_orig_out_data = all_orig_out_data.cpu()
                     continue
@@ -225,8 +295,13 @@ class AdaroundOptimizer:
         quant_model.to(device)
 
     @classmethod
-    def _compute_recons_metrics(cls, quant_module: AdaroundWrapperBase, act_func, inp_data: torch.Tensor,
-                                out_data: torch.Tensor) -> Tuple[float, float]:
+    def _compute_recons_metrics(
+        cls,
+        quant_module: AdaroundWrapperBase,
+        act_func,
+        inp_data: torch.Tensor,
+        out_data: torch.Tensor,
+    ) -> Tuple[float, float]:
         """
         Compute Mean square error of output activations using soft rounding which maps alpha parameter
         between zero and one and hard rounding which maps to exact zero and one
@@ -239,11 +314,15 @@ class AdaroundOptimizer:
 
         # Enable hard rounding and get adaround wrapper module's output
         quant_module.use_soft_rounding = False
-        out_data_hard = cls._compute_output_with_adarounded_weights(quant_module, inp_data)
+        out_data_hard = cls._compute_output_with_adarounded_weights(
+            quant_module, inp_data
+        )
 
         # Enable soft rounding and get adaround wrapper module's output
         quant_module.use_soft_rounding = True
-        out_data_soft = cls._compute_output_with_adarounded_weights(quant_module, inp_data)
+        out_data_soft = cls._compute_output_with_adarounded_weights(
+            quant_module, inp_data
+        )
 
         # If followed by an activation function
         if act_func is not None:
@@ -257,7 +336,9 @@ class AdaroundOptimizer:
         return float(recons_err_hard), float(recons_err_soft)
 
     @staticmethod
-    def _compute_output_with_adarounded_weights(quant_module: AdaroundWrapperBase, inp_data: torch.Tensor):
+    def _compute_output_with_adarounded_weights(
+        quant_module: AdaroundWrapperBase, inp_data: torch.Tensor
+    ):
         """
         Compute output of AdaroundSupportedModules with adarounded weights
         :param quant_module: Adaround wrapper module
@@ -272,24 +353,41 @@ class AdaroundOptimizer:
         adarounded_weights = quant_module.apply_adaround(quant_module.weight)
 
         if isinstance(module, torch.nn.Conv2d):
-            out_data = functional.conv2d(inp_data, adarounded_weights, bias=module.bias, stride=module.stride,
-                                         dilation=module.dilation, padding=module.padding, groups=module.groups)
+            out_data = functional.conv2d(
+                inp_data,
+                adarounded_weights,
+                bias=module.bias,
+                stride=module.stride,
+                dilation=module.dilation,
+                padding=module.padding,
+                groups=module.groups,
+            )
         elif isinstance(module, torch.nn.ConvTranspose2d):
-            out_data = functional.conv_transpose2d(inp_data, adarounded_weights, bias=module.bias,
-                                                   stride=module.stride, padding=module.padding,
-                                                   output_padding=module.output_padding, groups=module.groups,
-                                                   dilation=module.dilation)
+            out_data = functional.conv_transpose2d(
+                inp_data,
+                adarounded_weights,
+                bias=module.bias,
+                stride=module.stride,
+                padding=module.padding,
+                output_padding=module.output_padding,
+                groups=module.groups,
+                dilation=module.dilation,
+            )
         elif isinstance(module, torch.nn.Linear):
             out_data = functional.linear(inp_data, adarounded_weights, bias=module.bias)
 
         else:
-            raise ValueError('AdaRound is not supported for the module: ', module)
+            raise ValueError("AdaRound is not supported for the module: ", module)
 
         return out_data
 
     @staticmethod
-    def _can_cache_acts_data(num_batches: int, input_shape: torch.Size, output_shape: torch.Size, dtype: torch.dtype)\
-            -> bool:
+    def _can_cache_acts_data(
+        num_batches: int,
+        input_shape: torch.Size,
+        output_shape: torch.Size,
+        dtype: torch.dtype,
+    ) -> bool:
         """
         Function to check whether activations data can be cached and fit in CPU memory for given
         input and output shape in advance. The threshold CPU memory is determined by multiplying threshold and
@@ -312,19 +410,34 @@ class AdaroundOptimizer:
         # required CPU memory in GB.
         data_size_in_bits = 16 if dtype == torch.half else 32
         req_mem = 0
-        req_mem += reduce(lambda x, y: x * y, input_shape) * num_batches * data_size_in_bits / (1024 * 1024 * 1024 * 8)
-        req_mem += reduce(lambda x, y: x * y, output_shape) * num_batches * data_size_in_bits / (1024 * 1024 * 1024 * 8)
+        req_mem += (
+            reduce(lambda x, y: x * y, input_shape)
+            * num_batches
+            * data_size_in_bits
+            / (1024 * 1024 * 1024 * 8)
+        )
+        req_mem += (
+            reduce(lambda x, y: x * y, output_shape)
+            * num_batches
+            * data_size_in_bits
+            / (1024 * 1024 * 1024 * 8)
+        )
 
         if req_mem < threshold_mem:
             can_cache_data = True
-        logger.debug("Placing cached activations data on CPU: %s, required_memory: %f GB, available_memory: %f GB",
-                     str(can_cache_data), req_mem, threshold_mem)
+        logger.debug(
+            "Placing cached activations data on CPU: %s, required_memory: %f GB, available_memory: %f GB",
+            str(can_cache_data),
+            req_mem,
+            threshold_mem,
+        )
 
         return can_cache_data
 
     @staticmethod
-    def _place_cached_acts_data(inp_data: torch.Tensor, out_data: torch.Tensor, device: torch.device) \
-            -> Tuple[torch.Tensor, torch.Tensor]:
+    def _place_cached_acts_data(
+        inp_data: torch.Tensor, out_data: torch.Tensor, device: torch.device
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Function decides whether cached activation data can be placed on device or not. If yes, it puts
         cached activation data to given device. If there is not enough device memory, it keeps the
@@ -340,15 +453,25 @@ class AdaroundOptimizer:
         torch.cuda.empty_cache()
 
         # Available GPU memory in GB
-        threshold_mem = torch.cuda.get_device_properties(device).total_memory - torch.cuda.memory_allocated(device)
+        threshold_mem = torch.cuda.get_device_properties(
+            device
+        ).total_memory - torch.cuda.memory_allocated(device)
         threshold_mem = threshold_mem / (1024 * 1024 * 1024)
         threshold_mem = threshold_mem * EMPIRICAL_THRESHOLD
 
         # required GPU memory in GB
         data_size_in_bits = 16 if inp_data.dtype == torch.half else 32
         req_mem = 0
-        req_mem += reduce(lambda x, y: x * y, inp_data.size())  * data_size_in_bits / (1024 * 1024 * 1024 * 8)
-        req_mem += reduce(lambda x, y: x * y, out_data.size()) * data_size_in_bits / (1024 * 1024 * 1024 * 8)
+        req_mem += (
+            reduce(lambda x, y: x * y, inp_data.size())
+            * data_size_in_bits
+            / (1024 * 1024 * 1024 * 8)
+        )
+        req_mem += (
+            reduce(lambda x, y: x * y, out_data.size())
+            * data_size_in_bits
+            / (1024 * 1024 * 1024 * 8)
+        )
 
         if req_mem < threshold_mem:
             try:
@@ -358,8 +481,11 @@ class AdaroundOptimizer:
             except RuntimeError as error:
                 inp_data = inp_data.cpu()
                 out_data = out_data.cpu()
-                logger.debug("Could not place cached activations data on GPU."
-                             " Placed cached activations data on CPU. RuntimeError: %s", str(error))
+                logger.debug(
+                    "Could not place cached activations data on GPU."
+                    " Placed cached activations data on CPU. RuntimeError: %s",
+                    str(error),
+                )
 
         return inp_data, out_data
 

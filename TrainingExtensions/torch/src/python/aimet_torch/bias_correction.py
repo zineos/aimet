@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Code to perform bias correction for layers """
+"""Code to perform bias correction for layers"""
 
 import itertools
 from typing import Callable, Tuple, List, Union, Dict
@@ -52,7 +52,7 @@ from aimet_common.bias_correction import (
     ConvBnInfoType,
     ConvBnPatternHandler,
     analytical_bias_correction,
-    empirical_bias_correction
+    empirical_bias_correction,
 )
 from aimet_common.defs import ActivationType
 
@@ -66,8 +66,9 @@ from aimet_torch.v2.nn.base import BaseQuantizationMixin
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
+
 class StopForwardException(Exception):
-    """ Dummy exception to early-terminate forward-pass """
+    """Dummy exception to early-terminate forward-pass"""
 
 
 def forward_pass(model: torch.nn.Module, input_batch: Union[torch.Tensor, Tuple, List]):
@@ -99,17 +100,21 @@ def get_quantized_dequantized_weight(layer: torch.nn.Module) -> torch.Tensor:
     """
     # pylint: disable=protected-access
     weight_tensor = layer.weight
-    weight_quantizer = layer.param_quantizers['weight']
+    weight_quantizer = layer.param_quantizers["weight"]
 
     # v2 quantizer
     if callable(weight_quantizer):
         return weight_quantizer(weight_tensor)
 
     # v1 quantizer
-    return weight_quantizer.quantize_dequantize(weight_tensor, weight_quantizer.round_mode)
+    return weight_quantizer.quantize_dequantize(
+        weight_tensor, weight_quantizer.round_mode
+    )
 
 
-def register_fwd_hook_for_layer(layer: torch.nn.Module, hook: Callable) -> torch.utils.hooks.RemovableHandle:
+def register_fwd_hook_for_layer(
+    layer: torch.nn.Module, hook: Callable
+) -> torch.utils.hooks.RemovableHandle:
     """
     register forward hook for given layer
     :param layer: layer
@@ -120,7 +125,11 @@ def register_fwd_hook_for_layer(layer: torch.nn.Module, hook: Callable) -> torch
     return hook_handle
 
 
-def get_output_data(layer: torch.nn.Module, model: torch.nn.Module, images_in_one_batch: Union[torch.Tensor, Tuple, List]) -> np.ndarray:
+def get_output_data(
+    layer: torch.nn.Module,
+    model: torch.nn.Module,
+    images_in_one_batch: Union[torch.Tensor, Tuple, List],
+) -> np.ndarray:
     """
     Function to get output values of a layer
     :param layer: layer
@@ -128,6 +137,7 @@ def get_output_data(layer: torch.nn.Module, model: torch.nn.Module, images_in_on
     :param images_in_one_batch
     :return: list of output of layer for all batches of images
     """
+
     def _hook_to_collect_output_data(_, __, out_data):
         """
         hook to collect output data
@@ -140,7 +150,9 @@ def get_output_data(layer: torch.nn.Module, model: torch.nn.Module, images_in_on
     orig_layer_out_data = []
 
     # register forward hooks
-    hook_handles.append(register_fwd_hook_for_layer(layer, _hook_to_collect_output_data))
+    hook_handles.append(
+        register_fwd_hook_for_layer(layer, _hook_to_collect_output_data)
+    )
 
     # forward pass for 1 batch for model
     forward_pass(model, images_in_one_batch)
@@ -156,9 +168,9 @@ def get_output_data(layer: torch.nn.Module, model: torch.nn.Module, images_in_on
     return output_data
 
 
-def call_empirical_correct_bias(layer: torch.nn.Module,
-                                reference_outputs: np.ndarray,
-                                quantized_outputs: np.ndarray):
+def call_empirical_correct_bias(
+    layer: torch.nn.Module, reference_outputs: np.ndarray, quantized_outputs: np.ndarray
+):
     """
     Empirical bias correction using python.
 
@@ -171,13 +183,16 @@ def call_empirical_correct_bias(layer: torch.nn.Module,
 
     # update the bias param.
     with torch.no_grad():
-        layer.bias.copy_(torch.from_numpy(_bias).reshape_as(layer.bias)).to(device=layer.bias.device,
-                                                                            dtype=layer.bias.dtype)
+        layer.bias.copy_(torch.from_numpy(_bias).reshape_as(layer.bias)).to(
+            device=layer.bias.device, dtype=layer.bias.dtype
+        )
 
 
-def call_analytical_correct_bias(layer: torch.nn.Module,
-                                 bn: Union[torch.nn.BatchNorm2d, None],
-                                 activation_type: Union[ActivationType, None]):
+def call_analytical_correct_bias(
+    layer: torch.nn.Module,
+    bn: Union[torch.nn.BatchNorm2d, None],
+    activation_type: Union[ActivationType, None],
+):
     """
     Analytical bias correction using python.
 
@@ -213,20 +228,28 @@ def call_analytical_correct_bias(layer: torch.nn.Module,
         elif activation_type == ActivationType.relu6:
             activation = ActivationType.relu6
 
-    _bias = analytical_bias_correction(weight_tensor, quant_dequant_weight, bias_tensor, beta, gamma, activation)
+    _bias = analytical_bias_correction(
+        weight_tensor, quant_dequant_weight, bias_tensor, beta, gamma, activation
+    )
 
     # update the bias param.
     with torch.no_grad():
-        layer.bias.copy_(torch.from_numpy(_bias).reshape_as(layer.bias)).to(device=layer.bias.device,
-                                                                            dtype=layer.bias.dtype)
+        layer.bias.copy_(torch.from_numpy(_bias).reshape_as(layer.bias)).to(
+            device=layer.bias.device, dtype=layer.bias.dtype
+        )
 
 
 # pylint: disable=too-many-arguments
-def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_samples: int,
-                 data_loader, num_bias_correct_samples: int,
-                 conv_bn_dict: Union[Dict[torch.nn.Module, ConvBnInfoType], None] = None,
-                 perform_only_empirical_bias_corr: bool = True,
-                 layers_to_ignore: List[torch.nn.Module] = None):
+def correct_bias(
+    model: torch.nn.Module,
+    quant_params: QuantParams,
+    num_quant_samples: int,
+    data_loader,
+    num_bias_correct_samples: int,
+    conv_bn_dict: Union[Dict[torch.nn.Module, ConvBnInfoType], None] = None,
+    perform_only_empirical_bias_corr: bool = True,
+    layers_to_ignore: List[torch.nn.Module] = None,
+):
     """
     Corrects bias for each Conv layer of model (unless ignored). A combination of Analytical and Empirical Bias
     Correction is used i.e. all the layers which can be corrected using Analytical Bias Correction are corrected
@@ -267,7 +290,9 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
     def pass_data_through_model(model, early_stopping_iterations=None, use_cuda=False):
         # pylint: disable=unused-argument
         # forward pass for given number of batches for model
-        data_loader_n_samples_quant = itertools.islice(data_loader, n_batches_quantization)
+        data_loader_n_samples_quant = itertools.islice(
+            data_loader, n_batches_quantization
+        )
 
         for model_input, _ in data_loader_n_samples_quant:
             forward_pass(model, model_input)
@@ -291,12 +316,16 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
             module.bias.data = module.bias.data.to(device=module.weight.device)
 
     # Quantize full model
-    q = QuantizationSimModel(model=model, quant_scheme=quant_params.quant_scheme,
-                             rounding_mode=quant_params.round_mode,
-                             default_output_bw=quant_params.act_bw,
-                             default_param_bw=quant_params.weight_bw,
-                             in_place=True,
-                             dummy_input=dummy_input, config_file=quant_params.config_file)
+    q = QuantizationSimModel(
+        model=model,
+        quant_scheme=quant_params.quant_scheme,
+        rounding_mode=quant_params.round_mode,
+        default_output_bw=quant_params.act_bw,
+        default_param_bw=quant_params.weight_bw,
+        in_place=True,
+        dummy_input=dummy_input,
+        config_file=quant_params.config_file,
+    )
 
     # make sure  model got updated in-place before we use it for bc updates
     assert q.model is model
@@ -304,7 +333,7 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
     def disable_output_quantizers(qmodule):
         # v2 quantized module
         if isinstance(qmodule, BaseQuantizationMixin):
-            qmodule._remove_output_quantizers() # pylint: disable=protected-access
+            qmodule._remove_output_quantizers()  # pylint: disable=protected-access
             return
 
         # v1 QcQuantizeWrapper
@@ -314,7 +343,7 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
     # updates to skip_output_activation and layers_to_ignore
     for _, module in model.named_modules():
         # Skip all layer's output quantization
-        if isinstance(module, _QuantizedModuleProtocol): # pylint: disable=protected-access
+        if isinstance(module, _QuantizedModuleProtocol):  # pylint: disable=protected-access
             disable_output_quantizers(module)
 
     q.compute_encodings(pass_data_through_model, None)
@@ -324,10 +353,12 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
     if not perform_only_empirical_bias_corr:
         module_name, module = ordered_conv_linear_nodes[0]
         if module not in layers_to_ignore:
-            logger.info('Correcting layer %s using Analytical Bias Correction', module_name)
+            logger.info(
+                "Correcting layer %s using Analytical Bias Correction", module_name
+            )
             quantize_layer = model.get_submodule(module_name)
             call_analytical_correct_bias(quantize_layer, None, None)
-            logger.info('Corrected bias for the layer')
+            logger.info("Corrected bias for the layer")
             ordered_conv_linear_nodes.pop(0)
 
     for module_name, module in ordered_conv_linear_nodes:
@@ -341,40 +372,69 @@ def correct_bias(model: torch.nn.Module, quant_params: QuantParams, num_quant_sa
 
             if module in conv_bn_dict.keys():
                 bn_layer_info = conv_bn_dict[module]
-                if perform_only_empirical_bias_corr or bn_layer_info is None or bn_layer_info.input_bn is None:
+                if (
+                    perform_only_empirical_bias_corr
+                    or bn_layer_info is None
+                    or bn_layer_info.input_bn is None
+                ):
                     # Get output from quantized model and reference model
                     reference_outputs = []
                     quantized_outputs = []
-                    data_loader_n_samples_bias_corr = itertools.islice(data_loader, n_batches_bias_correction)
+                    data_loader_n_samples_bias_corr = itertools.islice(
+                        data_loader, n_batches_bias_correction
+                    )
 
                     for images_in_one_batch, _ in data_loader_n_samples_bias_corr:
-                        reference_output_batch = get_output_data(reference_layer, model_copy, images_in_one_batch)
-                        quantized_model_output_batch = get_output_data(quantize_layer, model, images_in_one_batch)
+                        reference_output_batch = get_output_data(
+                            reference_layer, model_copy, images_in_one_batch
+                        )
+                        quantized_model_output_batch = get_output_data(
+                            quantize_layer, model, images_in_one_batch
+                        )
 
                         if isinstance(reference_layer, torch.nn.Linear):
-                            extended_shape = np.concatenate((reference_output_batch.shape, np.array([1, 1])))
-                            reference_output_batch = reference_output_batch.reshape(extended_shape)
-                            quantized_model_output_batch = quantized_model_output_batch.reshape(extended_shape)
+                            extended_shape = np.concatenate(
+                                (reference_output_batch.shape, np.array([1, 1]))
+                            )
+                            reference_output_batch = reference_output_batch.reshape(
+                                extended_shape
+                            )
+                            quantized_model_output_batch = (
+                                quantized_model_output_batch.reshape(extended_shape)
+                            )
 
                         reference_outputs.append(reference_output_batch)
                         quantized_outputs.append(quantized_model_output_batch)
 
                     reference_outputs = np.concatenate(reference_outputs)
                     quantized_outputs = np.concatenate(quantized_outputs)
-                    logger.info('Correcting layer %s using Empirical Bias Correction', module_name)
-                    call_empirical_correct_bias(module, reference_outputs, quantized_outputs)
+                    logger.info(
+                        "Correcting layer %s using Empirical Bias Correction",
+                        module_name,
+                    )
+                    call_empirical_correct_bias(
+                        module, reference_outputs, quantized_outputs
+                    )
                 else:
-                    logger.info('Correcting layer %s using Analytical Bias Correction', module_name)
-                    call_analytical_correct_bias(quantize_layer, bn_layer_info.input_bn,
-                                                 bn_layer_info.in_activation_type)
-                logger.info('Corrected bias for the layer')
+                    logger.info(
+                        "Correcting layer %s using Analytical Bias Correction",
+                        module_name,
+                    )
+                    call_analytical_correct_bias(
+                        quantize_layer,
+                        bn_layer_info.input_bn,
+                        bn_layer_info.in_activation_type,
+                    )
+                logger.info("Corrected bias for the layer")
 
     SaveUtils.remove_quantization_wrappers(model)
 
-    logger.info('Completed bias correction')
+    logger.info("Completed bias correction")
 
 
-def find_all_conv_bn_with_activation(model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]) -> Dict:
+def find_all_conv_bn_with_activation(
+    model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]
+) -> Dict:
     """
     Uses searcher to find preceding and next bn layers for a conv/linear layer
     :param model: PyTorch model
@@ -382,29 +442,43 @@ def find_all_conv_bn_with_activation(model: torch.nn.Module, dummy_input: Union[
     :return: dictionary of conv/linear layers with associated bn op / activation info
     """
 
-    activation_types = ['Relu', 'Clip']
+    activation_types = ["Relu", "Clip"]
 
     # initialize all patterns to be matched and associated call back functions
     patterns_with_callbacks = []
     layer_select_handler = ConvBnPatternHandler()
-    patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', 'Conv'],
-                                               action=layer_select_handler))
+    patterns_with_callbacks.append(
+        PatternType(pattern=["BatchNormalization", "Conv"], action=layer_select_handler)
+    )
 
-    patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', 'ConvTranspose'],
-                                               action=layer_select_handler))
+    patterns_with_callbacks.append(
+        PatternType(
+            pattern=["BatchNormalization", "ConvTranspose"], action=layer_select_handler
+        )
+    )
 
-    patterns_with_callbacks.append(PatternType(pattern=['Conv'],
-                                               action=layer_select_handler))
+    patterns_with_callbacks.append(
+        PatternType(pattern=["Conv"], action=layer_select_handler)
+    )
 
-    patterns_with_callbacks.append(PatternType(pattern=['Gemm'],
-                                               action=layer_select_handler))
+    patterns_with_callbacks.append(
+        PatternType(pattern=["Gemm"], action=layer_select_handler)
+    )
 
     for activation in activation_types:
-        patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', activation, 'Conv'],
-                                                   action=layer_select_handler))
+        patterns_with_callbacks.append(
+            PatternType(
+                pattern=["BatchNormalization", activation, "Conv"],
+                action=layer_select_handler,
+            )
+        )
 
-        patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', activation, 'ConvTranspose'],
-                                                   action=layer_select_handler))
+        patterns_with_callbacks.append(
+            PatternType(
+                pattern=["BatchNormalization", activation, "ConvTranspose"],
+                action=layer_select_handler,
+            )
+        )
 
     connected_graph = ConnectedGraph(model, dummy_input)
 

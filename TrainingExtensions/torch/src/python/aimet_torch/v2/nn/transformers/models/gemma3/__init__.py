@@ -35,6 +35,11 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base directory to hold quantized transformers Gemma3 modules """
+"""Base directory to hold quantized transformers Gemma3 modules"""
 
-from .modeling_gemma3 import QuantizedGemma3RMSNorm, QuantizedQwen2RotaryEmbedding, QuantizedGemma3TextScaledWordEmbedding, QuantizedPytorchGELUTanh
+from .modeling_gemma3 import (
+    QuantizedGemma3RMSNorm,
+    QuantizedQwen2RotaryEmbedding,
+    QuantizedGemma3TextScaledWordEmbedding,
+    QuantizedPytorchGELUTanh,
+)

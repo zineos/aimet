@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=missing-function-docstring, too-many-ancestors
-""" Utilities for mixed precision feature in aimet_torch.v2 """
+"""Utilities for mixed precision feature in aimet_torch.v2"""
 
 from contextlib import contextmanager
 from typing import Union, Optional
@@ -57,15 +57,21 @@ def _mock_v1_quantizers(sim: QuantizationSimModel):
         for _, qmodule in sim.named_qmodules():
             for i, qtzr in enumerate(qmodule.input_quantizers):
                 if not isinstance(qtzr, _V1QuantizerMixin):
-                    qmodule.input_quantizers[i] = _V1QuantizerMixin.from_v2_quantizer(qtzr)
+                    qmodule.input_quantizers[i] = _V1QuantizerMixin.from_v2_quantizer(
+                        qtzr
+                    )
 
             for i, qtzr in enumerate(qmodule.output_quantizers):
                 if not isinstance(qtzr, _V1QuantizerMixin):
-                    qmodule.output_quantizers[i] = _V1QuantizerMixin.from_v2_quantizer(qtzr)
+                    qmodule.output_quantizers[i] = _V1QuantizerMixin.from_v2_quantizer(
+                        qtzr
+                    )
 
             for name, qtzr in list(qmodule.param_quantizers.items()):
                 if not isinstance(qtzr, _V1QuantizerMixin):
-                    qmodule.param_quantizers[name] = _V1QuantizerMixin.from_v2_quantizer(qtzr)
+                    qmodule.param_quantizers[name] = (
+                        _V1QuantizerMixin.from_v2_quantizer(qtzr)
+                    )
 
         yield
     finally:
@@ -118,8 +124,9 @@ class _V1QuantizerMixin:
             yield
 
     @classmethod
-    def from_v2_quantizer(cls, qtzr: Optional[QuantizeDequantize]) -> Union['_V1DisabledQuantizer',
-                                                                            '_V1QuantizeDequantize']:
+    def from_v2_quantizer(
+        cls, qtzr: Optional[QuantizeDequantize]
+    ) -> Union["_V1DisabledQuantizer", "_V1QuantizeDequantize"]:
         """
         Creates a mock that mimics v1 quantizer APIs from v2 quantizer
 
@@ -143,8 +150,10 @@ class _V1QuantizerMixin:
         mock_v1_qtzr.data_type = QuantizationDataType.int
         return mock_v1_qtzr
 
-    def to_v2_quantizer(self) -> Union[QuantizeDequantize, FloatQuantizeDequantize, None]:
-        """ Revert v1 quantizer mock to v2 quantizer """
+    def to_v2_quantizer(
+        self,
+    ) -> Union[QuantizeDequantize, FloatQuantizeDequantize, None]:
+        """Revert v1 quantizer mock to v2 quantizer"""
         if isinstance(self, _V1DisabledQuantizer):
             return None
 
@@ -159,10 +168,9 @@ class _V1QuantizerMixin:
 
         v2_qtzr = QuantizeDequantize.__new__(QuantizeDequantize)
         v2_qtzr.__dict__ = self.__dict__
-        delattr(v2_qtzr, 'enabled')
-        delattr(v2_qtzr, 'data_type')
+        delattr(v2_qtzr, "enabled")
+        delattr(v2_qtzr, "data_type")
         return v2_qtzr
-
 
 
 class _V1DisabledQuantizer(_V1QuantizerMixin, QuantizeDequantize):
@@ -179,5 +187,4 @@ class _V1DisabledQuantizer(_V1QuantizerMixin, QuantizeDequantize):
         return False
 
 
-class _V1QuantizeDequantize(_V1QuantizerMixin, QuantizeDequantize):
-    ...
+class _V1QuantizeDequantize(_V1QuantizerMixin, QuantizeDequantize): ...

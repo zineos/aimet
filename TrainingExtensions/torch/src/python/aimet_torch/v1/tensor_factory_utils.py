@@ -37,16 +37,15 @@
 """
 Tensor factory utility method
 """
+
 import functools
 import torch
 
 
 @functools.lru_cache
-def constant_tensor_factory(data,
-                            *,
-                            dtype=None,
-                            device=None,
-                            pin_memory=False) -> torch.Tensor:
+def constant_tensor_factory(
+    data, *, dtype=None, device=None, pin_memory=False
+) -> torch.Tensor:
     """
     Factory function that returns a cached constant scalar tensor with given data.
     This function is intentionally aligned with ``torch.tensor`` API except that
@@ -64,13 +63,13 @@ def constant_tensor_factory(data,
     :return: Constant read-only tensor
     """
     if not isinstance(data, (float, int)):
-        raise ValueError(f"Expected data to be an instance of float or int. Got {type(data)}).")
+        raise ValueError(
+            f"Expected data to be an instance of float or int. Got {type(data)})."
+        )
 
-    return torch.tensor(data,
-                        dtype=dtype,
-                        device=device,
-                        requires_grad=False,
-                        pin_memory=pin_memory)
+    return torch.tensor(
+        data, dtype=dtype, device=device, requires_grad=False, pin_memory=pin_memory
+    )
 
 
 def constant_like(data, tensor):
@@ -83,7 +82,6 @@ def constant_like(data, tensor):
     :param tensor: Tensor which the returned tensors will copy properties from.
     :return: Constant read-only tensor
     """
-    return constant_tensor_factory(data,
-                                   dtype=tensor.dtype,
-                                   device=tensor.device,
-                                   pin_memory=tensor.is_pinned())
+    return constant_tensor_factory(
+        data, dtype=tensor.dtype, device=tensor.device, pin_memory=tensor.is_pinned()
+    )

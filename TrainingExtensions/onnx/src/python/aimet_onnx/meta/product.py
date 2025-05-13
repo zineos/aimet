@@ -34,12 +34,13 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Tf Product class and utilities """
+"""Tf Product class and utilities"""
+
 import aimet_common.connected_graph.product
 
 
 class Product(aimet_common.connected_graph.product.Product):
-    """ Subclass Product inherited from aimet_common.connected_graph.operation.Product """
+    """Subclass Product inherited from aimet_common.connected_graph.operation.Product"""
 
     def __init__(self, name, shape):
         super().__init__(name, shape)

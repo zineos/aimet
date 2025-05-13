@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Supervised classification pipeline for ImageNet (to be deprecated in favor of using DL Pipelines) """
+"""Supervised classification pipeline for ImageNet (to be deprecated in favor of using DL Pipelines)"""
 
 # BSD 3-Clause License
 #
@@ -89,7 +89,7 @@ def convert_tensor(input_, device=None, non_blocking=False):
     """
     # TODO: Replace .cuda with .to for Pytorch 4.1
     if torch.is_tensor(input_):
-        if device == 'cpu' or device == torch.device(type='cpu'):
+        if device == "cpu" or device == torch.device(type="cpu"):
             input_ = input_.to(device=device)
         else:
             input_ = input_.cuda(device=device, non_blocking=non_blocking)
@@ -98,14 +98,21 @@ def convert_tensor(input_, device=None, non_blocking=False):
         return input_
 
     elif isinstance(input_, collections.Mapping):
-        return {k: convert_tensor(sample, device=device) for k, sample in input_.items()}
+        return {
+            k: convert_tensor(sample, device=device) for k, sample in input_.items()
+        }
 
     elif isinstance(input_, collections.Sequence):
         return [convert_tensor(sample, device=device) for sample in input_]
 
     else:
-        raise TypeError(("input must contain tensors, dicts or lists; found {}"
-                         .format(type(input_))))
+        raise TypeError(
+            (
+                "input must contain tensors, dicts or lists; found {}".format(
+                    type(input_)
+                )
+            )
+        )
     return input_
 
 
@@ -114,11 +121,20 @@ def _prepare_batch(batch, device=None):
     # https://github.com/pytorch/ignite/issues/231
     # is solved
     x, y = batch
-    return convert_tensor(x, device=device), convert_tensor(y, device=device, non_blocking=True)
+    return convert_tensor(x, device=device), convert_tensor(
+        y, device=device, non_blocking=True
+    )
 
 
-def create_supervised_classification_trainer(model, loss_fn, optimizer, val_loader,
-                                             learning_rate_scheduler, callback=None, use_cuda=None):
+def create_supervised_classification_trainer(
+    model,
+    loss_fn,
+    optimizer,
+    val_loader,
+    learning_rate_scheduler,
+    callback=None,
+    use_cuda=None,
+):
     """
     Todo: Add description
     :param model:
@@ -132,34 +148,43 @@ def create_supervised_classification_trainer(model, loss_fn, optimizer, val_load
     """
 
     if use_cuda and not torch.cuda.is_available():
-        raise RuntimeError('Trying to run using cuda, while cuda is not available')
+        raise RuntimeError("Trying to run using cuda, while cuda is not available")
 
     if use_cuda and torch.cuda.is_available():
-        device = torch.device('cuda:0')
+        device = torch.device("cuda:0")
         torch.backends.cudnn.benchmark = True
         if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel):
             model = nn.DataParallel(model)
             print("Using {} gpus for training".format(torch.cuda.device_count()))
     else:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
 
-    trainer = create_trainer(model=model, optimizer=optimizer, loss_fn=loss_fn,
-                             metrics={'top_1_accuracy': Accuracy(),
-                                      'top_5_accuracy': TopKCategoricalAccuracy(),
-                                      'loss': Loss(loss_fn),
-                                      },
-                             device=device)
+    trainer = create_trainer(
+        model=model,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        metrics={
+            "top_1_accuracy": Accuracy(),
+            "top_5_accuracy": TopKCategoricalAccuracy(),
+            "loss": Loss(loss_fn),
+        },
+        device=device,
+    )
 
     evaluator = create_supervised_classification_evaluator(model, loss_fn, use_cuda)
 
     if learning_rate_scheduler:
-        trainer.add_event_handler(Events.EPOCH_STARTED, lambda _: learning_rate_scheduler.step())
+        trainer.add_event_handler(
+            Events.EPOCH_STARTED, lambda _: learning_rate_scheduler.step()
+        )
 
     if callback is not None:
         trainer.add_event_handler(Events.ITERATION_COMPLETED, callback, model)
 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, log_training_results, optimizer)
-    trainer.add_event_handler(Events.EPOCH_COMPLETED, run_evaluation, evaluator, val_loader)
+    trainer.add_event_handler(
+        Events.EPOCH_COMPLETED, run_evaluation, evaluator, val_loader
+    )
 
     return trainer, evaluator
 
@@ -206,20 +231,24 @@ def create_supervised_classification_evaluator(model, loss_fn, use_cuda):
     """
 
     if use_cuda and torch.cuda.is_available():
-        device = torch.device('cuda:0')
+        device = torch.device("cuda:0")
         # multiple GPUs, we can remove this as well
         torch.backends.cudnn.benchmark = True
         if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel):
             model = nn.DataParallel(model)
             logger.info("Using %d gpus for training", torch.cuda.device_count())
     else:
-        device = torch.device('cpu')
+        device = torch.device("cpu")
 
-    evaluator = create_supervised_evaluator(model,
-                                            metrics={'top_1_accuracy': Accuracy(),
-                                                     'top_5_accuracy': TopKCategoricalAccuracy(),
-                                                     'loss': Loss(loss_fn)},
-                                            device=device)
+    evaluator = create_supervised_evaluator(
+        model,
+        metrics={
+            "top_1_accuracy": Accuracy(),
+            "top_5_accuracy": TopKCategoricalAccuracy(),
+            "loss": Loss(loss_fn),
+        },
+        device=device,
+    )
     return evaluator
 
 
@@ -237,8 +266,11 @@ def create_stand_alone_supervised_classification_evaluator(model, loss_fn, use_c
     @evaluator.on(Events.EPOCH_COMPLETED)
     def print_evaluation_results(engine):
         metrics = engine.state.metrics
-        logger.info('Validation Results - Top 1 accuracy: {:.2%} Top 5 accuracy: {:.2%}  Avg loss: {:.2f}'
-                    .format(metrics['top_1_accuracy'], metrics['top_5_accuracy'], metrics['loss']))
+        logger.info(
+            "Validation Results - Top 1 accuracy: {:.2%} Top 5 accuracy: {:.2%}  Avg loss: {:.2f}".format(
+                metrics["top_1_accuracy"], metrics["top_5_accuracy"], metrics["loss"]
+            )
+        )
 
     return evaluator
 
@@ -252,10 +284,16 @@ def log_training_results(trainer, optimizer):
     """
 
     metrics = trainer.state.metrics
-    logger.info('Training Results - Epoch: {}  Top 1 accuracy: {:.2%}  '
-                'Top 5 accuracy: {:.2%}  Avg loss: {:.2f}  Learning rate {:.2E}'
-                .format(trainer.state.epoch, metrics['top_1_accuracy'], metrics['top_5_accuracy'],
-                        metrics['loss'], optimizer.param_groups[0]['lr']))
+    logger.info(
+        "Training Results - Epoch: {}  Top 1 accuracy: {:.2%}  "
+        "Top 5 accuracy: {:.2%}  Avg loss: {:.2f}  Learning rate {:.2E}".format(
+            trainer.state.epoch,
+            metrics["top_1_accuracy"],
+            metrics["top_5_accuracy"],
+            metrics["loss"],
+            optimizer.param_groups[0]["lr"],
+        )
+    )
 
 
 def run_evaluation(trainer, evaluator, val_loader):
@@ -268,7 +306,12 @@ def run_evaluation(trainer, evaluator, val_loader):
     """
     evaluator.run(val_loader)
     metrics = evaluator.state.metrics
-    logger.info('Validation Results - Epoch: {}  Top 1 accuracy: {:.2%}  '
-                'Top 5 accuracy: {:.2%}  Avg loss: {:.2f}'
-                .format(trainer.state.epoch, metrics['top_1_accuracy'], metrics['top_5_accuracy'],
-                        metrics['loss']))
+    logger.info(
+        "Validation Results - Epoch: {}  Top 1 accuracy: {:.2%}  "
+        "Top 5 accuracy: {:.2%}  Avg loss: {:.2f}".format(
+            trainer.state.epoch,
+            metrics["top_1_accuracy"],
+            metrics["top_5_accuracy"],
+            metrics["loss"],
+        )
+    )

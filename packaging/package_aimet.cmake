@@ -176,7 +176,7 @@ foreach(package ${package_name_list})
   # Copy the dependency and other files into the staging subfolder
   execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${pkg_deps_staging_path}")
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E copy 
+    COMMAND ${CMAKE_COMMAND} -E copy
       ${deps_name_list_${package}}
       "${src_packaging_dir}/INSTALL.txt"
       "${src_packaging_dir}/envsetup.sh"

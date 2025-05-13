@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Find quantizer groups in a model """
+"""Find quantizer groups in a model"""
+
 import itertools
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
@@ -46,11 +47,17 @@ from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
 from aimet_common.connected_graph.operation import Op
 from aimet_common.utils import AimetLogger
 from aimet_common.amp.utils import CANDIDATE_WITH_DTYPE
-from aimet_common.amp.quantizer_groups import QuantizerGroupBase, get_supported_candidates_for_quantizers, \
-    compute_baseline_candidate_options
+from aimet_common.amp.quantizer_groups import (
+    QuantizerGroupBase,
+    get_supported_candidates_for_quantizers,
+    compute_baseline_candidate_options,
+)
 
 from aimet_torch.meta.connectedgraph import ConnectedGraph
-from aimet_torch._base.quantsim import _QuantizationSimModelInterface, _QuantizedModuleProtocol
+from aimet_torch._base.quantsim import (
+    _QuantizationSimModelInterface,
+    _QuantizedModuleProtocol,
+)
 from aimet_torch import onnx_utils
 from aimet_torch.translation_mapping import aimet_op_to_backend_op_name_map
 
@@ -62,6 +69,7 @@ class QuantizerGroup(QuantizerGroupBase):
     """
     Group of modules and quantizers
     """
+
     input_quantizers: Tuple[str, ...] = field(default_factory=tuple)
     output_quantizers: Tuple[str, ...] = field(default_factory=tuple)
     parameter_quantizers: Tuple[str, ...] = field(default_factory=tuple)
@@ -76,8 +84,9 @@ class QuantizerGroup(QuantizerGroupBase):
         activation_bw, parameter_bw = None, None
         activation_data_type, parameter_data_type = None, None
 
-        for quantizer in self._get_input_quantizers(name_to_quantizer_dict) +\
-                         self._get_output_quantizers(name_to_quantizer_dict):
+        for quantizer in self._get_input_quantizers(
+            name_to_quantizer_dict
+        ) + self._get_output_quantizers(name_to_quantizer_dict):
             activation_bw = quantizer.bitwidth
             activation_data_type = quantizer.data_type
             break
@@ -88,24 +97,30 @@ class QuantizerGroup(QuantizerGroupBase):
                 parameter_data_type = quantizer.data_type
                 break
 
-        return (activation_bw, activation_data_type), (parameter_bw, parameter_data_type)
+        return (activation_bw, activation_data_type), (
+            parameter_bw,
+            parameter_data_type,
+        )
 
-    def set_quantizers_to_candidate(self,
-                                    name_to_quantizer_dict: Dict,
-                                    candidate: CANDIDATE_WITH_DTYPE) -> None:
+    def set_quantizers_to_candidate(
+        self, name_to_quantizer_dict: Dict, candidate: CANDIDATE_WITH_DTYPE
+    ) -> None:
         """
         Sets a quantizer group to a given candidate bitwidth
         :param name_to_quantizer_dict: Gets module from module name
         :param candidate: candidate with act and param bw and data types
         """
         if len(candidate) == 1:
-            (activation_bw, activation_data_type), = candidate
+            ((activation_bw, activation_data_type),) = candidate
             param_bw, param_data_type = None, None
         else:
-            (activation_bw, activation_data_type), (param_bw, param_data_type) = candidate
+            (activation_bw, activation_data_type), (param_bw, param_data_type) = (
+                candidate
+            )
 
-        for quantizer in self._get_input_quantizers(name_to_quantizer_dict) +\
-                         self._get_output_quantizers(name_to_quantizer_dict):
+        for quantizer in self._get_input_quantizers(
+            name_to_quantizer_dict
+        ) + self._get_output_quantizers(name_to_quantizer_dict):
             quantizer.bitwidth = activation_bw
             quantizer.data_type = activation_data_type
 
@@ -119,17 +134,21 @@ class QuantizerGroup(QuantizerGroupBase):
         Converts quantizer group to a list
         :return: List containing input/output quantizers & weight quantizers
         """
-        return list(itertools.chain(
-            (("input", module_name) for module_name in self.input_quantizers),
-            (("output", module_name) for module_name in self.output_quantizers),
-            (("weight", module_name) for module_name in self.parameter_quantizers),
-        ))
+        return list(
+            itertools.chain(
+                (("input", module_name) for module_name in self.input_quantizers),
+                (("output", module_name) for module_name in self.output_quantizers),
+                (("weight", module_name) for module_name in self.parameter_quantizers),
+            )
+        )
 
     def get_active_quantizers(self, name_to_quantizer_dict):
-        """ Find all active tensor quantizers associated with this quantizer group """
-        quantizers = self._get_input_quantizers(name_to_quantizer_dict) +\
-                     self._get_output_quantizers(name_to_quantizer_dict) +\
-                     self._get_param_quantizers(name_to_quantizer_dict)
+        """Find all active tensor quantizers associated with this quantizer group"""
+        quantizers = (
+            self._get_input_quantizers(name_to_quantizer_dict)
+            + self._get_output_quantizers(name_to_quantizer_dict)
+            + self._get_param_quantizers(name_to_quantizer_dict)
+        )
         return [quantizer for quantizer in quantizers if quantizer.enabled]
 
     def _get_input_quantizers(self, name_to_quantizer_dict):
@@ -167,8 +186,9 @@ class QuantizerGroup(QuantizerGroupBase):
         return tuple(sorted(result))
 
 
-def find_wrapper_module(op_name: str, module_name_to_quantizer_dict: Dict) -> \
-        Tuple[Optional[str], Optional[torch.nn.Module]]:
+def find_wrapper_module(
+    op_name: str, module_name_to_quantizer_dict: Dict
+) -> Tuple[Optional[str], Optional[torch.nn.Module]]:
     """
     Finds quantization (wrapping) module corresponding to the wrapper module's dotted name
     :param op_name: Dotted name of op as represented in connected graph
@@ -176,7 +196,7 @@ def find_wrapper_module(op_name: str, module_name_to_quantizer_dict: Dict) -> \
     :return: Module name and the corresponding torch module in the sim
     """
     # pylint:disable = protected-access
-    module_name = op_name[op_name.find('.') + 1:]
+    module_name = op_name[op_name.find(".") + 1 :]
     if module_name in module_name_to_quantizer_dict:
         return module_name, module_name_to_quantizer_dict[module_name]
     # Else it is a functional op
@@ -196,36 +216,40 @@ def get_module_name_to_module_dict(sim: _QuantizationSimModelInterface) -> Dict:
     return module_name_to_quantizer_dict
 
 
-ops_to_skip = ['view',
-               'NumToTensor',
-               'Split',
-               CG_SPLIT,
-               'PythonOp',
-               'Tile',
-               'transpose',
-               'reshape',
-               'flatten',
-               'permute',
-               'Permute', # tensor.transpose() results in Permute. Name obtained after mpp
-               'Reshape', # Name obtained after MPP
-               'ChannelShuffle', # Obtained without going thru mpp. torch.nn.ChannelShuffle fails mpp
-               'TopK', # Name obtained after MPP
-               'PixelShuffle', # Name obtained after MPP
-               'Expand', # Name obtained after MPP. Reproduce using tensor.expand
-               'Pad', # Name obtained after MPP
-               'Slice', # Name obtained after MPP
-               'Gather', # Name obtained after MPP
-               'ScatterElements', # Name obtained after MPP
-               'ReduceMin',  # Name obtained after MPP
-               'ReduceMax', # Name obtained after MPP
-               'Upsample', # Name obtained after MPP
-               'RoIPool', # Name obtained after MPP
-               'MaxPool', # Name obtained after MPP
-               'Transpose' # Name obtained after MPP
-               ]
-ops_not_to_traverse = ['size']
+ops_to_skip = [
+    "view",
+    "NumToTensor",
+    "Split",
+    CG_SPLIT,
+    "PythonOp",
+    "Tile",
+    "transpose",
+    "reshape",
+    "flatten",
+    "permute",
+    "Permute",  # tensor.transpose() results in Permute. Name obtained after mpp
+    "Reshape",  # Name obtained after MPP
+    "ChannelShuffle",  # Obtained without going thru mpp. torch.nn.ChannelShuffle fails mpp
+    "TopK",  # Name obtained after MPP
+    "PixelShuffle",  # Name obtained after MPP
+    "Expand",  # Name obtained after MPP. Reproduce using tensor.expand
+    "Pad",  # Name obtained after MPP
+    "Slice",  # Name obtained after MPP
+    "Gather",  # Name obtained after MPP
+    "ScatterElements",  # Name obtained after MPP
+    "ReduceMin",  # Name obtained after MPP
+    "ReduceMax",  # Name obtained after MPP
+    "Upsample",  # Name obtained after MPP
+    "RoIPool",  # Name obtained after MPP
+    "MaxPool",  # Name obtained after MPP
+    "Transpose",  # Name obtained after MPP
+]
+ops_not_to_traverse = ["size"]
 
-def find_output_quantizer_groups(op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict):
+
+def find_output_quantizer_groups(
+    op: Op, parent_child_op_groups: Dict, map_for_skipped_ops: Dict
+):
     """
     Finds quantizer groups along the parent to child flow
     :param op: pytorch module
@@ -242,7 +266,9 @@ def find_output_quantizer_groups(op: Op, parent_child_op_groups: Dict, map_for_s
                 dotted_name = map_for_skipped_ops[op.dotted_name]
             if consumer.type in ops_to_skip:
                 map_for_skipped_ops[consumer.dotted_name] = dotted_name
-                find_output_quantizer_groups(consumer, parent_child_op_groups, map_for_skipped_ops)
+                find_output_quantizer_groups(
+                    consumer, parent_child_op_groups, map_for_skipped_ops
+                )
             # If there is a one to one connection between quantizers
             else:
                 parent_child_op_groups[dotted_name].append(consumer.dotted_name)
@@ -265,10 +291,10 @@ def find_op_groups(graph: ConnectedGraph) -> Dict:
     for op in graph.ordered_ops:
         # Add 1st op as child
         if not op.input_ops:
-            parent_child_op_groups['input_ops'].append(op.dotted_name)
+            parent_child_op_groups["input_ops"].append(op.dotted_name)
         # Add output op as child to put output of model as a quantizer group
         if not op.outputs:
-            parent_child_op_groups['output_ops'].append(op.dotted_name)
+            parent_child_op_groups["output_ops"].append(op.dotted_name)
     for op in graph.get_all_ops().values():
         if op.type in ops_to_skip or op.type in ops_not_to_traverse:
             continue
@@ -310,7 +336,7 @@ def find_input_quantizer_groups(graph, map_for_skipped_ops, parent_child_op_grou
 
 
 def get_input_and_param_quantizers(
-        child: str, module_name_to_module_dict: Dict
+    child: str, module_name_to_module_dict: Dict
 ) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
     """
     Adds child's input quantizer and param quantizer to quantizer group
@@ -324,7 +350,9 @@ def get_input_and_param_quantizers(
     if module_name is not None:
         for idx, input_quantizer in enumerate(module.input_quantizers):
             if input_quantizer.enabled:
-                input_quantizers.append(module_name + '_input_quantizer_idx_' + str(idx))
+                input_quantizers.append(
+                    module_name + "_input_quantizer_idx_" + str(idx)
+                )
         for _, param_quantizer in module.param_quantizers.items():
             if param_quantizer.enabled:
                 parameter_quantizers.append(module_name)
@@ -332,7 +360,9 @@ def get_input_and_param_quantizers(
 
 
 # pylint: disable=too-many-branches, too-many-locals, too-many-statements
-def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, List[QuantizerGroup]]:
+def find_quantizer_group(
+    sim: _QuantizationSimModelInterface,
+) -> Tuple[Dict, List[QuantizerGroup]]:
     """
     Finds quantizer groups in a quantization sim model
     :param sim: Quantization sim
@@ -342,7 +372,9 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
     connected_graph = sim.connected_graph
 
     if connected_graph is None:
-        raise AssertionError('Aborting Auto Mixed Precision, connected graph needs to exist for Auto Mixed precision')
+        raise AssertionError(
+            "Aborting Auto Mixed Precision, connected graph needs to exist for Auto Mixed precision"
+        )
 
     quantizer_groups = []
 
@@ -350,12 +382,16 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
 
     module_name_to_module_dict = get_module_name_to_module_dict(sim)
 
-    if 'input_ops' in parent_child_op_groups:
-        for child in parent_child_op_groups['input_ops']:
+    if "input_ops" in parent_child_op_groups:
+        for child in parent_child_op_groups["input_ops"]:
             # Add one quantizer group for each input and it's weight param
-            input_quantizers, parameter_quantizers = get_input_and_param_quantizers(child, module_name_to_module_dict)
+            input_quantizers, parameter_quantizers = get_input_and_param_quantizers(
+                child, module_name_to_module_dict
+            )
             if input_quantizers or parameter_quantizers:
-                child_module_name, _ = find_wrapper_module(child, module_name_to_module_dict)
+                child_module_name, _ = find_wrapper_module(
+                    child, module_name_to_module_dict
+                )
                 supported_kernel_ops = []
                 if child_module_name is not None:
                     supported_kernel_ops.append(child_module_name)
@@ -363,39 +399,43 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
                 if parameter_quantizers:
                     if len(input_quantizers) > 1:
                         # Unexpected case of having multiple inputs with a parameter. Leave these out of quantizer group selection.
-                        debug_str = (f'Skipping unsupported case of multiple inputs with params detected for input op '
-                                     f'{child}.')
+                        debug_str = (
+                            f"Skipping unsupported case of multiple inputs with params detected for input op "
+                            f"{child}."
+                        )
                         logger.debug(debug_str)
                         continue
                     quantizer_group = QuantizerGroup(
                         input_quantizers=input_quantizers,
                         parameter_quantizers=parameter_quantizers,
-                        supported_kernel_ops=tuple(supported_kernel_ops)
+                        supported_kernel_ops=tuple(supported_kernel_ops),
                     )
                     quantizer_groups.append(quantizer_group)
-                    logger.debug('\n Quantizer Group Added: %s', quantizer_group)
+                    logger.debug("\n Quantizer Group Added: %s", quantizer_group)
                 else:
                     # Create a quantizer group for each input_quantizer
                     for input_quantizer in input_quantizers:
                         quantizer_group = QuantizerGroup(
                             input_quantizers=(input_quantizer,),
                             parameter_quantizers=(),
-                            supported_kernel_ops=tuple(supported_kernel_ops)
+                            supported_kernel_ops=tuple(supported_kernel_ops),
                         )
                         quantizer_groups.append(quantizer_group)
-                        logger.debug('\n Quantizer Group Added: %s', quantizer_group)
+                        logger.debug("\n Quantizer Group Added: %s", quantizer_group)
 
     # Based on which quantizers are enabled, create a list of quantizer_groups
     for parents, children in parent_child_op_groups.items():
         input_quantizers = ()
         output_quantizers = ()
         parameter_quantizers = ()
-        if parents in ['input_ops', 'output_ops']:
+        if parents in ["input_ops", "output_ops"]:
             continue
         if not isinstance(parents, tuple):
             parents = [parents]
         for parent in parents:
-            module_name, module = find_wrapper_module(parent, module_name_to_module_dict)
+            module_name, module = find_wrapper_module(
+                parent, module_name_to_module_dict
+            )
             if module is not None:
                 for output_quantizer in module.output_quantizers:
                     if output_quantizer.enabled:
@@ -403,10 +443,14 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
 
         supported_kernel_ops = []
         for child in children:
-            input_q, param_q = get_input_and_param_quantizers(child, module_name_to_module_dict)
+            input_q, param_q = get_input_and_param_quantizers(
+                child, module_name_to_module_dict
+            )
             input_quantizers += input_q
             parameter_quantizers += param_q
-            child_module_name, _ = find_wrapper_module(child, module_name_to_module_dict)
+            child_module_name, _ = find_wrapper_module(
+                child, module_name_to_module_dict
+            )
             if child_module_name is not None:
                 supported_kernel_ops.append(child_module_name)
 
@@ -415,18 +459,20 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
             if parameter_quantizers:
                 if len(input_quantizers) + len(output_quantizers) > 1:
                     # Unexpected case of having multiple inputs with a parameter. Leave these out of quantizer group selection.
-                    debug_str = (f'Skipping unsupported case of multiple inputs with params detected for parents '
-                                 f'{parents} and children {children}.')
+                    debug_str = (
+                        f"Skipping unsupported case of multiple inputs with params detected for parents "
+                        f"{parents} and children {children}."
+                    )
                     logger.debug(debug_str)
                     continue
                 quantizer_group = QuantizerGroup(
                     input_quantizers=input_quantizers,
                     output_quantizers=output_quantizers,
                     parameter_quantizers=parameter_quantizers,
-                    supported_kernel_ops=tuple(supported_kernel_ops)
+                    supported_kernel_ops=tuple(supported_kernel_ops),
                 )
                 quantizer_groups.append(quantizer_group)
-                logger.debug('\n Quantizer Group added: %s', quantizer_group)
+                logger.debug("\n Quantizer Group added: %s", quantizer_group)
             else:
                 # Create a quantizer group for each input and output quantizer
                 for quantizer in input_quantizers:
@@ -434,24 +480,26 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
                         input_quantizers=(quantizer,),
                         output_quantizers=(),
                         parameter_quantizers=(),
-                        supported_kernel_ops=tuple(supported_kernel_ops)
+                        supported_kernel_ops=tuple(supported_kernel_ops),
                     )
                     quantizer_groups.append(quantizer_group)
-                    logger.debug('\n Quantizer Group added: %s', quantizer_group)
+                    logger.debug("\n Quantizer Group added: %s", quantizer_group)
                 for quantizer in output_quantizers:
                     quantizer_group = QuantizerGroup(
                         input_quantizers=(),
                         output_quantizers=(quantizer,),
                         parameter_quantizers=(),
-                        supported_kernel_ops=tuple(supported_kernel_ops)
+                        supported_kernel_ops=tuple(supported_kernel_ops),
                     )
                     quantizer_groups.append(quantizer_group)
-                    logger.debug('\n Quantizer Group added: %s', quantizer_group)
+                    logger.debug("\n Quantizer Group added: %s", quantizer_group)
 
-    if 'output_ops' in parent_child_op_groups:
-        for parent in parent_child_op_groups['output_ops']:
+    if "output_ops" in parent_child_op_groups:
+        for parent in parent_child_op_groups["output_ops"]:
             # Add one quantizer group for each input and it's weight param
-            module_name, module = find_wrapper_module(parent, module_name_to_module_dict)
+            module_name, module = find_wrapper_module(
+                parent, module_name_to_module_dict
+            )
             if module is not None:
                 for output_quantizer in module.output_quantizers:
                     if output_quantizer.enabled:
@@ -459,19 +507,21 @@ def find_quantizer_group(sim: _QuantizationSimModelInterface) -> Tuple[Dict, Lis
                         # default candidates
                         quantizer_group = QuantizerGroup(
                             output_quantizers=(module_name,),
-                            supported_kernel_ops=tuple()
+                            supported_kernel_ops=tuple(),
                         )
                         quantizer_groups.append(quantizer_group)
-                        logger.debug('\n Quantizer Group added: %s', quantizer_group)
+                        logger.debug("\n Quantizer Group added: %s", quantizer_group)
 
     return module_name_to_module_dict, quantizer_groups
 
 
-def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
-                              amp_candidates: List[CANDIDATE_WITH_DTYPE],
-                              supported_kernels: Dict,
-                              module_name_to_module_dict: Dict,
-                              use_all_amp_candidates: bool) -> Tuple[Dict, List]:
+def find_supported_candidates(
+    quantizer_groups: List[QuantizerGroup],
+    amp_candidates: List[CANDIDATE_WITH_DTYPE],
+    supported_kernels: Dict,
+    module_name_to_module_dict: Dict,
+    use_all_amp_candidates: bool,
+) -> Tuple[Dict, List]:
     """
     Computes 1. a list of supported candidates per Quantizer and 2. List of candidate options for max_candidate
     :param quantizer_groups: List of quantizer groups computed for the given model
@@ -488,9 +538,15 @@ def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
     # pylint: disable=too-many-nested-blocks
     # pylint: disable=protected-access
     for quantizer_group in quantizer_groups:
-        quantizers = sorted(set(itertools.chain(quantizer_group.get_input_quantizer_modules(),
-                                                quantizer_group.output_quantizers,
-                                                quantizer_group.parameter_quantizers)))
+        quantizers = sorted(
+            set(
+                itertools.chain(
+                    quantizer_group.get_input_quantizer_modules(),
+                    quantizer_group.output_quantizers,
+                    quantizer_group.parameter_quantizers,
+                )
+            )
+        )
 
         # quantizers are now unique ops present in the given quantizer_group
         onnx_ops = defaultdict(list)
@@ -499,7 +555,9 @@ def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
             try:
                 module = module_name_to_module_dict[supported_kernel_op]._module_to_wrap
             except AttributeError:
-                module = module_name_to_module_dict[supported_kernel_op].get_original_module()
+                module = module_name_to_module_dict[
+                    supported_kernel_op
+                ].get_original_module()
             backend_type = aimet_op_to_backend_op_name_map.get(type(module))
 
             if backend_type in supported_kernels:
@@ -508,8 +566,10 @@ def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
                 onnx_types = onnx_utils.map_torch_types_to_onnx.get(type(module), [])
 
                 if not onnx_types:
-                    logger.warning("No mapping found for %s in the torch to onnx op type mapping dictionary.",
-                                   type(module))
+                    logger.warning(
+                        "No mapping found for %s in the torch to onnx op type mapping dictionary.",
+                        type(module),
+                    )
 
                 supported_kernel_types.update(onnx_types)
 
@@ -521,15 +581,20 @@ def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
         for quantizer in quantizers:
             onnx_ops[quantizer] = list(supported_kernel_types)
 
-        supported_kernels_for_quantizers = get_supported_candidates_for_quantizers(quantizers,
-                                                                                   onnx_ops,
-                                                                                   supported_kernels,
-                                                                                   amp_candidates,
-                                                                                   use_all_amp_candidates)
+        supported_kernels_for_quantizers = get_supported_candidates_for_quantizers(
+            quantizers,
+            onnx_ops,
+            supported_kernels,
+            amp_candidates,
+            use_all_amp_candidates,
+        )
 
-        quantizers_with_supported_candidates[quantizer_group] = list(supported_kernels_for_quantizers)
+        quantizers_with_supported_candidates[quantizer_group] = list(
+            supported_kernels_for_quantizers
+        )
 
-    max_candidate_options = compute_baseline_candidate_options(quantizers_with_supported_candidates, amp_candidates,
-                                                               use_all_amp_candidates)
+    max_candidate_options = compute_baseline_candidate_options(
+        quantizers_with_supported_candidates, amp_candidates, use_all_amp_candidates
+    )
 
     return quantizers_with_supported_candidates, max_candidate_options

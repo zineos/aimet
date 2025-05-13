@@ -37,11 +37,15 @@
 from aimet_tensorflow.examples.test_models import keras_functional_conv_net
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
-from aimet_tensorflow.keras.utils.quantizer_utils import get_enabled_activation_quantizers, get_enabled_param_quantizers
+from aimet_tensorflow.keras.utils.quantizer_utils import (
+    get_enabled_activation_quantizers,
+    get_enabled_param_quantizers,
+)
 
 
 class TestQuantizerUtils:
     """Test Quantizer Utils"""
+
     def test_get_enabled_activation_quantizers(self):
         model = keras_functional_conv_net()
         _, potential_new_model = fold_all_batch_norms(model)

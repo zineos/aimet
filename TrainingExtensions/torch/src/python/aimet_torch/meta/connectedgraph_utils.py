@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities for ConnectedGraph """
+"""Utilities for ConnectedGraph"""
 
 from typing import Tuple, Union, List, Dict
 import torch
@@ -49,17 +49,44 @@ from aimet_torch.utils import create_rand_tensors_given_shapes, get_device
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
-ActivationTypes = (torch.nn.ReLU6, torch.nn.ReLU, torch.nn.PReLU, torch.nn.RReLU, torch.nn.LeakyReLU,
-                   torch.nn.Sigmoid, torch.nn.LogSigmoid, torch.nn.Softmin, torch.nn.Softmax, torch.nn.LogSoftmax,
-                   torch.nn.Tanh, torch.nn.Hardtanh, torch.nn.ELU, torch.nn.Hardshrink, torch.nn.Hardsigmoid,
-                   torch.nn.Hardtanh, torch.nn.Hardswish, torch.nn.MultiheadAttention, torch.nn.SELU, torch.nn.CELU,
-                   torch.nn.GELU, torch.nn.SiLU, torch.nn.Mish, torch.nn.Softplus, torch.nn.Softshrink,
-                   torch.nn.Softsign, torch.nn.Tanhshrink, torch.nn.Threshold, torch.nn.GLU, torch.nn.Softmax2d,
-                   torch.nn.AdaptiveLogSoftmaxWithLoss)
+ActivationTypes = (
+    torch.nn.ReLU6,
+    torch.nn.ReLU,
+    torch.nn.PReLU,
+    torch.nn.RReLU,
+    torch.nn.LeakyReLU,
+    torch.nn.Sigmoid,
+    torch.nn.LogSigmoid,
+    torch.nn.Softmin,
+    torch.nn.Softmax,
+    torch.nn.LogSoftmax,
+    torch.nn.Tanh,
+    torch.nn.Hardtanh,
+    torch.nn.ELU,
+    torch.nn.Hardshrink,
+    torch.nn.Hardsigmoid,
+    torch.nn.Hardtanh,
+    torch.nn.Hardswish,
+    torch.nn.MultiheadAttention,
+    torch.nn.SELU,
+    torch.nn.CELU,
+    torch.nn.GELU,
+    torch.nn.SiLU,
+    torch.nn.Mish,
+    torch.nn.Softplus,
+    torch.nn.Softshrink,
+    torch.nn.Softsign,
+    torch.nn.Tanhshrink,
+    torch.nn.Threshold,
+    torch.nn.GLU,
+    torch.nn.Softmax2d,
+    torch.nn.AdaptiveLogSoftmaxWithLoss,
+)
 
 
-def get_module_act_func_pair(model: torch.nn.Module, model_input: Union[Tuple[torch.Tensor], List[torch.Tensor]]) -> \
-        Dict[torch.nn.Module, Union[torch.nn.Module, None]]:
+def get_module_act_func_pair(
+    model: torch.nn.Module, model_input: Union[Tuple[torch.Tensor], List[torch.Tensor]]
+) -> Dict[torch.nn.Module, Union[torch.nn.Module, None]]:
     """
     For given model, returns dictionary of module to immediate following activation function else maps
     module to None.
@@ -83,7 +110,6 @@ def get_module_act_func_pair(model: torch.nn.Module, model_input: Union[Tuple[to
     all_ops = graph.get_all_ops()
 
     for op in all_ops.values():
-
         # Get module associated with op
         cur_module = op.get_module()
 
@@ -91,7 +117,7 @@ def get_module_act_func_pair(model: torch.nn.Module, model_input: Union[Tuple[to
             module_act_func_pair[cur_module] = None
 
             if op.outputs:
-                assert op.output_ops, 'op output should have at least one consumer op.'
+                assert op.output_ops, "op output should have at least one consumer op."
                 # Get the next op
                 next_op = op.output_ops[0]
                 # Get module associated with next op
@@ -100,14 +126,18 @@ def get_module_act_func_pair(model: torch.nn.Module, model_input: Union[Tuple[to
                 # Get the appropriate activation function
                 if isinstance(next_module, ActivationTypes):
                     module_act_func_pair[cur_module] = next_module
-                    logger.debug("Module: %s is followed by activation function: %s", op.dotted_name,
-                                 next_op.dotted_name)
+                    logger.debug(
+                        "Module: %s is followed by activation function: %s",
+                        op.dotted_name,
+                        next_op.dotted_name,
+                    )
 
     return module_act_func_pair
 
 
-def create_connected_graph_with_input_shapes(model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]]) \
-        -> ConnectedGraph:
+def create_connected_graph_with_input_shapes(
+    model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]]
+) -> ConnectedGraph:
     """
     Create connected graph, using random inputs generated from given input shapes.
     :param model: torch model to create a connected graph from
@@ -119,7 +149,9 @@ def create_connected_graph_with_input_shapes(model: torch.nn.Module, input_shape
     return ConnectedGraph(model, random_inputs)
 
 
-def get_ops_with_missing_modules(model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]) -> List[Op]:
+def get_ops_with_missing_modules(
+    model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]
+) -> List[Op]:
     """
     Utility function to ensure that all connected graph ops of a certain type have associated modules
     :param model: Pytorch model to create connected graph from
@@ -129,15 +161,23 @@ def get_ops_with_missing_modules(model: torch.nn.Module, model_input: Union[torc
     try:
         conn_graph = ConnectedGraph(model, model_input)
     except:
-        logger.error('A connected graph failed to be built. This may prevent from AIMET features from being able to '
-                     'run on the model. Please address the errors shown.')
+        logger.error(
+            "A connected graph failed to be built. This may prevent from AIMET features from being able to "
+            "run on the model. Please address the errors shown."
+        )
         # pylint: disable=raise-missing-from
-        raise AssertionError('A connected graph failed to be built. This may prevent from AIMET features from being '
-                             'able to run on the model. Please address the errors shown.')
+        raise AssertionError(
+            "A connected graph failed to be built. This may prevent from AIMET features from being "
+            "able to run on the model. Please address the errors shown."
+        )
 
     missing_modules = []
     for op in conn_graph.get_all_ops().values():
-        if not op.get_module() and op.type not in ConnectedGraph.math_invariant_types and op.type != CG_SPLIT:
+        if (
+            not op.get_module()
+            and op.type not in ConnectedGraph.math_invariant_types
+            and op.type != CG_SPLIT
+        ):
             missing_modules.append(op)
 
     return missing_modules

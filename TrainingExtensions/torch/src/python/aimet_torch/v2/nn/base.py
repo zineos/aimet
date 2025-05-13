@@ -67,6 +67,7 @@ from aimet_torch.v2.utils import (
 )
 from aimet_torch.v2.deepspeed_utils import SafeGatheredParameters, _shallow_copy
 
+
 def _no_op(in_tensor):
     return in_tensor
 
@@ -76,32 +77,41 @@ class UnknownModuleError(RuntimeError):
     Exception thrown when an unknown module is encountered
     whose quantized definition isn't registered using @QuantizationMixin.implements().
     """
-    module_cls: Type[torch.nn.Module]
-    mixin_cls: Type['BaseQuantizationMixin']
-    api_reference_url = "https://quic.github.io/aimet-pages/releases/" \
-                        "latest/apiref/torch/generated/" \
-                        "aimet_torch.nn.QuantizationMixin.html#aimet_torch.nn.QuantizationMixin.implements"
 
-    def __init__(self, module_cls: Type[torch.nn.Module], mixin_cls: Type['BaseQuantizationMixin']):
+    module_cls: Type[torch.nn.Module]
+    mixin_cls: Type["BaseQuantizationMixin"]
+    api_reference_url = (
+        "https://quic.github.io/aimet-pages/releases/"
+        "latest/apiref/torch/generated/"
+        "aimet_torch.nn.QuantizationMixin.html#aimet_torch.nn.QuantizationMixin.implements"
+    )
+
+    def __init__(
+        self,
+        module_cls: Type[torch.nn.Module],
+        mixin_cls: Type["BaseQuantizationMixin"],
+    ):
         self.module_cls = module_cls
         self.mixin_cls = mixin_cls
         msg = self.generate_err_msg()
         super().__init__(msg)
 
     def generate_err_msg(self) -> str:
-        """ Generate error message """
+        """Generate error message"""
         module_cls = self.module_cls
         mixin_cls = self.mixin_cls
         code_example = self.generate_code_example()
 
-        return f'The quantized module definition of {module_cls} is not registered. ' \
-               f'Please register the quantized module definition of {module_cls} ' \
-               f'using `@{mixin_cls.__name__}.implements({module_cls.__name__})` decorator.\n\n' \
-               f"For example:\n\n{code_example}\n\n" \
-               f"For more details, please refer to the official API reference:\n{self.api_reference_url}"
+        return (
+            f"The quantized module definition of {module_cls} is not registered. "
+            f"Please register the quantized module definition of {module_cls} "
+            f"using `@{mixin_cls.__name__}.implements({module_cls.__name__})` decorator.\n\n"
+            f"For example:\n\n{code_example}\n\n"
+            f"For more details, please refer to the official API reference:\n{self.api_reference_url}"
+        )
 
     def generate_code_example(self) -> str:
-        """ Generate code example """
+        """Generate code example"""
         module_cls = self.module_cls
         mixin_cls = self.mixin_cls
 
@@ -114,24 +124,28 @@ class UnknownModuleError(RuntimeError):
             ret_type = torch.Tensor
 
         positional_or_keyword_args = [
-            arg for arg in forward_fn_args
-            if arg.kind in (inspect.Parameter.POSITIONAL_ONLY,
-                            inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            arg
+            for arg in forward_fn_args
+            if arg.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
         ]
         if positional_or_keyword_args != forward_fn_args:
             # Module takes variable number of inputs (*args and/or **kwargs)
             # In this case, only the user knows the proper number of input quantizers
             _declare_input_quantizers = [
-                'self.input_quantizers = torch.nn.ModuleList(',
+                "self.input_quantizers = torch.nn.ModuleList(",
                 "    # <TODO: Declare the number of input quantizers here>",
-                ')',
+                ")",
             ]
             _quantize_inputs = [
                 "# <TODO: Quantize inputs as necessary>\n",
             ]
         else:
             _declare_input_quantizers = [
-                f'self.input_quantizers = torch.nn.ModuleList({[None for _ in positional_or_keyword_args]})',
+                f"self.input_quantizers = torch.nn.ModuleList({[None for _ in positional_or_keyword_args]})",
             ]
             _quantize_inputs = []
             for i, arg in enumerate(positional_or_keyword_args):
@@ -142,7 +156,7 @@ class UnknownModuleError(RuntimeError):
 
         if ret_type == torch.Tensor:
             _declare_output_quantizers = [
-                'self.output_quantizers = torch.nn.ModuleList([None])',
+                "self.output_quantizers = torch.nn.ModuleList([None])",
             ]
             _quantize_outputs = [
                 "if self.output_quantizers[0]:",
@@ -159,8 +173,10 @@ class UnknownModuleError(RuntimeError):
             ]
 
         def format_arg(arg: inspect.Parameter):
-            if arg.kind in (inspect.Parameter.POSITIONAL_ONLY,
-                            inspect.Parameter.POSITIONAL_OR_KEYWORD):
+            if arg.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
                 return arg.name
             if arg.kind == inspect.Parameter.VAR_POSITIONAL:
                 return f"*{arg.name}"
@@ -170,30 +186,29 @@ class UnknownModuleError(RuntimeError):
                 return f"**{arg.name}"
             raise RuntimeError
 
-        return '\n'.join([
-            f'@{mixin_cls.__name__}.implements({module_cls.__name__})',
-            f'class Quantized{module_cls.__name__}({mixin_cls.__name__}, {module_cls.__name__}):',
-             '    def __quant_init__(self):',
-             '        super().__quant_init__()',
-             '',
-             '        # Declare the number of input/output quantizers',
-          *(f'        {line}' for line in _declare_input_quantizers),
-          *(f'        {line}' for line in _declare_output_quantizers),
-             '',
-            f'    def forward{forward_fn_signature}:',
-             '        # Quantize input tensors',
-          *(f'        {line}' for line in _quantize_inputs),
-
-             '        # Run forward with quantized inputs and parameters',
-             '        with self._patch_quantized_parameters():',
-            f'            ret = super().forward({", ".join([format_arg(arg) for arg in forward_fn_args])})',
-             '',
-             '        # Quantize output tensors',
-          *(f'        {line}' for line in _quantize_outputs),
-
-             '        return ret',
-        ])
-
+        return "\n".join(
+            [
+                f"@{mixin_cls.__name__}.implements({module_cls.__name__})",
+                f"class Quantized{module_cls.__name__}({mixin_cls.__name__}, {module_cls.__name__}):",
+                "    def __quant_init__(self):",
+                "        super().__quant_init__()",
+                "",
+                "        # Declare the number of input/output quantizers",
+                *(f"        {line}" for line in _declare_input_quantizers),
+                *(f"        {line}" for line in _declare_output_quantizers),
+                "",
+                f"    def forward{forward_fn_signature}:",
+                "        # Quantize input tensors",
+                *(f"        {line}" for line in _quantize_inputs),
+                "        # Run forward with quantized inputs and parameters",
+                "        with self._patch_quantized_parameters():",
+                f"            ret = super().forward({', '.join([format_arg(arg) for arg in forward_fn_args])})",
+                "",
+                "        # Quantize output tensors",
+                *(f"        {line}" for line in _quantize_outputs),
+                "        return ret",
+            ]
+        )
 
 
 class BaseQuantizationMixin(abc.ABC):
@@ -230,9 +245,9 @@ class BaseQuantizationMixin(abc.ABC):
         For custom quantized classes, this method should be overridden to set the appropriate lengths of
         :attr:`input_quantizers` and :attr:`output_quantizers` for the given base class.
         """
-        self.param_quantizers = nn.ModuleDict({
-            name: None for name, _ in self.named_parameters(recurse=False)
-        })
+        self.param_quantizers = nn.ModuleDict(
+            {name: None for name, _ in self.named_parameters(recurse=False)}
+        )
         # Currently assume single input & output
         self.input_quantizers = nn.ModuleList([None])
         self.output_quantizers = nn.ModuleList([None])
@@ -273,7 +288,7 @@ class BaseQuantizationMixin(abc.ABC):
             if not param_quantizer:
                 continue
 
-            if not param_quantizer._allow_overwrite: # pylint: disable=protected-access
+            if not param_quantizer._allow_overwrite:  # pylint: disable=protected-access
                 continue
 
             if not param_quantizer.is_initialized() or overwrite:
@@ -286,11 +301,14 @@ class BaseQuantizationMixin(abc.ABC):
 
         with SafeGatheredParameters(params.values()):
             for param_qtzr, param in params.items():
-                with patch_attr(param_qtzr, "forward", _no_op), param_qtzr.compute_encodings():
+                with (
+                    patch_attr(param_qtzr, "forward", _no_op),
+                    param_qtzr.compute_encodings(),
+                ):
                     _ = param_qtzr(param)
 
     def compute_param_encodings(self):
-        """ Compute encodings of parameter quantizers """
+        """Compute encodings of parameter quantizers"""
         self._compute_param_encodings(overwrite=True)
 
     @contextlib.contextmanager
@@ -320,12 +338,12 @@ class BaseQuantizationMixin(abc.ABC):
                 if not isinstance(quantizer, QuantizerBase):
                     continue
 
-                if not quantizer._allow_overwrite: # pylint: disable=protected-access
+                if not quantizer._allow_overwrite:  # pylint: disable=protected-access
                     continue
 
                 # Set input/output quantizers into pass-through mode during compute_encodings
                 # NOTE: This behavior is for backawrd-compatibility with V1 quantsim.
-                stack.enter_context(patch_attr(quantizer, 'forward', _no_op))
+                stack.enter_context(patch_attr(quantizer, "forward", _no_op))
 
                 ctx = quantizer.compute_encodings()
                 stack.enter_context(ctx)
@@ -353,6 +371,7 @@ class BaseQuantizationMixin(abc.ABC):
             # Update the mapping from torch module to onnx op
             # so v1 connected graph and quantsim configurator can properly handle quantized modules.
             from aimet_torch.onnx_utils import map_torch_types_to_onnx
+
             onnx_type = map_torch_types_to_onnx.get(module_cls, None)
             if onnx_type:
                 map_torch_types_to_onnx[quantized_cls] = onnx_type
@@ -362,7 +381,8 @@ class BaseQuantizationMixin(abc.ABC):
             # TODO: This unfortunately relies on the **class name** of the module, not the real type
             #       of the module due to the limitation of v1 implementation.
             #       Should redefine `aimet_to_to_backend_op_name_map` as `Dict[Type[Module], str]`
-            from aimet_torch.translation_mapping import aimet_op_to_backend_op_name_map # pylint:disable = cyclic-import
+            from aimet_torch.translation_mapping import aimet_op_to_backend_op_name_map  # pylint:disable = cyclic-import
+
             backend_op_name = aimet_op_to_backend_op_name_map.get(module_cls, None)
             if backend_op_name:
                 aimet_op_to_backend_op_name_map[quantized_cls] = backend_op_name
@@ -410,17 +430,21 @@ class BaseQuantizationMixin(abc.ABC):
         input_encodings = []
         for quantizer in flatten_nn_module_list(self.input_quantizers):
             if isinstance(quantizer, QuantizerBase) and quantizer.is_initialized():
-                input_encodings.append(quantizer.get_encodings().to_qnn_encoding_dict(encoding_version))
+                input_encodings.append(
+                    quantizer.get_encodings().to_qnn_encoding_dict(encoding_version)
+                )
             else:
                 input_encodings.append(None)
         return input_encodings
 
-    def import_input_encodings(self,
-                               encodings: Mapping[str, Mapping],
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_input_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import input encodings represented in below format:
         {
@@ -435,7 +459,7 @@ class BaseQuantizationMixin(abc.ABC):
         :param freeze: If True, freezes the quantizer's encodings after loading
         """
         for i, quantizer in enumerate(list(self.input_quantizers)):
-            if quantizer and not quantizer._allow_overwrite: # pylint: disable=protected-access
+            if quantizer and not quantizer._allow_overwrite:  # pylint: disable=protected-access
                 continue
             encoding = encodings.get(str(i), None)
             if not encoding:
@@ -445,7 +469,9 @@ class BaseQuantizationMixin(abc.ABC):
                 continue
             if quantizer is None:
                 if strict:
-                    raise RuntimeError(f"Failed to import input encoding at index {i}: no quantizer present.")
+                    raise RuntimeError(
+                        f"Failed to import input encoding at index {i}: no quantizer present."
+                    )
                 continue
             if isinstance(encoding, dict):
                 encoding = [encoding]
@@ -463,17 +489,21 @@ class BaseQuantizationMixin(abc.ABC):
         output_encodings = []
         for quantizer in flatten_nn_module_list(self.output_quantizers):
             if isinstance(quantizer, QuantizerBase) and quantizer.is_initialized():
-                output_encodings.append(quantizer.get_encodings().to_qnn_encoding_dict(encoding_version))
+                output_encodings.append(
+                    quantizer.get_encodings().to_qnn_encoding_dict(encoding_version)
+                )
             else:
                 output_encodings.append(None)
         return output_encodings
 
-    def import_output_encodings(self,
-                                encodings: Mapping[str, Mapping],
-                                strict: bool,
-                                partial: bool,
-                                requires_grad: Optional[bool],
-                                allow_overwrite: bool):
+    def import_output_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import output encodings represented in below format:
         {
@@ -488,7 +518,7 @@ class BaseQuantizationMixin(abc.ABC):
         :param freeze: If True, freezes the quantizer's encodings after loading
         """
         for i, quantizer in enumerate(list(self.output_quantizers)):
-            if quantizer and not quantizer._allow_overwrite: # pylint: disable=protected-access
+            if quantizer and not quantizer._allow_overwrite:  # pylint: disable=protected-access
                 continue
             encoding = encodings.get(str(i), None)
             if not encoding:
@@ -498,7 +528,9 @@ class BaseQuantizationMixin(abc.ABC):
                 continue
             if quantizer is None:
                 if strict:
-                    raise RuntimeError(f"Failed to import output encoding at index {i}: no quantizer present.")
+                    raise RuntimeError(
+                        f"Failed to import output encoding at index {i}: no quantizer present."
+                    )
                 continue
             if isinstance(encoding, dict):
                 encoding = [encoding]
@@ -516,7 +548,9 @@ class BaseQuantizationMixin(abc.ABC):
         encodings = {}
         for param_name, quantizer in self.param_quantizers.items():
             if isinstance(quantizer, QuantizerBase) and quantizer.is_initialized():
-                encodings[param_name] = quantizer.get_encodings().to_qnn_encoding_dict(encoding_version)
+                encodings[param_name] = quantizer.get_encodings().to_qnn_encoding_dict(
+                    encoding_version
+                )
             else:
                 encodings[param_name] = None
 
@@ -528,19 +562,21 @@ class BaseQuantizationMixin(abc.ABC):
             if isinstance(param, QuantizedTensorBase) and param.encoding is not None:
                 # If parameter itself is an already-quantized tensor,
                 # export the encoding held by the parameter
-                e = param.encoding.to_qnn_encoding_dict(encoding_version) # pylint: disable=protected-access
+                e = param.encoding.to_qnn_encoding_dict(encoding_version)  # pylint: disable=protected-access
             else:
                 e = None
             encodings[param_name] = e
 
         return encodings
 
-    def import_param_encodings(self,
-                               encodings: Mapping[str, Mapping],
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_param_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import parameter encodings represented in below format:
         {
@@ -555,7 +591,7 @@ class BaseQuantizationMixin(abc.ABC):
         :param freeze: If True, freezes the quantizer's encodings after loading
         """
         for param_name, quantizer in dict(self.param_quantizers).items():
-            if quantizer and not quantizer._allow_overwrite: # pylint: disable=protected-access
+            if quantizer and not quantizer._allow_overwrite:  # pylint: disable=protected-access
                 continue
             encoding = encodings.get(param_name, None)
 
@@ -577,13 +613,15 @@ class BaseQuantizationMixin(abc.ABC):
                     "vector_stride": encoding[0]["vector_stride"],
                     "index_bw": encoding[0]["index_bw"],
                 }
-                rounded_weight.encoding = VectorEncoding(e.scale,
-                                                         e.offset,
-                                                         e.bitwidth,
-                                                         e.signed,
-                                                         e.symmetry,
-                                                         block_size=None,
-                                                         **vector_encoding_properties)
+                rounded_weight.encoding = VectorEncoding(
+                    e.scale,
+                    e.offset,
+                    e.bitwidth,
+                    e.signed,
+                    e.symmetry,
+                    block_size=None,
+                    **vector_encoding_properties,
+                )
                 setattr(self, param_name, nn.Parameter(rounded_weight))
                 # Remove associated quantizer since the weight is holding already-quantized values
                 self.param_quantizers[param_name] = None
@@ -595,7 +633,9 @@ class BaseQuantizationMixin(abc.ABC):
                 continue
             if quantizer is None:
                 if strict:
-                    raise RuntimeError(f"Failed to import encoding for parameter {param_name}: no quantizer present.")
+                    raise RuntimeError(
+                        f"Failed to import encoding for parameter {param_name}: no quantizer present."
+                    )
                 continue
             if isinstance(encoding, dict):
                 encoding = [encoding]
@@ -629,7 +669,7 @@ class BaseQuantizationMixin(abc.ABC):
 
         orig_module = orig_module_cls.__new__(orig_module_cls)
         orig_module.__dict__ = self.__dict__.copy()
-        orig_module.__dict__.pop('forward', None)
+        orig_module.__dict__.pop("forward", None)
 
         # NOTE: We use custom copy function _shallow_copy, which is a superset of dict.copy(),
         #       to circumvent an OOP failure in deepspeed where ZeROOrderedDict.copy()
@@ -639,9 +679,9 @@ class BaseQuantizationMixin(abc.ABC):
         orig_module._parameters = _shallow_copy(self._parameters)
         orig_module._buffers = self._buffers.copy()
         orig_module._modules = self._modules.copy()
-        del orig_module._modules['input_quantizers']
-        del orig_module._modules['output_quantizers']
-        del orig_module._modules['param_quantizers']
+        del orig_module._modules["input_quantizers"]
+        del orig_module._modules["output_quantizers"]
+        del orig_module._modules["param_quantizers"]
 
         return orig_module
 
@@ -682,22 +722,24 @@ class BaseQuantizationMixin(abc.ABC):
         return _remove_quantizers(self.output_quantizers, indices)
 
     def _remove_activation_quantizers(self):
-        """ Remove all activation quantizers """
+        """Remove all activation quantizers"""
         # pylint: disable=protected-access
         ctx_1 = self._remove_output_quantizers()
         ctx_2 = self._remove_input_quantizers()
-        return _ContextManager(action=lambda: None,
-                               cleanup=lambda: (ctx_1._cleanup(), ctx_2._cleanup()))
+        return _ContextManager(
+            action=lambda: None, cleanup=lambda: (ctx_1._cleanup(), ctx_2._cleanup())
+        )
 
     def _remove_all_quantizers(self):
-        """ Remove all quantizers """
+        """Remove all quantizers"""
         # pylint: disable=protected-access
         ctx_1 = self._remove_activation_quantizers()
         ctx_2 = self._remove_param_quantizers()
-        return _ContextManager(action=lambda: None,
-                               cleanup=lambda: (ctx_1._cleanup(), ctx_2._cleanup()))
+        return _ContextManager(
+            action=lambda: None, cleanup=lambda: (ctx_1._cleanup(), ctx_2._cleanup())
+        )
 
-    def _create_int32_bias_quantizer(self, input, _): # pylint: disable=redefined-builtin
+    def _create_int32_bias_quantizer(self, input, _):  # pylint: disable=redefined-builtin
         assert hasattr(self, "bias")
         assert isinstance(self.bias, torch.Tensor)
 
@@ -712,10 +754,12 @@ class BaseQuantizationMixin(abc.ABC):
         input_scale = None
 
         if len(input) == 1:
-            input, = input
+            (input,) = input
             if isinstance(self.input_quantizers[0], AffineQuantizerBase):
                 input_scale = self.input_quantizers[0].get_scale()
-            elif isinstance(input, QuantizedTensorBase) and isinstance(input.encoding, AffineEncoding):
+            elif isinstance(input, QuantizedTensorBase) and isinstance(
+                input.encoding, AffineEncoding
+            ):
                 input_scale = input.encoding.scale
 
         try:
@@ -724,7 +768,7 @@ class BaseQuantizationMixin(abc.ABC):
             bias_scale = None
 
         bias = self.bias
-        qmin = -2**31
+        qmin = -(2**31)
         qmax = 2**31 - 1
 
         if bias_scale is not None:
@@ -735,10 +779,9 @@ class BaseQuantizationMixin(abc.ABC):
         else:
             bias_encoding_shape = bias.shape
 
-        bias_qtzr = QuantizeDequantize(shape=bias_encoding_shape,
-                                       qmin=qmin,
-                                       qmax=qmax,
-                                       symmetric=True)
+        bias_qtzr = QuantizeDequantize(
+            shape=bias_encoding_shape, qmin=qmin, qmax=qmax, symmetric=True
+        )
         bias_qtzr.to(dtype=bias.dtype, device=bias.device)
         self.param_quantizers["bias"] = bias_qtzr
 
@@ -752,7 +795,9 @@ class BaseQuantizationMixin(abc.ABC):
             with bias_qtzr.compute_encodings():
                 _ = bias_qtzr(bias)
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
         raise NotImplementedError
 
     def fold_param_quantizers(self):
@@ -796,7 +841,11 @@ class BaseQuantizationMixin(abc.ABC):
 
             param = getattr(self, param_name)
             qdq_param = param_qtzr(param).dequantize()
-            setattr(self, param_name, torch.nn.Parameter(qdq_param, requires_grad=param.requires_grad))
+            setattr(
+                self,
+                param_name,
+                torch.nn.Parameter(qdq_param, requires_grad=param.requires_grad),
+            )
             self.param_quantizers[param_name] = None
 
     def _unfold_param_quantizers(self):
@@ -811,7 +860,9 @@ class BaseQuantizationMixin(abc.ABC):
                 continue
 
             if isinstance(qdq_param.encoding, GroupedBlockEncoding):
-                param_qtzr = GroupedBlockQuantizeDequantize.from_encodings(qdq_param.encoding)
+                param_qtzr = GroupedBlockQuantizeDequantize.from_encodings(
+                    qdq_param.encoding
+                )
             elif isinstance(qdq_param.encoding, AffineEncoding):
                 param_qtzr = QuantizeDequantize.from_encodings(qdq_param.encoding)
             elif isinstance(qdq_param.encoding, FloatEncoding):
@@ -823,7 +874,11 @@ class BaseQuantizationMixin(abc.ABC):
                 continue
 
             param = qdq_param.as_subclass(torch.Tensor)
-            setattr(self, param_name, torch.nn.Parameter(param, requires_grad=param.requires_grad))
+            setattr(
+                self,
+                param_name,
+                torch.nn.Parameter(param, requires_grad=param.requires_grad),
+            )
             self.param_quantizers[param_name] = param_qtzr
 
 
@@ -834,14 +889,13 @@ def _remove_quantizers(quantizers, keys):
         for key, orig_qtzr in orig_quantizers.items():
             quantizers[key] = orig_qtzr
 
-    ctx = _ContextManager(action=lambda: None,
-                          cleanup=restore_quantizers)
+    ctx = _ContextManager(action=lambda: None, cleanup=restore_quantizers)
 
     try:
         for key in keys:
             quantizers[key] = None
     except Exception:
-        ctx._cleanup() # pylint: disable=protected-access
+        ctx._cleanup()  # pylint: disable=protected-access
         raise
 
     return ctx

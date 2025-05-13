@@ -35,6 +35,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base directory to hold quantized transformers modules """
+"""Base directory to hold quantized transformers modules"""
 
 from .models import *

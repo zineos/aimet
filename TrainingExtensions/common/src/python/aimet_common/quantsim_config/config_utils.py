@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for quantsim configurations """
+"""Utilities for quantsim configurations"""
+
 import os
 
 
@@ -44,4 +45,6 @@ def get_path_for_target_config(target_config: str) -> str:
 
     :return: path for target config file
     """
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), f'{target_config}.json')
+    return os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), f"{target_config}.json"
+    )

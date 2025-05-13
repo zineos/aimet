@@ -40,7 +40,9 @@ from typing import Optional, Mapping
 import torch
 
 
-class _finfo(namedtuple("_finfo", ("exponent_bits", "mantissa_bits", "finite", "unsigned_zero"))):
+class _finfo(
+    namedtuple("_finfo", ("exponent_bits", "mantissa_bits", "finite", "unsigned_zero"))
+):
     def to_torch_dtype(self) -> Optional[torch.dtype]:
         return _finfo_to_torch_dtype.get(self)
 
@@ -49,10 +51,12 @@ class _finfo(namedtuple("_finfo", ("exponent_bits", "mantissa_bits", "finite", "
         try:
             return _torch_dtype_to_finfo[dtype]
         except KeyError as e:
-            msg = " ".join([
-                f"Expected dtype to be one of {list(_torch_dtype_to_finfo.keys())};",
-                f"got {dtype}",
-            ])
+            msg = " ".join(
+                [
+                    f"Expected dtype to be one of {list(_torch_dtype_to_finfo.keys())};",
+                    f"got {dtype}",
+                ]
+            )
             raise ValueError(msg) from e
 
     def to_str(self) -> str:
@@ -66,7 +70,7 @@ class _finfo(namedtuple("_finfo", ("exponent_bits", "mantissa_bits", "finite", "
         fn = "fn" if fn else ""
         uz = "uz" if uz else ""
 
-        return f"float{e+m+1}_e{e}m{m}{fn}{uz}"
+        return f"float{e + m + 1}_e{e}m{m}{fn}{uz}"
 
     def is_float16(self):
         return self == _float16
@@ -84,31 +88,30 @@ _finfo_to_torch_dtype: Mapping[_finfo, torch.dtype] = {
 }
 
 if hasattr(torch, "float8_e4m3fn"):
-    _float8_e4m3fn = _finfo(exponent_bits=4, mantissa_bits=3, finite=True, unsigned_zero=False)
-    _finfo_to_torch_dtype.update({
-        _float8_e4m3fn: torch.float8_e4m3fn
-    })
+    _float8_e4m3fn = _finfo(
+        exponent_bits=4, mantissa_bits=3, finite=True, unsigned_zero=False
+    )
+    _finfo_to_torch_dtype.update({_float8_e4m3fn: torch.float8_e4m3fn})
 
 if hasattr(torch, "float8_e4m3fnuz"):
-    _float8_e4m3fnuz = _finfo(exponent_bits=4, mantissa_bits=3, finite=True, unsigned_zero=True)
-    _finfo_to_torch_dtype.update({
-        _float8_e4m3fnuz: torch.float8_e4m3fnuz
-    })
+    _float8_e4m3fnuz = _finfo(
+        exponent_bits=4, mantissa_bits=3, finite=True, unsigned_zero=True
+    )
+    _finfo_to_torch_dtype.update({_float8_e4m3fnuz: torch.float8_e4m3fnuz})
 
 if hasattr(torch, "float8_e5m2"):
-    _float8_e5m2 = _finfo(exponent_bits=5, mantissa_bits=2, finite=False, unsigned_zero=False)
-    _finfo_to_torch_dtype.update({
-        _float8_e5m2: torch.float8_e5m2
-    })
+    _float8_e5m2 = _finfo(
+        exponent_bits=5, mantissa_bits=2, finite=False, unsigned_zero=False
+    )
+    _finfo_to_torch_dtype.update({_float8_e5m2: torch.float8_e5m2})
 
 if hasattr(torch, "float8_e5m2fnuz"):
-    _float8_e5m2fnuz = _finfo(exponent_bits=5, mantissa_bits=2, finite=True, unsigned_zero=True)
-    _finfo_to_torch_dtype.update({
-        _float8_e5m2fnuz: torch.float8_e5m2fnuz
-    })
+    _float8_e5m2fnuz = _finfo(
+        exponent_bits=5, mantissa_bits=2, finite=True, unsigned_zero=True
+    )
+    _finfo_to_torch_dtype.update({_float8_e5m2fnuz: torch.float8_e5m2fnuz})
 
 
 _torch_dtype_to_finfo: Mapping[torch.dtype, _finfo] = {
-    torch_dtype: finfo
-    for finfo, torch_dtype in _finfo_to_torch_dtype.items()
+    torch_dtype: finfo for finfo, torch_dtype in _finfo_to_torch_dtype.items()
 }

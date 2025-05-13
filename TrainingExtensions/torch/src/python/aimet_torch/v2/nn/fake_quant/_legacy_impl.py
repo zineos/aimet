@@ -58,19 +58,21 @@ from ..modules import custom
 
 
 class FakeQuantMeta(abc.ABCMeta):
-    """Sets :meth:`forward` to :meth:`quantized_forward` if only :meth:`quantized_forward` is defined
-    """
+    """Sets :meth:`forward` to :meth:`quantized_forward` if only :meth:`quantized_forward` is defined"""
 
     def __new__(mcs, name, bases, namespace, **kwargs):
         if "quantized_forward" in namespace and "forward" not in namespace:
-            warnings.warn("Support for defining `quantized_forward` in place of `forward` method will be deprecated, "
-                          "please use `forward` instead.",
-                          DeprecationWarning, stacklevel=2)
+            warnings.warn(
+                "Support for defining `quantized_forward` in place of `forward` method will be deprecated, "
+                "please use `forward` instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             namespace["forward"] = namespace["quantized_forward"]
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
 
-class FakeQuantizationMixin(BaseQuantizationMixin, metaclass=FakeQuantMeta): # pylint: disable=abstract-method
+class FakeQuantizationMixin(BaseQuantizationMixin, metaclass=FakeQuantMeta):  # pylint: disable=abstract-method
     """Mixin that implements fake-quantization on top of regular pytorch modules.
 
     Specifically, a fake-quantized module will quantize input, output, and parameter tensors with
@@ -128,8 +130,8 @@ class FakeQuantizationMixin(BaseQuantizationMixin, metaclass=FakeQuantMeta): # p
 
     """
 
-    cls_to_qcls = OrderedDict() # ouantized class -> original class
-    qcls_to_cls = OrderedDict() # original class -> quantized class
+    cls_to_qcls = OrderedDict()  # ouantized class -> original class
+    qcls_to_cls = OrderedDict()  # original class -> quantized class
 
     @abc.abstractmethod
     def forward(self, *args, **kwargs):
@@ -153,19 +155,21 @@ class FakeQuantizationMixin(BaseQuantizationMixin, metaclass=FakeQuantMeta): # p
         Wrap a regular module class into a fake-quantized module class
         """
         if not issubclass(module_cls, nn.Module):
-            raise ValueError("Expected module_cls to be a subclass of torch.nn.Module. "
-                             f"Got {module_cls}.")
+            raise ValueError(
+                "Expected module_cls to be a subclass of torch.nn.Module. "
+                f"Got {module_cls}."
+            )
         if module_cls in cls.cls_to_qcls:
             return cls.cls_to_qcls[module_cls]
 
         quantized_cls_name = f"FakeQuantized{module_cls.__name__}"
         base_classes = (cls, module_cls)
-        quantized_cls = type(quantized_cls_name, base_classes, {'__module__': __name__})
+        quantized_cls = type(quantized_cls_name, base_classes, {"__module__": __name__})
         return cls.implements(module_cls)(quantized_cls)
 
 
-class _FakeQuantizedUnaryOpMixin(FakeQuantizationMixin): # pylint: disable=abstract-method
-    def forward(self, *args, **kwargs) -> Tensor: # pylint: disable=missing-function-docstring
+class _FakeQuantizedUnaryOpMixin(FakeQuantizationMixin):  # pylint: disable=abstract-method
+    def forward(self, *args, **kwargs) -> Tensor:  # pylint: disable=missing-function-docstring
         x, *others = args
 
         if isinstance(x, Tensor) and x.is_floating_point() and self.input_quantizers[0]:
@@ -174,17 +178,22 @@ class _FakeQuantizedUnaryOpMixin(FakeQuantizationMixin): # pylint: disable=abstr
         with self._patch_quantized_parameters():
             output = super().forward(x, *others, **kwargs)
 
-        if isinstance(output, Tensor) and output.is_floating_point() and self.output_quantizers[0]:
+        if (
+            isinstance(output, Tensor)
+            and output.is_floating_point()
+            and self.output_quantizers[0]
+        ):
             output = self.output_quantizers[0](output)
 
         return output
 
-class _FakeQuantizedBinaryOpMixin(FakeQuantizationMixin): # pylint: disable=abstract-method
+
+class _FakeQuantizedBinaryOpMixin(FakeQuantizationMixin):  # pylint: disable=abstract-method
     def __quant_init__(self):
         super().__quant_init__()
         self.input_quantizers = nn.ModuleList([None, None])
 
-    def forward(self, *args, **kwargs) -> Tensor: # pylint: disable=missing-function-docstring
+    def forward(self, *args, **kwargs) -> Tensor:  # pylint: disable=missing-function-docstring
         x, y, *others = args
 
         if isinstance(x, Tensor) and x.is_floating_point() and self.input_quantizers[0]:
@@ -196,17 +205,22 @@ class _FakeQuantizedBinaryOpMixin(FakeQuantizationMixin): # pylint: disable=abst
         with self._patch_quantized_parameters():
             output = super().forward(x, y, *others, **kwargs)
 
-        if isinstance(output, Tensor) and output.is_floating_point() and self.output_quantizers[0]:
+        if (
+            isinstance(output, Tensor)
+            and output.is_floating_point()
+            and self.output_quantizers[0]
+        ):
             output = self.output_quantizers[0](output)
 
         return output
 
-class _FakeQuantizedTernaryOpMixin(FakeQuantizationMixin): # pylint: disable=abstract-method
+
+class _FakeQuantizedTernaryOpMixin(FakeQuantizationMixin):  # pylint: disable=abstract-method
     def __quant_init__(self):
         super().__quant_init__()
         self.input_quantizers = nn.ModuleList([None, None, None])
 
-    def forward(self, *args, **kwargs) -> Tensor: # pylint: disable=missing-function-docstring
+    def forward(self, *args, **kwargs) -> Tensor:  # pylint: disable=missing-function-docstring
         x, y, z, *others = args
 
         if isinstance(x, Tensor) and x.is_floating_point() and self.input_quantizers[0]:
@@ -221,11 +235,14 @@ class _FakeQuantizedTernaryOpMixin(FakeQuantizationMixin): # pylint: disable=abs
         with self._patch_quantized_parameters():
             output = super().forward(x, y, z, *others, **kwargs)
 
-        if isinstance(output, Tensor) and output.is_floating_point() and self.output_quantizers[0]:
+        if (
+            isinstance(output, Tensor)
+            and output.is_floating_point()
+            and self.output_quantizers[0]
+        ):
             output = self.output_quantizers[0](output)
 
         return output
-
 
 
 ########################
@@ -336,23 +353,29 @@ _TORCH_NN_UNARY_MODULES = [
 ]
 
 if version.parse(torch.__version__) >= version.parse("1.10.0"):
-    _TORCH_NN_UNARY_MODULES.extend([
-        nn.ReflectionPad3d,
-    ])
+    _TORCH_NN_UNARY_MODULES.extend(
+        [
+            nn.ReflectionPad3d,
+        ]
+    )
 
 if version.parse(torch.__version__) >= version.parse("1.12.0"):
-    _TORCH_NN_UNARY_MODULES.extend([
-        nn.Dropout1d,
-    ])
+    _TORCH_NN_UNARY_MODULES.extend(
+        [
+            nn.Dropout1d,
+        ]
+    )
 
 if version.parse(torch.__version__) >= version.parse("2.1.0"):
-    _TORCH_NN_UNARY_MODULES.extend([
-        nn.CircularPad1d,
-        nn.CircularPad2d,
-        nn.CircularPad3d,
-        nn.ZeroPad1d,
-        nn.ZeroPad3d,
-    ])
+    _TORCH_NN_UNARY_MODULES.extend(
+        [
+            nn.CircularPad1d,
+            nn.CircularPad2d,
+            nn.CircularPad3d,
+            nn.ZeroPad1d,
+            nn.ZeroPad3d,
+        ]
+    )
 
 _TORCH_NN_BINARY_MODULES = [
     nn.BCELoss,
@@ -379,7 +402,9 @@ _TORCH_NN_TERNARY_MODULES = [
 
 def _register_global_variable(var_name, obj):
     if var_name in globals():
-        raise RuntimeError(f'Variable name "{var_name}" already exists in the global namespace.')
+        raise RuntimeError(
+            f'Variable name "{var_name}" already exists in the global namespace.'
+        )
     globals().update({var_name: obj})
 
 
@@ -402,13 +427,15 @@ class FakeQuantizedEmbedding(FakeQuantizationMixin, nn.Embedding):
     """
     Quantized class definition for nn.Embedding.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
-        self.input_quantizers = nn.ModuleList([]) # nn.Embedding takes no float input
+        self.input_quantizers = nn.ModuleList([])  # nn.Embedding takes no float input
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, input: Tensor) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input: Tensor) -> Tensor:
         """
         Quantized forward impl for nn.Embedding.
         """
@@ -428,16 +455,20 @@ class FakeQuantizedEmbeddingBag(FakeQuantizationMixin, nn.EmbeddingBag):
     """
     Quantized class definition for nn.EmbeddingBag.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None])
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, # pylint: disable=arguments-differ
-                input: Tensor,
-                offsets: Optional[Tensor] = None,
-                per_sample_weights: Optional[Tensor] = None) -> Tensor:
+    # pylint: disable=arguments-differ
+    def forward(
+        self,
+        input: Tensor,
+        offsets: Optional[Tensor] = None,
+        per_sample_weights: Optional[Tensor] = None,
+    ) -> Tensor:
         """
         Quantized forward impl for nn.EmbeddingBag.
         """
@@ -461,7 +492,8 @@ class _FakeQuantizedRNNBaseMixin(FakeQuantizationMixin):
         self.input_quantizers = nn.ModuleList([None, None])
         self.output_quantizers = nn.ModuleList([None, None])
 
-    def forward(self, input, hx: Optional[Tensor] = None): # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input, hx: Optional[Tensor] = None):
         """
         Quantized forward impl for nn.GRU and nn.RNN.
         """
@@ -494,6 +526,7 @@ class _FakeQuantizedRNNBaseMixin(FakeQuantizationMixin):
 
         return output, hidden
 
+
 FakeQuantizedGRU = _FakeQuantizedRNNBaseMixin.wrap(nn.GRU)
 FakeQuantizedRNN = _FakeQuantizedRNNBaseMixin.wrap(nn.RNN)
 
@@ -504,7 +537,8 @@ class _FakeQuantizedRNNCellBaseMixin(FakeQuantizationMixin):
         self.input_quantizers = nn.ModuleList([None, None])
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, input: Tensor, hx: Optional[Tensor] = None) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input: Tensor, hx: Optional[Tensor] = None) -> Tensor:
         """
         Quantized forward impl for nn.GRUCell and nn.RNNCell.
         """
@@ -524,6 +558,7 @@ class _FakeQuantizedRNNCellBaseMixin(FakeQuantizationMixin):
 
         return output
 
+
 FakeQuantizedGRUCell = _FakeQuantizedRNNCellBaseMixin.wrap(nn.GRUCell)
 FakeQuantizedRNNCell = _FakeQuantizedRNNCellBaseMixin.wrap(nn.RNNCell)
 
@@ -533,13 +568,15 @@ class FakeQuantizedLSTM(FakeQuantizationMixin, nn.LSTM):
     """
     Quantized class definition for nn.LSTM.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None, None])
         self.output_quantizers = nn.ModuleList([None, None, None])
 
-    def forward(self, input, hx: Optional[Tuple[Tensor, Tensor]] = None): # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input, hx: Optional[Tuple[Tensor, Tensor]] = None):
         """
         Quantized forward impl for nn.LSTM.
         """
@@ -591,13 +628,15 @@ class FakeQuantizedLSTMCell(FakeQuantizationMixin, nn.LSTMCell):
     """
     Quantized class definition for nn.LSTMCell.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None, None])
         self.output_quantizers = nn.ModuleList([None, None])
 
-    def forward(self, input: Tensor, hx: Optional[Tuple[Tensor, Tensor]] = None): # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input: Tensor, hx: Optional[Tuple[Tensor, Tensor]] = None):
         """
         Quantized forward impl for nn.LSTMCell.
         """
@@ -628,21 +667,25 @@ class FakeQuantizedLSTMCell(FakeQuantizationMixin, nn.LSTMCell):
 
 
 @FakeQuantizationMixin.implements(nn.AdaptiveLogSoftmaxWithLoss)
-class FakeQuantizedAdaptiveLogSoftmaxWithLoss(FakeQuantizationMixin, nn.AdaptiveLogSoftmaxWithLoss):
+class FakeQuantizedAdaptiveLogSoftmaxWithLoss(
+    FakeQuantizationMixin, nn.AdaptiveLogSoftmaxWithLoss
+):
     """
     Quantized class definition for nn.AdaptiveLogSoftmaxWithLoss.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None])
         self.output_quantizers = nn.ModuleList([None, None])
 
-    def forward(self, input_: Tensor, target_: Tensor) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, input_: Tensor, target_: Tensor) -> Tensor:
         """
         Quantized forward impl for nn.AdaptiveLogSoftmaxWithLoss.
         """
-        if  self.input_quantizers[0]:
+        if self.input_quantizers[0]:
             input_ = self.input_quantizers[0](input_)
 
         if self.input_quantizers[1]:
@@ -662,7 +705,6 @@ class FakeQuantizedAdaptiveLogSoftmaxWithLoss(FakeQuantizationMixin, nn.Adaptive
         return _ASMoutput(output, loss)
 
 
-
 # Quantized definitions of the following nn.Modules are intentionally omitted:
 #  * nn.MultiheadAttention
 #  * nn.Transformer
@@ -672,18 +714,19 @@ class FakeQuantizedAdaptiveLogSoftmaxWithLoss(FakeQuantizationMixin, nn.Adaptive
 #  * nn.TransformerEncoderLayer
 
 
-
-
-
 ###########################
 ### AIMET V1 custom ops ###
 ###########################
 
 # These class names are already occupied by torch.nn.Modules.
 # To avoid name collision, we add prefix "Aimet" to the variable names as an ad-hoc workaraound.
-FakeQuantizedAimetChannelShuffle = _FakeQuantizedUnaryOpMixin.wrap(custom.ChannelShuffle)
+FakeQuantizedAimetChannelShuffle = _FakeQuantizedUnaryOpMixin.wrap(
+    custom.ChannelShuffle
+)
 FakeQuantizedAimetMaxPool2d = _FakeQuantizedUnaryOpMixin.wrap(custom.MaxPool2d)
-FakeQuantizedAimetAdaptiveAvgPool2d = _FakeQuantizedUnaryOpMixin.wrap(custom.AdaptiveAvgPool2d)
+FakeQuantizedAimetAdaptiveAvgPool2d = _FakeQuantizedUnaryOpMixin.wrap(
+    custom.AdaptiveAvgPool2d
+)
 FakeQuantizedAimetAvgPool2d = _FakeQuantizedUnaryOpMixin.wrap(custom.AvgPool2d)
 
 _AIMET_V1_UNARY_MODULES = [
@@ -731,7 +774,7 @@ _AIMET_V1_UNARY_MODULES = [
     custom.Shape,
     custom.Expand,
     custom.StridedSlice,
-    custom.RmsNorm
+    custom.RmsNorm,
 ]
 _AIMET_V1_BINARY_MODULES = [
     custom.MatMul,
@@ -785,26 +828,29 @@ for _module_cls in _AIMET_V1_TERNARY_MODULES:
     _register_global_variable(_quantized_cls.__name__, _quantized_cls)
 
 
-
 @FakeQuantizationMixin.implements(custom.BatchNorm)
-class FakeQuantizedBatchNorm(FakeQuantizationMixin, custom.BatchNorm): # pylint: disable=abstract-method
+class FakeQuantizedBatchNorm(FakeQuantizationMixin, custom.BatchNorm):  # pylint: disable=abstract-method
     """
     Quantized class definition for custom.BatchNorm.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None, None, None, None])
 
-    def forward(self, # pylint: disable=too-many-arguments, arguments-differ
-                          input: Tensor,
-                          running_mean: Optional[Tensor],
-                          running_var: Optional[Tensor],
-                          weight: Optional[Tensor] = None,
-                          bias: Optional[Tensor] = None,
-                          training: bool = False,
-                          momentum: float = 0.1,
-                          eps: float = 1e-5) -> Tensor:
+    # pylint: disable=too-many-arguments, arguments-differ
+    def forward(
+        self,
+        input: Tensor,
+        running_mean: Optional[Tensor],
+        running_var: Optional[Tensor],
+        weight: Optional[Tensor] = None,
+        bias: Optional[Tensor] = None,
+        training: bool = False,
+        momentum: float = 0.1,
+        eps: float = 1e-5,
+    ) -> Tensor:
         """
         Quantized forward impl for custom.BatchNorm.
         """
@@ -825,8 +871,16 @@ class FakeQuantizedBatchNorm(FakeQuantizationMixin, custom.BatchNorm): # pylint:
         if bias is not None and self.input_quantizers[4]:
             bias = self.input_quantizers[4](bias)
 
-        output = super().forward(input, running_mean.detach(), running_var.detach(),
-                                     weight, bias, training, momentum, eps)
+        output = super().forward(
+            input,
+            running_mean.detach(),
+            running_var.detach(),
+            weight,
+            bias,
+            training,
+            momentum,
+            eps,
+        )
 
         if self.output_quantizers[0]:
             output = self.output_quantizers[0](output)
@@ -835,21 +889,25 @@ class FakeQuantizedBatchNorm(FakeQuantizationMixin, custom.BatchNorm): # pylint:
 
 
 @FakeQuantizationMixin.implements(custom.GroupNorm)
-class FakeQuantizedAimetGroupNorm(FakeQuantizationMixin, custom.GroupNorm): # pylint: disable=abstract-method
+class FakeQuantizedAimetGroupNorm(FakeQuantizationMixin, custom.GroupNorm):  # pylint: disable=abstract-method
     """
     Quantized class definition for custom.GroupNorm.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None, None, None])
 
-    def forward(self, # pylint: disable=arguments-differ
-                          input: Tensor,
-                          num_groups: int,
-                          weight: Optional[Tensor] = None,
-                          bias: Optional[Tensor] = None,
-                          eps: float = 1e-5) -> Tensor:
+    # pylint: disable=arguments-differ
+    def forward(
+        self,
+        input: Tensor,
+        num_groups: int,
+        weight: Optional[Tensor] = None,
+        bias: Optional[Tensor] = None,
+        eps: float = 1e-5,
+    ) -> Tensor:
         """
         Quantized forward impl for custom.GroupNorm.
         """
@@ -877,17 +935,19 @@ class FakeQuantizedNonMaxSuppression(FakeQuantizationMixin, custom.NonMaxSuppres
     """
     Quantized class definition for custom.NonMaxSuppression.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None])
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, *args) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, *args) -> Tensor:
         """
         Quantized forward impl for custom.NonMaxSuppression.
         """
-        boxes, scores = args # boxes are integer tensors
+        boxes, scores = args  # boxes are integer tensors
 
         if self.input_quantizers[0]:
             # Use same input quantizer for all the score tensors
@@ -906,7 +966,9 @@ class FakeQuantizedSplit(FakeQuantizationMixin, custom.Split):
     """
     Quantized class definition for custom.Split.
     """
-    def forward(self, *args, **kwargs): # pylint: disable=arguments-differ
+
+    # pylint: disable=arguments-differ
+    def forward(self, *args, **kwargs):
         """
         Quantized forward impl for custom.Split.
         """
@@ -919,7 +981,11 @@ class FakeQuantizedSplit(FakeQuantizationMixin, custom.Split):
 
         if self.output_quantizers[0]:
             # Use same output quantizer for all the output tensors
-            quantize_fn = lambda out: self.output_quantizers[0](out) if out.is_floating_point() else out
+            quantize_fn = (
+                lambda out: self.output_quantizers[0](out)
+                if out.is_floating_point()
+                else out
+            )
             outputs = tree_map(quantize_fn, outputs)
 
         return outputs
@@ -930,6 +996,7 @@ class FakeQuantizedConcat(FakeQuantizationMixin, custom.Concat):
     """
     Quantized class definition for custom.Concat.
     """
+
     _num_inputs: int
 
     def __quant_init__(self):
@@ -943,23 +1010,28 @@ class FakeQuantizedConcat(FakeQuantizationMixin, custom.Concat):
         input_encodings = super().export_input_encodings(encoding_version)
         return input_encodings * self._num_inputs
 
-    def import_input_encodings(self,
-                               encodings,
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_input_encodings(
+        self,
+        encodings,
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Extends super().import_input_encodings to set `self._num_inputs` based on length of encodings.
         """
         self._num_inputs = len(encodings)
-        super().import_input_encodings(encodings,
-                                       strict=strict,
-                                       partial=partial,
-                                       requires_grad=requires_grad,
-                                       allow_overwrite=allow_overwrite)
+        super().import_input_encodings(
+            encodings,
+            strict=strict,
+            partial=partial,
+            requires_grad=requires_grad,
+            allow_overwrite=allow_overwrite,
+        )
 
-    def forward(self, *x): # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, *x):
         """
         Quantized forward impl for custom.Concat.
         """
@@ -967,7 +1039,11 @@ class FakeQuantizedConcat(FakeQuantizationMixin, custom.Concat):
 
         if self.input_quantizers[0]:
             # Use same input quantizer for all the input tensors
-            quantize_fn = lambda inp: self.input_quantizers[0](inp) if inp.is_floating_point() else inp
+            quantize_fn = (
+                lambda inp: self.input_quantizers[0](inp)
+                if inp.is_floating_point()
+                else inp
+            )
             x = tree_map(quantize_fn, x)
 
         output = super().forward(*x)
@@ -979,26 +1055,36 @@ class FakeQuantizedConcat(FakeQuantizationMixin, custom.Concat):
 
 
 @FakeQuantizationMixin.implements(custom.Where)
-class FakeQuantizedWhere(FakeQuantizationMixin, custom.Where): # pylint: disable=abstract-method
+class FakeQuantizedWhere(FakeQuantizationMixin, custom.Where):  # pylint: disable=abstract-method
     """
     Quantized class definition for custom.Where.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None, None])
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, condition: Tensor, input, other, **kwargs) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, condition: Tensor, input, other, **kwargs) -> Tensor:
         """
         Quantized forward impl for custom.MaskedFill.
         """
         # pylint: disable=redefined-builtin
 
-        if isinstance(input, Tensor) and input.is_floating_point() and self.input_quantizers[1]:
+        if (
+            isinstance(input, Tensor)
+            and input.is_floating_point()
+            and self.input_quantizers[1]
+        ):
             input = self.input_quantizers[1](input)
 
-        if isinstance(other, Tensor) and other.is_floating_point() and self.input_quantizers[2]:
+        if (
+            isinstance(other, Tensor)
+            and other.is_floating_point()
+            and self.input_quantizers[2]
+        ):
             other = self.input_quantizers[2](other)
 
         output = super().forward(condition, input, other, **kwargs)
@@ -1010,21 +1096,27 @@ class FakeQuantizedWhere(FakeQuantizationMixin, custom.Where): # pylint: disable
 
 
 @FakeQuantizationMixin.implements(custom.MaskedFill)
-class FakeQuantizedMaskedFill(FakeQuantizationMixin, custom.MaskedFill): # pylint: disable=abstract-method
+class FakeQuantizedMaskedFill(FakeQuantizationMixin, custom.MaskedFill):  # pylint: disable=abstract-method
     """
     Quantized class definition for custom.MaskedFill.
     """
+
     def __quant_init__(self):
         super().__quant_init__()
         # pylint: disable=attribute-defined-outside-init
         self.input_quantizers = nn.ModuleList([None, None])
         self.output_quantizers = nn.ModuleList([None])
 
-    def forward(self, mask: Tensor, value) -> Tensor: # pylint: disable=arguments-differ
+    # pylint: disable=arguments-differ
+    def forward(self, mask: Tensor, value) -> Tensor:
         """
         Quantized forward impl for custom.MaskedFill.
         """
-        if isinstance(value, Tensor) and value.is_floating_point() and self.input_quantizers[1]:
+        if (
+            isinstance(value, Tensor)
+            and value.is_floating_point()
+            and self.input_quantizers[1]
+        ):
             value = self.input_quantizers[1](value)
 
         output = super().forward(mask, value)

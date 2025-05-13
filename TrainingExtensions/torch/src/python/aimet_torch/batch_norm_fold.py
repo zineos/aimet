@@ -43,5 +43,5 @@ from .v2.batch_norm_fold import (
     _is_valid_bn_fold,
     _find_all_batch_norms_to_fold,
     find_standalone_batchnorm_ops,
-    find_all_batch_norms_to_fold
+    find_all_batch_norms_to_fold,
 )

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=too-many-lines
-""" Top level API for performing quantization simulation of a pytorch model """
+"""Top level API for performing quantization simulation of a pytorch model"""
 
 import copy
 from typing import (
@@ -75,7 +75,11 @@ from aimet_torch._base.quantsim import (
     check_accumulator_overflow,
 )
 from aimet_torch.v2 import nn as aimet_nn
-from aimet_torch.v2.nn import BaseQuantizationMixin, QuantizationMixin, UnknownModuleError
+from aimet_torch.v2.nn import (
+    BaseQuantizationMixin,
+    QuantizationMixin,
+    UnknownModuleError,
+)
 from aimet_torch.v2.nn.fake_quant import _legacy_impl
 from aimet_torch.v2._builder import _V2LazyQuantizeWrapper
 from aimet_torch.v2.quantization.base import QuantizerBase, EncodingBase
@@ -87,14 +91,14 @@ from aimet_torch.v2.deepspeed_utils import _register_zero3_forward_hooks
 
 
 __all__ = [
-    'QuantizationSimModel',
-    'QuantParams',
-    'ExportableQuantModule',
-    'save_checkpoint',
-    'load_checkpoint',
-    'check_accumulator_overflow',
-    'load_encodings_to_sim',
-    'compute_encodings_for_sims',
+    "QuantizationSimModel",
+    "QuantParams",
+    "ExportableQuantModule",
+    "save_checkpoint",
+    "load_checkpoint",
+    "check_accumulator_overflow",
+    "load_encodings_to_sim",
+    "compute_encodings_for_sims",
 ]
 
 unquantizable_modules = (QuantizerBase, *unquantizable_modules)
@@ -119,7 +123,9 @@ def _convert_to_qmodel(model: torch.nn.Module):
     """
 
     def _convert_to_qmodule(module: torch.nn.Module):
-        if not isinstance(module, (*quantized_modules, *unquantizable_modules, *containers)):
+        if not isinstance(
+            module, (*quantized_modules, *unquantizable_modules, *containers)
+        ):
             qmodule = None
             try:
                 qmodule = QuantizationMixin.from_module(module)
@@ -131,8 +137,10 @@ def _convert_to_qmodel(model: torch.nn.Module):
                 except UnknownModuleError:
                     pass
 
-                if type(module).forward != torch.nn.Module.forward: # We don't complain if the user has no intent of
-                                                                    # running forward with this module
+                if (
+                    type(module).forward != torch.nn.Module.forward
+                ):  # We don't complain if the user has no intent of
+                    # running forward with this module
                     if not qmodule and not tuple(module.children()):
                         exceptions[e.module_cls] = e
 
@@ -153,27 +161,29 @@ def _convert_to_qmodel(model: torch.nn.Module):
 
     # Multiple unknown modules found. Batch all error messages in one exception
     e = next(iter(exceptions.values()))
-    msg = '\n'.join([
-        'Quantized module definitions of the following modules are not registered: [',
-        *(f'    {e.module_cls},' for e in exceptions.values()),
-        ']',
-    ])
+    msg = "\n".join(
+        [
+            "Quantized module definitions of the following modules are not registered: [",
+            *(f"    {e.module_cls}," for e in exceptions.values()),
+            "]",
+        ]
+    )
 
-    raise RuntimeError('\n\n'.join([
-        msg,
+    raise RuntimeError(
+        "\n\n".join(
+            [
+                msg,
+                "Please register the quantized module definition of the modules listed above "
+                f"using `@{e.mixin_cls.__name__}.implements()` decorator.",
+                "For example:",
+                *(e.generate_code_example() for e in exceptions.values()),
+                f"For more details, please refer to the official API reference:\n{e.api_reference_url}",
+            ]
+        )
+    )
 
-        'Please register the quantized module definition of the modules listed above ' \
-        f'using `@{e.mixin_cls.__name__}.implements()` decorator.',
 
-        "For example:",
-
-        *(e.generate_code_example() for e in exceptions.values()),
-
-       f"For more details, please refer to the official API reference:\n{e.api_reference_url}"
-    ]))
-
-
-class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing-class-docstring
+class QuantizationSimModel(_QuantizationSimModelBase):  # pylint: disable=missing-class-docstring
     __doc__ = f"""
     Class that simulates the quantized model execution on a target hardware backend.
 
@@ -233,7 +243,7 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             unless otherwise specified in the config file. (Default: 8)
         in_place (bool, optional): If True, then the given model is modified in-place into a quantized model. (Default: `False`)
         config_file (str, optional): File path or alias of the configuration file.
-            Alias can be one of {{ {', '.join(_config_file_aliases.keys())} }} (Default: `"default"`)
+            Alias can be one of {{ {", ".join(_config_file_aliases.keys())} }} (Default: `"default"`)
         default_data_type (QuantizationDataType, optional): Default data type to use for quantizing all
             inputs, outputs and parameters unless otherwise specified in the config file.
             Possible options are QuantizationDataType.int and QuantizationDataType.float.
@@ -243,47 +253,62 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
 
     _quantized_modules = quantized_modules
 
-    def __init__(self, # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
-                 model: torch.nn.Module,
-                 dummy_input: Union[torch.Tensor, Sequence[torch.Tensor]],
-                 quant_scheme: Union[str, QuantScheme] = None, # NOTE: Planned to be deprecated
-                 rounding_mode: Optional[str] = None, # NOTE: Planned to be deprecated
-                 default_output_bw: int = 8,
-                 default_param_bw: int = 8,
-                 in_place: bool = False,
-                 config_file: str = None,
-                 default_data_type: QuantizationDataType = QuantizationDataType.int):
+    def __init__(
+        self,  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Sequence[torch.Tensor]],
+        quant_scheme: Union[str, QuantScheme] = None,  # NOTE: Planned to be deprecated
+        rounding_mode: Optional[str] = None,  # NOTE: Planned to be deprecated
+        default_output_bw: int = 8,
+        default_param_bw: int = 8,
+        in_place: bool = False,
+        config_file: str = None,
+        default_data_type: QuantizationDataType = QuantizationDataType.int,
+    ):
         if not quant_scheme:
             old_default = QuantScheme.post_training_tf_enhanced
             new_default = QuantScheme.min_max
-            msg = _red(f"The default value of 'quant_scheme' has changed from '{old_default}' "
-                       f"to '{new_default}' since aimet-torch==2.0.0. "
-                       "If you wish to maintain the legacy default behavior, "
-                       f"please explicitly pass 'quant_scheme={old_default}'")
+            msg = _red(
+                f"The default value of 'quant_scheme' has changed from '{old_default}' "
+                f"to '{new_default}' since aimet-torch==2.0.0. "
+                "If you wish to maintain the legacy default behavior, "
+                f"please explicitly pass 'quant_scheme={old_default}'"
+            )
             warnings.warn(msg, DeprecationWarning, stacklevel=2)
             quant_scheme = new_default
 
         if rounding_mode:
-            if rounding_mode == 'nearest':
-                warnings.warn(_red("Passing rounding_mode='nearest' is no longer needed "\
-                                   "and will be deprecated soon in the later versions."),
-                              DeprecationWarning, stacklevel=2)
+            if rounding_mode == "nearest":
+                warnings.warn(
+                    _red(
+                        "Passing rounding_mode='nearest' is no longer needed "
+                        "and will be deprecated soon in the later versions."
+                    ),
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
             else:
                 raise TypeError("'rounding_mode' parameter is no longer supported.")
 
         qmodules = {
-            name: module for name, module in model.named_modules()
+            name: module
+            for name, module in model.named_modules()
             if isinstance(module, BaseQuantizationMixin)
         }
         quantizers = {
-            name: module for name, module in model.named_modules()
+            name: module
+            for name, module in model.named_modules()
             if isinstance(module, QuantizerBase)
         }
 
         if isinstance(model, BaseQuantizationMixin):
-            problem = f"the model itself is already a quantized module of type {type(model)}."
+            problem = (
+                f"the model itself is already a quantized module of type {type(model)}."
+            )
         elif isinstance(model, QuantizerBase):
-            problem = f"the model itself is already a quantizer object of type {type(model)}."
+            problem = (
+                f"the model itself is already a quantizer object of type {type(model)}."
+            )
         elif qmodules:
             problem = f"the model already contains quantized modules: {', '.join(qmodules.keys())}."
         elif quantizers:
@@ -313,21 +338,27 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             #       Since quantsim constructor relies on torch.jit tracing which involves running
             #       forward pass of the model, here we register a temporary hook to make
             #       uninitialized but pre-partitioned models runnable.
-            super().__init__(model, dummy_input, quant_scheme,
-                             rounding_mode='nearest',
-                             default_output_bw=default_output_bw,
-                             default_param_bw=default_param_bw,
-                             in_place=in_place,
-                             config_file=config_file,
-                             default_data_type=default_data_type)
+            super().__init__(
+                model,
+                dummy_input,
+                quant_scheme,
+                rounding_mode="nearest",
+                default_output_bw=default_output_bw,
+                default_param_bw=default_param_bw,
+                in_place=in_place,
+                config_file=config_file,
+                default_data_type=default_data_type,
+            )
 
         # Quantization parameters are placed on cpu by default.
         # Move them to cuda device as necessary
 
-        default_device = torch.device('cpu')
+        default_device = torch.device("cpu")
 
-        for param_or_buffer in itertools.chain(self.model.parameters(), self.model.buffers()):
-            if param_or_buffer.device.type != 'cpu':
+        for param_or_buffer in itertools.chain(
+            self.model.parameters(), self.model.buffers()
+        ):
+            if param_or_buffer.device.type != "cpu":
                 # Use the first non-cpu device as default device.
                 # Default device is necessary for the input/output quantizers of
                 # modules without any parameters such as ReLU
@@ -340,8 +371,14 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
 
             try:
                 # Find the device of the first parameter of the orignal module
-                param_or_buffer = next(iter(itertools.chain(module.parameters(recurse=False),
-                                                            module.buffers(recurse=False))))
+                param_or_buffer = next(
+                    iter(
+                        itertools.chain(
+                            module.parameters(recurse=False),
+                            module.buffers(recurse=False),
+                        )
+                    )
+                )
                 device = param_or_buffer.device
             except StopIteration:
                 # If the original module has no parameter, use default device
@@ -357,22 +394,28 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             # Let input/output of HTP resize ops to share same encoding
             self._propagate_encodings()
 
+    # pylint: disable=arguments-differ
     @overload
-    def compute_encodings(self, forward_pass_callback: Callable[[torch.nn.Module], Any]): # pylint: disable=arguments-differ
-        ...
+    def compute_encodings(
+        self, forward_pass_callback: Callable[[torch.nn.Module], Any]
+    ): ...
 
-    T = TypeVar('T')
+    T = TypeVar("T")
 
+    # pylint: disable=arguments-differ
     @overload
-    def compute_encodings(self, # pylint: disable=arguments-differ
-                          forward_pass_callback: Callable[[torch.nn.Module, T], Any],
-                          forward_pass_callback_args: T):
-        ...
+    def compute_encodings(
+        self,
+        forward_pass_callback: Callable[[torch.nn.Module, T], Any],
+        forward_pass_callback_args: T,
+    ): ...
 
     del T
 
     # pylint: disable=arguments-differ
-    def compute_encodings(self, forward_pass_callback, forward_pass_callback_args=_NOT_SPECIFIED):
+    def compute_encodings(
+        self, forward_pass_callback, forward_pass_callback_args=_NOT_SPECIFIED
+    ):
         r"""
         Computes encodings for all quantizers in the model.
 
@@ -423,8 +466,14 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             with aimet_nn.compute_encodings(self.model):
                 _ = forward_pass_callback(*args)
 
-    def export(self, path: str, filename_prefix: str, dummy_input: Union[torch.Tensor, Tuple],
-               *args, **kwargs):
+    def export(
+        self,
+        path: str,
+        filename_prefix: str,
+        dummy_input: Union[torch.Tensor, Tuple],
+        *args,
+        **kwargs,
+    ):
         if isinstance(dummy_input, torch.Tensor):
             dummy_input = (dummy_input,)
 
@@ -433,16 +482,19 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             """
             Fill in block sizes for dimensions with block size -1
             """
-            inp, = inp
+            (inp,) = inp
             dims = len(qtzr.block_size)
             input_shape = inp.shape[-dims:]
             scale_shape = qtzr.get_scale().shape[-dims:]
             block_size = qtzr.block_size
 
-            concrete_block_size = tuple(inp_size//scale_size if blk_size == -1 else blk_size
-                                        for inp_size, scale_size, blk_size
-                                        in zip(input_shape, scale_shape, block_size))
-            ctx = patch_attr(qtzr, 'block_size', concrete_block_size)
+            concrete_block_size = tuple(
+                inp_size // scale_size if blk_size == -1 else blk_size
+                for inp_size, scale_size, blk_size in zip(
+                    input_shape, scale_shape, block_size
+                )
+            )
+            ctx = patch_attr(qtzr, "block_size", concrete_block_size)
             stack.enter_context(ctx)
 
         handles = []
@@ -463,7 +515,9 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
 
                 # TODO
                 # stack.enter_context(self._concretize_int32_bias_quantizers(dummy_input))
-                return super().export(path, filename_prefix, dummy_input, *args, **kwargs)
+                return super().export(
+                    path, filename_prefix, dummy_input, *args, **kwargs
+                )
 
         finally:
             for h in handles:
@@ -480,7 +534,7 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
                     module.encoding_analyzer.set_percentile(percentile_value)
 
     def __str__(self):
-        stream = io.StringIO(newline='\n')
+        stream = io.StringIO(newline="\n")
         stream.write("-------------------------\n")
         stream.write("Quantized Model Report\n")
         stream.write("-------------------------\n")
@@ -501,28 +555,44 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
 
     # pylint: disable=missing-function-docstring
     @staticmethod
-    def compute_layer_encodings_for_sim(sim: 'QuantizationSimModel'):
-        raise NotImplementedError("QuantizationSimModel.compute_layer_encodings_for_sim has been removed.")
+    def compute_layer_encodings_for_sim(sim: "QuantizationSimModel"):
+        raise NotImplementedError(
+            "QuantizationSimModel.compute_layer_encodings_for_sim has been removed."
+        )
 
     # pylint: disable=missing-function-docstring, unused-argument
     @staticmethod
-    def prepare_sim_for_compute_encodings(sim: 'QuantizationSimModel'):
-        logger.warning("QuantizationSimModel.prepare_sim_for_compute_encodings has been deprecated and is no longer necessary. "
-                       "Any calls can be safely removed.")
+    def prepare_sim_for_compute_encodings(sim: "QuantizationSimModel"):
+        logger.warning(
+            "QuantizationSimModel.prepare_sim_for_compute_encodings has been deprecated and is no longer necessary. "
+            "Any calls can be safely removed."
+        )
 
     # pylint: disable=missing-function-docstring
     @classmethod
     def set_mode_for_recurrent_module(cls, layer, name: str):
-        raise NotImplementedError("QuantizationSimModel.set_mode_for_recurrent_module has been removed.")
+        raise NotImplementedError(
+            "QuantizationSimModel.set_mode_for_recurrent_module has been removed."
+        )
 
     @staticmethod
-    def save_model_with_embedded_quantization_nodes(sim_model, path: str, filename_prefix: str,
-                                                    dummy_input, onnx_export_args=None,
-                                                    export_to_torchscript=False, is_conditional=False):
-        raise NotImplementedError("QuantizationSimModel.save_model_with_embedded_quantization_nodes has been removed.")
+    def save_model_with_embedded_quantization_nodes(
+        sim_model,
+        path: str,
+        filename_prefix: str,
+        dummy_input,
+        onnx_export_args=None,
+        export_to_torchscript=False,
+        is_conditional=False,
+    ):
+        raise NotImplementedError(
+            "QuantizationSimModel.save_model_with_embedded_quantization_nodes has been removed."
+        )
 
     @staticmethod
-    def _replace_quantization_wrapper_with_native_torch_quantization_nodes(quant_sim_model, device: torch.device):
+    def _replace_quantization_wrapper_with_native_torch_quantization_nodes(
+        quant_sim_model, device: torch.device
+    ):
         raise NotImplementedError()
 
     @classmethod
@@ -545,18 +615,18 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
         return stack
 
     def named_qmodules(self):
-        """Generator that yields all quantized modules in the model and their names
-        """
+        """Generator that yields all quantized modules in the model and their names"""
         for name, module in self.model.named_modules():
             if isinstance(module, (BaseQuantizationMixin, _V2LazyQuantizeWrapper)):
                 yield name, module
 
-    @deprecated(f'Use {named_qmodules.__qualname__} instead.')
-    def quant_wrappers(self): # pylint: disable=missing-docstring
+    @deprecated(f"Use {named_qmodules.__qualname__} instead.")
+    def quant_wrappers(self):  # pylint: disable=missing-docstring
         return self.named_qmodules()
 
     def _add_quantization_wrappers(self, module, num_inout_tensors, default_data_type):
         visited = set()
+
         def wrap_children(parent: torch.nn.Module):
             for name, child in parent.named_children():
                 if not isinstance(child, BaseQuantizationMixin):
@@ -567,7 +637,9 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
 
                 visited.add(child)
 
-                child_wrapper = self._create_quantizer_module(child, num_inout_tensors, default_data_type)
+                child_wrapper = self._create_quantizer_module(
+                    child, num_inout_tensors, default_data_type
+                )
                 setattr(parent, name, child_wrapper)
                 visited.add(child_wrapper)
 
@@ -580,16 +652,28 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
                 setattr(model, name, child)
             self._realize_quant_wrappers_in_model(child)
 
-    def _create_quantizer_module(self, module_to_quantize: torch.nn.Module, num_inout_tensors,
-                                 data_type: QuantizationDataType) -> torch.nn.Module:
-        """Instantiates wrapper based on quant scheme
-        """
+    def _create_quantizer_module(
+        self,
+        module_to_quantize: torch.nn.Module,
+        num_inout_tensors,
+        data_type: QuantizationDataType,
+    ) -> torch.nn.Module:
+        """Instantiates wrapper based on quant scheme"""
         # We lookup the number of input and output tensors already determined
         # Special case, we are adding a wrapper for a module not in the forward pass: Use default of 1, 1
-        num_in_tensors, num_out_tensors = num_inout_tensors.get(module_to_quantize, (1, 1))
-        quantized_module = _V2LazyQuantizeWrapper(module_to_quantize, self._default_param_bw, self._default_output_bw,
-                                                  self._rounding_mode, self._quant_scheme, num_inputs=num_in_tensors,
-                                                  num_outputs=num_out_tensors, data_type=data_type)
+        num_in_tensors, num_out_tensors = num_inout_tensors.get(
+            module_to_quantize, (1, 1)
+        )
+        quantized_module = _V2LazyQuantizeWrapper(
+            module_to_quantize,
+            self._default_param_bw,
+            self._default_output_bw,
+            self._rounding_mode,
+            self._quant_scheme,
+            num_inputs=num_in_tensors,
+            num_outputs=num_out_tensors,
+            data_type=data_type,
+        )
         return quantized_module
 
     @classmethod
@@ -645,7 +729,9 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
     def _propagate_encodings(self):
         # pylint: disable=import-outside-toplevel
         from aimet_torch.onnx_utils import map_torch_types_to_onnx
-        from aimet_torch.v2.experimental.quantsim_utils import propagate_output_encodings
+        from aimet_torch.v2.experimental.quantsim_utils import (
+            propagate_output_encodings,
+        )
 
         resize_ops = set()
 
@@ -656,7 +742,7 @@ class QuantizationSimModel(_QuantizationSimModelBase): # pylint: disable=missing
             if not onnx_op or len(onnx_op) > 1:
                 continue
 
-            onnx_op, = onnx_op
+            (onnx_op,) = onnx_op
 
             if onnx_op == "Resize":
                 resize_ops.add(qmodule)
@@ -669,14 +755,17 @@ class _QuantizationSimOnnxExport:
     Helper class for exporting quantized models to ONNX format.
     This class is used by the QuantizationSimModel.onnx.export() method.
     """
+
     def __init__(self, sim):
         self.sim = sim
 
-    def export(self,
-               args: Union[Tuple[Any, ...], torch.Tensor],
-               f: Union[str, io.BytesIO],
-               export_int32_bias: bool = True,
-               **kwargs):
+    def export(
+        self,
+        args: Union[Tuple[Any, ...], torch.Tensor],
+        f: Union[str, io.BytesIO],
+        export_int32_bias: bool = True,
+        **kwargs,
+    ):
         """
         This method exports out the quant-sim model so it is ready to be run on-target and
         takes the same arguments as torch.onnx.export()
@@ -697,6 +786,7 @@ class _QuantizationSimOnnxExport:
             _to_onnx,
             _temporarily_unfold_param_quantizers,
         )
+
         _check_unsupported_args(kwargs)
 
         with contextlib.ExitStack() as stack:
@@ -707,7 +797,9 @@ class _QuantizationSimOnnxExport:
             if export_int32_bias:
                 # Temoprarily instantiate int32 bias quantizers
                 stack.enter_context(
-                    _concretize_int32_bias_quantizers(self.sim.model, args, kwargs.get("kwargs"))
+                    _concretize_int32_bias_quantizers(
+                        self.sim.model, args, kwargs.get("kwargs")
+                    )
                 )
 
             # Export quantize-dequantized weight
@@ -717,15 +809,17 @@ class _QuantizationSimOnnxExport:
             # Remove [b]float16 quantizers
             stack.enter_context(_remove_fp16_quantizers(self.sim.model))
 
-            onnx_model, tensor_to_encoding_map = _to_onnx(self.sim.model, args, **kwargs)
+            onnx_model, tensor_to_encoding_map = _to_onnx(
+                self.sim.model, args, **kwargs
+            )
 
         onnx.save(onnx_model, f)
         encodings_dict = self._to_json(tensor_to_encoding_map)
 
         # export weight encodings to output json file
-        onnx_file_path = (f if isinstance(f, str) else f.name)
+        onnx_file_path = f if isinstance(f, str) else f.name
         encoding_file_path = os.path.splitext(onnx_file_path)[0] + ".encodings"
-        with open(encoding_file_path, 'w', encoding='utf-8') as encoding_file:
+        with open(encoding_file_path, "w", encoding="utf-8") as encoding_file:
             json.dump(encodings_dict, encoding_file, indent=2)
 
     def _to_json(self, tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]):
@@ -740,13 +834,15 @@ class _QuantizationSimOnnxExport:
         }
 
         if quantsim.encoding_version >= "2.0.0":
-            encodings_dict.update({
-                "encodings": [
-                    {"name": name, **qnn_encoding}
-                    for name, (qnn_encoding, _) in qnn_encodings.items()
-                    if qnn_encoding
-                ]
-            })
+            encodings_dict.update(
+                {
+                    "encodings": [
+                        {"name": name, **qnn_encoding}
+                        for name, (qnn_encoding, _) in qnn_encodings.items()
+                        if qnn_encoding
+                    ]
+                }
+            )
         else:
             if quantsim.encoding_version >= "1.0.0":
                 param_encodings = [
@@ -771,17 +867,19 @@ class _QuantizationSimOnnxExport:
                     if qnn_encoding and not is_param
                 }
 
-            encodings_dict.update({
-                "activation_encodings": activation_encodings,
-                "param_encodings": param_encodings,
-                "excluded_layers": self.sim._excluded_layer_names, # pylint: disable=protected-access
-            })
+            encodings_dict.update(
+                {
+                    "activation_encodings": activation_encodings,
+                    "param_encodings": param_encodings,
+                    "excluded_layers": self.sim._excluded_layer_names,  # pylint: disable=protected-access
+                }
+            )
 
             if self.sim.quant_args:
-                encodings_dict.update({'quantizer_args': self.sim.quant_args})
+                encodings_dict.update({"quantizer_args": self.sim.quant_args})
 
         return encodings_dict
-        
+
 
 @deprecated("""
 Use QuantizationSimModel.load_encodings with the following keyword arguments instead:
@@ -792,9 +890,10 @@ sim.load_encodings(encoding_path
                    requires_grad=None,
                    allow_overwrite=None)
 ```
-"""
-)
-def load_encodings_to_sim(quant_sim_model: _QuantizationSimModelBase, pytorch_encoding_path: str):
+""")
+def load_encodings_to_sim(
+    quant_sim_model: _QuantizationSimModelBase, pytorch_encoding_path: str
+):
     """
     Loads the saved encodings to quant sim model. The encoding filename to load should end in _torch.encodings,
     generated as part of quantsim export.
@@ -803,11 +902,13 @@ def load_encodings_to_sim(quant_sim_model: _QuantizationSimModelBase, pytorch_en
         when encodings were exported.
     :param pytorch_encoding_path: Path of the encodings file to load.
     """
-    quant_sim_model.load_encodings(pytorch_encoding_path,
-                                   strict=True,
-                                   partial=False,
-                                   requires_grad=None,
-                                   allow_overwrite=None)
+    quant_sim_model.load_encodings(
+        pytorch_encoding_path,
+        strict=True,
+        partial=False,
+        requires_grad=None,
+        allow_overwrite=None,
+    )
 
 
 @deprecated(r"""
@@ -819,10 +920,12 @@ with torch.no_grad(), \
         aimet_torch.v2.nn.compute_encodings(sim_2.model):
     # Run forward pass with calibration dataset
 ```
-"""
-)
-def compute_encodings_for_sims(sim_list: Sequence[QuantizationSimModel], forward_pass_callback: Callable,
-                               forward_pass_callback_args: Any):
+""")
+def compute_encodings_for_sims(
+    sim_list: Sequence[QuantizationSimModel],
+    forward_pass_callback: Callable,
+    forward_pass_callback_args: Any,
+):
     """
     Compute encodings for a list of QuantSims.
 
@@ -848,4 +951,6 @@ def compute_encodings_for_sims(sim_list: Sequence[QuantizationSimModel], forward
     with contextlib.ExitStack() as stack:
         for mgr in ctx_managers:
             stack.enter_context(mgr)
-        _ = forward_pass_callback([sim.model for sim in sim_list], forward_pass_callback_args)
+        _ = forward_pass_callback(
+            [sim.model for sim in sim_list], forward_pass_callback_args
+        )

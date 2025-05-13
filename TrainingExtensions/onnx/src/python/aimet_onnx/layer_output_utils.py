@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module contains utilities to capture and save intermediate layer-outputs of a model """
+"""This module contains utilities to capture and save intermediate layer-outputs of a model"""
 
 import copy
 from typing import List, Dict, Tuple, Union
@@ -61,7 +61,7 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.LayerOutputs)
 
 
 class LayerOutputUtil:
-    """ Implementation to capture and save outputs of intermediate layers of a model (fp32/quantsim) """
+    """Implementation to capture and save outputs of intermediate layers of a model (fp32/quantsim)"""
 
     def __init__(self, model: ModelProto, dir_path: str, device: int = 0):
         """
@@ -74,37 +74,51 @@ class LayerOutputUtil:
         self.model = model
 
         # Fetch appropriate execution providers depending on availability
-        providers = ['CPUExecutionProvider']
-        if 'CUDAExecutionProvider' in ort.get_available_providers():
-            providers = [('CUDAExecutionProvider', {'device_id': device}), 'CPUExecutionProvider']
+        providers = ["CPUExecutionProvider"]
+        if "CUDAExecutionProvider" in ort.get_available_providers():
+            providers = [
+                ("CUDAExecutionProvider", {"device_id": device}),
+                "CPUExecutionProvider",
+            ]
 
         # Utility to capture layer-outputs
-        self.layer_output = LayerOutput(model=model, providers=providers, dir_path=dir_path)
+        self.layer_output = LayerOutput(
+            model=model, providers=providers, dir_path=dir_path
+        )
 
         # Utility to save model inputs and their corresponding layer-outputs
         self.save_input_output = SaveInputOutput(dir_path)
 
-    def generate_layer_outputs(self, input_instance: Union[np.ndarray, List[np.ndarray], Tuple[np.ndarray]]):
+    def generate_layer_outputs(
+        self, input_instance: Union[np.ndarray, List[np.ndarray], Tuple[np.ndarray]]
+    ):
         """
         This method captures output of every layer of a model & saves the inputs and corresponding layer-outputs to disk.
 
         :param input_instance: Single input instance for which we want to obtain layer-outputs.
         :return: None
         """
-        logger.info("Generating layer-outputs for input instance %d", self.save_input_output.input_cntr+1)
+        logger.info(
+            "Generating layer-outputs for input instance %d",
+            self.save_input_output.input_cntr + 1,
+        )
 
         input_dict = create_input_dict(self.model, input_instance)
 
         layer_output_dict = self.layer_output.get_outputs(input_dict)
         self.save_input_output.save(input_instance, layer_output_dict)
 
-        logger.info('Layer-outputs generated for input instance %d', self.save_input_output.input_cntr)
+        logger.info(
+            "Layer-outputs generated for input instance %d",
+            self.save_input_output.input_cntr,
+        )
 
 
 class LayerOutput:
     """
     This class creates a layer-output name to layer-output dictionary.
     """
+
     def __init__(self, model: ModelProto, providers: List, dir_path: str):
         """
         Constructor - It initializes few lists that are required for capturing and naming layer-outputs.
@@ -116,7 +130,9 @@ class LayerOutput:
         self.model = copy.deepcopy(model)
         self.activation_names = LayerOutput.get_activation_names(self.model)
 
-        quantized_activation_names = [name for name in self.activation_names if name.endswith('_updated')]
+        quantized_activation_names = [
+            name for name in self.activation_names if name.endswith("_updated")
+        ]
         if quantized_activation_names:
             self.activation_names = quantized_activation_names
 
@@ -125,7 +141,10 @@ class LayerOutput:
         self.session = QuantizationSimModel.build_session(self.model, providers)
 
         # Replace special characters with underscore. This gives valid file names to store activation tensors.
-        self.sanitized_activation_names = [re.sub(r'\W+', "_", name.replace('_updated', '')) for name in self.activation_names]
+        self.sanitized_activation_names = [
+            re.sub(r"\W+", "_", name.replace("_updated", ""))
+            for name in self.activation_names
+        ]
 
         # Save activation names which are in topological order of model graph. This order can be used while comparing layer-outputs.
         save_layer_output_names(self.sanitized_activation_names, dir_path)
@@ -153,9 +172,9 @@ class LayerOutput:
         for node in model.graph.input:
             activation_names.append(node.name)
         for node in model.graph.node:
-            if node.op_type == 'Constant':
+            if node.op_type == "Constant":
                 # Ignore and keep track to further ignore its quantized version
-                constant_activations.append(node.output[0]+'_updated')
+                constant_activations.append(node.output[0] + "_updated")
             else:
                 for output in node.output:
                     if output not in constant_activations:

@@ -38,14 +38,29 @@
 """
 This file contains unit tests for testing ConnectedGraph
 """
+
 import tensorflow as tf
 
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_output_ops
+from aimet_common.connected_graph.connectedgraph_utils import (
+    get_all_input_ops,
+    get_all_output_ops,
+)
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
-from aimet_tensorflow.keras.amp.quantizer_groups import find_op_groups, find_quantizer_group
-from models.test_models import keras_model, simple_sequential_with_input_shape, simple_functional, \
-        concat_functional, single_residual_model, nested_sequential_model, nested_functional_model, \
-        sequential_in_functional, tiny_conv_net
+from aimet_tensorflow.keras.amp.quantizer_groups import (
+    find_op_groups,
+    find_quantizer_group,
+)
+from models.test_models import (
+    keras_model,
+    simple_sequential_with_input_shape,
+    simple_functional,
+    concat_functional,
+    single_residual_model,
+    nested_sequential_model,
+    nested_functional_model,
+    sequential_in_functional,
+    tiny_conv_net,
+)
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 
 
@@ -72,10 +87,9 @@ class TestQuantizerGroups:
             assert isinstance(parent, tuple) == False
             assert len(child) == 1
 
-        assert op_groups['input_ops'] == ['Gemm_0']
-        assert op_groups['Gemm_0'] == ['Gemm_1']
-        assert op_groups['output_ops'] == ['Gemm_1']
-
+        assert op_groups["input_ops"] == ["Gemm_0"]
+        assert op_groups["Gemm_0"] == ["Gemm_1"]
+        assert op_groups["output_ops"] == ["Gemm_1"]
 
     def test_simple_functional(self):
         model = simple_functional()
@@ -95,9 +109,7 @@ class TestQuantizerGroups:
             assert isinstance(parent, tuple) == False
             assert len(child) == 1
 
-        assert op_groups['Gemm_0'] == ['Gemm_1']
-
-
+        assert op_groups["Gemm_0"] == ["Gemm_1"]
 
     def test_concat_functional(self):
         model = concat_functional()
@@ -109,7 +121,7 @@ class TestQuantizerGroups:
             assert layer.inbound_nodes
 
         assert len(connected_graph.get_all_ops().keys()) == 6
-        concat_op = connected_graph.get_all_ops()['Concat_3']
+        concat_op = connected_graph.get_all_ops()["Concat_3"]
         assert len(concat_op.inputs) == 3
         op_groups = find_op_groups(connected_graph)
         print(op_groups)
@@ -173,19 +185,17 @@ class TestQuantizerGroups:
         op_groups = find_op_groups(connected_graph)
         print(op_groups)
 
-
     def test_sequential_in_functional(self):
         model = tiny_conv_net()
 
         connected_graph = ConnectedGraph(model)
-        #assert len(connected_graph.get_all_ops().keys()) == 25
+        # assert len(connected_graph.get_all_ops().keys()) == 25
 
         product_dict = connected_graph.get_all_products()
-        #assert "Conv_4_to_BatchNormalization_5" in product_dict
-        #assert "batch_normalization_6.weight" in product_dict
+        # assert "Conv_4_to_BatchNormalization_5" in product_dict
+        # assert "batch_normalization_6.weight" in product_dict
         op_groups = find_op_groups(connected_graph)
         print(op_groups)
-
 
     def test_keras_model(self):
         model = keras_model()
@@ -197,26 +207,24 @@ class TestQuantizerGroups:
             assert not isinstance(parent, tuple)
             assert len(child) == 1
 
-        assert op_groups['Conv_0'] == ['BatchNormalization_1']
-        assert op_groups['AveragePool_2'] == ['MaxPool_3']
-        assert 'Conv_0' in op_groups
+        assert op_groups["Conv_0"] == ["BatchNormalization_1"]
+        assert op_groups["AveragePool_2"] == ["MaxPool_3"]
+        assert "Conv_0" in op_groups
 
         assert 9 == len(op_groups)
 
-
     def test_find_quantizer_groups(self):
         model = keras_model()
-        sim = QuantizationSimModel(model, quant_scheme='tf')
+        sim = QuantizationSimModel(model, quant_scheme="tf")
 
         _, quantizer_groups = find_quantizer_group(sim)
 
         assert len(quantizer_groups) == 9
 
-
     def test_find_quantizer_residual(self):
         model = single_residual_model()
 
-        sim = QuantizationSimModel(model, quant_scheme='tf')
+        sim = QuantizationSimModel(model, quant_scheme="tf")
         _, quantizer_groups = find_quantizer_group(sim)
 
         assert len(quantizer_groups[2].parameter_quantizers) == 4

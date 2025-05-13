@@ -44,9 +44,15 @@ class QuantizeLinear(opset10.QuantizeLinear):
     OPSET = 13
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         if block_size is not None:
             raise RuntimeError(
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
@@ -54,20 +60,28 @@ class QuantizeLinear(opset10.QuantizeLinear):
 
         cls._check_dtype(dtype)
 
-        return helper.make_node("QuantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output],
-                                axis=axis)
+        return helper.make_node(
+            "QuantizeLinear",
+            name=name,
+            inputs=list(inputs),
+            outputs=[output],
+            axis=axis,
+        )
 
 
 class DequantizeLinear(opset10.DequantizeLinear):
     OPSET = 13
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         if block_size is not None:
             raise RuntimeError(
                 f"Blockwise quantization is not supported in opset {cls.OPSET}"
@@ -75,8 +89,10 @@ class DequantizeLinear(opset10.DequantizeLinear):
 
         cls._check_dtype(dtype)
 
-        return helper.make_node("DequantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output],
-                                axis=axis)
+        return helper.make_node(
+            "DequantizeLinear",
+            name=name,
+            inputs=list(inputs),
+            outputs=[output],
+            axis=axis,
+        )

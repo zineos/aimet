@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utility functions for ONNX """
+"""Utility functions for ONNX"""
 
 import copy
 import itertools
@@ -54,13 +54,31 @@ from packaging import version
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
     from onnx import NodeProto, TensorProto, ModelProto, GraphProto, ValueInfoProto
 else:
-    from onnx.onnx_pb import NodeProto, TensorProto, ModelProto, GraphProto, ValueInfoProto
+    from onnx.onnx_pb import (
+        NodeProto,
+        TensorProto,
+        ModelProto,
+        GraphProto,
+        ValueInfoProto,
+    )
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
 
-OP_TYPES_WITH_PARAMS = ['Conv', 'Gemm', 'ConvTranspose', 'BatchNormalization', 'MatMul', 'Transpose',
-                        'InstanceNormalization', 'LayerNormalization', 'GroupNormalization', 'RNN', 'LSTM', 'GRU']
+OP_TYPES_WITH_PARAMS = [
+    "Conv",
+    "Gemm",
+    "ConvTranspose",
+    "BatchNormalization",
+    "MatMul",
+    "Transpose",
+    "InstanceNormalization",
+    "LayerNormalization",
+    "GroupNormalization",
+    "RNN",
+    "LSTM",
+    "GRU",
+]
 
 
 def remove_nodes_with_type(node_type: str, onnx_graph: onnx.GraphProto):
@@ -85,8 +103,10 @@ def remove_nodes_with_type(node_type: str, onnx_graph: onnx.GraphProto):
             if output:
                 node.input[i] = input_output_pairs[_input]
         for outputs in onnx_graph.output:
-            if outputs.name in input_output_pairs and \
-                    node.output[0] == input_output_pairs[outputs.name]:
+            if (
+                outputs.name in input_output_pairs
+                and node.output[0] == input_output_pairs[outputs.name]
+            ):
                 node.output[0] = outputs.name
 
 
@@ -106,18 +126,12 @@ def _prune_unused_initializers(graph: onnx.GraphProto, init_names: Iterable[str]
     # Don't prune if initializer is still used
     to_be_pruned -= set(inp for node in graph.node for inp in node.input)
 
-    initializers = [
-        init for init in graph.initializer
-        if init.name not in to_be_pruned
-    ]
+    initializers = [init for init in graph.initializer if init.name not in to_be_pruned]
 
     graph.ClearField("initializer")
     graph.initializer.extend(initializers)
 
-    inputs = [
-        inp for inp in graph.input
-        if inp.name not in to_be_pruned
-    ]
+    inputs = [inp for inp in graph.input if inp.name not in to_be_pruned]
     graph.ClearField("input")
     graph.input.extend(inputs)
 
@@ -144,12 +158,9 @@ def remove_nodes(nodes: Iterable[NodeProto], onnx_graph: onnx.GraphProto):
 
     removed_nodes = {node.name: node for node in nodes}
     remaining_nodes = [
-        node for node in onnx_graph.node
-        if node.name not in removed_nodes
+        node for node in onnx_graph.node if node.name not in removed_nodes
     ]
-    output_to_node = {
-        node.output[0]: node for node in onnx_graph.node
-    }
+    output_to_node = {node.output[0]: node for node in onnx_graph.node}
 
     for other_node in remaining_nodes:
         if other_node.input and other_node.output:
@@ -175,7 +186,9 @@ def remove_nodes(nodes: Iterable[NodeProto], onnx_graph: onnx.GraphProto):
     for node in removed_nodes.values():
         onnx_graph.node.remove(node)
 
-    removed_node_inputs = set(inp for node in removed_nodes.values() for inp in node.input)
+    removed_node_inputs = set(
+        inp for node in removed_nodes.values() for inp in node.input
+    )
     _prune_unused_initializers(onnx_graph, removed_node_inputs)
 
 
@@ -271,9 +284,13 @@ def make_dummy_input(model: ModelProto, dynamic_size: int = 1) -> Dict[str, np.n
                 # Else, axis has a fixed dimension size stored in dim.dim_value
                 shape.append(dim.dim_value)
         if shape:
-            input_dict[name] = np.random.randn(*shape).astype(mapping.TENSOR_TYPE_TO_NP_TYPE[dtype])
+            input_dict[name] = np.random.randn(*shape).astype(
+                mapping.TENSOR_TYPE_TO_NP_TYPE[dtype]
+            )
         else:
-            input_dict[name] = np.array(np.random.randn(*shape)).astype(mapping.TENSOR_TYPE_TO_NP_TYPE[dtype])
+            input_dict[name] = np.array(np.random.randn(*shape)).astype(
+                mapping.TENSOR_TYPE_TO_NP_TYPE[dtype]
+            )
     return input_dict
 
 
@@ -284,7 +301,7 @@ def replace_relu6_with_relu(model: ModelProto):
     :param model: ONNX model
     """
     for node in model.model.graph.node:
-        if node.op_type == 'Clip' and check_if_clip_node_minimum_is_zero(node, model):
+        if node.op_type == "Clip" and check_if_clip_node_minimum_is_zero(node, model):
             parent_node = None
             child_node = None
             for temp_node in model.model.graph.node:
@@ -293,17 +310,22 @@ def replace_relu6_with_relu(model: ModelProto):
                 if node.output[0] in temp_node.input:
                     child_node = temp_node
             assert parent_node, "Parent Node for Clip operation does not exist"
-            if parent_node.op_type in ['Conv', 'ConvTranspose'] and child_node and \
-                    child_node.op_type in ['Conv', 'ConvTranspose']:
+            if (
+                parent_node.op_type in ["Conv", "ConvTranspose"]
+                and child_node
+                and child_node.op_type in ["Conv", "ConvTranspose"]
+            ):
                 name = node.name
                 remove_node(node, model.model.graph)
                 inputs = [parent_node.output[0]]
-                model.replace_input_of_all_nodes(parent_node.output[0], parent_node.output[0] + '_replaced')
+                model.replace_input_of_all_nodes(
+                    parent_node.output[0], parent_node.output[0] + "_replaced"
+                )
                 relu_node = onnx.helper.make_node(
                     op_type="Relu",
                     inputs=inputs,
-                    outputs=[parent_node.output[0] + '_replaced'],
-                    name='Relu_' + name,
+                    outputs=[parent_node.output[0] + "_replaced"],
+                    name="Relu_" + name,
                 )
 
                 model.add_node(relu_node)
@@ -321,10 +343,17 @@ def check_if_clip_node_minimum_is_zero(node: NodeProto, model: ModelProto):
         input_node = node.input[1]
         for node_graph in model.model.graph.node:
             if node_graph.output[0] == input_node:
-                if hasattr(node_graph, "attribute") and hasattr(node_graph.attribute[0], "t") and \
-                        numpy_helper.to_array(node_graph.attribute[0].t) == 0:
+                if (
+                    hasattr(node_graph, "attribute")
+                    and hasattr(node_graph.attribute[0], "t")
+                    and numpy_helper.to_array(node_graph.attribute[0].t) == 0
+                ):
                     return True
-    elif hasattr(node, "attribute") and node.attribute[1].name == "min" and node.attribute[1].f == 0.0:
+    elif (
+        hasattr(node, "attribute")
+        and node.attribute[1].name == "min"
+        and node.attribute[1].f == 0.0
+    ):
         return True
     return False
 
@@ -342,8 +371,9 @@ def add_hook_to_get_activation(model: ModelProto, name: str) -> ValueInfoProto:
     return val_info
 
 
-def remove_activation_hooks(model: ModelProto,
-                            hooks: Union[List[ValueInfoProto], ValueInfoProto]):
+def remove_activation_hooks(
+    model: ModelProto, hooks: Union[List[ValueInfoProto], ValueInfoProto]
+):
     """
     Removes activation hooks from the model output
     :param model: The model from which to remove the hooks
@@ -381,16 +411,17 @@ def get_product_name_from_quantized_name(quantized_name: str):
     Gets product's name from quantized name
     :param quantized_name: Quantized name
     """
-    if '_updated' in quantized_name:
-        return quantized_name[:quantized_name.index('_updated')]
-    if '_qdq' in quantized_name:
-        return quantized_name[:quantized_name.index('_qdq')]
+    if "_updated" in quantized_name:
+        return quantized_name[: quantized_name.index("_updated")]
+    if "_qdq" in quantized_name:
+        return quantized_name[: quantized_name.index("_qdq")]
     # If there is no quantizer added then return None
     return None
 
 
-def retrieve_constant_input(node: NodeProto, model: ModelProto, index: int
-                            ) -> Tuple[TensorProto, bool]:
+def retrieve_constant_input(
+    node: NodeProto, model: ModelProto, index: int
+) -> Tuple[TensorProto, bool]:
     """
     Retrieves node input at the specified index if the input has a corresponding initializer in model.graph.initializer
     and is separated from node by no more than one Transpose operation.
@@ -410,6 +441,7 @@ def retrieve_constant_input(node: NodeProto, model: ModelProto, index: int
                 weight = ParamUtils.get_param(model, other_node, 0)
                 transposed = True
     return weight, transposed
+
 
 def save_model_with_external_weights(model: onnx.ModelProto, f: str, **kwargs):
     """
@@ -438,8 +470,10 @@ class CachedDataset:
         :param path: Path to save model inputs
         """
         if len(data_loader) < num_batches:
-            raise ValueError(f'Can not fetch {num_batches} batches from '
-                             f'a data loader of length {len(data_loader)}.')
+            raise ValueError(
+                f"Can not fetch {num_batches} batches from "
+                f"a data loader of length {len(data_loader)}."
+            )
 
         self._num_batches = num_batches
         self._path = path
@@ -450,9 +484,9 @@ class CachedDataset:
         return self._num_batches
 
     def __getitem__(self, index: int):
-        path = os.path.join(self._path, 'model_inputs_' + str(index))
+        path = os.path.join(self._path, "model_inputs_" + str(index))
 
-        with open(path, 'rb') as file:
+        with open(path, "rb") as file:
             batch = pickle.load(file)
 
         return batch
@@ -465,14 +499,21 @@ class CachedDataset:
             os.makedirs(self._path)
 
         for i, batch in enumerate(data_loader):
-            path = os.path.join(self._path, f'model_inputs_{i}')
-            with open(path, 'wb') as file:
+            path = os.path.join(self._path, f"model_inputs_{i}")
+            with open(path, "wb") as file:
                 pickle.dump(batch, file)
 
-        logger.info('Caching %d batches from data loader at path location: %s', self._num_batches, self._path)
+        logger.info(
+            "Caching %d batches from data loader at path location: %s",
+            self._num_batches,
+            self._path,
+        )
 
 
-def create_input_dict(model: ModelProto, input_batch: Union[Dict, np.ndarray, List[np.ndarray], Tuple[np.ndarray]]) -> Dict:
+def create_input_dict(
+    model: ModelProto,
+    input_batch: Union[Dict, np.ndarray, List[np.ndarray], Tuple[np.ndarray]],
+) -> Dict:
     """
     Creates input dictionary (input name to input value map) for session.run
 
@@ -498,9 +539,13 @@ def create_input_dict(model: ModelProto, input_batch: Union[Dict, np.ndarray, Li
         input_batch_list = list(input_batch)
 
     else:
-        raise ValueError('Input batch should be either dict, numpy array, list or tuple')
+        raise ValueError(
+            "Input batch should be either dict, numpy array, list or tuple"
+        )
 
     if not len(input_names) == len(input_batch_list):
-        raise ValueError('There is mismatch between number of input names and input tensors')
+        raise ValueError(
+            "There is mismatch between number of input names and input tensors"
+        )
 
     return dict(zip(input_names, input_batch_list))

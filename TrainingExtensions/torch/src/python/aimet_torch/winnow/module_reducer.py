@@ -37,26 +37,35 @@
 #
 #  =============================================================================
 
-""" Contains functionality related to reducing a module.  """
+"""Contains functionality related to reducing a module."""
 
 from typing import List
 import torch
 from aimet_common.utils import AimetLogger, ModelApi
-from aimet_common.winnow.winnow_utils import get_zero_positions_in_binary_mask, get_conv_ops_for_api, get_indices_among_ones_of_overlapping_ones
+from aimet_common.winnow.winnow_utils import (
+    get_zero_positions_in_binary_mask,
+    get_conv_ops_for_api,
+    get_indices_among_ones_of_overlapping_ones,
+)
 from aimet_common.winnow.module_reducer import ModuleReducer as AimetCommonModuleReducer
 from aimet_common.connected_graph.operation import Op as Operation
-from aimet_common.connected_graph.operation import determine_preceding_op_input_product_index_in_multi_input_op, \
-    determine_succeeding_op_output_product_index_in_multi_output_op
+from aimet_common.connected_graph.operation import (
+    determine_preceding_op_input_product_index_in_multi_input_op,
+    determine_succeeding_op_output_product_index_in_multi_output_op,
+)
 from aimet_common.polyslice import PolySlice
 from aimet_torch.winnow.winnow_utils import UpsampleLayer, DownsampleLayer
 from aimet_torch.utils import is_leaf_module
-from aimet_torch.winnow.winnow_utils import reduce_tensor, get_one_positions_in_binary_mask
+from aimet_torch.winnow.winnow_utils import (
+    reduce_tensor,
+    get_one_positions_in_binary_mask,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Winnow)
 
 
 class ModuleReducer(AimetCommonModuleReducer):
-    """ Class responsible for reducing PyTorch modules. """
+    """Class responsible for reducing PyTorch modules."""
 
     def __init__(self, model, using_cuda, reshape, op_to_mask_dict: dict):
         """
@@ -105,11 +114,10 @@ class ModuleReducer(AimetCommonModuleReducer):
         modified_modules = {}
 
         for an_op in list_of_ops_to_reduce:
-
             if an_op.type in get_conv_ops_for_api(ModelApi.pytorch):
                 a_conv_module = self._reduce_conv_module(an_op)
                 modified_modules[an_op.dotted_name] = a_conv_module
-            elif an_op.type in ['BatchNorm2d', 'BatchNormalization']:
+            elif an_op.type in ["BatchNorm2d", "BatchNormalization"]:
                 a_bn_module = self._reduce_batchnorm_module(an_op)
                 modified_modules[an_op.dotted_name] = a_bn_module
             else:
@@ -118,7 +126,7 @@ class ModuleReducer(AimetCommonModuleReducer):
         return modified_modules
 
     def _reduce_batchnorm_module(self, an_op: Operation):
-        """ Winnow a BatchNorm2d Module """
+        """Winnow a BatchNorm2d Module"""
 
         # BatchNorm2d Op's inputs provide following:
         # 1) input
@@ -131,27 +139,36 @@ class ModuleReducer(AimetCommonModuleReducer):
         x_input, weight, bias, running_mean, running_var = an_op.inputs
 
         # Set the parm_name for inputs and set out_channels to True
-        x_input.parm_name, \
-        weight.parm_name, \
-        bias.parm_name, \
-        running_mean.parm_name, \
-        running_var.parm_name = 'input', 'weight', 'bias', 'running_mean', 'running_var'
+        (
+            x_input.parm_name,
+            weight.parm_name,
+            bias.parm_name,
+            running_mean.parm_name,
+            running_var.parm_name,
+        ) = "input", "weight", "bias", "running_mean", "running_var"
 
         weight.impacts_out_channels = True
         assert x_input.shape == an_op.output_shape
 
         op_mask = self._op_to_mask_dict[an_op]
-        input_ch_masks, output_ch_masks = op_mask.input_channel_masks, op_mask.output_channel_masks
+        input_ch_masks, output_ch_masks = (
+            op_mask.input_channel_masks,
+            op_mask.output_channel_masks,
+        )
         assert len(input_ch_masks) == 1 and len(output_ch_masks) == 1
 
-        output_ch_indices_to_reduce = get_zero_positions_in_binary_mask(output_ch_masks[0])
+        output_ch_indices_to_reduce = get_zero_positions_in_binary_mask(
+            output_ch_masks[0]
+        )
 
         # create PolySlice object with dim = 0 and indices_to_reduce
         # weight, bias, running_mean and running_var are 1D arrays so we need to prune in dimension 0
         output_reduction = PolySlice(dim=0, index=output_ch_indices_to_reduce)
 
         named_module = an_op.get_module()
-        reduced_module = self._reduce_batchnorm_parameters(an_op, named_module, output_reduction)
+        reduced_module = self._reduce_batchnorm_parameters(
+            an_op, named_module, output_reduction
+        )
         logger.info("Winnowed BatchNorm module: %s", an_op.dotted_name)
 
         if reduced_module:
@@ -183,15 +200,27 @@ class ModuleReducer(AimetCommonModuleReducer):
         downstream_op = bn_op.output_ops[0]
         downstream_op_mask = self._op_to_mask_dict[downstream_op]
         downstream_op_input_masks = downstream_op_mask.input_channel_masks
-        downstream_op_mask_index = determine_preceding_op_input_product_index_in_multi_input_op(bn_op,
-                                                                                                downstream_op)
+        downstream_op_mask_index = (
+            determine_preceding_op_input_product_index_in_multi_input_op(
+                bn_op, downstream_op
+            )
+        )
         downstream_op_input_mask = downstream_op_input_masks[downstream_op_mask_index]
-        bn_op_out_mask_zero_positions = get_zero_positions_in_binary_mask(bn_op_out_mask)
-        downstream_op_input_mask_zero_positions = get_zero_positions_in_binary_mask(downstream_op_input_mask)
-        logger.debug("BatchNorm output mask: %s, downstream input mask: %s", bn_op_out_mask_zero_positions,
-                     downstream_op_input_mask_zero_positions)
+        bn_op_out_mask_zero_positions = get_zero_positions_in_binary_mask(
+            bn_op_out_mask
+        )
+        downstream_op_input_mask_zero_positions = get_zero_positions_in_binary_mask(
+            downstream_op_input_mask
+        )
+        logger.debug(
+            "BatchNorm output mask: %s, downstream input mask: %s",
+            bn_op_out_mask_zero_positions,
+            downstream_op_input_mask_zero_positions,
+        )
 
-        if len(bn_op_out_mask_zero_positions) > len(downstream_op_input_mask_zero_positions):
+        if len(bn_op_out_mask_zero_positions) > len(
+            downstream_op_input_mask_zero_positions
+        ):
             # More channels have been reduced from NatchNorm. Append an UpSamle layer to the BatchNorm.
             seq = self._append_upsample_layer_to_module(bn_op, bn_op_out_mask)
             return seq
@@ -199,20 +228,25 @@ class ModuleReducer(AimetCommonModuleReducer):
         return None
 
     def _reduce_batchnorm_parameters(self, bn_op, named_module, output_reduction):
-        """ Reduce the BatchNorm module's parameters. """
+        """Reduce the BatchNorm module's parameters."""
 
         for op_input_product in bn_op.inputs:
-
             if op_input_product.parm_name == "input":
                 continue
             cur_parm = getattr(named_module, op_input_product.parm_name)
             if op_input_product.parm_name in ("running_mean", "running_var"):
-                bn_running_parm = torch.nn.Parameter(reduce_tensor(cur_parm, output_reduction), requires_grad=False)
-                named_module.register_buffer(op_input_product.parm_name, bn_running_parm)
+                bn_running_parm = torch.nn.Parameter(
+                    reduce_tensor(cur_parm, output_reduction), requires_grad=False
+                )
+                named_module.register_buffer(
+                    op_input_product.parm_name, bn_running_parm
+                )
             else:
                 if self._using_cuda:
                     cur_parm = torch.nn.Parameter(cur_parm.cuda())
-                weight_parm = torch.nn.Parameter(reduce_tensor(cur_parm, output_reduction), requires_grad=True)
+                weight_parm = torch.nn.Parameter(
+                    reduce_tensor(cur_parm, output_reduction), requires_grad=True
+                )
                 setattr(named_module, op_input_product.parm_name, weight_parm)
 
                 reduction_dim = output_reduction.get_dims()[0]
@@ -233,21 +267,31 @@ class ModuleReducer(AimetCommonModuleReducer):
         """
         logger.info("winnow_conv_module(): winnowing %s", an_op.dotted_name)
         op_input_product = an_op.inputs[1]
-        op_input_product.parm_name = 'weight'
+        op_input_product.parm_name = "weight"
 
         op_mask = self._op_to_mask_dict[an_op]
-        input_ch_masks, output_ch_masks = op_mask.input_channel_masks, op_mask.output_channel_masks
+        input_ch_masks, output_ch_masks = (
+            op_mask.input_channel_masks,
+            op_mask.output_channel_masks,
+        )
 
         if len(input_ch_masks) == 1:
-            input_ch_indices_to_reduce = get_zero_positions_in_binary_mask(input_ch_masks[0])
+            input_ch_indices_to_reduce = get_zero_positions_in_binary_mask(
+                input_ch_masks[0]
+            )
         else:
             input_ch_indices_to_reduce = []
         if output_ch_masks:
-            output_ch_indices_to_reduce = get_zero_positions_in_binary_mask(output_ch_masks[0])
+            output_ch_indices_to_reduce = get_zero_positions_in_binary_mask(
+                output_ch_masks[0]
+            )
         else:
             output_ch_indices_to_reduce = []
-        logger.debug("winnow_conv_module(): ip indices to reduce: %s, op indices to reduce: %s",
-                     input_ch_indices_to_reduce, output_ch_indices_to_reduce)
+        logger.debug(
+            "winnow_conv_module(): ip indices to reduce: %s, op indices to reduce: %s",
+            input_ch_indices_to_reduce,
+            output_ch_indices_to_reduce,
+        )
 
         named_module = an_op.get_module()
 
@@ -259,22 +303,31 @@ class ModuleReducer(AimetCommonModuleReducer):
             ip_reduction = PolySlice(parm_dim_to_reduce, input_ch_indices_to_reduce)
             op_input_product.impacts_in_channels = True
             reduction = ip_reduction
-            reduced_module = reduce_conv_module_weight_parameter(an_op, named_module, reduction, self._using_cuda)
+            reduced_module = reduce_conv_module_weight_parameter(
+                an_op, named_module, reduction, self._using_cuda
+            )
 
         if output_ch_indices_to_reduce:
             parm_dim_to_reduce = 0
             op_reduction = PolySlice(parm_dim_to_reduce, output_ch_indices_to_reduce)
             op_input_product.impacts_out_channels = True
             reduction = op_reduction
-            reduced_module = reduce_conv_module_weight_parameter(an_op, named_module, reduction, self._using_cuda)
+            reduced_module = reduce_conv_module_weight_parameter(
+                an_op, named_module, reduction, self._using_cuda
+            )
 
         if len(an_op.inputs) > 2:
             # Bias Parameter
             if output_ch_indices_to_reduce:
                 # Has output channel reduction
-                logger.debug("Op: %s, has Bias parameter with output channels to reduce: %s",
-                             an_op.dotted_name, output_ch_indices_to_reduce)
-                reduce_conv_module_bias_parameter(an_op, named_module, output_ch_indices_to_reduce, self._using_cuda)
+                logger.debug(
+                    "Op: %s, has Bias parameter with output channels to reduce: %s",
+                    an_op.dotted_name,
+                    output_ch_indices_to_reduce,
+                )
+                reduce_conv_module_bias_parameter(
+                    an_op, named_module, output_ch_indices_to_reduce, self._using_cuda
+                )
 
         logger.info("Winnowed Conv module: %s", an_op.dotted_name)
 
@@ -287,7 +340,6 @@ class ModuleReducer(AimetCommonModuleReducer):
                 return sequential
 
         return reduced_module
-
 
     def _check_conv_input_mask_and_add_downsample_layer(self, conv_op: Operation):
         """
@@ -306,33 +358,58 @@ class ModuleReducer(AimetCommonModuleReducer):
         # Conv module has a single input.
         mask_index = 0
 
-        input_ch_indices_to_reduce = get_zero_positions_in_binary_mask(input_ch_masks[mask_index])
+        input_ch_indices_to_reduce = get_zero_positions_in_binary_mask(
+            input_ch_masks[mask_index]
+        )
         input_producer_op = get_previous_op(conv_op)
-        logger.debug("Input producer Op output shape: %s", input_producer_op.output_shape[1])
+        logger.debug(
+            "Input producer Op output shape: %s", input_producer_op.output_shape[1]
+        )
         input_producer_op_mask = self._op_to_mask_dict[input_producer_op]
         input_producer_op_out_masks = input_producer_op_mask.output_channel_masks
         input_producer_op_out_mask = None
         if len(input_producer_op.output_ops) == 1:
             input_producer_op_out_mask = input_producer_op_out_masks[0]
         elif len(input_producer_op.output_ops) > 1:
-            input_producer_op_output_mask_index = \
-                determine_succeeding_op_output_product_index_in_multi_output_op(conv_op, input_producer_op)
-            input_producer_op_out_mask = input_producer_op_out_masks[input_producer_op_output_mask_index]
+            input_producer_op_output_mask_index = (
+                determine_succeeding_op_output_product_index_in_multi_output_op(
+                    conv_op, input_producer_op
+                )
+            )
+            input_producer_op_out_mask = input_producer_op_out_masks[
+                input_producer_op_output_mask_index
+            ]
         else:
-            logger.error("Number of consumer is zero for: %s", input_producer_op.dotted_name)
+            logger.error(
+                "Number of consumer is zero for: %s", input_producer_op.dotted_name
+            )
 
-        input_producer_op_out_mask_zero_positions = get_zero_positions_in_binary_mask(input_producer_op_out_mask)
-        input_producer_op_out_mask_length = len(get_one_positions_in_binary_mask(input_producer_op_out_mask))
-        if len(input_ch_indices_to_reduce) > len(input_producer_op_out_mask_zero_positions):
-            logger.debug("Conv module in mask zero positions: %s, Previous Op out mask zero positions: %s, "
-                         "Previous Op out mask length: %s", input_ch_indices_to_reduce,
-                         input_producer_op_out_mask_zero_positions, input_producer_op_out_mask_length)
-            sequential = self._prepend_downsample_layer_to_module(conv_op, input_producer_op_out_mask)
+        input_producer_op_out_mask_zero_positions = get_zero_positions_in_binary_mask(
+            input_producer_op_out_mask
+        )
+        input_producer_op_out_mask_length = len(
+            get_one_positions_in_binary_mask(input_producer_op_out_mask)
+        )
+        if len(input_ch_indices_to_reduce) > len(
+            input_producer_op_out_mask_zero_positions
+        ):
+            logger.debug(
+                "Conv module in mask zero positions: %s, Previous Op out mask zero positions: %s, "
+                "Previous Op out mask length: %s",
+                input_ch_indices_to_reduce,
+                input_producer_op_out_mask_zero_positions,
+                input_producer_op_out_mask_length,
+            )
+            sequential = self._prepend_downsample_layer_to_module(
+                conv_op, input_producer_op_out_mask
+            )
             return sequential
 
         return None
 
-    def _prepend_downsample_layer_to_module(self, op: Operation, input_producer_op_out_mask: List[int]):
+    def _prepend_downsample_layer_to_module(
+        self, op: Operation, input_producer_op_out_mask: List[int]
+    ):
         """Creates a Sequential by prepending a Downsample layer to the module associated with the Op.
         Replaces the module with the Sequential at the module's parent.
 
@@ -342,8 +419,13 @@ class ModuleReducer(AimetCommonModuleReducer):
         :return:
         """
 
-        logger.debug("Prepend Downsample: Op dotted name: %s, Op type: %s next down module dotted name: %s, type: %s",
-                     op.dotted_name, op.type, op.output_ops[0].dotted_name, op.output_ops[0].type)
+        logger.debug(
+            "Prepend Downsample: Op dotted name: %s, Op type: %s next down module dotted name: %s, type: %s",
+            op.dotted_name,
+            op.type,
+            op.output_ops[0].dotted_name,
+            op.output_ops[0].type,
+        )
 
         if op.type in get_conv_ops_for_api(ModelApi.pytorch):
             conv_op = op
@@ -356,8 +438,10 @@ class ModuleReducer(AimetCommonModuleReducer):
         op_mask = self._op_to_mask_dict[op]
         op_in_masks = op_mask.input_channel_masks
 
-        keep_indices = get_indices_among_ones_of_overlapping_ones(input_producer_op_out_mask, op_in_masks[0])
-        keep_indices_tensor = torch.tensor(keep_indices)        # pylint: disable=not-callable
+        keep_indices = get_indices_among_ones_of_overlapping_ones(
+            input_producer_op_out_mask, op_in_masks[0]
+        )
+        keep_indices_tensor = torch.tensor(keep_indices)  # pylint: disable=not-callable
         if self._using_cuda:
             keep_indices_tensor = keep_indices_tensor.cuda()
 
@@ -374,13 +458,13 @@ class ModuleReducer(AimetCommonModuleReducer):
         return seq
 
     def _append_upsample_layer_to_module(self, op: Operation, input_mask):
-        """ Creates a Sequential by appending an Upsample layer to the given module.
-            Replaces the module with the Sequential at the module's parent. """
+        """Creates a Sequential by appending an Upsample layer to the given module.
+        Replaces the module with the Sequential at the module's parent."""
 
         module = op.get_module()
         parent_module_ref, var_name = self._parent_module_ref[module]
 
-        input_mask_tensor = torch.tensor(input_mask) # pylint: disable=not-callable
+        input_mask_tensor = torch.tensor(input_mask)  # pylint: disable=not-callable
         if self._using_cuda:
             input_mask_tensor = input_mask_tensor.cuda()
 
@@ -396,7 +480,9 @@ class ModuleReducer(AimetCommonModuleReducer):
         return seq
 
 
-def reduce_conv_module_bias_parameter(an_op, named_module, indices_to_reduce, using_cuda):
+def reduce_conv_module_bias_parameter(
+    an_op, named_module, indices_to_reduce, using_cuda
+):
     """
     Reduces the bias parameter of a Conv module.
 
@@ -412,7 +498,7 @@ def reduce_conv_module_bias_parameter(an_op, named_module, indices_to_reduce, us
     #                                       1: weights,
     #                                       2: bias
     bias_parameter_product = an_op.inputs[2]
-    bias_parameter_product.parm_name = 'bias'
+    bias_parameter_product.parm_name = "bias"
     assert len(bias_parameter_product.shape) == 1
     assert bias_parameter_product.shape[0] == an_op.output_shape[1]
     cur_parm = getattr(named_module, bias_parameter_product.parm_name)
@@ -421,8 +507,10 @@ def reduce_conv_module_bias_parameter(an_op, named_module, indices_to_reduce, us
     if using_cuda:
         cur_parm = torch.nn.Parameter(cur_parm.cuda())
 
-    bias_parameter = torch.nn.Parameter(reduce_tensor(cur_parm, bias_reduction), requires_grad=True)
-    setattr(named_module, 'bias', bias_parameter)
+    bias_parameter = torch.nn.Parameter(
+        reduce_tensor(cur_parm, bias_reduction), requires_grad=True
+    )
+    setattr(named_module, "bias", bias_parameter)
 
     logger.debug("For module %s, Bias Parameter reduced.", an_op.dotted_name)
 
@@ -447,8 +535,10 @@ def reduce_conv_module_weight_parameter(an_op, named_module, reduction, using_cu
     if using_cuda:
         cur_parm = torch.nn.Parameter(cur_parm.cuda())
 
-    weight_parm = torch.nn.Parameter(reduce_tensor(cur_parm, reduction), requires_grad=True)
-    setattr(named_module, 'weight', weight_parm)
+    weight_parm = torch.nn.Parameter(
+        reduce_tensor(cur_parm, reduction), requires_grad=True
+    )
+    setattr(named_module, "weight", weight_parm)
 
     reduction_dim = reduction.get_dims()[0]
     slices_decr = len(reduction.get_slices(reduction_dim))
@@ -464,8 +554,12 @@ def reduce_conv_module_weight_parameter(an_op, named_module, reduction, using_cu
     if op_input_product.impacts_groups:
         named_module.groups -= slices_decr
         named_module.in_channels -= slices_decr
-        logger.debug("For module %s reduced input channels to %d and groups to %d", an_op.dotted_name,
-                     named_module.in_channels, named_module.groups)
+        logger.debug(
+            "For module %s reduced input channels to %d and groups to %d",
+            an_op.dotted_name,
+            named_module.in_channels,
+            named_module.groups,
+        )
 
     return named_module
 
@@ -479,7 +573,10 @@ def get_next_conv_op_for_op_with_single_consumer(op: Operation):
     """
 
     single_consumer_op_index = 0
-    while op.type not in ['Conv2d', 'convolution']:     # TODO: remove 'Conv2d' when old CG is gone
+    while op.type not in [
+        "Conv2d",
+        "convolution",
+    ]:  # TODO: remove 'Conv2d' when old CG is gone
         op = op.output_ops[single_consumer_op_index]
     return op
 
@@ -494,6 +591,10 @@ def get_previous_op(op: Operation):
     """
 
     previous_op = op.inputs[0].producer
-    while previous_op.type in ('Relu', 'ReLU', 'relu'):     # TODO: remove first two after old CG is gone
+    while previous_op.type in (
+        "Relu",
+        "ReLU",
+        "relu",
+    ):  # TODO: remove first two after old CG is gone
         previous_op = previous_op.inputs[0].producer
     return previous_op

@@ -42,7 +42,6 @@ from aimet_torch.v2.quantsim import QuantizationSimModel
 from ..models_ import test_models
 
 
-
 def test_compute_param_encodings():
     model = test_models.TinyModel()
     dummy_input = torch.rand(1, 3, 32, 32)

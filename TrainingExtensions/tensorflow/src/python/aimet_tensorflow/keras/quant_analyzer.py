@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Quant Analyzer"""
+
 import os
 from collections import OrderedDict, defaultdict
 from typing import Dict, List, Tuple
@@ -42,21 +43,31 @@ from typing import Dict, List, Tuple
 import tensorflow as tf
 
 from aimet_common.defs import QuantScheme
-from aimet_common.quant_analyzer import export_per_layer_sensitivity_analysis_plot, save_json, \
-    create_and_export_min_max_ranges_plot, export_stats_histogram_plot, export_per_layer_mse_plot
+from aimet_common.quant_analyzer import (
+    export_per_layer_sensitivity_analysis_plot,
+    save_json,
+    create_and_export_min_max_ranges_plot,
+    export_stats_histogram_plot,
+    export_per_layer_mse_plot,
+)
 from aimet_common.utils import CallbackFunc, AimetLogger, Spinner
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms
 from aimet_tensorflow.keras.graphsearchtuils import GraphSearchUtils
 from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import QcQuantizeWrapper
 from aimet_tensorflow.keras.quant_sim.tensor_quantizer import TensorQuantizer
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
-from aimet_tensorflow.keras.utils.quantizer_utils import get_enabled_activation_quantizers, enable_disable_quantizers, \
-    get_enabled_param_quantizers
+from aimet_tensorflow.keras.utils.quantizer_utils import (
+    get_enabled_activation_quantizers,
+    enable_disable_quantizers,
+    get_enabled_param_quantizers,
+)
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
 
-def _sort_quant_wrappers_based_on_occurrence(sim: QuantizationSimModel) -> Dict[str, QcQuantizeWrapper]:
+def _sort_quant_wrappers_based_on_occurrence(
+    sim: QuantizationSimModel,
+) -> Dict[str, QcQuantizeWrapper]:
     """
     Sort quant wrappers based on occurrence for given quantsim model.
 
@@ -73,8 +84,9 @@ def _sort_quant_wrappers_based_on_occurrence(sim: QuantizationSimModel) -> Dict[
     return sorted_quant_wrappers_dict
 
 
-def _get_enabled_quantizers(sorted_quant_wrappers: Dict[str, QcQuantizeWrapper]) -> \
-        Dict[QcQuantizeWrapper, List[TensorQuantizer]]:
+def _get_enabled_quantizers(
+    sorted_quant_wrappers: Dict[str, QcQuantizeWrapper],
+) -> Dict[QcQuantizeWrapper, List[TensorQuantizer]]:
     """
     For given sorted quant wrappers dict, get enabled quantizers.
 
@@ -99,9 +111,9 @@ def _get_enabled_quantizers(sorted_quant_wrappers: Dict[str, QcQuantizeWrapper])
     return enabled_quant_wrappers
 
 
-def _get_output_of_intermediate_layer(model: tf.keras.Model,
-                                      input_tensor: tf.Tensor,
-                                      layer_index: int) -> tf.Tensor:
+def _get_output_of_intermediate_layer(
+    model: tf.keras.Model, input_tensor: tf.Tensor, layer_index: int
+) -> tf.Tensor:
     """
     Return output tensor from model extracted up to target intermediate layer
 
@@ -127,10 +139,12 @@ class QuantAnalyzer:
     5) per layer MSE analysis
     """
 
-    def __init__(self,
-                 model: tf.keras.Model,
-                 forward_pass_callback: CallbackFunc,
-                 eval_callback: CallbackFunc):
+    def __init__(
+        self,
+        model: tf.keras.Model,
+        forward_pass_callback: CallbackFunc,
+        eval_callback: CallbackFunc,
+    ):
         """
         :param model: FP32 model to analyze for quantization.
         :param forward_pass_callback: A callback function for model calibration that simply runs
@@ -142,9 +156,13 @@ class QuantAnalyzer:
                 representing the model performance evaluated against entire test/evaluation dataset.
         """
         if not isinstance(forward_pass_callback, CallbackFunc):
-            raise ValueError('forward_pass_callback and its argument(s) are not encapsulated by CallbackFunc class.')
+            raise ValueError(
+                "forward_pass_callback and its argument(s) are not encapsulated by CallbackFunc class."
+            )
         if not isinstance(eval_callback, CallbackFunc):
-            raise ValueError('eval_callback and its argument(s) are not encapsulated by CallbackFunc class.')
+            raise ValueError(
+                "eval_callback and its argument(s) are not encapsulated by CallbackFunc class."
+            )
 
         self._model = model
         self._forward_pass_callback = forward_pass_callback
@@ -152,13 +170,15 @@ class QuantAnalyzer:
         self._unlabeled_dataset = None
         self._num_batches = None
 
-    def analyze(self,
-                quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-                rounding_mode: str = "nearest",
-                default_param_bw: int = 8,
-                default_output_bw: int = 8,
-                config_file: str = None,
-                results_dir: str = "./tmp/"):
+    def analyze(
+        self,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        default_param_bw: int = 8,
+        default_output_bw: int = 8,
+        config_file: str = None,
+        results_dir: str = "./tmp/",
+    ):
         """
         Analyze model for quantization and point out sensitive parts/hotspots of the model by performing
             1) model sensitivity to quantization,
@@ -178,14 +198,18 @@ class QuantAnalyzer:
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
 
-        sim = self._create_quantsim_and_encodings(quant_scheme,
-                                                  rounding_mode,
-                                                  default_param_bw,
-                                                  default_output_bw,
-                                                  config_file)
+        sim = self._create_quantsim_and_encodings(
+            quant_scheme,
+            rounding_mode,
+            default_param_bw,
+            default_output_bw,
+            config_file,
+        )
 
         # Check model sensitivity to weight and activation quantization individually.
-        self.check_model_sensitivity_to_quantization(sim, default_param_bw, default_output_bw)
+        self.check_model_sensitivity_to_quantization(
+            sim, default_param_bw, default_output_bw
+        )
 
         # Perform per layer analysis by enabling each quant wrapper (OPTION-1).
         self.perform_per_layer_analysis_by_enabling_quant_wrappers(sim, results_dir)
@@ -204,12 +228,14 @@ class QuantAnalyzer:
         if self._unlabeled_dataset and self._num_batches:
             self.export_per_layer_mse_loss(sim, results_dir)
 
-    def _create_quantsim_and_encodings(self,
-                                       quant_scheme: QuantScheme,
-                                       rounding_mode: str,
-                                       default_param_bw: int,
-                                       default_output_bw: int,
-                                       config_file: str) -> QuantizationSimModel:
+    def _create_quantsim_and_encodings(
+        self,
+        quant_scheme: QuantScheme,
+        rounding_mode: str,
+        default_param_bw: int,
+        default_output_bw: int,
+        config_file: str,
+    ) -> QuantizationSimModel:
         """
         Create Quantsim and compute encodings.
 
@@ -220,23 +246,26 @@ class QuantAnalyzer:
         :param config_file: Path to configuration file for model quantizers.
         :return: Quantsim model.
         """
-        _, self._model = fold_all_batch_norms(self._model) # pylint: disable=attribute-defined-outside-init
-        sim = QuantizationSimModel(self._model,
-                                   quant_scheme=quant_scheme,
-                                   rounding_mode=rounding_mode,
-                                   default_output_bw=default_output_bw,
-                                   default_param_bw=default_param_bw,
-                                   config_file=config_file)
+        _, self._model = fold_all_batch_norms(self._model)  # pylint: disable=attribute-defined-outside-init
+        sim = QuantizationSimModel(
+            self._model,
+            quant_scheme=quant_scheme,
+            rounding_mode=rounding_mode,
+            default_output_bw=default_output_bw,
+            default_param_bw=default_param_bw,
+            config_file=config_file,
+        )
 
-        sim.compute_encodings(forward_pass_callback=self._forward_pass_callback.func,
-                              forward_pass_callback_args=self._forward_pass_callback.args)
+        sim.compute_encodings(
+            forward_pass_callback=self._forward_pass_callback.func,
+            forward_pass_callback_args=self._forward_pass_callback.args,
+        )
 
         return sim
 
-    def check_model_sensitivity_to_quantization(self,
-                                                sim: QuantizationSimModel,
-                                                default_param_bw: int,
-                                                default_output_bw: int):
+    def check_model_sensitivity_to_quantization(
+        self, sim: QuantizationSimModel, default_param_bw: int, default_output_bw: int
+    ):
         """
         Perform the sensitivity analysis to weight and activation quantization
         individually.
@@ -250,12 +279,18 @@ class QuantAnalyzer:
         _logger.info("FP32 eval score (W32A32): %f", fp32_eval_score)
 
         weight_quantized_eval_score = self._eval_weight_quantized_model(sim)
-        _logger.info("Weight-quantized eval score (W%dA32): %f", default_param_bw,
-                     weight_quantized_eval_score)
+        _logger.info(
+            "Weight-quantized eval score (W%dA32): %f",
+            default_param_bw,
+            weight_quantized_eval_score,
+        )
 
         act_quantized_eval_score = self._eval_activation_quantized_model(sim)
-        _logger.info("Activation-quantized eval score (W32A%d): %f", default_output_bw,
-                     act_quantized_eval_score)
+        _logger.info(
+            "Activation-quantized eval score (W32A%d): %f",
+            default_output_bw,
+            act_quantized_eval_score,
+        )
 
     def _eval_model(self, model: tf.keras.Model) -> float:
         """
@@ -295,9 +330,9 @@ class QuantAnalyzer:
         enable_disable_quantizers(enabled_param_quantizers, enabled=True)
         return eval_score
 
-    def perform_per_layer_analysis_by_enabling_quant_wrappers(self,
-                                                              sim: QuantizationSimModel,
-                                                              results_dir: str) -> Dict[str, float]:
+    def perform_per_layer_analysis_by_enabling_quant_wrappers(
+        self, sim: QuantizationSimModel, results_dir: str
+    ) -> Dict[str, float]:
         """
         NOTE: Option 1
 
@@ -315,25 +350,28 @@ class QuantAnalyzer:
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
 
-        _logger.info("\nOPTION-1:\nAll the quant wrappers are disabled.\n"
-                     "Starting per-layer analysis by enabling quant wrappers as per config file.")
+        _logger.info(
+            "\nOPTION-1:\nAll the quant wrappers are disabled.\n"
+            "Starting per-layer analysis by enabling quant wrappers as per config file."
+        )
 
-        layer_wise_eval_score_dict = self._perform_per_layer_analysis(sim,
-                                                                      disable_all_quantizers=True,
-                                                                      enabled_before=True,
-                                                                      enabled_after=False)
-        export_per_layer_sensitivity_analysis_plot(layer_wise_eval_score_dict,
-                                                   results_dir,
-                                                   title="per_layer_quant_enabled")
-        save_json(layer_wise_eval_score_dict,
-                  results_dir,
-                  title="per_layer_quant_enabled.json")
+        layer_wise_eval_score_dict = self._perform_per_layer_analysis(
+            sim, disable_all_quantizers=True, enabled_before=True, enabled_after=False
+        )
+        export_per_layer_sensitivity_analysis_plot(
+            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_enabled"
+        )
+        save_json(
+            layer_wise_eval_score_dict,
+            results_dir,
+            title="per_layer_quant_enabled.json",
+        )
         _logger.info("Exported per-layer quant analysis (enabled) plot.")
         return layer_wise_eval_score_dict
 
-    def perform_per_layer_analysis_by_disabling_quant_wrappers(self,
-                                                               sim: QuantizationSimModel,
-                                                               results_dir: str) -> Dict[str, float]:
+    def perform_per_layer_analysis_by_disabling_quant_wrappers(
+        self, sim: QuantizationSimModel, results_dir: str
+    ) -> Dict[str, float]:
         """
         NOTE: Option 2
 
@@ -351,26 +389,31 @@ class QuantAnalyzer:
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
 
-        _logger.info("\nOPTION-2:\nAll the quant wrappers are enabled as per config file.\n"
-                     "Starting per-layer analysis by disabling quant wrappers.")
-        layer_wise_eval_score_dict = self._perform_per_layer_analysis(sim,
-                                                                      disable_all_quantizers=False,
-                                                                      enabled_before=False,
-                                                                      enabled_after=True)
-        export_per_layer_sensitivity_analysis_plot(layer_wise_eval_score_dict,
-                                                   results_dir,
-                                                   title="per_layer_quant_disabled")
-        save_json(layer_wise_eval_score_dict,
-                  results_dir,
-                  title="per_layer_quant_disabled.json")
+        _logger.info(
+            "\nOPTION-2:\nAll the quant wrappers are enabled as per config file.\n"
+            "Starting per-layer analysis by disabling quant wrappers."
+        )
+        layer_wise_eval_score_dict = self._perform_per_layer_analysis(
+            sim, disable_all_quantizers=False, enabled_before=False, enabled_after=True
+        )
+        export_per_layer_sensitivity_analysis_plot(
+            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_disabled"
+        )
+        save_json(
+            layer_wise_eval_score_dict,
+            results_dir,
+            title="per_layer_quant_disabled.json",
+        )
         _logger.info("Exported per-layer quant analysis (disabled) plot.")
         return layer_wise_eval_score_dict
 
-    def _perform_per_layer_analysis(self,
-                                    sim: QuantizationSimModel,
-                                    disable_all_quantizers: bool,
-                                    enabled_before: bool,
-                                    enabled_after: bool) -> Dict[str, float]:
+    def _perform_per_layer_analysis(
+        self,
+        sim: QuantizationSimModel,
+        disable_all_quantizers: bool,
+        enabled_before: bool,
+        enabled_after: bool,
+    ) -> Dict[str, float]:
         """
         Helper function for perform_per_layer_analysis_by_enabling_quant_wrappers() and
         perform_per_layer_analysis_by_disabling_quant_wrappers()
@@ -401,7 +444,9 @@ class QuantAnalyzer:
 
                 # Record eval score.
                 eval_score_dict[name] = self._eval_model(sim.model)
-                _logger.debug("For layer: %s, the eval score is: %f", name, eval_score_dict[name])
+                _logger.debug(
+                    "For layer: %s, the eval score is: %f", name, eval_score_dict[name]
+                )
 
                 enable_disable_quantizers(enabled_quantizers, enabled=enabled_after)
 
@@ -411,9 +456,9 @@ class QuantAnalyzer:
 
         return eval_score_dict
 
-    def export_per_layer_encoding_min_max_range(self,
-                                                sim: QuantizationSimModel,
-                                                results_dir: str) -> Tuple[Dict, Dict]:
+    def export_per_layer_encoding_min_max_range(
+        self, sim: QuantizationSimModel, results_dir: str
+    ) -> Tuple[Dict, Dict]:
         """
         Export encoding min and max range for all weights and activations. results_dir should have
         html files in following format.
@@ -442,12 +487,18 @@ class QuantAnalyzer:
             for index, quantizer in enumerate(quant_wrapper.input_quantizers):
                 if quantizer.is_enabled():
                     name = f"{wrapped_layer_name}_input_{index}"
-                    min_max_range_for_activations_dict[name] = (quantizer.encoding.min, quantizer.encoding.max)
+                    min_max_range_for_activations_dict[name] = (
+                        quantizer.encoding.min,
+                        quantizer.encoding.max,
+                    )
 
             for index, quantizer in enumerate(quant_wrapper.output_quantizers):
                 if quantizer.is_enabled():
                     name = f"{wrapped_layer_name}_output_{index}"
-                    min_max_range_for_activations_dict[name] = (quantizer.encoding.min, quantizer.encoding.max)
+                    min_max_range_for_activations_dict[name] = (
+                        quantizer.encoding.min,
+                        quantizer.encoding.max,
+                    )
 
             for quantizer in quant_wrapper.param_quantizers:
                 if quantizer.is_enabled():
@@ -456,26 +507,40 @@ class QuantAnalyzer:
                     quantizer_name = quantizer.name.replace("/", "-")
                     name = f"{wrapped_layer_name}_{quantizer_name}"
 
-                    if isinstance(quantizer.encoding, List): # per-channel
+                    if isinstance(quantizer.encoding, List):  # per-channel
                         per_channel_encodings = {}
                         for index, encoding in enumerate(quantizer.encoding):
-                            per_channel_encodings[f"{name}_{index}"] = (encoding.min, encoding.max)
+                            per_channel_encodings[f"{name}_{index}"] = (
+                                encoding.min,
+                                encoding.max,
+                            )
                         min_max_range_for_weights_dict[name] = per_channel_encodings
-                    else: # per-tensor
-                        min_max_range_for_weights_dict[name] = (quantizer.encoding.min, quantizer.encoding.max)
+                    else:  # per-tensor
+                        min_max_range_for_weights_dict[name] = (
+                            quantizer.encoding.min,
+                            quantizer.encoding.max,
+                        )
 
-        create_and_export_min_max_ranges_plot(min_max_range_for_weights_dict,
-                                              min_max_ranges_dir,
-                                              title="weights")
-        create_and_export_min_max_ranges_plot(min_max_range_for_activations_dict,
-                                              min_max_ranges_dir,
-                                              title="activations")
-        save_json(min_max_range_for_weights_dict, min_max_ranges_dir, title="weights.json")
-        save_json(min_max_range_for_activations_dict, min_max_ranges_dir, title="activations.json")
+        create_and_export_min_max_ranges_plot(
+            min_max_range_for_weights_dict, min_max_ranges_dir, title="weights"
+        )
+        create_and_export_min_max_ranges_plot(
+            min_max_range_for_activations_dict, min_max_ranges_dir, title="activations"
+        )
+        save_json(
+            min_max_range_for_weights_dict, min_max_ranges_dir, title="weights.json"
+        )
+        save_json(
+            min_max_range_for_activations_dict,
+            min_max_ranges_dir,
+            title="activations.json",
+        )
         _logger.info("Exported per layer encodings min-max ranges plot(s).")
         return min_max_range_for_weights_dict, min_max_range_for_activations_dict
 
-    def export_per_layer_stats_histogram(self, sim: QuantizationSimModel, results_dir: str) -> None:
+    def export_per_layer_stats_histogram(
+        self, sim: QuantizationSimModel, results_dir: str
+    ) -> None:
         """
         NOTE: Not to invoke when quantization scheme is not TF-Enhanced.
 
@@ -501,28 +566,36 @@ class QuantAnalyzer:
 
             for index, quantizer in enumerate(quant_wrapper.input_quantizers):
                 if quantizer.encoding:
-                    self._create_and_export_stats_histogram_plot(quantizer, activations_pdf_dir,
-                                                                 title=f"{wrapped_layer_name}_input_q{index}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        activations_pdf_dir,
+                        title=f"{wrapped_layer_name}_input_q{index}",
+                    )
 
             for index, quantizer in enumerate(quant_wrapper.output_quantizers):
                 if quantizer.encoding:
-                    self._create_and_export_stats_histogram_plot(quantizer, activations_pdf_dir,
-                                                                 title=f"{wrapped_layer_name}_output_q{index}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        activations_pdf_dir,
+                        title=f"{wrapped_layer_name}_output_q{index}",
+                    )
 
             for quantizer in quant_wrapper.param_quantizers:
                 if quantizer.encoding:
                     # Keras parameter name usually contains slash (/) and it can cause incorrect file path when saving
                     #   Replace slash (/) with dash (-) to avoid it
                     param_name = quantizer.name.replace("/", "-")
-                    self._create_and_export_stats_histogram_plot(quantizer,
-                                                                 os.path.join(weights_pdf_dir, wrapped_layer_name),
-                                                                 title=f"{wrapped_layer_name}_{param_name}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        os.path.join(weights_pdf_dir, wrapped_layer_name),
+                        title=f"{wrapped_layer_name}_{param_name}",
+                    )
         _logger.info("Exported per layer stats histogram plot(s).")
 
     @staticmethod
-    def _create_and_export_stats_histogram_plot(quantizer: TensorQuantizer,
-                                                results_dir: str,
-                                                title: str) -> None:
+    def _create_and_export_stats_histogram_plot(
+        quantizer: TensorQuantizer, results_dir: str, title: str
+    ) -> None:
         """
         For given quantizer, create and export histogram (PDF) of statistics in html format.
 
@@ -538,11 +611,13 @@ class QuantAnalyzer:
             encodings = [encodings]
 
         for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
-            export_stats_histogram_plot(histogram, encoding, results_dir, title=f"{title}_{index}")
+            export_stats_histogram_plot(
+                histogram, encoding, results_dir, title=f"{title}_{index}"
+            )
 
-    def export_per_layer_mse_loss(self,
-                                  sim: QuantizationSimModel,
-                                  results_dir: str) -> Dict[str, float]:
+    def export_per_layer_mse_loss(
+        self, sim: QuantizationSimModel, results_dir: str
+    ) -> Dict[str, float]:
         """
         NOTE: Need to pass same model input data through both fp32 and quantsim model to
         tap output activations of each layer.
@@ -558,23 +633,22 @@ class QuantAnalyzer:
         mse_loss_dict = {}
         with Spinner("Calculating per-layer MSE loss"):
             for index, layer in enumerate(self._model.layers):
-                if isinstance(layer, tf.keras.layers.InputLayer) or \
-                        GraphSearchUtils.is_folded_batch_normalization(layer):
+                if isinstance(
+                    layer, tf.keras.layers.InputLayer
+                ) or GraphSearchUtils.is_folded_batch_normalization(layer):
                     continue
 
                 loss = self._compute_mse_loss(sim, index)
                 mse_loss_dict[layer.name] = loss
 
-        export_per_layer_mse_plot(mse_loss_dict,
-                                  results_dir,
-                                  title="per_layer_mse_loss")
+        export_per_layer_mse_plot(
+            mse_loss_dict, results_dir, title="per_layer_mse_loss"
+        )
         save_json(mse_loss_dict, results_dir, title="per_layer_mse_loss.json")
         _logger.info("Exported per layer MSE loss plot.")
         return mse_loss_dict
 
-    def _compute_mse_loss(self,
-                          sim: QuantizationSimModel,
-                          index: int) -> float:
+    def _compute_mse_loss(self, sim: QuantizationSimModel, index: int) -> float:
         """
         Compute MSE loss between fp32 and quantized output activations for each batch, add for
         all the batches and return averaged mse loss.
@@ -587,7 +661,9 @@ class QuantAnalyzer:
         total = 0
         mse = tf.keras.losses.MeanSquaredError()
         for tensor in self._unlabeled_dataset.take(self._num_batches):
-            quantized_output = _get_output_of_intermediate_layer(sim.model, tensor, index)
+            quantized_output = _get_output_of_intermediate_layer(
+                sim.model, tensor, index
+            )
             fp32_output = _get_output_of_intermediate_layer(self._model, tensor, index)
 
             loss += mse(quantized_output, fp32_output).numpy()
@@ -595,7 +671,9 @@ class QuantAnalyzer:
 
         return loss / total
 
-    def enable_per_layer_mse_loss(self, unlabeled_dataset: tf.data.Dataset, num_batches: int) -> None:
+    def enable_per_layer_mse_loss(
+        self, unlabeled_dataset: tf.data.Dataset, num_batches: int
+    ) -> None:
         """
         Enable per layer MSE loss analysis.
 

@@ -46,12 +46,17 @@ from aimet_torch.blockwise_sampler import BlockwiseSampler
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.utils import StopForwardException, disable_all_quantizers
 
+
 class Block(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(
+            in_channels=3, out_channels=3, kernel_size=1, stride=1, padding=1
+        )
         self.relu = torch.nn.ReLU()
-        self.conv2 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=1, stride=1, padding=1)
+        self.conv2 = torch.nn.Conv2d(
+            in_channels=3, out_channels=3, kernel_size=1, stride=1, padding=1
+        )
 
     def forward(self, x):
         out = self.conv1(x)
@@ -76,7 +81,10 @@ class RandomDataset(Dataset):
         self.shape = shape
         self.length = length
         self.generator = torch.Generator().manual_seed(0)
-        self.samples = tuple(torch.randn(self.shape, generator=self.generator) for _ in range(self.length))
+        self.samples = tuple(
+            torch.randn(self.shape, generator=self.generator)
+            for _ in range(self.length)
+        )
 
     def __len__(self):
         return self.length
@@ -90,12 +98,15 @@ class InputHolder:
     args: tuple
     kwargs: dict
 
+
 class StopForwardExceptionWithInput(StopForwardException):
     def __init__(self, captured_input):
         self.captured_input = captured_input
 
+
 def hook_fn(module, args, kwargs):
     raise StopForwardExceptionWithInput(InputHolder(args, kwargs))
+
 
 @pytest.mark.parametrize("cache_activations_on_disk", [True, False])
 @pytest.mark.parametrize("keep_unused_blocks_on_cpu", [True, False])
@@ -107,6 +118,7 @@ def test_blockwise_sampler(cache_activations_on_disk, keep_unused_blocks_on_cpu)
     def forward_pass_callback(quantized_model):
         for sample in DataLoader(dataset, batch_size=1, shuffle=False):
             _ = sim.model(sample)
+
     sim.compute_encodings(forward_pass_callback)
 
     sampler = BlockwiseSampler(
@@ -114,7 +126,7 @@ def test_blockwise_sampler(cache_activations_on_disk, keep_unused_blocks_on_cpu)
         blocks=sim.model.blocks,
         dataloader=DataLoader(dataset, batch_size=1, shuffle=False),
         cache_activations_on_disk=cache_activations_on_disk,
-        keep_unused_blocks_on_cpu=keep_unused_blocks_on_cpu
+        keep_unused_blocks_on_cpu=keep_unused_blocks_on_cpu,
     )
 
     for block, fp_block_inputs, qt_block_inputs in sampler.sample():
@@ -147,11 +159,19 @@ def test_blockwise_sampler(cache_activations_on_disk, keep_unused_blocks_on_cpu)
             for qt_block_input in qt_block_inputs:
                 stack.enter_context(qt_block_input.load())
 
-            fp_block_inputs_args = tuple(fp_block_input.args for fp_block_input in fp_block_inputs)
-            qt_block_inputs_args = tuple(qt_block_input.args for qt_block_input in qt_block_inputs)
+            fp_block_inputs_args = tuple(
+                fp_block_input.args for fp_block_input in fp_block_inputs
+            )
+            qt_block_inputs_args = tuple(
+                qt_block_input.args for qt_block_input in qt_block_inputs
+            )
 
             assert block in sim.model.blocks
-            for cached_tensors, uncached_tensors in zip(fp_block_inputs_args, fp_block_inputs_without_caching):
+            for cached_tensors, uncached_tensors in zip(
+                fp_block_inputs_args, fp_block_inputs_without_caching
+            ):
                 _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)
-            for cached_tensors, uncached_tensors in zip(qt_block_inputs_args, qt_block_inputs_without_caching):
+            for cached_tensors, uncached_tensors in zip(
+                qt_block_inputs_args, qt_block_inputs_without_caching
+            ):
                 _verify_equal_tuples_of_tensors(uncached_tensors, cached_tensors)

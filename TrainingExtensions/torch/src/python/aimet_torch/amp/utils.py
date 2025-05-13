@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to aimet_torch._base.amp.utils """
-from .._base.amp.utils import * # pylint: disable=wildcard-import, unused-wildcard-import
+"""Alias to aimet_torch._base.amp.utils"""
+
+from .._base.amp.utils import *  # pylint: disable=wildcard-import, unused-wildcard-import

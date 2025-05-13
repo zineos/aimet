@@ -39,14 +39,19 @@
 from aimet_common.connected_graph.operation import Op
 from aimet_onnx.graph_passes.graph_pass import SupergroupGraphPass
 from aimet_onnx.graph_passes.pass_registry import register_pass
-from aimet_onnx.graph_passes.utils import check_consecutive_ops, get_op_from_outputs, match_and_get_next_op
+from aimet_onnx.graph_passes.utils import (
+    check_consecutive_ops,
+    get_op_from_outputs,
+    match_and_get_next_op,
+)
 from aimet_onnx.utils import ModelProto
+
 
 @register_pass("LayerNormalization")
 class LayerNormalization(SupergroupGraphPass):
     """
     Disable output quantizers for LayerNormalization intermediate ops:
-    
+
     LayerNormalization(x) = (x - E(x)) / Sqrt(Var(x) + ε) * γ + β
 
     Expected graph:
@@ -55,18 +60,18 @@ class LayerNormalization(SupergroupGraphPass):
             |       |
         ReduceMean  |
             |       |
-            +---+---+     
+            +---+---+
                 Sub
             +---+---+
             |       |
             Pow     |
             |       |
-        ReduceMean  | 
+        ReduceMean  |
             |       |
             Add     |
             |       |
             Sqrt    |
-            +---+---+ 
+            +---+---+
                 Div
                 |
                 Mul (if affine_transform=True)
@@ -83,7 +88,12 @@ class LayerNormalization(SupergroupGraphPass):
         sub_1 = match_and_get_next_op(op, "ReduceMean")
 
         # x - E[x]
-        if sub_1 is None or sub_1.type != "Sub" or len(sub_1.output_ops) != 2 or sub_1.inputs[0] != op.inputs[0]:
+        if (
+            sub_1 is None
+            or sub_1.type != "Sub"
+            or len(sub_1.output_ops) != 2
+            or sub_1.inputs[0] != op.inputs[0]
+        ):
             return False
 
         pow_1 = get_op_from_outputs(sub_1, "Pow")
@@ -92,16 +102,21 @@ class LayerNormalization(SupergroupGraphPass):
             return False
 
         # Sqrt(Var(x) + ε)
-        match, denominator_ops = check_consecutive_ops(pow_1, ["Pow", "ReduceMean", "Add", "Sqrt"])
+        match, denominator_ops = check_consecutive_ops(
+            pow_1, ["Pow", "ReduceMean", "Add", "Sqrt"]
+        )
         if not match:
             return False
 
         # (x - E(x)) / Sqrt(Var(x) + ε)
-        if div_1.inputs[0].producer != sub_1 or div_1.inputs[1].producer != denominator_ops[-1]:
+        if (
+            div_1.inputs[0].producer != sub_1
+            or div_1.inputs[1].producer != denominator_ops[-1]
+        ):
             return False
 
         # Collect quantizers to disable.
-        all_ops = [ op, sub_1 ] + denominator_ops + [ div_1 ]
+        all_ops = [op, sub_1] + denominator_ops + [div_1]
         self.disable_output_quantizers(op_list=all_ops[:-1])
         self.disable_const_quantizers(op_list=all_ops)
 
@@ -117,7 +132,9 @@ class LayerNormalization(SupergroupGraphPass):
         self.disable_const_quantizers(op_list=[div_1])
 
         # (x - E(x)) / Sqrt(Var(x) + ε) * γ + β
-        match, mul_add_ops = check_consecutive_ops(div_mul_ops[-1], ["Mul", "Add"], validate_last_op_consumers=False)
+        match, mul_add_ops = check_consecutive_ops(
+            div_mul_ops[-1], ["Mul", "Add"], validate_last_op_consumers=False
+        )
         if not match:
             return True
 

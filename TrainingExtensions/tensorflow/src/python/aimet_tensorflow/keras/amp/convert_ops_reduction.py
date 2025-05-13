@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module implements the convert op overhead reduction stage of AMP """
+"""This module implements the convert op overhead reduction stage of AMP"""
+
 import enum
 from collections import defaultdict
 from typing import List, Dict, Tuple
@@ -44,28 +45,39 @@ import networkx as nx
 from aimet_common.utils import AimetLogger
 from aimet_common.defs import QuantizationDataType
 from aimet_common.amp.quantizer_groups import QuantizerGroupBase
-from aimet_common.amp.convert_ops_reduction import ReduceConvertOps as BaseReduceConvertOps
+from aimet_common.amp.convert_ops_reduction import (
+    ReduceConvertOps as BaseReduceConvertOps,
+)
 
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
-from aimet_tensorflow.keras.amp.quantizer_groups import find_op_groups, find_wrapper_module
+from aimet_tensorflow.keras.amp.quantizer_groups import (
+    find_op_groups,
+    find_wrapper_module,
+)
 
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.MixedPrecision)
 
 
 class ReduceConvertOps(BaseReduceConvertOps):
-    """ This class implements Convert Ops reduction algo"""
+    """This class implements Convert Ops reduction algo"""
 
     class TensorAxis(enum.Enum):
-        """ Enum to find the axis index for tensor dimensions"""
+        """Enum to find the axis index for tensor dimensions"""
+
         N = 0
         H = 1
         W = 2
         C = 3
 
-    def __init__(self, aimet_sim: QuantizationSimModel, quantizer_groups: List[QuantizerGroupBase],
-                 candidates: List, mac_dict: Dict):
+    def __init__(
+        self,
+        aimet_sim: QuantizationSimModel,
+        quantizer_groups: List[QuantizerGroupBase],
+        candidates: List,
+        mac_dict: Dict,
+    ):
         """
         :param aimet_sim: Sim object with loaded quantizer settings
         :param quantizer_groups: List of quantizer groups of aimet_sim
@@ -86,13 +98,24 @@ class ReduceConvertOps(BaseReduceConvertOps):
             if len(qgroup.input_quantizers) == 1 and not qgroup.output_quantizers:
                 # TODO: (temporary fix for now) conv1_Conv_input_quantizer_idx_0_input --> conv1_Conv_input
                 # quantizer_group2node_index[qgroup.input_quantizers[0]+"_input"] = counter
-                quantizer_group2node_index[qgroup.input_quantizers[0].split('_input_quantizer_')[0] + "_input"] = counter
+                quantizer_group2node_index[
+                    qgroup.input_quantizers[0].split("_input_quantizer_")[0] + "_input"
+                ] = counter
                 counter += 1
             elif len(qgroup.output_quantizers) == 1:
-                quantizer_group2node_index[qgroup.output_quantizers[0].split('_output_quantizer_')[0] + "_output"] = counter
+                quantizer_group2node_index[
+                    qgroup.output_quantizers[0].split("_output_quantizer_")[0]
+                    + "_output"
+                ] = counter
                 counter += 1
-            elif not qgroup.input_quantizers and not qgroup.output_quantizers and len(qgroup.parameter_quantizers) >= 1:
-                quantizer_group2node_index[qgroup.parameter_quantizers[0].split('/')[0] + "_weights_only"] = counter
+            elif (
+                not qgroup.input_quantizers
+                and not qgroup.output_quantizers
+                and len(qgroup.parameter_quantizers) >= 1
+            ):
+                quantizer_group2node_index[
+                    qgroup.parameter_quantizers[0].split("/")[0] + "_weights_only"
+                ] = counter
                 counter += 1
             else:
                 raise RuntimeError("Issue with this quantizer group:{}".format(qgroup))
@@ -128,14 +151,22 @@ class ReduceConvertOps(BaseReduceConvertOps):
 
         # Rename nodes from op dotted name to quantizer-group name
         module_name_to_module_dict = self._sim._layer_name_to_quant_wrapper
-        G = self.rename_nodes(G, module_name_to_module_dict, dotted_name2op_name, ops_dict, find_wrapper_module)
+        G = self.rename_nodes(
+            G,
+            module_name_to_module_dict,
+            dotted_name2op_name,
+            ops_dict,
+            find_wrapper_module,
+        )
         _logger.info("Networkx Graph nodes renamed to QuantizerGroup names")
 
         # Tensor dimension correction (needed because of the transpose ops, which have either "nchw" or "nhwc" in their names)
         for node in G.nodes:
             if "tensor_dims" in G.nodes[node]:
                 if "nchw" in node:
-                    G.nodes[node]["tensor_dims"] = self.permute_tensor_dims(G.nodes[node]["tensor_dims"], "nchw")
+                    G.nodes[node]["tensor_dims"] = self.permute_tensor_dims(
+                        G.nodes[node]["tensor_dims"], "nchw"
+                    )
 
         # Identify the nodes in the graph that represents a quantizer-group
         self.mark_qg_nodes(G, quantizer_group2node_index)
@@ -144,9 +175,9 @@ class ReduceConvertOps(BaseReduceConvertOps):
         # Identify the nodes in the graph who has parameters
         nx.set_node_attributes(G, False, "has_weight")
         for i_para in parameter_quantizers:
-            op_name = i_para[:i_para.rfind('/')] + '_output'
+            op_name = i_para[: i_para.rfind("/")] + "_output"
             if op_name in G:
-                G.nodes[op_name]['has_weight'] = True
+                G.nodes[op_name]["has_weight"] = True
             else:
                 raise RuntimeError(f"check the weight quantizer {i_para}")
 
@@ -173,7 +204,7 @@ class ReduceConvertOps(BaseReduceConvertOps):
         parent_child_op_groups_dotted = defaultdict(list)
         for parent, children in parent_child_op_groups.items():
             dotted_parent = parent
-            if parent not in ['input_ops', 'output_ops']:
+            if parent not in ["input_ops", "output_ops"]:
                 dotted_parent = op_name_to_dotted_name[parent]
             dotted_children = [op_name_to_dotted_name[child] for child in children]
             parent_child_op_groups_dotted[dotted_parent] = dotted_children
@@ -184,8 +215,8 @@ class ReduceConvertOps(BaseReduceConvertOps):
         This function returns the phase 2 solution i.e. the act bw of each quantizer-group
         :param qg_graph: quantizer-group graph
         """
-        QUANTIZER_TYPE_INPUT = 'input'
-        QUANTIZER_TYPE_OUTPUT = 'output'
+        QUANTIZER_TYPE_INPUT = "input"
+        QUANTIZER_TYPE_OUTPUT = "output"
 
         solution_dict = {}
         # pylint: disable=protected-access
@@ -207,27 +238,49 @@ class ReduceConvertOps(BaseReduceConvertOps):
         """
         qg_candidates = []
         for quantizer_group in self._quantizer_groups:
-            if len(quantizer_group.input_quantizers) == 1 and not quantizer_group.output_quantizers:
+            if (
+                len(quantizer_group.input_quantizers) == 1
+                and not quantizer_group.output_quantizers
+            ):
                 # TODO: (temporary fix for now) conv1_Conv_input_quantizer_idx_0_input --> conv1_Conv_input
                 # bitwidth = phase_three_sol[quantizer_group.input_quantizers[0] + "_input"]
-                bitwidth = phase_three_sol[quantizer_group.input_quantizers[0].split('_input_quantizer_')[0] + "_input"]
+                bitwidth = phase_three_sol[
+                    quantizer_group.input_quantizers[0].split("_input_quantizer_")[0]
+                    + "_input"
+                ]
             elif len(quantizer_group.output_quantizers) == 1:
-                bitwidth = phase_three_sol[quantizer_group.output_quantizers[0].split('_output_quantizer_')[0] + "_output"]  ## Example: conv1_output = 8 bits (followed by conv2)
-            elif not quantizer_group.input_quantizers and not quantizer_group.output_quantizers and len(
-                    quantizer_group.parameter_quantizers) == 1:
-                param_bitwidth_candidates = [candidate[1][0] for candidate in self._candidates]
+                bitwidth = phase_three_sol[
+                    quantizer_group.output_quantizers[0].split("_output_quantizer_")[0]
+                    + "_output"
+                ]  ## Example: conv1_output = 8 bits (followed by conv2)
+            elif (
+                not quantizer_group.input_quantizers
+                and not quantizer_group.output_quantizers
+                and len(quantizer_group.parameter_quantizers) == 1
+            ):
+                param_bitwidth_candidates = [
+                    candidate[1][0] for candidate in self._candidates
+                ]
                 all_eight_bits = [i == 8 for i in param_bitwidth_candidates]
                 if all(all_eight_bits):
                     bitwidth = 8
                 else:
-                    raise RuntimeError("Candidate parameter bandwidths are not all 8 bits -- unsupported.")
+                    raise RuntimeError(
+                        "Candidate parameter bandwidths are not all 8 bits -- unsupported."
+                    )
             else:
                 raise RuntimeError("Unexpected quantizer group type.")
 
             if bitwidth == 8:
-                candidate = ((8, QuantizationDataType.int), (8, QuantizationDataType.int))
+                candidate = (
+                    (8, QuantizationDataType.int),
+                    (8, QuantizationDataType.int),
+                )
             elif bitwidth == 16:
-                candidate = ((16, QuantizationDataType.int), (8, QuantizationDataType.int))
+                candidate = (
+                    (16, QuantizationDataType.int),
+                    (8, QuantizationDataType.int),
+                )
             else:
                 raise NotImplementedError
 

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Quant Analyzer """
+"""Quant Analyzer"""
 
 import os
 import contextlib
@@ -78,11 +78,12 @@ class QuantAnalyzer(QuantAnalyzerBase):
         for quantizer in quantizers:
             quantizer.enabled = enabled
 
-    def _create_and_export_stats_histogram_plot(self,
-                                                quantizer: StaticGridTensorQuantizer,
-                                                results_dir: str,
-                                                title: str,
-                                                ):
+    def _create_and_export_stats_histogram_plot(
+        self,
+        quantizer: StaticGridTensorQuantizer,
+        results_dir: str,
+        title: str,
+    ):
         """
         For given quantizer, create and export histogram (PDF) of statistics in html format.
 
@@ -98,7 +99,9 @@ class QuantAnalyzer(QuantAnalyzerBase):
             encodings = [encodings]
 
         for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
-            export_stats_histogram_plot(histogram, encoding, results_dir, title=f"{title}_{index}")
+            export_stats_histogram_plot(
+                histogram, encoding, results_dir, title=f"{title}_{index}"
+            )
 
     @staticmethod
     def patch_quantsim_to_store_histogram(_):
@@ -145,7 +148,9 @@ class QuantAnalyzer(QuantAnalyzerBase):
         return utils.disable_all_quantizers(module)
 
     @staticmethod
-    def _get_quantized_modules(sim: QuantizationSimModel) -> Generator[QcQuantizeWrapper, None, None]:
+    def _get_quantized_modules(
+        sim: QuantizationSimModel,
+    ) -> Generator[QcQuantizeWrapper, None, None]:
         for module in sim.model.modules():
             if isinstance(module, (QcQuantizeWrapper, QcQuantizeRecurrent)):
                 yield module

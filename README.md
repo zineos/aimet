@@ -21,7 +21,7 @@ We also host the [AIMET Model Zoo](https://github.com/quic/aimet-model-zoo) - a 
 - [Installation](#quick-installation)
 - [Why AIMET?](#why-aimet)
 - [Supported features](#supported-features)
-- [What's New](#whats-new)  
+- [What's New](#whats-new)
 - [Results](#results)
 - [Resources](#resources)
 - [Contributions](#contributions)
@@ -74,7 +74,7 @@ Some recently added features include
 * Quantization-aware Training (QAT) for recurrent models (including with RNNs, LSTMs and GRUs)
 
 ## Results
-AIMET can quantize an existing 32-bit floating-point model to an 8-bit fixed-point model without sacrificing much accuracy and without model fine-tuning. 
+AIMET can quantize an existing 32-bit floating-point model to an 8-bit fixed-point model without sacrificing much accuracy and without model fine-tuning.
 
 
 <h4>DFQ</h4>
@@ -147,7 +147,7 @@ The DFQ method applied to several popular networks, such as MobileNet-v2 and Res
     <td align="center" bgcolor="#add8e6">70.86%</td>
   </tr>
 </table>
-<br>  
+<br>
 
 <h4>Quantization for Recurrent Models</h4>
 <p>AIMET supports quantization simulation and quantization-aware training (QAT) for recurrent models (RNN, LSTM, GRU). Using QAT feature in AIMET, a DeepSpeech2 model with bi-directional LSTMs can be quantized to 8-bit precision with minimal drop in accuracy.</p>

@@ -11,7 +11,7 @@ AIMET Examples provide reference code (in the form of *scripts* and *Jupyter Not
 - [Running Examples via Command Line](#running-examples-via-command-line)
 
 ## Installation Instructions
-- The dataloader, evaluator, and trainer utilized in the examples is for the ImageNet dataset. To run the examples end-to-end, please download it from here: https://www.image-net.org/download.php 
+- The dataloader, evaluator, and trainer utilized in the examples is for the ImageNet dataset. To run the examples end-to-end, please download it from here: https://www.image-net.org/download.php
 - Install AIMET and its dependencies using the instructions in [this section](../README.md#installation-instructions).
 - Go to https://github.com/quic/aimet/releases and identify the release tag (`<release_tag>`) of the AIMET package that you're working with.
 - Clone the AIMET repo as follows to any location:
@@ -20,7 +20,7 @@ WORKSPACE="<absolute_path_to_workspace>"
 mkdir $WORKSPACE && cd $WORKSPACE
 git clone https://github.com/quic/aimet.git --branch <release_tag>
 ```
-- Update the environment variable as follows:  
+- Update the environment variable as follows:
 `export PYTHONPATH=$PYTHONPATH:${WORKSPACE}/aimet`
 
 ## Code Layout:
@@ -41,7 +41,7 @@ Examples/
 ## Overview
 This section describes how to apply the various quantization and compression techniques.
 
-### Post Training Quantization Examples 
+### Post Training Quantization Examples
 - _Cross Layer Equalization and Bias Correction - [Torch](torch/quantization/cle_bc.py), [TensorFlow](tensorflow/quantization/cle_bc.py)_:
   - Cross Layer Equalization performs BatchNorm Folding, Cross Layer Scaling, and High Bias Fold
   - Bias Correction corrects shift in layer outputs introduced due to quantization
@@ -62,9 +62,9 @@ This section describes how to apply the various quantization and compression tec
   - Weight SVD is a tensor decomposition technique which decomposes one large layer (in terms of mac or memory) into two smaller layers. Given a neural network layer, with kernel (m,n,h,w) where m is the input channels, n the output channels, and h, w giving the height and width of the kernel itself, Weight SVD will decompose the kernel into one of size (m,k,1,1) and another of size (k,n,h,w), where k is called the rank. The smaller the value of k the larger the degree of compression achieved.
 
 ## Running Examples via Jupyter Notebook
-- Install the Jupyter metapackage as follows (pre-pend with "sudo -H" if appropriate):  
-`python3 -m pip install jupyter`  
-- Start the notebook server as follows (please customize the command line options if appropriate):  
+- Install the Jupyter metapackage as follows (pre-pend with "sudo -H" if appropriate):
+`python3 -m pip install jupyter`
+- Start the notebook server as follows (please customize the command line options if appropriate):
 `jupyter notebook --ip=* --no-browser &`
 - The above command will generate and display a URL in the terminal. Copy and paste it into your browser.
 - Navigate to one of the following paths under the Examples directory and launch your chosen Jupyter Notebook (`.ipynb` extension):
@@ -77,10 +77,10 @@ This section describes how to apply the various quantization and compression tec
 ## Running Examples via Command Line
 Here is how you would run an AIMET example:
 ```
-python example_name.py --dataset_dir path/to/dataset/ --use_cuda 
-``` 
-For example, to run the channel pruning example run the following: 
+python example_name.py --dataset_dir path/to/dataset/ --use_cuda
+```
+For example, to run the channel pruning example run the following:
 ```
 python channel_pruning.py --dataset_dir path/to/dataset/ --use_cuda --epochs 15 --learning_rate 1e-2 --learning_rate_schedule [5, 10]
-``` 
+```
 Setting the hyperparameters epochs, learning rate, and learning rate scheduler is optional. If the values are not given, the default values will be used.

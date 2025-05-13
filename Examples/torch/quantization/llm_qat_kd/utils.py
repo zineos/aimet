@@ -49,7 +49,7 @@ def preprocess_split(dataset, tokenizer, block_size, column_name="text"):
     def tokenize_fn(examples):
         return tokenizer(examples[column_name], return_token_type_ids=False)
 
-    map_kwargs = { 
+    map_kwargs = {
         "num_proc": None,
         "load_from_cache_file": True,
         "desc": "Running tokenizer on dataset",

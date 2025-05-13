@@ -60,10 +60,9 @@ def evaluate(model: torch.nn.Module, dummy_input: torch.Tensor):
 
 
 class TestModelPreparer:
-
     @pytest.mark.cuda
     def test_inception_v3(self):
-        """ Verify inception_v3 """
+        """Verify inception_v3"""
         model = models.inception_v3().eval().cuda()
         prepared_model = prepare_model(model)
         print(prepared_model)
@@ -83,21 +82,32 @@ class TestModelPreparer:
 
     @pytest.mark.cuda
     def test_deeplab_v3(self):
-        """ Verify deeplab_v3 """
+        """Verify deeplab_v3"""
         # Set the strict flag to False so that torch.jit.trace can be successful.
         from aimet_torch.meta import connectedgraph
+
         connectedgraph.jit_trace_args.update({"strict": False})
-        if Version(torchvision.__version__) < Version('0.10.2'):
-            model = models.segmentation.deeplabv3_resnet50(pretrained_backbone=False).eval().cuda()
+        if Version(torchvision.__version__) < Version("0.10.2"):
+            model = (
+                models.segmentation.deeplabv3_resnet50(pretrained_backbone=False)
+                .eval()
+                .cuda()
+            )
         else:
-            model = models.segmentation.deeplabv3_resnet50(weights_backbone=None).eval().cuda()
+            model = (
+                models.segmentation.deeplabv3_resnet50(weights_backbone=None)
+                .eval()
+                .cuda()
+            )
         prepared_model = prepare_model(model)
         print(prepared_model)
         input_shape = (1, 3, 224, 224)
         dummy_input = torch.randn(*input_shape).cuda()
 
         # Verify bit-exact outputs.
-        assert torch.equal(prepared_model(dummy_input)['out'], model(dummy_input)['out'])
+        assert torch.equal(
+            prepared_model(dummy_input)["out"], model(dummy_input)["out"]
+        )
 
         # Verify that validator checks pass.
         assert ModelValidator.validate_model(prepared_model, dummy_input)
@@ -107,17 +117,23 @@ class TestModelPreparer:
         quant_sim.compute_encodings(evaluate, dummy_input)
         quant_sim.model(dummy_input)
 
-    @pytest.mark.skipif(Version(torch.__version__) < Version('1.10.0'), reason="torch1.13.1 is required.")
+    @pytest.mark.skipif(
+        Version(torch.__version__) < Version("1.10.0"),
+        reason="torch1.13.1 is required.",
+    )
     def test_fx_with_vit(self):
-        """ Verify VIT """
+        """Verify VIT"""
         from transformers import ViTModel, ViTConfig
         from transformers.utils.fx import symbolic_trace
 
         # Set the strict flag to False so that torch.jit.trace can be successful.
         from aimet_torch.meta import connectedgraph
+
         connectedgraph.jit_trace_args.update({"strict": False})
 
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
         model = ViTModel(ViTConfig()).to(device)
         dummy_input = torch.randn(1, 3, 224, 224, device=device)
 
@@ -133,7 +149,9 @@ class TestModelPreparer:
             outputs2 = traced_model(dummy_input)
 
         # Verify bit-exact outputs.
-        assert torch.equal(dict(outputs)["last_hidden_state"], outputs2["last_hidden_state"])
+        assert torch.equal(
+            dict(outputs)["last_hidden_state"], outputs2["last_hidden_state"]
+        )
         assert torch.equal(dict(outputs)["pooler_output"], outputs2["pooler_output"])
 
         # Verify that validator checks pass.

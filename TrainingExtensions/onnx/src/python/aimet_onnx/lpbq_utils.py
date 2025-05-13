@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utility functions for applying LPBQ quantization """
+"""Utility functions for applying LPBQ quantization"""
 
 from typing import List, Tuple, Sequence
 import numpy as np
@@ -61,9 +61,10 @@ def _split_blocks(encoding: np.ndarray, block_grouping) -> np.ndarray:
             expanded_shape.append(block_group)
     return encoding.reshape(expanded_shape)
 
-def _get_per_group_scale_factor(scale: np.ndarray,
-                               block_grouping: Sequence[int],
-                               scale_bitwidth: int) -> np.ndarray:
+
+def _get_per_group_scale_factor(
+    scale: np.ndarray, block_grouping: Sequence[int], scale_bitwidth: int
+) -> np.ndarray:
     """
     Get per channel scale.
 
@@ -74,12 +75,13 @@ def _get_per_group_scale_factor(scale: np.ndarray,
     grouped_scale = _split_blocks(scale, block_grouping)
     group_axes = tuple(range(1, len(grouped_scale.shape), 2))
     max_scale = np.max(grouped_scale, axis=group_axes, keepdims=True)
-    per_group_scale = max_scale / 2 ** scale_bitwidth
+    per_group_scale = max_scale / 2**scale_bitwidth
     return per_group_scale
 
-def grouped_dynamic_quantize(input_array: np.ndarray,
-                             grouping,
-                             bitwidth) -> Tuple[np.ndarray, np.ndarray]:
+
+def grouped_dynamic_quantize(
+    input_array: np.ndarray, grouping, bitwidth
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Quantize input array between (1, 2 ** bitwidth) based on the maximum value in each group.
 
@@ -91,13 +93,18 @@ def grouped_dynamic_quantize(input_array: np.ndarray,
     dynamic_scale = _get_per_group_scale_factor(input_array, grouping, bitwidth)
     grouped_scale = _split_blocks(input_array, grouping)
     # Note: following aimet_torch implementation, clip to 2 ** bitwidth
-    quantized_input = np.clip(np.round(grouped_scale / dynamic_scale), 1, 2 ** bitwidth).astype(np.uint32)
+    quantized_input = np.clip(
+        np.round(grouped_scale / dynamic_scale), 1, 2**bitwidth
+    ).astype(np.uint32)
     return quantized_input.reshape(input_array.shape), dynamic_scale
 
-def compress_encoding_scales(encodings: List[libpymo.TfEncoding],
-                             encoding_shape: Sequence[int],
-                             block_grouping: Sequence[int],
-                             scale_bitwidth: int) -> List[libpymo.TfEncoding]:
+
+def compress_encoding_scales(
+    encodings: List[libpymo.TfEncoding],
+    encoding_shape: Sequence[int],
+    block_grouping: Sequence[int],
+    scale_bitwidth: int,
+) -> List[libpymo.TfEncoding]:
     """
     Performs dynamic quantize-dequantization on encodings with the granularity specified in block_grouping
 
@@ -109,18 +116,26 @@ def compress_encoding_scales(encodings: List[libpymo.TfEncoding],
     assert len(encoding_shape) == len(block_grouping)
     scale, offset = encodings_to_scale_offset_arrays(encodings, encoding_shape)
     compressed_scales = _compress_encoding_scales(scale, block_grouping, scale_bitwidth)
-    new_encodings = scale_offset_arrays_to_encodings(compressed_scales, offset, encodings[0].bw)
+    new_encodings = scale_offset_arrays_to_encodings(
+        compressed_scales, offset, encodings[0].bw
+    )
     return new_encodings
 
-def _compress_encoding_scales(scale: np.ndarray,
-                              block_grouping: Sequence[int],
-                              scale_bitwidth: int) -> np.ndarray:
-    int_scale, per_group_scale_factor = grouped_dynamic_quantize(scale, block_grouping, scale_bitwidth)
+
+def _compress_encoding_scales(
+    scale: np.ndarray, block_grouping: Sequence[int], scale_bitwidth: int
+) -> np.ndarray:
+    int_scale, per_group_scale_factor = grouped_dynamic_quantize(
+        scale, block_grouping, scale_bitwidth
+    )
     grouped_int_scale = _split_blocks(int_scale, block_grouping)
     dequantized_scale = grouped_int_scale * per_group_scale_factor
     return dequantized_scale.reshape(scale.shape)
 
-def encodings_to_scale_offset_arrays(encodings: List[libpymo.TfEncoding], shape: Sequence[int]) -> Tuple[np.ndarray, np.ndarray]:
+
+def encodings_to_scale_offset_arrays(
+    encodings: List[libpymo.TfEncoding], shape: Sequence[int]
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Converts list of TfEncoding objects to scale & offset numpy arrays with the given shape
     """
@@ -130,13 +145,18 @@ def encodings_to_scale_offset_arrays(encodings: List[libpymo.TfEncoding], shape:
     offset = np.array([enc.offset for enc in encodings]).reshape(shape)
     return scale, offset
 
-def scale_offset_arrays_to_encodings(scales: np.ndarray, offsets: np.ndarray, bitwidth) -> List[libpymo.TfEncoding]:
+
+def scale_offset_arrays_to_encodings(
+    scales: np.ndarray, offsets: np.ndarray, bitwidth
+) -> List[libpymo.TfEncoding]:
     """
     Converts scale offset arrays to a list of TfEncoding objects
     """
     encodings = []
     for scale, offset in zip(scales.flatten().tolist(), offsets.flatten().tolist()):
-        min_val, max_val = compute_min_max_given_delta_offset(scale, offset, bitwidth, False, False)
+        min_val, max_val = compute_min_max_given_delta_offset(
+            scale, offset, bitwidth, False, False
+        )
         encoding = libpymo.TfEncoding()
 
         encoding.bw = bitwidth

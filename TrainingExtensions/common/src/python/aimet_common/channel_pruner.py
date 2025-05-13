@@ -35,13 +35,14 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Channel Pruning functions that are common to both PyTorch and TensorFlow """
+"""Channel Pruning functions that are common to both PyTorch and TensorFlow"""
 
 import numpy as np
 
 
-def select_channels_to_prune(weight_data: np.array
-                             , comp_ratio: float, num_in_channels: int) -> list:
+def select_channels_to_prune(
+    weight_data: np.array, comp_ratio: float, num_in_channels: int
+) -> list:
     """
     Based on the weight date, compression ratio and the number of input channels, return the
     input channel indices to prune.
@@ -57,7 +58,7 @@ def select_channels_to_prune(weight_data: np.array
     # Weight data is of shape [Noc, Nic, k_h, k_w]
 
     # Calculate squared magnitudes of weight data along all the axis except input channels (dim = 1)
-    magnitudes = np.sum(np.sum(np.sum((weight_data ** 2), 3), 2), 0)
+    magnitudes = np.sum(np.sum(np.sum((weight_data**2), 3), 2), 0)
 
     all_indices = list(range(num_in_channels))
 

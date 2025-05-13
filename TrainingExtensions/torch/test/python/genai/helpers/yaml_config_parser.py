@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" General utils for GenAI model testing """
+"""General utils for GenAI model testing"""
 
 import inspect
 import yaml
@@ -45,10 +45,28 @@ from . import metrics as genai_metrics
 from . import quant_recipes as genai_quant_recipes
 from .. import models as genai_models
 
-genai_dataset_classes = [obj for name, obj in inspect.getmembers(genai_datasets) if inspect.isclass(obj) and issubclass(obj, genai_datasets.Dataset)]
-genai_metric_classes = [obj for name, obj in inspect.getmembers(genai_metrics) if inspect.isclass(obj) and issubclass(obj, genai_metrics.EvaluationMetric)]
-genai_quant_recipe_classes = [obj for name, obj in inspect.getmembers(genai_quant_recipes) if inspect.isclass(obj) and issubclass(obj, genai_quant_recipes.QuantizationTechnique)]
-genai_model_classes = [obj for name, obj in inspect.getmembers(genai_models) if inspect.isclass(obj) and issubclass(obj, genai_models.GenAIModel)]
+genai_dataset_classes = [
+    obj
+    for name, obj in inspect.getmembers(genai_datasets)
+    if inspect.isclass(obj) and issubclass(obj, genai_datasets.Dataset)
+]
+genai_metric_classes = [
+    obj
+    for name, obj in inspect.getmembers(genai_metrics)
+    if inspect.isclass(obj) and issubclass(obj, genai_metrics.EvaluationMetric)
+]
+genai_quant_recipe_classes = [
+    obj
+    for name, obj in inspect.getmembers(genai_quant_recipes)
+    if inspect.isclass(obj)
+    and issubclass(obj, genai_quant_recipes.QuantizationTechnique)
+]
+genai_model_classes = [
+    obj
+    for name, obj in inspect.getmembers(genai_models)
+    if inspect.isclass(obj) and issubclass(obj, genai_models.GenAIModel)
+]
+
 
 class YAMLConfigParser:
     recipe_lookup: dict = {}
@@ -100,11 +118,17 @@ class YAMLConfigParser:
             raise RuntimeError("Metrics not specified.")
 
         if not isinstance(doc["model"], dict):
-            raise RuntimeError("Multiple models cannot be specified in a single document.")
+            raise RuntimeError(
+                "Multiple models cannot be specified in a single document."
+            )
         if not isinstance(doc["dataset"], dict):
-            raise RuntimeError("Multiple datasets cannot be specified in a single document.")
+            raise RuntimeError(
+                "Multiple datasets cannot be specified in a single document."
+            )
         if not isinstance(doc["recipe"], dict):
-            raise RuntimeError("Multiple recipes cannot be specified in a single document.")
+            raise RuntimeError(
+                "Multiple recipes cannot be specified in a single document."
+            )
 
         if "name" not in doc["model"]:
             raise RuntimeError("Model name not specified.")
@@ -118,7 +142,9 @@ class YAMLConfigParser:
         if "context_length" not in doc["model"]:
             raise RuntimeError("Context length not specified.")
 
-        metrics = doc["metrics"] if isinstance(doc["metrics"], list) else [doc["metrics"]]
+        metrics = (
+            doc["metrics"] if isinstance(doc["metrics"], list) else [doc["metrics"]]
+        )
         for metric in metrics:
             if "name" not in metric:
                 raise RuntimeError("Metric name not specified.")
@@ -135,7 +161,9 @@ class YAMLConfigParser:
             task_params["model"]["class"] = model_cls
             del task_params["model"]["name"]
         except LookupError as exc:
-            raise LookupError(f"Specified model name ({model_name}) not found.") from exc
+            raise LookupError(
+                f"Specified model name ({model_name}) not found."
+            ) from exc
 
         dataset_name = doc["dataset"]["name"]
         try:
@@ -144,7 +172,9 @@ class YAMLConfigParser:
             task_params["dataset"]["class"] = dataset_cls
             del task_params["dataset"]["name"]
         except LookupError as exc:
-            raise LookupError(f"Specified dataset name ({dataset_name}) not found.") from exc
+            raise LookupError(
+                f"Specified dataset name ({dataset_name}) not found."
+            ) from exc
 
         recipe_name = doc["recipe"]["name"]
         try:
@@ -153,9 +183,13 @@ class YAMLConfigParser:
             task_params["recipe"]["class"] = recipe_cls
             del task_params["recipe"]["name"]
         except LookupError as exc:
-            raise LookupError(f"Specified quantization recipe name ({recipe_name}) not found.") from exc
+            raise LookupError(
+                f"Specified quantization recipe name ({recipe_name}) not found."
+            ) from exc
 
-        metrics = doc["metrics"] if isinstance(doc["metrics"], list) else [doc["metrics"]]
+        metrics = (
+            doc["metrics"] if isinstance(doc["metrics"], list) else [doc["metrics"]]
+        )
         task_params["metrics"] = []
         for metric in metrics:
             metric_name = metric["name"]
@@ -165,7 +199,9 @@ class YAMLConfigParser:
                 task_params["metrics"][-1]["class"] = metric_cls
                 del task_params["metrics"][-1]["name"]
             except LookupError as exc:
-                raise LookupError(f"Specified metric name ({metric_name}) not found.") from exc
+                raise LookupError(
+                    f"Specified metric name ({metric_name}) not found."
+                ) from exc
         del doc["metrics"]
 
         task_params["profiler"] = doc.pop("profiler", {})
@@ -178,10 +214,11 @@ class YAMLConfigParser:
     @classmethod
     def parse(cls, filename):
         print(filename)
-        with open(filename, 'r') as file:
+        with open(filename, "r") as file:
             docs = yaml.safe_load_all(file)
             for doc in docs:
                 yield cls.parse_document(doc)
+
 
 for dataset in genai_dataset_classes:
     YAMLConfigParser.register_dataset(dataset)

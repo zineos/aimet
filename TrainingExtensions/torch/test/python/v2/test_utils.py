@@ -42,7 +42,9 @@ import torch
 
 from .models_.test_models import ModelWithMatMul2, BasicConv2d
 from aimet_common.defs import QuantScheme
-from aimet_torch.v2.experimental import set_matmul_second_input_producer_to_8bit_symmetric
+from aimet_torch.v2.experimental import (
+    set_matmul_second_input_producer_to_8bit_symmetric,
+)
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.nn import BaseQuantizationMixin
 from aimet_torch.utils import get_all_quantizers, disable_all_quantizers
@@ -58,41 +60,42 @@ from aimet_torch.v2.utils import (
     remove_param_quantizers,
 )
 
-@pytest.mark.parametrize('reduce_dim, target_shape', [
-    # | reduce dim   | target shape |
-    # | -------------|--------------|
-    (   [0,1,2,3],     []          ),
 
-    (   [0,1,2],       [6]         ),
-    (   [0,1,2],       [1,6]       ),
-    (   [0,1,2],       [1,1,6]     ),
-    (   [0,1,2],       [1,1,1,6]   ),
-    (   [0,1,3],       [5,1]       ),
-    (   [0,1,3],       [1,5,1]     ),
-    (   [0,1,3],       [1,1,5,1]   ),
-    (   [0,2,3],       [4,1,1]     ),
-    (   [0,2,3],       [1,4,1,1]   ),
-    (   [1,2,3],       [3,1,1,1]   ),
-
-    (   [0,1],         [5,6]       ),
-    (   [0,1],         [1,5,6]     ),
-    (   [0,1],         [1,1,5,6]   ),
-    (   [0,2],         [4,1,6]     ),
-    (   [0,2],         [1,4,1,6]   ),
-    (   [1,2],         [3,1,1,6]   ),
-    (   [0,3],         [4,5,1]     ),
-    (   [0,3],         [1,4,5,1]   ),
-    (   [1,3],         [3,1,5,1]   ),
-    (   [2,3],         [3,4,1,1]   ),
-
-    (   [0],           [4,5,6]     ),
-    (   [0],           [1,4,5,6]   ),
-    (   [1],           [3,1,5,6]   ),
-    (   [2],           [3,4,1,6]   ),
-    (   [3],           [3,4,5,1]   ),
-])
+@pytest.mark.parametrize(
+    "reduce_dim, target_shape",
+    [
+        # | reduce dim   | target shape |
+        # | -------------|--------------|
+        ([0, 1, 2, 3], []),
+        ([0, 1, 2], [6]),
+        ([0, 1, 2], [1, 6]),
+        ([0, 1, 2], [1, 1, 6]),
+        ([0, 1, 2], [1, 1, 1, 6]),
+        ([0, 1, 3], [5, 1]),
+        ([0, 1, 3], [1, 5, 1]),
+        ([0, 1, 3], [1, 1, 5, 1]),
+        ([0, 2, 3], [4, 1, 1]),
+        ([0, 2, 3], [1, 4, 1, 1]),
+        ([1, 2, 3], [3, 1, 1, 1]),
+        ([0, 1], [5, 6]),
+        ([0, 1], [1, 5, 6]),
+        ([0, 1], [1, 1, 5, 6]),
+        ([0, 2], [4, 1, 6]),
+        ([0, 2], [1, 4, 1, 6]),
+        ([1, 2], [3, 1, 1, 6]),
+        ([0, 3], [4, 5, 1]),
+        ([0, 3], [1, 4, 5, 1]),
+        ([1, 3], [3, 1, 5, 1]),
+        ([2, 3], [3, 4, 1, 1]),
+        ([0], [4, 5, 6]),
+        ([0], [1, 4, 5, 6]),
+        ([1], [3, 1, 5, 6]),
+        ([2], [3, 4, 1, 6]),
+        ([3], [3, 4, 5, 1]),
+    ],
+)
 def test_reduce(reduce_dim, target_shape):
-    x = torch.arange(start=0, end=3*4*5*6).view(3,4,5,6)
+    x = torch.arange(start=0, end=3 * 4 * 5 * 6).view(3, 4, 5, 6)
     out = reduce(x, target_shape, torch.sum)
     expected = torch.sum(x, dim=reduce_dim, keepdim=True)
     assert list(out.shape) == list(target_shape)
@@ -104,7 +107,7 @@ def test_patch_attr():
     old_forward = conv.forward
     old_dict = conv.__dict__.copy()
 
-    with patch_attr(conv, 'forward', lambda x: x):
+    with patch_attr(conv, "forward", lambda x: x):
         pass
 
     assert conv.forward == old_forward
@@ -113,10 +116,10 @@ def test_patch_attr():
     replica = conv._replicate_for_data_parallel()
     assert replica.forward.__self__ is replica
 
-    with patch_attr(conv, 'no_exist_attribute', 1):
+    with patch_attr(conv, "no_exist_attribute", 1):
         assert conv.no_exist_attribute == 1
 
-    assert not hasattr(conv, 'no_exist_attribute')
+    assert not hasattr(conv, "no_exist_attribute")
 
 
 @pytest.fixture
@@ -181,13 +184,11 @@ def test_allow_recompute(use_deterministic_algorithms):
     # 90% of the expected memory saving
     assert expected_memory_saving * 0.9 <= actual_memory_saving
 
-
     assert torch.equal(conv1_grad_with_recompute, conv1_grad_without_recompute)
     assert torch.equal(conv2_grad_with_recompute, conv2_grad_without_recompute)
 
 
 def test_matmul_bit_override():
-
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     model = ModelWithMatMul2().to(device)
@@ -198,7 +199,7 @@ def test_matmul_bit_override():
 
     quantsim_config = {
         "defaults": {
-            "hw_version": 'V79',
+            "hw_version": "V79",
             "ops": {"is_output_quantized": "True"},
             "params": {},
         },
@@ -222,7 +223,7 @@ def test_matmul_bit_override():
             dummy_input,
             quant_scheme=QuantScheme.post_training_tf,
             config_file=config_path,
-            default_output_bw = 16,
+            default_output_bw=16,
             default_param_bw=4,
         )
 
@@ -237,10 +238,13 @@ def test_matmul_bit_override():
     assert closest_output_quantizer_of_second_input.signed
 
 
-@pytest.mark.parametrize('impl', [
-    remove_all_quantizers,
-    disable_all_quantizers, # NOTE: Alias of remove_all_quantizers for backwards compatibility
-])
+@pytest.mark.parametrize(
+    "impl",
+    [
+        remove_all_quantizers,
+        disable_all_quantizers,  # NOTE: Alias of remove_all_quantizers for backwards compatibility
+    ],
+)
 def test_remove_all_quantizers(impl):
     model = BasicConv2d(kernel_size=3)
     dummy_input = torch.rand(1, 64, 16, 16)
@@ -279,6 +283,7 @@ def test_remove_all_quantizers(impl):
             assert all(quant is None for quant in module.output_quantizers)
             assert all(value is None for value in module.param_quantizers.values())
 
+
 def test_remove_activation_quantizers():
     model = BasicConv2d(kernel_size=3)
     dummy_input = torch.rand(1, 64, 16, 16)
@@ -314,6 +319,7 @@ def test_remove_activation_quantizers():
             assert all(quant is None for quant in module.input_quantizers)
             assert all(quant is None for quant in module.output_quantizers)
 
+
 def test_remove_param_quantizers():
     model = BasicConv2d(kernel_size=3)
     dummy_input = torch.rand(1, 64, 16, 16)
@@ -337,6 +343,7 @@ def test_remove_param_quantizers():
     for module in qsim.model.modules():
         if isinstance(module, BaseQuantizationMixin):
             assert all(value is None for value in module.param_quantizers.values())
+
 
 def test_remove_input_quantizers():
     model = BasicConv2d(kernel_size=3)
@@ -362,6 +369,7 @@ def test_remove_input_quantizers():
         if isinstance(module, BaseQuantizationMixin):
             assert all(quant is None for quant in module.input_quantizers)
 
+
 def test_remove_output_quantizers():
     model = BasicConv2d(kernel_size=3)
     dummy_input = torch.rand(1, 64, 16, 16)
@@ -376,7 +384,6 @@ def test_remove_output_quantizers():
         for module in qsim.model.modules():
             if isinstance(module, BaseQuantizationMixin):
                 assert all(quant is None for quant in module.output_quantizers)
-
 
     # Ensures that quantizers are restored properly
     assert module_list == list(qsim.model.modules())
@@ -396,11 +403,22 @@ def test_get_all_quantizers():
     model = BasicConv2d(kernel_size=3)
     dummy_input = torch.rand(1, 64, 16, 16)
     sim = QuantizationSimModel(model, dummy_input=dummy_input)
-    param_quantizers, input_quantizers, output_quantizers = get_all_quantizers(sim.model)
+    param_quantizers, input_quantizers, output_quantizers = get_all_quantizers(
+        sim.model
+    )
 
-    assert param_quantizers == \
-           sum((list(qmodule.param_quantizers.values()) for _, qmodule in sim.named_qmodules()), start=[])
-    assert input_quantizers == \
-           sum((list(qmodule.input_quantizers) for _, qmodule in sim.named_qmodules()), start=[])
-    assert output_quantizers == \
-           sum((list(qmodule.output_quantizers) for _, qmodule in sim.named_qmodules()), start=[])
+    assert param_quantizers == sum(
+        (
+            list(qmodule.param_quantizers.values())
+            for _, qmodule in sim.named_qmodules()
+        ),
+        start=[],
+    )
+    assert input_quantizers == sum(
+        (list(qmodule.input_quantizers) for _, qmodule in sim.named_qmodules()),
+        start=[],
+    )
+    assert output_quantizers == sum(
+        (list(qmodule.output_quantizers) for _, qmodule in sim.named_qmodules()),
+        start=[],
+    )

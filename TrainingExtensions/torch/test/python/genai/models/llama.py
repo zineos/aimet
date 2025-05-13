@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Llama model class """
+"""Llama model class"""
 
 import types
 import torch
@@ -48,35 +48,50 @@ from transformers.models.llama import modeling_llama
 from aimet_common.defs import QuantScheme
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
-from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
+    QuantizedLlamaRMSNorm,
+)
 
 from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
 
 
 class Llama_32(GenAIModel):
-    """ Generic LLaMa 3.2 """
+    """Generic LLaMa 3.2"""
+
     DEFAULT_MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
 
     @classmethod
-    def _instantiate_model(cls, model_id: str, small_model: bool = False) -> PreTrainedModel:
+    def _instantiate_model(
+        cls, model_id: str, small_model: bool = False
+    ) -> PreTrainedModel:
         if model_id is None:
             model_id = cls.DEFAULT_MODEL_ID
 
         llm_config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
         if small_model:
             llm_config.num_hidden_layers = 2
-        return modeling_llama.LlamaForCausalLM.from_pretrained(model_id, config=llm_config)
+        return modeling_llama.LlamaForCausalLM.from_pretrained(
+            model_id, config=llm_config
+        )
 
     @classmethod
     def instantiate_tokenizer(cls, model_id: str) -> PreTrainedTokenizer:
         if model_id is None:
             model_id = cls.DEFAULT_MODEL_ID
 
-        return AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
+        return AutoTokenizer.from_pretrained(
+            model_id, use_fast=True, trust_remote_code=True
+        )
 
     @classmethod
-    def instantiate_quantsim(cls, model_id: str, context_length: int, sequence_length: int, small_model: bool = False) -> QuantizationSimModel:
+    def instantiate_quantsim(
+        cls,
+        model_id: str,
+        context_length: int,
+        sequence_length: int,
+        small_model: bool = False,
+    ) -> QuantizationSimModel:
         model = cls._instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
@@ -91,7 +106,7 @@ class Llama_32(GenAIModel):
             dummy_attention_mask,
             {"past_key_values": None},
             context_length,
-            sequence_length
+            sequence_length,
         )
 
         quantsim = QuantizationSimModel(
@@ -101,17 +116,16 @@ class Llama_32(GenAIModel):
             default_output_bw=16,
             default_param_bw=4,
             in_place=True,
-            config_file=cls.get_quantsim_config()
+            config_file=cls.get_quantsim_config(),
         )
 
         quantsim.model.orig_forward = quantsim.model.forward
         quantsim.model.forward = types.MethodType(
             cls.create_static_graph_forward(context_length, sequence_length),
-            quantsim.model
+            quantsim.model,
         )
         quantsim.model.prepare_inputs_for_generation = types.MethodType(
-            cls.static_graph_prepare_inputs_for_generation,
-            quantsim.model
+            cls.static_graph_prepare_inputs_for_generation, quantsim.model
         )
 
         remove_param_quantizers(quantsim.model.model.model.embed_tokens)

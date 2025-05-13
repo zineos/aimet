@@ -53,13 +53,19 @@ from aimet_common.defs import CostMetric, LayerCompRatioPair
 
 
 def get_data_loader(data_set_size, batch_size=1):
-    transform = transforms.Compose([
-        transforms.ToTensor()
-    ])
+    transform = transforms.Compose([transforms.ToTensor()])
     data_loader = torch.utils.data.DataLoader(
-        datasets.FakeData(size=data_set_size, image_size=(1, 28, 28), num_classes=10,
-                          transform=transform, target_transform=None, random_offset=0),
-        batch_size=batch_size, shuffle=False)
+        datasets.FakeData(
+            size=data_set_size,
+            image_size=(1, 28, 28),
+            num_classes=10,
+            transform=transform,
+            target_transform=None,
+            random_offset=0,
+        ),
+        batch_size=batch_size,
+        shuffle=False,
+    )
     return data_loader
 
 
@@ -98,7 +104,6 @@ class _TestNetStrided(torch.nn.Module):
 
 
 class TestSpatialSvdLayerSplit(unittest.TestCase):
-
     def test_split_layer(self):
         model = _TestNet()
 
@@ -106,15 +111,21 @@ class TestSpatialSvdLayerSplit(unittest.TestCase):
 
         num_examples = 2000
 
-        input_data = np.random.normal(size=[num_examples,
-                                            layer.in_channels,
-                                            *layer.kernel_size])
+        input_data = np.random.normal(
+            size=[num_examples, layer.in_channels, *layer.kernel_size]
+        )
 
-        output_data = F.conv2d(torch.FloatTensor(input_data), layer.weight, bias=layer.bias)
+        output_data = F.conv2d(
+            torch.FloatTensor(input_data), layer.weight, bias=layer.bias
+        )
 
-        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(module=layer, rank=100)
+        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(
+            module=layer, rank=100
+        )
         seq_layers = torch.nn.Sequential(first_layer, second_layer)
-        new_output = seq_layers.forward(torch.FloatTensor(input_data)).cpu().detach().numpy()
+        new_output = (
+            seq_layers.forward(torch.FloatTensor(input_data)).cpu().detach().numpy()
+        )
 
         output_data = output_data.cpu().detach().numpy()
 
@@ -127,14 +138,15 @@ class TestSpatialSvdLayerSplit(unittest.TestCase):
         num_examples = 2000
         k_x, k_t = layer.kernel_size
 
-        input_data = np.random.normal(size=[num_examples,
-                                            layer.in_channels,
-                                            k_x + 2,
-                                            k_t + 2])
+        input_data = np.random.normal(
+            size=[num_examples, layer.in_channels, k_x + 2, k_t + 2]
+        )
 
         output_data = layer(torch.FloatTensor(input_data))
 
-        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(module=layer, rank=100)
+        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(
+            module=layer, rank=100
+        )
         seq_layers = torch.nn.Sequential(first_layer, second_layer)
 
         new_output = seq_layers.forward(torch.FloatTensor(input_data))
@@ -146,15 +158,18 @@ class TestSpatialSvdLayerSplit(unittest.TestCase):
 
         layer = model.conv2
         num_examples = 2000
-        input_data = np.random.normal(size=[num_examples,
-                                            layer.in_channels,
-                                            *layer.kernel_size])
+        input_data = np.random.normal(
+            size=[num_examples, layer.in_channels, *layer.kernel_size]
+        )
 
         layer.weight.data[:, 0] = 0
 
-        output_data = F.conv2d(torch.FloatTensor(input_data), layer.weight, bias=layer.bias)
-        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(module=layer,
-                                                                          rank=96)
+        output_data = F.conv2d(
+            torch.FloatTensor(input_data), layer.weight, bias=layer.bias
+        )
+        first_layer, second_layer = SpatialSvdModuleSplitter.split_module(
+            module=layer, rank=96
+        )
         seq_layers = torch.nn.Sequential(first_layer, second_layer)
 
         new_output = torch.relu(seq_layers.forward(torch.FloatTensor(input_data)))
@@ -164,9 +179,7 @@ class TestSpatialSvdLayerSplit(unittest.TestCase):
 
 
 class TestSpatialSvdPruning(unittest.TestCase):
-
     def test_prune_layer(self):
-
         model = mnist_torch_model.Net()
 
         # Create a layer database
@@ -177,12 +190,14 @@ class TestSpatialSvdPruning(unittest.TestCase):
         # Copy the db
         comp_layer_db = copy.deepcopy(orig_layer_db)
 
-        conv1 = comp_layer_db.find_layer_by_name('conv1')
+        conv1 = comp_layer_db.find_layer_by_name("conv1")
         spatial_svd_pruner = SpatialSvdPruner()
-        spatial_svd_pruner._prune_layer(orig_layer_db, comp_layer_db, conv1, 0.5, CostMetric.mac)
+        spatial_svd_pruner._prune_layer(
+            orig_layer_db, comp_layer_db, conv1, 0.5, CostMetric.mac
+        )
 
-        conv1_a = comp_layer_db.find_layer_by_name('conv1.0')
-        conv1_b = comp_layer_db.find_layer_by_name('conv1.1')
+        conv1_a = comp_layer_db.find_layer_by_name("conv1.0")
+        conv1_b = comp_layer_db.find_layer_by_name("conv1.1")
 
         self.assertEqual((5, 1), conv1_a.module.kernel_size)
         self.assertEqual(1, conv1_a.module.in_channels)
@@ -211,7 +226,6 @@ class TestSpatialSvdPruning(unittest.TestCase):
         self.assertEqual(conv1_b.output_shape, list(conv1_b_output.shape))
 
     def test_prune_model_2_layers(self):
-
         model = mnist_torch_model.Net()
 
         # Create a layer database
@@ -222,16 +236,22 @@ class TestSpatialSvdPruning(unittest.TestCase):
         # Copy the db
         comp_layer_db = copy.deepcopy(orig_layer_db)
 
-        conv1 = comp_layer_db.find_layer_by_name('conv1')
-        conv2 = comp_layer_db.find_layer_by_name('conv2')
+        conv1 = comp_layer_db.find_layer_by_name("conv1")
+        conv2 = comp_layer_db.find_layer_by_name("conv2")
         pruner = SpatialSvdPruner()
 
-        layer_db = pruner.prune_model(orig_layer_db, [LayerCompRatioPair(conv1, Decimal(0.5)),
-                                                      LayerCompRatioPair(conv2, Decimal(0.5))], CostMetric.mac,
-                                      trainer=None)
+        layer_db = pruner.prune_model(
+            orig_layer_db,
+            [
+                LayerCompRatioPair(conv1, Decimal(0.5)),
+                LayerCompRatioPair(conv2, Decimal(0.5)),
+            ],
+            CostMetric.mac,
+            trainer=None,
+        )
 
-        conv1_a = layer_db.find_layer_by_name('conv1.0')
-        conv1_b = layer_db.find_layer_by_name('conv1.1')
+        conv1_a = layer_db.find_layer_by_name("conv1.0")
+        conv1_b = layer_db.find_layer_by_name("conv1.1")
 
         self.assertEqual((5, 1), conv1_a.module.kernel_size)
         self.assertEqual(1, conv1_a.module.in_channels)
@@ -241,8 +261,8 @@ class TestSpatialSvdPruning(unittest.TestCase):
         self.assertEqual(2, conv1_b.module.in_channels)
         self.assertEqual(32, conv1_b.module.out_channels)
 
-        conv2_a = layer_db.find_layer_by_name('conv2.0')
-        conv2_b = layer_db.find_layer_by_name('conv2.1')
+        conv2_a = layer_db.find_layer_by_name("conv2.0")
+        conv2_b = layer_db.find_layer_by_name("conv2.1")
 
         self.assertEqual((5, 1), conv2_a.module.kernel_size)
         self.assertEqual(32, conv2_a.module.in_channels)

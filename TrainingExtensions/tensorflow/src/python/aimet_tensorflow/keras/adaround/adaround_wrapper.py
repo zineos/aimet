@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Adaround wrapper """
+"""Adaround wrapper"""
 
 import typing
 from typing import Dict, Union, List, Tuple
@@ -49,12 +49,16 @@ from aimet_common.defs import QuantScheme
 from aimet_common.defs import AdaroundConstants
 
 BATCH_SIZE = 32
-QUANT_SCHEME_TO_PYMO = {QuantScheme.post_training_tf_enhanced: libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED,
-                        QuantScheme.post_training_tf: libpymo.QuantizationMode.QUANTIZATION_TF}
+QUANT_SCHEME_TO_PYMO = {
+    QuantScheme.post_training_tf_enhanced: libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED,
+    QuantScheme.post_training_tf: libpymo.QuantizationMode.QUANTIZATION_TF,
+}
 
-ConvType = typing.Union[tf.keras.layers.Conv2D,
-                        tf.keras.layers.Conv2DTranspose,
-                        tf.keras.layers.DepthwiseConv2D]
+ConvType = typing.Union[
+    tf.keras.layers.Conv2D,
+    tf.keras.layers.Conv2DTranspose,
+    tf.keras.layers.DepthwiseConv2D,
+]
 
 _supported_convs = ConvType.__args__
 
@@ -63,11 +67,22 @@ class AdaroundWrapper(keras.layers.Layer):
     """
     Adaround Wrapper base class
     """
+
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, layer: tf.keras.layers.Layer, param_bw: int, quant_scheme: QuantScheme, is_symmetric: bool,
-                 strict_symmetric: bool, unsigned_symmetric: bool, per_channel_enabled: bool,
-                 output_height: Union[int, None], output_width: Union[int, None], output_channels: Union[int, None]):
+    def __init__(
+        self,
+        layer: tf.keras.layers.Layer,
+        param_bw: int,
+        quant_scheme: QuantScheme,
+        is_symmetric: bool,
+        strict_symmetric: bool,
+        unsigned_symmetric: bool,
+        per_channel_enabled: bool,
+        output_height: Union[int, None],
+        output_width: Union[int, None],
+        output_channels: Union[int, None],
+    ):
         """
         :param layer: Tf keras layer.
         :param param_bw: Bitwidth for weight quantization
@@ -81,17 +96,33 @@ class AdaroundWrapper(keras.layers.Layer):
 
         self._layer = layer
         self.per_channel_enabled = per_channel_enabled
-        self._orig_weight_tensor_shape, self._weight_tensor, self._bias_tensor = \
+        self._orig_weight_tensor_shape, self._weight_tensor, self._bias_tensor = (
             self._get_weight_and_bias_tensors(layer)
+        )
 
-        self.use_soft_rounding = self.add_weight(layer.name + '_use_soft_rounding', dtype=tf.bool,
-                                                 initializer=tf.constant_initializer(True), trainable=False)
+        self.use_soft_rounding = self.add_weight(
+            layer.name + "_use_soft_rounding",
+            dtype=tf.bool,
+            initializer=tf.constant_initializer(True),
+            trainable=False,
+        )
         self.ch_axis = self._get_channel_axis(self._layer, self._weight_tensor.shape)
-        self.encoding = self.compute_encodings(self._weight_tensor, param_bw, quant_scheme, is_symmetric,
-                                               strict_symmetric=strict_symmetric, unsigned_symmetric=unsigned_symmetric,
-                                               enable_per_channel=self.per_channel_enabled, ch_axis=self.ch_axis)
-        alpha = self._calculate_alpha(self._weight_tensor, self.encoding, self.per_channel_enabled, self.ch_axis)
-        self.alpha = self.add_weight(self._layer.name + '_alpha', trainable=True, shape=alpha.shape)
+        self.encoding = self.compute_encodings(
+            self._weight_tensor,
+            param_bw,
+            quant_scheme,
+            is_symmetric,
+            strict_symmetric=strict_symmetric,
+            unsigned_symmetric=unsigned_symmetric,
+            enable_per_channel=self.per_channel_enabled,
+            ch_axis=self.ch_axis,
+        )
+        alpha = self._calculate_alpha(
+            self._weight_tensor, self.encoding, self.per_channel_enabled, self.ch_axis
+        )
+        self.alpha = self.add_weight(
+            self._layer.name + "_alpha", trainable=True, shape=alpha.shape
+        )
         self.alpha.assign(alpha)
         self._output_height = output_height
         self._output_width = output_width
@@ -106,7 +137,9 @@ class AdaroundWrapper(keras.layers.Layer):
         :return: Adarounded output tensor
         """
         adaround_weight_tensor = self.adaround_weights()
-        adaround_out_tensor = self._compute_output_with_adarounded_weights(inputs, adaround_weight_tensor)
+        adaround_out_tensor = self._compute_output_with_adarounded_weights(
+            inputs, adaround_weight_tensor
+        )
 
         if self._bias_tensor is not None:
             adaround_out_tensor = adaround_out_tensor + self._bias_tensor
@@ -114,9 +147,16 @@ class AdaroundWrapper(keras.layers.Layer):
         return adaround_out_tensor
 
     @staticmethod
-    def compute_encodings(weight_data: np.ndarray, param_bw: int, quant_scheme: QuantScheme, is_symmetric: bool,
-                          strict_symmetric: bool, unsigned_symmetric: bool, enable_per_channel: bool, ch_axis: int) \
-            -> Union[libpymo.TfEncoding, List[libpymo.TfEncoding]]:
+    def compute_encodings(
+        weight_data: np.ndarray,
+        param_bw: int,
+        quant_scheme: QuantScheme,
+        is_symmetric: bool,
+        strict_symmetric: bool,
+        unsigned_symmetric: bool,
+        enable_per_channel: bool,
+        ch_axis: int,
+    ) -> Union[libpymo.TfEncoding, List[libpymo.TfEncoding]]:
         """
         :param weight_data: Weight data of Adaround supported ops
         :param param_bw: bitwidth (4-31) to use for quantizing weight data
@@ -141,26 +181,32 @@ class AdaroundWrapper(keras.layers.Layer):
         if enable_per_channel:
             encoding = []
             shape = list(weight_data.shape)
-            assert ch_axis < len(shape), 'ch_axis is pointing to an incorrect dimension'
+            assert ch_axis < len(shape), "ch_axis is pointing to an incorrect dimension"
             num_channels = shape.pop(ch_axis)
 
             # reshape weights based on the ch_axis - ch_axis has to be the first index to slice and be used for encoding
             weight_data = weight_data.transpose(
-                AdaroundWrapper._generate_weight_transpose_perm(weight_data.shape, ch_axis))
+                AdaroundWrapper._generate_weight_transpose_perm(
+                    weight_data.shape, ch_axis
+                )
+            )
             weight_data = np.ascontiguousarray(weight_data, weight_data.dtype)
 
             for ch_idx in range(num_channels):
                 analyzer = libpymo.EncodingAnalyzerForPython(quant_scheme)
                 analyzer.updateStats(weight_data[ch_idx], False)
-                channel_encoding, _ = analyzer.computeEncoding(param_bw, is_symmetric, strict_symmetric,
-                                                               unsigned_symmetric)
+                channel_encoding, _ = analyzer.computeEncoding(
+                    param_bw, is_symmetric, strict_symmetric, unsigned_symmetric
+                )
                 encoding.append(channel_encoding)
 
         else:
             # Compute the encodings for the weight data using collected stats
             analyzer = libpymo.EncodingAnalyzerForPython(quant_scheme)
             analyzer.updateStats(weight_data, False)
-            encoding, _ = analyzer.computeEncoding(param_bw, is_symmetric, strict_symmetric, unsigned_symmetric)
+            encoding, _ = analyzer.computeEncoding(
+                param_bw, is_symmetric, strict_symmetric, unsigned_symmetric
+            )
 
         return encoding
 
@@ -169,17 +215,29 @@ class AdaroundWrapper(keras.layers.Layer):
         Adaround the weight tensor. Extra post-processing step if the layer is a DepthwiseConv2D
         :return: AdaRounded weight tensor
         """
-        adaround_tensor = self._get_adarounded_weight(self.alpha, self._weight_tensor, self.encoding,
-                                                      self.use_soft_rounding,
-                                                      enable_per_channel=self.per_channel_enabled,
-                                                      ch_axis=self.ch_axis)
-        if self.per_channel_enabled and isinstance(self._layer, tf.keras.layers.DepthwiseConv2D):
+        adaround_tensor = self._get_adarounded_weight(
+            self.alpha,
+            self._weight_tensor,
+            self.encoding,
+            self.use_soft_rounding,
+            enable_per_channel=self.per_channel_enabled,
+            ch_axis=self.ch_axis,
+        )
+        if self.per_channel_enabled and isinstance(
+            self._layer, tf.keras.layers.DepthwiseConv2D
+        ):
             return tf.reshape(adaround_tensor, self._orig_weight_tensor_shape)
         return adaround_tensor
 
     @staticmethod
-    def _get_adarounded_weight(alpha, weight_tensor, encoding, use_soft_rounding, enable_per_channel: bool,
-                               ch_axis: int) -> tf.Tensor:
+    def _get_adarounded_weight(
+        alpha,
+        weight_tensor,
+        encoding,
+        use_soft_rounding,
+        enable_per_channel: bool,
+        ch_axis: int,
+    ) -> tf.Tensor:
         """
         Get the adarounded weight
 
@@ -194,18 +252,28 @@ class AdaroundWrapper(keras.layers.Layer):
 
         # Soft rounding maps alpha parameter between zero and one using rectified sigmoid function
         def compute_soft_rounding():
-            return tf.clip_by_value(tf.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) +
-                                    AdaroundConstants.GAMMA, 0, 1)
+            return tf.clip_by_value(
+                tf.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)
+                + AdaroundConstants.GAMMA,
+                0,
+                1,
+            )
 
         # Hard rounding maps alpha to exact zero or one
         def compute_hard_rounding():
             return tf.cast(alpha > 0, dtype=alpha.dtype)  # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
 
         if enable_per_channel:
-            assert isinstance(encoding, list), "Per-channel expects encoding to be a list"
+            assert isinstance(encoding, list), (
+                "Per-channel expects encoding to be a list"
+            )
 
-            delta = AdaroundWrapper._broadcast_to_tensor(weight_tensor, [enc.delta for enc in encoding], ch_axis)
-            offset = AdaroundWrapper._broadcast_to_tensor(weight_tensor, [enc.offset for enc in encoding], ch_axis)
+            delta = AdaroundWrapper._broadcast_to_tensor(
+                weight_tensor, [enc.delta for enc in encoding], ch_axis
+            )
+            offset = AdaroundWrapper._broadcast_to_tensor(
+                weight_tensor, [enc.offset for enc in encoding], ch_axis
+            )
             bw = encoding[0].bw
         else:
             delta = encoding.delta
@@ -216,13 +284,15 @@ class AdaroundWrapper(keras.layers.Layer):
         tensor = tf.floor(weight_tensor / delta)
 
         # Compute h_alpha depending on soft or hard rounding
-        h_alpha = tf.cond(use_soft_rounding, compute_soft_rounding, compute_hard_rounding)
+        h_alpha = tf.cond(
+            use_soft_rounding, compute_soft_rounding, compute_hard_rounding
+        )
 
         # Adaround the tensor
         tensor = tf.add(tensor, h_alpha)
 
         # Quantize and de-quantize the tensor
-        tensor_quant = tf.clip_by_value(tensor - offset, 0, 2 ** bw - 1)
+        tensor_quant = tf.clip_by_value(tensor - offset, 0, 2**bw - 1)
         tensor_dequant = (tensor_quant + offset) * delta
 
         return tensor_dequant
@@ -240,8 +310,9 @@ class AdaroundWrapper(keras.layers.Layer):
             ch_axis = 2
         return ch_axis
 
-    def _compute_output_with_adarounded_weights(self, inp_tensor: tf.Tensor, adaround_weight_tensor: tf.Tensor) -> \
-            tf.Tensor:
+    def _compute_output_with_adarounded_weights(
+        self, inp_tensor: tf.Tensor, adaround_weight_tensor: tf.Tensor
+    ) -> tf.Tensor:
         """
         Compute output of AdaroundSupportedModules with adarounded weights
         :param inp_tensor: The input tensor to be used for computing the output
@@ -251,25 +322,34 @@ class AdaroundWrapper(keras.layers.Layer):
         if isinstance(self._layer, _supported_convs):
             kwargs = self._get_conv_args(self._layer)
             if isinstance(self._layer, tf.keras.layers.DepthwiseConv2D):
-                adaround_out_tensor = tf.nn.depthwise_conv2d(inp_tensor, adaround_weight_tensor, **kwargs)
+                adaround_out_tensor = tf.nn.depthwise_conv2d(
+                    inp_tensor, adaround_weight_tensor, **kwargs
+                )
             elif isinstance(self._layer, tf.keras.layers.Conv2DTranspose):
-                adaround_out_tensor = self._compute_output_with_adaround_weights_conv2d_transpose_helper(
-                    self._output_height,
-                    self._output_width,
-                    self._output_channels,
-                    inp_tensor,
-                    adaround_weight_tensor,
-                    **kwargs)
+                adaround_out_tensor = (
+                    self._compute_output_with_adaround_weights_conv2d_transpose_helper(
+                        self._output_height,
+                        self._output_width,
+                        self._output_channels,
+                        inp_tensor,
+                        adaround_weight_tensor,
+                        **kwargs,
+                    )
+                )
             else:
-                adaround_out_tensor = tf.nn.conv2d(inp_tensor, adaround_weight_tensor, **kwargs)
+                adaround_out_tensor = tf.nn.conv2d(
+                    inp_tensor, adaround_weight_tensor, **kwargs
+                )
         elif isinstance(self._layer, tf.keras.layers.Dense):
             adaround_out_tensor = tf.matmul(inp_tensor, adaround_weight_tensor)
         else:
-            raise ValueError('Keras Layer: {} not supported'.format(self._layer))
+            raise ValueError("Keras Layer: {} not supported".format(self._layer))
 
         return adaround_out_tensor
 
-    def _get_weight_and_bias_tensors(self, layer: tf.keras.layers.Layer) -> Tuple[Tuple, np.ndarray, np.ndarray]:
+    def _get_weight_and_bias_tensors(
+        self, layer: tf.keras.layers.Layer
+    ) -> Tuple[Tuple, np.ndarray, np.ndarray]:
         """
         Function to properly grab the weight and bias tensor of a given Keras layer, as well as transform
         weights if needed.
@@ -279,8 +359,12 @@ class AdaroundWrapper(keras.layers.Layer):
         weights = layer.get_weights()
         weight_tensor = weights[0]
         orig_weight_shape = weight_tensor.shape
-        if self.per_channel_enabled and isinstance(layer, tf.keras.layers.DepthwiseConv2D):
-            weight_tensor = self._transform_input_ndarray_for_depthwise_conv_2d(weight_tensor)
+        if self.per_channel_enabled and isinstance(
+            layer, tf.keras.layers.DepthwiseConv2D
+        ):
+            weight_tensor = self._transform_input_ndarray_for_depthwise_conv_2d(
+                weight_tensor
+            )
 
         bias_tensor = None
         if len(weights) > 1:
@@ -295,28 +379,35 @@ class AdaroundWrapper(keras.layers.Layer):
         :return: keyword arguments
         """
 
-        if layer.data_format == 'channels_last':
-            data_format = 'NHWC'
+        if layer.data_format == "channels_last":
+            data_format = "NHWC"
             strides = [1, layer.strides[0], layer.strides[1], 1]
         else:
-            data_format = 'NCHW'
+            data_format = "NCHW"
             strides = [1, 1, layer.strides[0], layer.strides[1]]
 
-        if layer.padding == 'valid':
-            padding = 'VALID'
+        if layer.padding == "valid":
+            padding = "VALID"
         else:
-            padding = 'SAME'
+            padding = "SAME"
 
-        kwargs = {'data_format': data_format,
-                  'strides': strides,
-                  'padding': padding,
-                  'dilations': layer.dilation_rate}
+        kwargs = {
+            "data_format": data_format,
+            "strides": strides,
+            "padding": padding,
+            "dilations": layer.dilation_rate,
+        }
         return kwargs
 
     @staticmethod
     def _compute_output_with_adaround_weights_conv2d_transpose_helper(
-            output_height, output_width, output_channels,
-            inp_tensor, adaround_weight_tensor, **kwargs) -> tf.Tensor:
+        output_height,
+        output_width,
+        output_channels,
+        inp_tensor,
+        adaround_weight_tensor,
+        **kwargs,
+    ) -> tf.Tensor:
         """
         Compute output specificly for Conv2DTranpose layers for both tensorflow and keras
         (i.e. Conv2DTranspose, Conv2DBackpropInput)
@@ -328,23 +419,31 @@ class AdaroundWrapper(keras.layers.Layer):
         :param **kwargs: Other kwargs needed
         :return: output of the op computed with AdaROunded weights
         """
-        assert output_height is not None, 'Output height required for conv2d transpose'
-        assert output_width is not None, 'Output width required for conv2d transpose'
-        assert output_channels is not None, 'Output channels required for conv2d transpose'
+        assert output_height is not None, "Output height required for conv2d transpose"
+        assert output_width is not None, "Output width required for conv2d transpose"
+        assert output_channels is not None, (
+            "Output channels required for conv2d transpose"
+        )
 
-        if kwargs['data_format'] == 'NCHW':
+        if kwargs["data_format"] == "NCHW":
             output_shape = (BATCH_SIZE, output_channels, output_height, output_width)
         else:
             output_shape = (BATCH_SIZE, output_height, output_width, output_channels)
 
-        kwargs['output_shape'] = output_shape
+        kwargs["output_shape"] = output_shape
 
-        adaround_out_tensor = tf.nn.conv2d_transpose(inp_tensor, adaround_weight_tensor, **kwargs)
+        adaround_out_tensor = tf.nn.conv2d_transpose(
+            inp_tensor, adaround_weight_tensor, **kwargs
+        )
         return adaround_out_tensor
 
     @staticmethod
-    def _calculate_alpha(tensor: tf.Tensor, encoding: Union[libpymo.TfEncoding, List[libpymo.TfEncoding]],
-                         enable_per_channel: bool, ch_axis: int) -> tf.Tensor:
+    def _calculate_alpha(
+        tensor: tf.Tensor,
+        encoding: Union[libpymo.TfEncoding, List[libpymo.TfEncoding]],
+        enable_per_channel: bool,
+        ch_axis: int,
+    ) -> tf.Tensor:
         """
         Calculate alpha parameter for either per tensor or per channel
         :param tensor: The tensor to be ada rounded
@@ -354,18 +453,28 @@ class AdaroundWrapper(keras.layers.Layer):
         :return: Adarounded output tensor
         """
         if enable_per_channel:
-            assert isinstance(encoding, list), "Per-channel expects encoding to be a list"
-            delta = AdaroundWrapper._broadcast_to_tensor(tensor, [enc.delta for enc in encoding], ch_axis)
+            assert isinstance(encoding, list), (
+                "Per-channel expects encoding to be a list"
+            )
+            delta = AdaroundWrapper._broadcast_to_tensor(
+                tensor, [enc.delta for enc in encoding], ch_axis
+            )
         else:
             delta = encoding.delta
 
         tensor_floor = tf.floor(tensor / delta)
         tensor = (tensor / delta) - tensor_floor
         # pylint: disable=invalid-unary-operand-type
-        return -tf.math.log((AdaroundConstants.ZETA - AdaroundConstants.GAMMA) / (tensor - AdaroundConstants.GAMMA) - 1)
+        return -tf.math.log(
+            (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)
+            / (tensor - AdaroundConstants.GAMMA)
+            - 1
+        )
 
     @staticmethod
-    def _transform_input_ndarray_for_depthwise_conv_2d(input_arr: Union[np.ndarray]) -> Union[np.ndarray]:
+    def _transform_input_ndarray_for_depthwise_conv_2d(
+        input_arr: Union[np.ndarray],
+    ) -> Union[np.ndarray]:
         """
         For DepthwiseConv2d op, if per-channel is enabled, we need to use the last two axes as channel axis.
         This helper function basically merges the last two dimensions into one, so that the rest of the flow would work
@@ -399,7 +508,9 @@ class AdaroundWrapper(keras.layers.Layer):
         return perm
 
     @staticmethod
-    def _broadcast_to_tensor(tensor: tf.Tensor, encoding: list, ch_axis: int) -> tf.constant:
+    def _broadcast_to_tensor(
+        tensor: tf.Tensor, encoding: list, ch_axis: int
+    ) -> tf.constant:
         """
         Broadcast per-channel delta/offset using the encodings array
 
@@ -407,6 +518,7 @@ class AdaroundWrapper(keras.layers.Layer):
         :param encoding: list of per-channel encoding delta/offset to generate broadcasted encoding
         :param ch_axis: dimension to be used for per channel quantization
         """
+
         def _get_broadcast_shape() -> List:
             """
             compute the broadcast shape based on the channel index
@@ -429,5 +541,7 @@ class AdaroundWrapper(keras.layers.Layer):
         tensor_encoding = tf.constant(encoding, dtype=tensor.dtype)
         # broadcast delta/offset of shape (num_channels,) to broadcast_shape
         tensor_encoding = tf.broadcast_to(tensor_encoding, _get_broadcast_shape())
-        tensor_encoding = tf.transpose(tensor_encoding, perm=_get_encoding_rotate_perm())
+        tensor_encoding = tf.transpose(
+            tensor_encoding, perm=_get_encoding_rotate_perm()
+        )
         return tensor_encoding

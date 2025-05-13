@@ -43,8 +43,12 @@ import aimet_common.libpymo as libpymo
 
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_torch.v1.qc_quantize_op import LearnedGridQuantWrapper
-from aimet_torch.v1.tensor_quantizer import StaticGridPerTensorQuantizer, StaticGridPerChannelQuantizer,\
-    StaticGridTensorQuantizer, LearnedGridTensorQuantizer
+from aimet_torch.v1.tensor_quantizer import (
+    StaticGridPerTensorQuantizer,
+    StaticGridPerChannelQuantizer,
+    StaticGridTensorQuantizer,
+    LearnedGridTensorQuantizer,
+)
 
 BUCKET_SIZE = 512
 
@@ -56,15 +60,18 @@ def set_seed():
 
 
 class TestStaticTensorQuantizer:
-
     def test_get_stats_histogram_per_tensor(self):
         """
         test get_stats_histogram() for per tensor quantizer.
         """
         tensor = torch.randn(5, 5)
-        quantizer = StaticGridPerTensorQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                 quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                 use_symmetric_encodings=False, enabled_by_default=True)
+        quantizer = StaticGridPerTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf_enhanced,
+            use_symmetric_encodings=False,
+            enabled_by_default=True,
+        )
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
         assert quantizer.encoding, "Encoding shouldn't be None."
@@ -79,10 +86,14 @@ class TestStaticTensorQuantizer:
         test get_stats_histogram() for per channel quantizer.
         """
         tensor = torch.randn(5, 10)
-        quantizer = StaticGridPerChannelQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                  quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                  num_channels=5, use_symmetric_encodings=False,
-                                                  enabled_by_default=True)
+        quantizer = StaticGridPerChannelQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf_enhanced,
+            num_channels=5,
+            use_symmetric_encodings=False,
+            enabled_by_default=True,
+        )
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
         assert quantizer.encoding, "Encoding shouldn't be None."
@@ -96,16 +107,24 @@ class TestStaticTensorQuantizer:
         test get_stats_histogram() with invalid inputs.
         """
         # Encoding should be computed.
-        quantizer = StaticGridTensorQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                              quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                              use_symmetric_encodings=False, enabled_by_default=True)
+        quantizer = StaticGridTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf_enhanced,
+            use_symmetric_encodings=False,
+            enabled_by_default=True,
+        )
         with pytest.raises(RuntimeError):
             quantizer.get_stats_histogram()
 
         # quant scheme should be TF-Enhanced.
-        quantizer = StaticGridTensorQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                              quant_scheme=QuantScheme.post_training_tf,
-                                              use_symmetric_encodings=False, enabled_by_default=True)
+        quantizer = StaticGridTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf,
+            use_symmetric_encodings=False,
+            enabled_by_default=True,
+        )
         with pytest.raises(RuntimeError):
             quantizer.get_stats_histogram()
 
@@ -113,61 +132,82 @@ class TestStaticTensorQuantizer:
         """
         test whether is_unsigned_symmetric flag is set correctly based on encoding range
         """
+
         def _reset_update_compute_encoding(quantizer, tensor):
             quantizer.reset_encoding_stats()
             quantizer.update_encoding_stats(tensor)
             quantizer.compute_encoding()
 
-        positive_value_only_tensor = torch.tensor([[1.3, 2.6, 10.5, 4.6],
-                                                   [6.8, 7.9, 9.6, 2.5],
-                                                   [20.1, 25.4, 33.3, 15.3]])
-        positive_negative_value_mixed_tensor = torch.tensor([[-3.1, -1.4, 6.9, 7.7],
-                                                             [6.8, 7.9, 9.6, 2.5],
-                                                             [20.1, 25.4, 33.3, 15.3]])
+        positive_value_only_tensor = torch.tensor(
+            [[1.3, 2.6, 10.5, 4.6], [6.8, 7.9, 9.6, 2.5], [20.1, 25.4, 33.3, 15.3]]
+        )
+        positive_negative_value_mixed_tensor = torch.tensor(
+            [[-3.1, -1.4, 6.9, 7.7], [6.8, 7.9, 9.6, 2.5], [20.1, 25.4, 33.3, 15.3]]
+        )
 
         ### Test for per-tensor quantizer
-        per_tensor_quantizer = StaticGridPerTensorQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                            quant_scheme=QuantScheme.post_training_tf,
-                                                            use_symmetric_encodings=True,
-                                                            enabled_by_default=True,
-                                                            data_type=QuantizationDataType.int)
+        per_tensor_quantizer = StaticGridPerTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf,
+            use_symmetric_encodings=True,
+            enabled_by_default=True,
+            data_type=QuantizationDataType.int,
+        )
         per_tensor_quantizer.use_unsigned_symmetric = True
         _reset_update_compute_encoding(per_tensor_quantizer, positive_value_only_tensor)
         assert per_tensor_quantizer.is_unsigned_symmetric
 
-        _reset_update_compute_encoding(per_tensor_quantizer, positive_negative_value_mixed_tensor)
+        _reset_update_compute_encoding(
+            per_tensor_quantizer, positive_negative_value_mixed_tensor
+        )
         assert not per_tensor_quantizer.is_unsigned_symmetric
 
         ### Test for per-channel quantizer
-        per_channel_quantizer = StaticGridPerChannelQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                              quant_scheme=QuantScheme.post_training_tf,
-                                                              use_symmetric_encodings=True,
-                                                              num_channels=3,
-                                                              enabled_by_default=True,
-                                                              data_type=QuantizationDataType.int)
+        per_channel_quantizer = StaticGridPerChannelQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.post_training_tf,
+            use_symmetric_encodings=True,
+            num_channels=3,
+            enabled_by_default=True,
+            data_type=QuantizationDataType.int,
+        )
         per_channel_quantizer.use_unsigned_symmetric = True
-        _reset_update_compute_encoding(per_channel_quantizer, positive_value_only_tensor)
+        _reset_update_compute_encoding(
+            per_channel_quantizer, positive_value_only_tensor
+        )
         assert per_channel_quantizer.is_unsigned_symmetric
 
-        _reset_update_compute_encoding(per_channel_quantizer, positive_negative_value_mixed_tensor)
+        _reset_update_compute_encoding(
+            per_channel_quantizer, positive_negative_value_mixed_tensor
+        )
         assert not per_channel_quantizer.is_unsigned_symmetric
 
-    @pytest.mark.parametrize("quantizer",
-                             [StaticGridPerTensorQuantizer(bitwidth=32,
-                                                           round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                           quant_scheme=QuantScheme.post_training_tf,
-                                                           use_symmetric_encodings=True,
-                                                           enabled_by_default=True,
-                                                           data_type=QuantizationDataType.int),
-                              StaticGridPerChannelQuantizer(bitwidth=32, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                            quant_scheme=QuantScheme.post_training_tf,
-                                                            use_symmetric_encodings=True,
-                                                            num_channels=10,
-                                                            enabled_by_default=True,
-                                                            data_type=QuantizationDataType.int)
-                              ])
+    @pytest.mark.parametrize(
+        "quantizer",
+        [
+            StaticGridPerTensorQuantizer(
+                bitwidth=32,
+                round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                quant_scheme=QuantScheme.post_training_tf,
+                use_symmetric_encodings=True,
+                enabled_by_default=True,
+                data_type=QuantizationDataType.int,
+            ),
+            StaticGridPerChannelQuantizer(
+                bitwidth=32,
+                round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                quant_scheme=QuantScheme.post_training_tf,
+                use_symmetric_encodings=True,
+                num_channels=10,
+                enabled_by_default=True,
+                data_type=QuantizationDataType.int,
+            ),
+        ],
+    )
     def test_tensor_quantizer_bitwidth_32(self, quantizer):
-        """ Test tensor quantizer with bitwidth 32 """
+        """Test tensor quantizer with bitwidth 32"""
         tensor = torch.randn(10, 5)
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
@@ -176,24 +216,36 @@ class TestStaticTensorQuantizer:
         assert quantizer.encoding is None
         assert torch.equal(tensor, quantizer_out)
 
-    @pytest.mark.parametrize("quantizer, tensor",
-                             [(StaticGridPerTensorQuantizer(bitwidth=8,
-                                                            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                            quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                            use_symmetric_encodings=False,
-                                                            enabled_by_default=True,
-                                                            data_type=QuantizationDataType.int),
-                               torch.tensor([-10.0, 10.0])),
-                              (StaticGridPerChannelQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                             quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                             use_symmetric_encodings=False,
-                                                             num_channels=10,
-                                                             enabled_by_default=True,
-                                                             data_type=QuantizationDataType.int),
-                               torch.tensor([-10.0, 10.0]).repeat(10, 1))
-                              ])
+    @pytest.mark.parametrize(
+        "quantizer, tensor",
+        [
+            (
+                StaticGridPerTensorQuantizer(
+                    bitwidth=8,
+                    round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                    quant_scheme=QuantScheme.post_training_tf_enhanced,
+                    use_symmetric_encodings=False,
+                    enabled_by_default=True,
+                    data_type=QuantizationDataType.int,
+                ),
+                torch.tensor([-10.0, 10.0]),
+            ),
+            (
+                StaticGridPerChannelQuantizer(
+                    bitwidth=8,
+                    round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                    quant_scheme=QuantScheme.post_training_tf_enhanced,
+                    use_symmetric_encodings=False,
+                    num_channels=10,
+                    enabled_by_default=True,
+                    data_type=QuantizationDataType.int,
+                ),
+                torch.tensor([-10.0, 10.0]).repeat(10, 1),
+            ),
+        ],
+    )
     def test_tensor_quantizer_fix_encoding_min_max_vals(self, quantizer, tensor):
-        """ Test fixing encoding min and max values """
+        """Test fixing encoding min and max values"""
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
         assert quantizer.quant_scheme == QuantScheme.post_training_tf_enhanced
@@ -220,22 +272,38 @@ class TestStaticTensorQuantizer:
 
 
 class TestLearnedGridTensorQuantizer:
-
     def test_learned_grid_set_and_freeze_param_encoding(self):
         """
         test freeze_encoding() method for LearnedGridQuantWrapper.
         """
         conv = torch.nn.Conv2d(1, 32, 5)
-        quant_wrapper = LearnedGridQuantWrapper(conv, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                                is_output_quantized=True, activation_bw=8,
-                                                weight_bw=8, device='cpu')
+        quant_wrapper = LearnedGridQuantWrapper(
+            conv,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            is_output_quantized=True,
+            activation_bw=8,
+            weight_bw=8,
+            device="cpu",
+        )
 
         enc_old = libpymo.TfEncoding()
-        enc_old.bw, enc_old.max, enc_old.min, enc_old.delta, enc_old.offset = 8, 0.5, -1, 1, 0.2
+        enc_old.bw, enc_old.max, enc_old.min, enc_old.delta, enc_old.offset = (
+            8,
+            0.5,
+            -1,
+            1,
+            0.2,
+        )
 
         enc_new = libpymo.TfEncoding()
-        enc_new.bw, enc_new.max, enc_new.min, enc_new.delta, enc_new.offset = 8, 0.4, -0.98, 1, 0.2
+        enc_new.bw, enc_new.max, enc_new.min, enc_new.delta, enc_new.offset = (
+            8,
+            0.4,
+            -0.98,
+            1,
+            0.2,
+        )
 
         # Set encoding for output quantizer and freeze it.
         quant_wrapper.output_quantizers[0].encoding = enc_old
@@ -260,10 +328,15 @@ class TestLearnedGridTensorQuantizer:
         test freeze_encoding() method for LearnedGridQuantWrapper.
         """
         conv = torch.nn.Conv2d(1, 32, 5)
-        quant_wrapper = LearnedGridQuantWrapper(conv, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                                is_output_quantized=True, activation_bw=8,
-                                                weight_bw=8, device='cpu')
+        quant_wrapper = LearnedGridQuantWrapper(
+            conv,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            is_output_quantized=True,
+            activation_bw=8,
+            weight_bw=8,
+            device="cpu",
+        )
 
         enc = libpymo.TfEncoding()
         enc.bw, enc.max, enc.min, enc.delta, enc.offset = 8, 0.5, -1, 0.01, 50
@@ -271,10 +344,10 @@ class TestLearnedGridTensorQuantizer:
         # Set encoding for all - input, output and parameters quantizer.
         quant_wrapper.input_quantizers[0].enabled = True
         quant_wrapper.input_quantizers[0].encoding = enc
-        quant_wrapper.param_quantizers['weight'].enabled = True
-        quant_wrapper.param_quantizers['weight'].encoding = enc
-        quant_wrapper.param_quantizers['bias'].enabled = True
-        quant_wrapper.param_quantizers['bias'].encoding = enc
+        quant_wrapper.param_quantizers["weight"].enabled = True
+        quant_wrapper.param_quantizers["weight"].encoding = enc
+        quant_wrapper.param_quantizers["bias"].enabled = True
+        quant_wrapper.param_quantizers["bias"].encoding = enc
         quant_wrapper.output_quantizers[0].enabled = True
         quant_wrapper.output_quantizers[0].encoding = enc
 
@@ -316,12 +389,14 @@ class TestLearnedGridTensorQuantizer:
         assert quant_wrapper.output_quantizers[0].encoding.max == 0.5
 
     def test_learned_grid_n_and_p_up_to_date(self):
-        tensor_quantizer = LearnedGridTensorQuantizer(bitwidth=8,
-                                                      round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                      quant_scheme=QuantScheme.training_range_learning,
-                                                      use_symmetric_encodings=True,
-                                                      enabled_by_default=True,
-                                                      data_type=QuantizationDataType.int)
+        tensor_quantizer = LearnedGridTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.training_range_learning,
+            use_symmetric_encodings=True,
+            enabled_by_default=True,
+            data_type=QuantizationDataType.int,
+        )
 
         assert tensor_quantizer.n() == 0.0
         assert tensor_quantizer.p() == 255.0
@@ -337,72 +412,99 @@ class TestLearnedGridTensorQuantizer:
         assert tensor_quantizer.p() == 65534.0
 
     def test_learned_grid_update_encoding_invalid_input(self):
-        tensor_quantizer = LearnedGridTensorQuantizer(bitwidth=8,
-                                                      round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                      quant_scheme=QuantScheme.training_range_learning,
-                                                      use_symmetric_encodings=True,
-                                                      enabled_by_default=True,
-                                                      data_type=QuantizationDataType.int)
-
+        tensor_quantizer = LearnedGridTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.training_range_learning,
+            use_symmetric_encodings=True,
+            enabled_by_default=True,
+            data_type=QuantizationDataType.int,
+        )
 
         enc_new = libpymo.TfEncoding()
-        enc_new.bw, enc_new.max, enc_new.min, enc_new.delta, enc_new.offset = 4, 0.4, -0.98, 1, 0.2
+        enc_new.bw, enc_new.max, enc_new.min, enc_new.delta, enc_new.offset = (
+            4,
+            0.4,
+            -0.98,
+            1,
+            0.2,
+        )
 
         with pytest.raises(RuntimeError):
             tensor_quantizer.encoding = enc_new
 
-    @pytest.mark.parametrize("quantizer",
-                             [StaticGridPerTensorQuantizer(bitwidth=8,
-                                                           round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                           quant_scheme=QuantScheme.post_training_tf,
-                                                           use_symmetric_encodings=False,
-                                                           enabled_by_default=True),
-                              StaticGridPerChannelQuantizer(bitwidth=8,
-                                                            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                            quant_scheme=QuantScheme.post_training_tf,
-                                                            use_symmetric_encodings=True,
-                                                            enabled_by_default=True,
-                                                            num_channels=5,
-                                                            ch_axis=0),
-                              StaticGridPerChannelQuantizer(bitwidth=8,
-                                                            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                            quant_scheme=QuantScheme.post_training_tf,
-                                                            use_symmetric_encodings=True,
-                                                            enabled_by_default=True,
-                                                            num_channels=5,
-                                                            ch_axis=1)
-                              ])
+    @pytest.mark.parametrize(
+        "quantizer",
+        [
+            StaticGridPerTensorQuantizer(
+                bitwidth=8,
+                round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                quant_scheme=QuantScheme.post_training_tf,
+                use_symmetric_encodings=False,
+                enabled_by_default=True,
+            ),
+            StaticGridPerChannelQuantizer(
+                bitwidth=8,
+                round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                quant_scheme=QuantScheme.post_training_tf,
+                use_symmetric_encodings=True,
+                enabled_by_default=True,
+                num_channels=5,
+                ch_axis=0,
+            ),
+            StaticGridPerChannelQuantizer(
+                bitwidth=8,
+                round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+                quant_scheme=QuantScheme.post_training_tf,
+                use_symmetric_encodings=True,
+                enabled_by_default=True,
+                num_channels=5,
+                ch_axis=1,
+            ),
+        ],
+    )
     def test_non_contiguous_input_tensor(self, quantizer):
         tensor = torch.randn((5, 5, 100, 100))
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
 
-        out_contiguous = quantizer.quantize_dequantize(tensor.to(memory_format=torch.contiguous_format),
-                                                       quantizer.round_mode)
-        out_channels_last = quantizer.quantize_dequantize(tensor.to(memory_format=torch.channels_last),
-                                                          quantizer.round_mode)
+        out_contiguous = quantizer.quantize_dequantize(
+            tensor.to(memory_format=torch.contiguous_format), quantizer.round_mode
+        )
+        out_channels_last = quantizer.quantize_dequantize(
+            tensor.to(memory_format=torch.channels_last), quantizer.round_mode
+        )
         assert torch.allclose(out_contiguous, out_channels_last)
 
         tensor = tensor.view(*tensor.shape, 1)
-        out_contiguous = quantizer.quantize_dequantize(tensor.to(memory_format=torch.contiguous_format),
-                                                       quantizer.round_mode)
-        out_channels_last_3d = quantizer.quantize_dequantize(tensor.to(memory_format=torch.channels_last_3d),
-                                                          quantizer.round_mode)
+        out_contiguous = quantizer.quantize_dequantize(
+            tensor.to(memory_format=torch.contiguous_format), quantizer.round_mode
+        )
+        out_channels_last_3d = quantizer.quantize_dequantize(
+            tensor.to(memory_format=torch.channels_last_3d), quantizer.round_mode
+        )
         assert torch.allclose(out_contiguous, out_channels_last_3d)
 
-        out_contiguous = quantizer.quantize_dequantize(tensor[..., ::2, :].contiguous(),
-                                                       quantizer.round_mode)
-        out_strided = quantizer.quantize_dequantize(tensor[..., ::2, :],
-                                                    quantizer.round_mode)
+        out_contiguous = quantizer.quantize_dequantize(
+            tensor[..., ::2, :].contiguous(), quantizer.round_mode
+        )
+        out_strided = quantizer.quantize_dequantize(
+            tensor[..., ::2, :], quantizer.round_mode
+        )
         assert torch.allclose(out_contiguous, out_strided)
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
     def test_learned_grid_encoding_getter(self, dtype):
         conv = torch.nn.Conv2d(1, 1, 1)
-        quant_wrapper = LearnedGridQuantWrapper(conv, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                                is_output_quantized=True, activation_bw=16,
-                                                weight_bw=8, device="cpu")
+        quant_wrapper = LearnedGridQuantWrapper(
+            conv,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            is_output_quantized=True,
+            activation_bw=16,
+            weight_bw=8,
+            device="cpu",
+        )
         enc = libpymo.TfEncoding()
         enc.bw, enc.max, enc.min = 16, 0.4, -0.98
 
@@ -410,28 +512,44 @@ class TestLearnedGridTensorQuantizer:
         quant_wrapper.output_quantizers[0].encoding = enc
 
         e = quant_wrapper.to(dtype=dtype).output_quantizers[0].encoding
-        rtol=1e-3
-        assert np.isclose(e.max, 0.4,   rtol=rtol)
+        rtol = 1e-3
+        assert np.isclose(e.max, 0.4, rtol=rtol)
         assert np.isclose(e.min, -0.98, rtol=rtol)
-        assert np.isclose(e.delta, (e.max-e.min)/(2**e.bw-1), rtol=rtol)
-        assert np.isclose(e.offset, e.min/e.delta, rtol=rtol)
+        assert np.isclose(e.delta, (e.max - e.min) / (2**e.bw - 1), rtol=rtol)
+        assert np.isclose(e.offset, e.min / e.delta, rtol=rtol)
 
     @pytest.mark.cuda
     @pytest.mark.parametrize("device", ("cpu", "cuda"))
-    @pytest.mark.parametrize("tensor", (torch.tensor([0, -3.4028e38, -3.4028e38]),
-                                        torch.tensor([0, 3.4028e38]),
-                                        torch.tensor([3.4028e38, 0, -3.4028e38])),
-                             )
-    @pytest.mark.parametrize("quant_scheme", (QuantScheme.post_training_tf, QuantScheme.post_training_tf_enhanced,))
+    @pytest.mark.parametrize(
+        "tensor",
+        (
+            torch.tensor([0, -3.4028e38, -3.4028e38]),
+            torch.tensor([0, 3.4028e38]),
+            torch.tensor([3.4028e38, 0, -3.4028e38]),
+        ),
+    )
+    @pytest.mark.parametrize(
+        "quant_scheme",
+        (
+            QuantScheme.post_training_tf,
+            QuantScheme.post_training_tf_enhanced,
+        ),
+    )
     @pytest.mark.parametrize("symmetric", (True, False))
-    def test_tensor_quantizer_extreme_values(self, quant_scheme, tensor, device, symmetric):
+    def test_tensor_quantizer_extreme_values(
+        self, quant_scheme, tensor, device, symmetric
+    ):
         """
         test get_stats_histogram() for per tensor quantizer.
         """
         tensor = tensor.to(device)
-        quantizer = StaticGridPerTensorQuantizer(bitwidth=8, round_mode=libpymo.RoundingMode.ROUND_NEAREST,
-                                                 quant_scheme=quant_scheme,
-                                                 use_symmetric_encodings=symmetric, enabled_by_default=True)
+        quantizer = StaticGridPerTensorQuantizer(
+            bitwidth=8,
+            round_mode=libpymo.RoundingMode.ROUND_NEAREST,
+            quant_scheme=quant_scheme,
+            use_symmetric_encodings=symmetric,
+            enabled_by_default=True,
+        )
         quantizer.update_encoding_stats(tensor)
         quantizer.compute_encoding()
         encoding = quantizer.encoding

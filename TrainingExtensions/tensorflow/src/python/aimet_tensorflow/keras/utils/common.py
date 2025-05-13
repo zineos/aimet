@@ -35,13 +35,16 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Common Utilities for tf 2 keras """
+"""Common Utilities for tf 2 keras"""
+
 import errno
 import os
 from typing import Callable, Union, List, Dict, Tuple, AnyStr
 
 import tensorflow as tf
-from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_from_session_graph
+from tensorflow.python.framework.convert_to_constants import (
+    convert_variables_to_constants_from_session_graph,
+)
 from tensorflow.python.framework.graph_util_impl import remove_training_nodes
 from packaging import version
 
@@ -52,10 +55,20 @@ from aimet_tensorflow.keras.defs import AxisHandling
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
-lambda_operators = ['__operators__.add', 'math.multiply', 'math.truediv', 'math.subtract']
-per_channel_quantizeable_layers = (tf.keras.layers.Conv2D, tf.keras.layers.Conv2DTranspose,
-                                   tf.keras.layers.DepthwiseConv2D, tf.keras.layers.SeparableConv2D,
-                                   tf.keras.layers.Dense)
+lambda_operators = [
+    "__operators__.add",
+    "math.multiply",
+    "math.truediv",
+    "math.subtract",
+]
+per_channel_quantizeable_layers = (
+    tf.keras.layers.Conv2D,
+    tf.keras.layers.Conv2DTranspose,
+    tf.keras.layers.DepthwiseConv2D,
+    tf.keras.layers.SeparableConv2D,
+    tf.keras.layers.Dense,
+)
+
 
 def to_functional(func: Callable) -> tf.keras.Model:
     """
@@ -76,7 +89,9 @@ def to_functional(func: Callable) -> tf.keras.Model:
         """
         model = args[0]
         if isinstance(model, tf.keras.Sequential):
-            _logger.info("Input model is a Sequential model. Converting to Functional model.")
+            _logger.info(
+                "Input model is a Sequential model. Converting to Functional model."
+            )
             model = tf.keras.Model(inputs=model.inputs, outputs=model.outputs)
             args = (model,) + args[1:]
         return func(*args, **kwargs)
@@ -91,8 +106,8 @@ def is_lambda_operator(layer: tf.keras.layers.Layer) -> bool:
     :return True if layer is a known lambda operator, False otherwise
     """
     config = layer.get_config()
-    if 'function' in config:
-        return config['function'] in lambda_operators
+    if "function" in config:
+        return config["function"] in lambda_operators
     return False
 
 
@@ -112,8 +127,9 @@ def is_a_tf_op_lambda_layer(layer: tf.keras.layers.Layer) -> bool:
     return isinstance(layer, TFOpLambda)
 
 
-def module_to_name_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) \
-        -> Dict[tf.keras.layers.Layer, Tuple[tf.keras.Model, str]]:
+def module_to_name_map(
+    cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
+) -> Dict[tf.keras.layers.Layer, Tuple[tf.keras.Model, str]]:
     """
     To find a variable name and parent reference of one module.
 
@@ -129,7 +145,10 @@ def module_to_name_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) \
             ref_name.update(module_to_name_map(inner_layer))
         else:
             for key, element in vars(cur_layer).items():
-                if isinstance(element, tf.keras.layers.Layer) and element == inner_layer:
+                if (
+                    isinstance(element, tf.keras.layers.Layer)
+                    and element == inner_layer
+                ):
                     ref_name[element] = (cur_layer, key)
 
     return ref_name
@@ -152,8 +171,9 @@ def find_input_layers(node_layer_map: Dict) -> List[tf.keras.layers.InputLayer]:
     return input_layers
 
 
-def _find_last_layers(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) \
-        -> List[tf.keras.layers.Layer]:
+def _find_last_layers(
+    cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
+) -> List[tf.keras.layers.Layer]:
     """
     helper to find the last layers of the model.
 
@@ -174,8 +194,11 @@ def _find_last_layers(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) \
 
     return last_layers
 
+
 @to_functional
-def create_layer_to_out_node_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) -> Dict:
+def create_layer_to_out_node_map(
+    cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
+) -> Dict:
     """
     To find the outbound nodes of one layer.
 
@@ -198,8 +221,8 @@ def create_layer_to_out_node_map(cur_layer: (tf.keras.Model, tf.keras.layers.Lay
 
 
 def _submodule_handler_node_to_layer_map(
-        cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
-        node_layer_map: Dict) -> Tuple[Dict, str, List]:
+    cur_layer: (tf.keras.Model, tf.keras.layers.Layer), node_layer_map: Dict
+) -> Tuple[Dict, str, List]:
     """
     The utility to extract node_layer_map for the cur_layer submodule and
     provide the connectivity with the outer model.
@@ -244,15 +267,20 @@ def _submodule_handler_node_to_layer_map(
             # otherwise we need to build a connection between incoming layer of cur layer
             # and succeeding layers to inner model input layer
             elif len(im_input_layer_succeeding_layers) == 1:
-                node_layer_map.update({node: [in_layers, im_input_layer_succeeding_layers[0]]})
+                node_layer_map.update(
+                    {node: [in_layers, im_input_layer_succeeding_layers[0]]}
+                )
         elif in_layers and cur_layer in in_layers:
             im_last_layers = _find_last_layers(cur_layer)
             node_layer_map.update({node: [im_last_layers, out_layer]})
 
     return im_node_layer_map, im_node_input, im_nodes_after_input_layer
 
+
 @to_functional
-def create_node_to_layer_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer)) -> Dict:
+def create_node_to_layer_map(
+    cur_layer: (tf.keras.Model, tf.keras.layers.Layer),
+) -> Dict:
     """
     To find the input layers and output layer of one node.
 
@@ -278,8 +306,9 @@ def create_node_to_layer_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer))
         # If the layer has additional inner layers, trace the internal connections for
         # input/output mapping. Otherwise, treat it as a single layer.
         if hasattr(inner_layer, "layers"):
-            im_node_layer_map, im_node_input, im_nodes_after_input_layer = \
+            im_node_layer_map, im_node_input, im_nodes_after_input_layer = (
                 _submodule_handler_node_to_layer_map(inner_layer, node_layer_map)
+            )
             if len(im_nodes_after_input_layer) == 1:
                 del im_node_layer_map[im_nodes_after_input_layer[0]]
             del im_node_layer_map[im_node_input]
@@ -289,8 +318,11 @@ def create_node_to_layer_map(cur_layer: (tf.keras.Model, tf.keras.layers.Layer))
     return node_layer_map
 
 
-def replace_layer_in_functional_model(model: tf.keras.Model, old_layer: tf.keras.layers.Layer,
-                                      new_layers: Union[List, tf.keras.layers.Layer]):
+def replace_layer_in_functional_model(
+    model: tf.keras.Model,
+    old_layer: tf.keras.layers.Layer,
+    new_layers: Union[List, tf.keras.layers.Layer],
+):
     """
     Replace a layer in a model with a list of new layers to be called in sequential order.
     :param model: Model containing layer to replace
@@ -299,12 +331,18 @@ def replace_layer_in_functional_model(model: tf.keras.Model, old_layer: tf.keras
     """
     # pylint: disable=protected-access
     if old_layer in model._input_layers:
-        _logger.error('Replacement for input layers not currently supported')
-        raise NotImplementedError('Replacement for input layers not currently supported')
+        _logger.error("Replacement for input layers not currently supported")
+        raise NotImplementedError(
+            "Replacement for input layers not currently supported"
+        )
 
     if len(old_layer.inbound_nodes) > 1:
-        _logger.error('Replacement for layers used multiple times not currently supported')
-        raise NotImplementedError('Replacement for layers used multiple times not currently supported')
+        _logger.error(
+            "Replacement for layers used multiple times not currently supported"
+        )
+        raise NotImplementedError(
+            "Replacement for layers used multiple times not currently supported"
+        )
 
     if not isinstance(new_layers, list):
         new_layers = [new_layers]
@@ -313,31 +351,45 @@ def replace_layer_in_functional_model(model: tf.keras.Model, old_layer: tf.keras
 
     # Find layers before and after the old layer to replace
     # Need to use keras_inputs instead of input_layers due to bug where only one input layer will be shown
-    parent_layers = [keras_input._keras_history.layer for keras_input in old_layer.inbound_nodes[0].keras_inputs]
-    following_layers_and_inputs_dict = _get_following_layers_and_inputs(residing_model, old_layer)
+    parent_layers = [
+        keras_input._keras_history.layer
+        for keras_input in old_layer.inbound_nodes[0].keras_inputs
+    ]
+    following_layers_and_inputs_dict = _get_following_layers_and_inputs(
+        residing_model, old_layer
+    )
 
     # Clear out certain outbound nodes of parent layers, inbound node of old layer, outbound nodes of old layer, and
     # certain inbound nodes of following layers.
-    _clear_inbound_and_outbound_nodes(old_layer, parent_layers, following_layers_and_inputs_dict)
+    _clear_inbound_and_outbound_nodes(
+        old_layer, parent_layers, following_layers_and_inputs_dict
+    )
 
     # Remove network nodes from the residing model for old_layer and following layers
-    _remove_network_nodes(residing_model, [old_layer] + list(following_layers_and_inputs_dict.keys()))
+    _remove_network_nodes(
+        residing_model, [old_layer] + list(following_layers_and_inputs_dict.keys())
+    )
 
     # Call new layers in sequence to create new nodes
     out_tensor = _call_new_layers_sequentially(parent_layers, new_layers)
 
     # Connect the last new layer back to old child layer, creating a new node in the process
     if following_layers_and_inputs_dict:
-        _link_following_layers_to_new_layer_output(out_tensor, following_layers_and_inputs_dict, old_layer)
+        _link_following_layers_to_new_layer_output(
+            out_tensor, following_layers_and_inputs_dict, old_layer
+        )
     else:
         _update_model_output_info(residing_model, old_layer, out_tensor)
 
     # Update model's layers and network nodes
-    residing_model._insert_layers(new_layers + list(following_layers_and_inputs_dict.keys()))
+    residing_model._insert_layers(
+        new_layers + list(following_layers_and_inputs_dict.keys())
+    )
 
 
-def _get_residing_model_of_layer(model: tf.keras.Model, layer: tf.keras.layers.Layer) -> Union[tf.keras.Model,
-                                                                                               None]:
+def _get_residing_model_of_layer(
+    model: tf.keras.Model, layer: tf.keras.layers.Layer
+) -> Union[tf.keras.Model, None]:
     """
     Get the model in which the layer resides, given a top level model. The residing model could be the topmost level
     model itself, or a submodel inside the topmost model.
@@ -357,8 +409,9 @@ def _get_residing_model_of_layer(model: tf.keras.Model, layer: tf.keras.layers.L
     return None
 
 
-def _get_following_layers_and_inputs(model: tf.keras.Model, layer: tf.keras.layers.Layer) -> \
-        Dict[tf.keras.layers.Layer, List]:
+def _get_following_layers_and_inputs(
+    model: tf.keras.Model, layer: tf.keras.layers.Layer
+) -> Dict[tf.keras.layers.Layer, List]:
     """
     Get a dictionary mapping following layers of the given layer to the keras inputs for the following layer.
     :param model: Model containing layer
@@ -387,12 +440,13 @@ def _remove_network_nodes(model: tf.keras.Model, layers: List[tf.keras.layers.La
     """
     # pylint: disable=protected-access
     for layer in layers:
-        node_key = layer.name + '_ib-0'
+        node_key = layer.name + "_ib-0"
         model._network_nodes.remove(node_key)
 
 
-def _call_new_layers_sequentially(parent_layers: List[tf.keras.layers.Layer],
-                                  new_layers: List[tf.keras.layers.Layer]) -> tf.Tensor:
+def _call_new_layers_sequentially(
+    parent_layers: List[tf.keras.layers.Layer], new_layers: List[tf.keras.layers.Layer]
+) -> tf.Tensor:
     """
     Call new layers sequentially to create nodes, starting from parent layers.
     :param parent_layers: Parent layers to start building new nodes from
@@ -415,10 +469,11 @@ def _call_new_layers_sequentially(parent_layers: List[tf.keras.layers.Layer],
     return curr_tensor
 
 
-def _clear_inbound_and_outbound_nodes(layer_of_interest: tf.keras.layers.Layer,
-                                      parent_layers: List[tf.keras.layers.Layer],
-                                      following_layers_and_inputs_dict: Dict[tf.keras.layers.Layer,
-                                                                             List[tf.Tensor]]):
+def _clear_inbound_and_outbound_nodes(
+    layer_of_interest: tf.keras.layers.Layer,
+    parent_layers: List[tf.keras.layers.Layer],
+    following_layers_and_inputs_dict: Dict[tf.keras.layers.Layer, List[tf.Tensor]],
+):
     """
     Clear certain outbound nodes of parent layers, inbound node of layer_of_interest, outbound nodes of
     layer_of_interest, and inbound nodes of following layers.
@@ -448,18 +503,23 @@ def _clear_inbound_and_outbound_nodes(layer_of_interest: tf.keras.layers.Layer,
                     # The following layer may have multiple inputs. In this case, since we are recreating the inbound
                     # node using all inputs, we need to clear out the corresponding outbound_node from the other input
                     # layers' outbound_nodes as well.
-                    for keras_input in following_layers_and_inputs_dict[following_layer]:
+                    for keras_input in following_layers_and_inputs_dict[
+                        following_layer
+                    ]:
                         # Don't modify outbound node of old_layer yet
                         if keras_input._keras_history.layer != layer_of_interest:
-                            keras_input._keras_history.layer._outbound_nodes.remove(outbound_node)
+                            keras_input._keras_history.layer._outbound_nodes.remove(
+                                outbound_node
+                            )
 
         layer_of_interest._outbound_nodes = []
 
 
-def _link_following_layers_to_new_layer_output(new_tensor_output: tf.Tensor,
-                                               following_layers_and_inputs_dict: Dict[tf.keras.layers.Layer,
-                                                                                      List[tf.Tensor]],
-                                               replaced_layer: tf.keras.layers.Layer):
+def _link_following_layers_to_new_layer_output(
+    new_tensor_output: tf.Tensor,
+    following_layers_and_inputs_dict: Dict[tf.keras.layers.Layer, List[tf.Tensor]],
+    replaced_layer: tf.keras.layers.Layer,
+):
     """
     Link following layers to the given tensor.
     :param new_tensor_output: Tensor to link to following layers
@@ -477,8 +537,11 @@ def _link_following_layers_to_new_layer_output(new_tensor_output: tf.Tensor,
         _ = following_layer(keras_inputs)
 
 
-def _update_model_output_info(residing_model: tf.keras.Model, replaced_layer: tf.keras.layers.Layer,
-                              new_tensor_output: tf.Tensor):
+def _update_model_output_info(
+    residing_model: tf.keras.Model,
+    replaced_layer: tf.keras.layers.Layer,
+    new_tensor_output: tf.Tensor,
+):
     """
     Update model output layers, output coordinates, and nested outputs with the new output tensor.
     :param residing_model: Model to update output info for
@@ -505,7 +568,7 @@ def _update_model_output_info(residing_model: tf.keras.Model, replaced_layer: tf
 
 
 def parse_activation_layer(
-        activation_layer: tf.keras.layers.Activation,
+    activation_layer: tf.keras.layers.Activation,
 ) -> List[str]:
     """
     Parse generic tf.keras.layers.Activation and convert it to corresponding onnx type
@@ -532,15 +595,19 @@ def parse_activation_layer(
 
     return [onnx_activation]
 
-def create_encoding_from_dict(encoding_dict: dict) -> Tuple[Union[libpymo.TfEncoding, List[libpymo.TfEncoding]], bool]:
+
+def create_encoding_from_dict(
+    encoding_dict: dict,
+) -> Tuple[Union[libpymo.TfEncoding, List[libpymo.TfEncoding]], bool]:
     """
     Create encoding object from encoding dictionary
     :param encoding_dict: Dictionary containing encodings
     :return: Encoding object or list of encoding objects, is_symmetric
     """
 
-    def _create_tf_encoding_object(bw: int, max_enc: float, min_enc: float, offset_enc: float,
-                                   delta_enc: float) -> libpymo.TfEncoding:
+    def _create_tf_encoding_object(
+        bw: int, max_enc: float, min_enc: float, offset_enc: float, delta_enc: float
+    ) -> libpymo.TfEncoding:
         """
         helper function to create TfEncoding object
         :param bw: bitwidth to be filled in encoding
@@ -558,12 +625,19 @@ def create_encoding_from_dict(encoding_dict: dict) -> Tuple[Union[libpymo.TfEnco
         enc.delta = delta_enc
         return enc
 
-    def _create_tf_encoding_factory(encoding_dict_to_convert) -> List[libpymo.TfEncoding]:
-        return [_create_tf_encoding_object(enc_dict.get('bitwidth'),
-                                           enc_dict.get('max'),
-                                           enc_dict.get('min'),
-                                           enc_dict.get('offset'),
-                                           enc_dict.get('scale')) for enc_dict in encoding_dict_to_convert]
+    def _create_tf_encoding_factory(
+        encoding_dict_to_convert,
+    ) -> List[libpymo.TfEncoding]:
+        return [
+            _create_tf_encoding_object(
+                enc_dict.get("bitwidth"),
+                enc_dict.get("max"),
+                enc_dict.get("min"),
+                enc_dict.get("offset"),
+                enc_dict.get("scale"),
+            )
+            for enc_dict in encoding_dict_to_convert
+        ]
 
     # make a distinction between the per-channel and per-tensor flow
     if isinstance(encoding_dict, List):
@@ -574,13 +648,15 @@ def create_encoding_from_dict(encoding_dict: dict) -> Tuple[Union[libpymo.TfEnco
         # in place temporarily to preserve backwards compatibility with older AdaRound exported encodings. It can be
         # removed after some time once users have fully switched to using the string exported is_symmetric flag.
         for enc_dict in encoding_dict:
-            if isinstance(enc_dict.get('is_symmetric'), bool):
-                enc_dict['is_symmetric'] = str(enc_dict['is_symmetric'])
+            if isinstance(enc_dict.get("is_symmetric"), bool):
+                enc_dict["is_symmetric"] = str(enc_dict["is_symmetric"])
 
-        log_with_error_and_assert_if_false(encoding_dict[0].get('is_symmetric') in ['True', 'False'],
-                                           _logger,
-                                           f'Unexpected value for is_symmetric: {encoding_dict[0].get("is_symmetric")}')
-        is_symmetric = encoding_dict[0].get('is_symmetric') == 'True'
+        log_with_error_and_assert_if_false(
+            encoding_dict[0].get("is_symmetric") in ["True", "False"],
+            _logger,
+            f"Unexpected value for is_symmetric: {encoding_dict[0].get('is_symmetric')}",
+        )
+        is_symmetric = encoding_dict[0].get("is_symmetric") == "True"
         return _create_tf_encoding_factory(encoding_dict), is_symmetric
 
     # Inserting logic to loop through encoding dict is_symmetric fields and replace boolean values with string
@@ -589,18 +665,22 @@ def create_encoding_from_dict(encoding_dict: dict) -> Tuple[Union[libpymo.TfEnco
     # AdaRound exported encodings are fixed in the same commit to export string values now, but this logic is put
     # in place temporarily to preserve backwards compatibility with older AdaRound exported encodings. It can be
     # removed after some time once users have fully switched to using the string exported is_symmetric flag.
-    if isinstance(encoding_dict.get('is_symmetric'), bool):
-        encoding_dict['is_symmetric'] = str(encoding_dict['is_symmetric'])
+    if isinstance(encoding_dict.get("is_symmetric"), bool):
+        encoding_dict["is_symmetric"] = str(encoding_dict["is_symmetric"])
 
-    log_with_error_and_assert_if_false(encoding_dict.get('is_symmetric') in ['True', 'False'],
-                                       _logger,
-                                       f'Unexpected value for is_symmetric: {encoding_dict.get("is_symmetric")}')
-    is_symmetric = encoding_dict.get('is_symmetric') == 'True'
+    log_with_error_and_assert_if_false(
+        encoding_dict.get("is_symmetric") in ["True", "False"],
+        _logger,
+        f"Unexpected value for is_symmetric: {encoding_dict.get('is_symmetric')}",
+    )
+    is_symmetric = encoding_dict.get("is_symmetric") == "True"
     encoding_dict = [encoding_dict]
     return _create_tf_encoding_factory(encoding_dict)[0], is_symmetric
 
 
-def get_number_of_outputs_and_axis_handling(layer, weight_shape, param_type) -> Tuple[int, AxisHandling]:
+def get_number_of_outputs_and_axis_handling(
+    layer, weight_shape, param_type
+) -> Tuple[int, AxisHandling]:
     """
     Get number of output of channels and handling axis for a specific layers
     :param layer: tf.keras.layers.Layer
@@ -611,28 +691,46 @@ def get_number_of_outputs_and_axis_handling(layer, weight_shape, param_type) -> 
     axis_handling = AxisHandling.LAST_AXIS
     num_output_channels = weight_shape[-1]
 
-    if isinstance(layer, (tf.keras.layers.Conv1DTranspose,
-                          tf.keras.layers.Conv2DTranspose,
-                          tf.keras.layers.Conv3DTranspose)) and param_type != 'bias':
+    if (
+        isinstance(
+            layer,
+            (
+                tf.keras.layers.Conv1DTranspose,
+                tf.keras.layers.Conv2DTranspose,
+                tf.keras.layers.Conv3DTranspose,
+            ),
+        )
+        and param_type != "bias"
+    ):
         num_output_channels = weight_shape[-2]
 
-    elif isinstance(layer, (tf.keras.layers.DepthwiseConv2D,
-                            tf.keras.layers.SeparableConv2D)) and param_type != 'bias':
+    elif (
+        isinstance(
+            layer, (tf.keras.layers.DepthwiseConv2D, tf.keras.layers.SeparableConv2D)
+        )
+        and param_type != "bias"
+    ):
         num_output_channels *= weight_shape[-2]
         axis_handling = AxisHandling.LAST_TWO_AXES
 
     return num_output_channels, axis_handling
 
 
-def log_param_quantizer_wrapper_details(layer, axis_handling=None, num_output_channels=None):
-    """ Logging statements to which Keras Layers are wrapped in Param Quantizers """
+def log_param_quantizer_wrapper_details(
+    layer, axis_handling=None, num_output_channels=None
+):
+    """Logging statements to which Keras Layers are wrapped in Param Quantizers"""
     if axis_handling is None and num_output_channels is None:
         _logger.debug("%s to be wrapped in ParamPerTENSORQuantizer\n", layer)
     else:
-        _logger.debug("%s to be wrapped in ParamPerCHANNELQuantizer\n"
-                      "Axis: %d\n"
-                      "Number of Output Channels: %d", layer,
-                      axis_handling, num_output_channels)
+        _logger.debug(
+            "%s to be wrapped in ParamPerCHANNELQuantizer\n"
+            "Axis: %d\n"
+            "Number of Output Channels: %d",
+            layer,
+            axis_handling,
+            num_output_channels,
+        )
 
 
 def set_keras_backend_version_to_v2(func_to_run_before_setting_back_to_v2: Callable):
@@ -669,6 +767,7 @@ def set_keras_backend_version_to_v2(func_to_run_before_setting_back_to_v2: Calla
 
         _ = swap_class(Functional, base_layer.Layer, base_layer_v1.Layer, use_v2=True)
         _ = swap_class(Functional, training.Model, training_v1.Model, use_v2=True)
+
     return wrap
 
 
@@ -680,18 +779,20 @@ def convert_h5_model_to_pb_model(h5_model_path: AnyStr, custom_objects: Dict = N
     :param custom_objects: If there are custom objects to load, Keras needs a dict of them to map them
     """
 
-    supported_file_types = ['h5', 'hdf5']
+    supported_file_types = ["h5", "hdf5"]
 
     # Function for validating if the file exist and is a h5
     def validate_model_path() -> Tuple[str, str]:
         if not os.path.exists(h5_model_path):
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), h5_model_path)
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), h5_model_path
+            )
 
-        model_name_split = os.path.basename(h5_model_path).split('.')
+        model_name_split = os.path.basename(h5_model_path).split(".")
         if model_name_split[-1] not in supported_file_types:
             raise ValueError(f"File must be of types {supported_file_types}.")
 
-        model_name = model_name_split[0] + '_converted.pb'
+        model_name = model_name_split[0] + "_converted.pb"
         save_path = os.path.dirname(h5_model_path)
 
         return model_name, save_path if save_path else os.getcwd()
@@ -709,7 +810,8 @@ def convert_h5_model_to_pb_model(h5_model_path: AnyStr, custom_objects: Dict = N
             # Take session and output names to a frozen graph. Also converting training specific ops
             # to testing ops i.e. Identities
             frozen_graph = convert_variables_to_constants_from_session_graph(
-                session, input_graph_def, output_names)
+                session, input_graph_def, output_names
+            )
             frozen_graph = remove_training_nodes(frozen_graph)
         return frozen_graph
 
@@ -723,16 +825,24 @@ def convert_h5_model_to_pb_model(h5_model_path: AnyStr, custom_objects: Dict = N
             # Try and load model. If there are custom objects, then user is logged how to pass custom objects and
             # raises again with the stacktrace.
             try:
-                model = tf.keras.models.load_model(h5_model_path,
-                                                   custom_objects=custom_objects,
-                                                   compile=False)
+                model = tf.keras.models.load_model(
+                    h5_model_path, custom_objects=custom_objects, compile=False
+                )
             except ValueError:
-                _logger.error("If using custom layers, pass a dict mapping them. "
-                              "For example, {'CustomLayer': CustomLayer}")
+                _logger.error(
+                    "If using custom layers, pass a dict mapping them. "
+                    "For example, {'CustomLayer': CustomLayer}"
+                )
                 raise
 
-            frozen_graph = freeze_session(tf.compat.v1.keras.backend.get_session(),
-                                          [out.op.name for out in model.outputs])
+            frozen_graph = freeze_session(
+                tf.compat.v1.keras.backend.get_session(),
+                [out.op.name for out in model.outputs],
+            )
             tf.io.write_graph(frozen_graph, save_path, model_name, as_text=False)
 
-    _logger.info("Success. The converted model is located at %s saved as %s", save_path, model_name)
+    _logger.info(
+        "Success. The converted model is located at %s saved as %s",
+        save_path,
+        model_name,
+    )

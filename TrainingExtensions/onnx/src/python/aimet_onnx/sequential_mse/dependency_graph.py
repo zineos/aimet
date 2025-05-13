@@ -36,7 +36,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Dependency Graph implementation """
+"""Dependency Graph implementation"""
 
 from collections import defaultdict, deque
 from typing import Union, List, Optional, Iterable, Dict, Tuple
@@ -60,11 +60,12 @@ class DependencyNode:
     """
     Class for node of dependency graph
     """
+
     cg_op: Op
     op_output_names: List[str]
     op_input_names: List[str]
-    inward_nodes: List['DependencyNode'] = field(default_factory=list)
-    outward_nodes: List['DependencyNode'] = field(default_factory=list)
+    inward_nodes: List["DependencyNode"] = field(default_factory=list)
+    outward_nodes: List["DependencyNode"] = field(default_factory=list)
     out_degree: int = 0
     in_degree: int = 0
 
@@ -87,7 +88,13 @@ class DependencyGraph:
         get_topologically_sorted_nodes(self): Get the topologically sorted SUPPORTED_MODULES.
         get_subgraph_inp_out_names(self, dependency_node: DependencyNode): Get the subgraph's input and output names to collect the inputs.
     """
-    def __init__(self, model: Union[onnx.ModelProto, ONNXModel], data_loader: Iterable, num_batches: int):
+
+    def __init__(
+        self,
+        model: Union[onnx.ModelProto, ONNXModel],
+        data_loader: Iterable,
+        num_batches: int,
+    ):
         """
         Initializes the object of the Dependency Graph
 
@@ -100,10 +107,12 @@ class DependencyGraph:
             self.model = ONNXModel(model)
         self.conn_graph = ConnectedGraph(self.model)
 
-        self.starting_ops = [] # Tracks nodes with zero in-degree (starting ops)
-        self._name_to_node = {} # Tracks a node name to the dependency node itself
-        self._sim_data = {} # Store data from the Quantsim model in memory
-        self._ref_cnt_for_sim_data = defaultdict(int) # Reference count to decide when to remove intermediate Quantsim data from memory
+        self.starting_ops = []  # Tracks nodes with zero in-degree (starting ops)
+        self._name_to_node = {}  # Tracks a node name to the dependency node itself
+        self._sim_data = {}  # Store data from the Quantsim model in memory
+        self._ref_cnt_for_sim_data = defaultdict(
+            int
+        )  # Reference count to decide when to remove intermediate Quantsim data from memory
 
         # Tracks a cg op name to the names of cg ops it depends on
         self._op_name_to_dependency_names = defaultdict(list)
@@ -131,6 +140,7 @@ class DependencyGraph:
 
         :return: List of nodes.
         """
+
         def _populate_in_degree(dep_node: DependencyNode, in_degree: dict):
             """
             Helper function to populate in_degree dictionary
@@ -153,7 +163,9 @@ class DependencyGraph:
             while queue:
                 level, dep_node = queue.popleft()
                 sorted_order[level].append(dep_node)
-                _logger.debug(f"Adding {dep_node.cg_op.name} to sorted_order at level {level}")
+                _logger.debug(
+                    f"Adding {dep_node.cg_op.name} to sorted_order at level {level}"
+                )
                 next_level = level + 1
 
                 # Decrease the in-degree for children nodes
@@ -183,7 +195,9 @@ class DependencyGraph:
 
         return sorted_order
 
-    def get_subgraph_inp_out_names(self, dep_nodes: List[DependencyNode]) -> Tuple[List[str], List[str]]:
+    def get_subgraph_inp_out_names(
+        self, dep_nodes: List[DependencyNode]
+    ) -> Tuple[List[str], List[str]]:
         """
         To gather input for the dependency nodes, retrieve the subgraph's input and output names.
 
@@ -209,7 +223,9 @@ class DependencyGraph:
 
         return list(input_names), list(output_names)
 
-    def dependency_node_inputs(self, dep_nodes: List[DependencyNode]) -> Dict[str, np.ndarray]:
+    def dependency_node_inputs(
+        self, dep_nodes: List[DependencyNode]
+    ) -> Dict[str, np.ndarray]:
         """
         For given dependency nodes at given level, return inputs by iterating the parent dependency nodes.
 
@@ -282,7 +298,9 @@ class DependencyGraph:
         :return: parameter numpy array
         """
         assert dep_node.cg_op.type in SUPPORTED_MODULES
-        tensor_proto = ParamUtils.get_param(self.model.model, dep_node.cg_op.get_module(), WEIGHT_INDEX)
+        tensor_proto = ParamUtils.get_param(
+            self.model.model, dep_node.cg_op.get_module(), WEIGHT_INDEX
+        )
         assert tensor_proto is not None
         tensor = onnx.numpy_helper.to_array(tensor_proto)
         return tensor
@@ -304,13 +322,16 @@ class DependencyGraph:
             for model_input in model_inputs:
                 if model_input not in batch_dict.keys():
                     raise ValueError(
-                        f"All inputs to the graph must be present in the dataloader. {model_input} is missing in the dataloader")
+                        f"All inputs to the graph must be present in the dataloader. {model_input} is missing in the dataloader"
+                    )
                 data[model_input].append(np.array(batch_dict[model_input]))
 
-        for (input_name, data_value) in data.items():
+        for input_name, data_value in data.items():
             self.update_sim_data([input_name], [data_value])
 
-    def _add_dependency_node(self, cg_op: Op, dependent_node_names: Optional[List[str]]):
+    def _add_dependency_node(
+        self, cg_op: Op, dependent_node_names: Optional[List[str]]
+    ):
         """
         - Insert the dependency node in the graph
         - Link the node with adjacent nodes
@@ -321,7 +342,11 @@ class DependencyGraph:
         """
         op_output_names = [out.name for out in cg_op.outputs]
         op_input_names = [inp.name for inp in cg_op.inputs]
-        op_input_names = [name for name in op_input_names if not ParamUtils.get_param_by_name(self.model.model, name)]
+        op_input_names = [
+            name
+            for name in op_input_names
+            if not ParamUtils.get_param_by_name(self.model.model, name)
+        ]
         dep_node = DependencyNode(cg_op, op_output_names, op_input_names)
         dep_node.in_degree = len(dependent_node_names)
         if dep_node.in_degree == 0:
@@ -343,10 +368,13 @@ class DependencyGraph:
         """
         Fill the input op names dict with ops having at least one graph input
         """
-        graph_inputs = [graph_inp.name for graph_inp in self.conn_graph.model.graph.input]
+        graph_inputs = [
+            graph_inp.name for graph_inp in self.conn_graph.model.graph.input
+        ]
 
         op_names_with_model_input = [
-            node.name for node in self.model.nodes()
+            node.name
+            for node in self.model.nodes()
             if any(input_name in graph_inputs for input_name in node.input)
         ]
 
@@ -378,18 +406,29 @@ class DependencyGraph:
         is_op_supported = False
 
         op = src_op.get_module()
-        if op and (self.is_supported_op(src_op) or src_op.name in self._op_names_with_model_inputs):
+        if op and (
+            self.is_supported_op(src_op)
+            or src_op.name in self._op_names_with_model_inputs
+        ):
             is_op_supported = True
             dependent_op_names = self._op_name_to_dependency_names[src_op.name]
             self._add_dependency_node(src_op, dependent_op_names)
-            _logger.debug(f"Added {src_op.name} to dependency graph with dependent_op_names: {len(dependent_op_names)}")
+            _logger.debug(
+                f"Added {src_op.name} to dependency graph with dependent_op_names: {len(dependent_op_names)}"
+            )
 
         # If src_op is part of SUPPORTED_MODULES or has at least one input as a model input, include its name in _op_name_to_dependency_names.
         # Otherwise, include the names of the dependencies of parent_op in _op_name_to_dependency_names.
         for child_op in src_op.output_ops:
-            parent_dependencies = [src_op.name] if is_op_supported else self._op_name_to_dependency_names[src_op.name]
+            parent_dependencies = (
+                [src_op.name]
+                if is_op_supported
+                else self._op_name_to_dependency_names[src_op.name]
+            )
             self._op_name_to_dependency_names[child_op.name].extend(parent_dependencies)
-            self._op_name_to_dependency_names[child_op.name] = list(set(self._op_name_to_dependency_names[child_op.name]))
+            self._op_name_to_dependency_names[child_op.name] = list(
+                set(self._op_name_to_dependency_names[child_op.name])
+            )
 
             self._in_degree_map[child_op.name] -= 1
             if self._in_degree_map[child_op.name] == 0:
@@ -406,7 +445,9 @@ class DependencyGraph:
             return False
         if len(cg_op.inputs) < 1:
             return False
-        tensor_proto = ParamUtils.get_param(self.model.model, cg_op.get_module(), WEIGHT_INDEX)
+        tensor_proto = ParamUtils.get_param(
+            self.model.model, cg_op.get_module(), WEIGHT_INDEX
+        )
         return tensor_proto is not None
 
     def _update_input_ref_count(self, dependency_node: DependencyNode):

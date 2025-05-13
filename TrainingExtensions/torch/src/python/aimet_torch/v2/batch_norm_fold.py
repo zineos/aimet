@@ -36,10 +36,14 @@
 # =============================================================================
 
 """This module enables batch norm folding in QuantSim v2"""
+
 from typing import List, Tuple, Iterable
 import torch
 from aimet_torch import utils
-from aimet_torch._base.batch_norm_fold import BatchNormFoldBase, _BatchNormFoldingNotSupported
+from aimet_torch._base.batch_norm_fold import (
+    BatchNormFoldBase,
+    _BatchNormFoldingNotSupported,
+)
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.nn.base import BaseQuantizationMixin
 from torch.nn.modules.conv import _ConvTransposeNd
@@ -61,8 +65,9 @@ class BatchNormFold(BatchNormFoldBase):
     """Handles batch norm folding logic"""
 
     @classmethod
-    def fold_all_batch_norms_to_scale(cls, sim: QuantizationSimModel)\
-            -> List[Tuple[BaseQuantizationMixin, BaseQuantizationMixin]]:
+    def fold_all_batch_norms_to_scale(
+        cls, sim: QuantizationSimModel
+    ) -> List[Tuple[BaseQuantizationMixin, BaseQuantizationMixin]]:
         """
         Fold all batch_norm layers in a model into the quantization scale parameter
         of the corresponding conv layers
@@ -82,26 +87,34 @@ class BatchNormFold(BatchNormFoldBase):
             if hasattr(sim.model, module_name):
                 module_to_qmodule[module] = getattr(sim.model, module_name)
 
-            if '.' in module_name and hasattr(sim.model, module_name.split('.')[1]):
-                module_to_qmodule[module] = getattr(sim.model, module_name.split('.')[1])
+            if "." in module_name and hasattr(sim.model, module_name.split(".")[1]):
+                module_to_qmodule[module] = getattr(
+                    sim.model, module_name.split(".")[1]
+                )
 
-        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(
+            connected_graph
+        )
 
         conv_bn_pairs = [
-            (module_to_qmodule[conv], module_to_qmodule[bn]) for conv, bn in conv_bn_pairs
+            (module_to_qmodule[conv], module_to_qmodule[bn])
+            for conv, bn in conv_bn_pairs
         ]
         bn_conv_pairs = [
-            (module_to_qmodule[bn], module_to_qmodule[conv]) for bn, conv in bn_conv_pairs
+            (module_to_qmodule[bn], module_to_qmodule[conv])
+            for bn, conv in bn_conv_pairs
         ]
 
         BatchNormFold._fold_given_batch_norms(model, conv_bn_pairs, bn_conv_pairs)
         return conv_bn_pairs + [(conv, bn) for bn, conv in bn_conv_pairs]
 
     @classmethod
-    def _fold_given_batch_norms(cls,
-                                model,
-                                conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
-                                bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]]):
+    def _fold_given_batch_norms(
+        cls,
+        model,
+        conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+        bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+    ):
         """
         Fold a given set of batch_norm layers into conv layers
 
@@ -113,15 +126,21 @@ class BatchNormFold(BatchNormFoldBase):
         # pylint: disable=protected-access
         for bn, conv in bn_conv_pairs:
             if isinstance(conv, BaseQuantizationMixin):
-                raise RuntimeError(f"Forward folding to scale is not possible. Got {conv}")
+                raise RuntimeError(
+                    f"Forward folding to scale is not possible. Got {conv}"
+                )
 
         bn_modules = []
 
         def _fold(conv, bn, fold_backward):
-            is_quantized = isinstance(conv, BaseQuantizationMixin) or isinstance(bn, BaseQuantizationMixin)
+            is_quantized = isinstance(conv, BaseQuantizationMixin) or isinstance(
+                bn, BaseQuantizationMixin
+            )
             try:
                 if is_quantized:
-                    assert isinstance(conv, BaseQuantizationMixin) and isinstance(bn, BaseQuantizationMixin)
+                    assert isinstance(conv, BaseQuantizationMixin) and isinstance(
+                        bn, BaseQuantizationMixin
+                    )
                     BatchNormFold._fold_to_scale(conv, bn)
                     bn_modules.append(bn)
                 else:
@@ -134,7 +153,6 @@ class BatchNormFold(BatchNormFoldBase):
                 )
             else:
                 bn_modules.append(bn if is_quantized else bn)
-
 
         with utils.in_eval_mode(model), torch.no_grad():
             for conv, bn in conv_bn_pairs:
@@ -209,15 +227,16 @@ class BatchNormFold(BatchNormFoldBase):
             weight_quantizer.max.copy_(new_encoding_max.view_as(weight_quantizer.max))
 
         # Copy batchnorm's output quantizers to conv output quantizers
-        for i, (conv_output_quantizer, bn_output_quantizer) in\
-                enumerate(zip(conv.output_quantizers, bn.output_quantizers)):
-
+        for i, (conv_output_quantizer, bn_output_quantizer) in enumerate(
+            zip(conv.output_quantizers, bn.output_quantizers)
+        ):
             if bn_output_quantizer:
                 conv_output_quantizer = bn_output_quantizer
 
             conv.output_quantizers[i] = conv_output_quantizer
 
         conv.param_quantizers["bias"] = None
+
 
 # Global variables for compatibility
 fold_all_batch_norms = BatchNormFold.fold_all_batch_norms_to_weight

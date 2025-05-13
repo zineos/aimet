@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module contains utilities to capture and save intermediate layer-outputs of a model. """
+"""This module contains utilities to capture and save intermediate layer-outputs of a model."""
 
 import os
 from typing import Union, List, Tuple
@@ -44,14 +44,18 @@ from collections import OrderedDict
 import json
 import numpy as np
 import tensorflow as tf
-from aimet_tensorflow.keras.quantsim import QcQuantizeWrapper, QcQuantizableMultiHeadAttention
+from aimet_tensorflow.keras.quantsim import (
+    QcQuantizeWrapper,
+    QcQuantizableMultiHeadAttention,
+)
 from aimet_common.layer_output_utils import SaveInputOutput
 from aimet_common.utils import AimetLogger
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.LayerOutputs)
 
+
 class LayerOutputUtil:
-    """ Implementation to capture and save outputs of intermediate layers of a model (fp32/quantsim) """
+    """Implementation to capture and save outputs of intermediate layers of a model (fp32/quantsim)"""
 
     def __init__(self, model: tf.keras.Model, save_dir: str = "./KerasLayerOutput"):
         """
@@ -67,18 +71,27 @@ class LayerOutputUtil:
         self.intermediate_model = self._get_intermediate_model(model)
 
         # Get actual Layer output name to modified layer output name dict
-        self.original_name_to_modified_name_mapper = self._get_original_name_to_modified_name_mapper(model)
+        self.original_name_to_modified_name_mapper = (
+            self._get_original_name_to_modified_name_mapper(model)
+        )
 
         # Saving the actual layer output name to modified layer output name (valid file name to save) in a json file
         os.makedirs(save_dir, exist_ok=True)
-        with open(os.path.join(save_dir, "LayerOutputNameMapper.json"), 'w', encoding='utf-8') as fp:
+        with open(
+            os.path.join(save_dir, "LayerOutputNameMapper.json"), "w", encoding="utf-8"
+        ) as fp:
             json.dump(self.original_name_to_modified_name_mapper, fp=fp, indent=4)
 
         # Utility to save model inputs and their corresponding layer-outputs
         self.save_inp_out_obj = SaveInputOutput(save_dir)
 
     @classmethod
-    def _get_layer_output_name(cls, layer: Union[QcQuantizeWrapper, QcQuantizableMultiHeadAttention, tf.keras.layers.Layer]):
+    def _get_layer_output_name(
+        cls,
+        layer: Union[
+            QcQuantizeWrapper, QcQuantizableMultiHeadAttention, tf.keras.layers.Layer
+        ],
+    ):
         """
         This function returns the actual layer output name for a given layer
         :param layer: Keras model layer.
@@ -114,13 +127,17 @@ class LayerOutputUtil:
 
             # Replace all non-word characters with "_" to make it a valid file name for saving the results
             # For Eg.: "conv2d/BiasAdd:0" gets converted to "conv2d_BiasAdd_0"
-            modified_layer_output_name = re.sub(r'\W+', "_", layer_output_name)
+            modified_layer_output_name = re.sub(r"\W+", "_", layer_output_name)
 
-            original_name_to_modified_name_mapper[layer_output_name] = modified_layer_output_name
+            original_name_to_modified_name_mapper[layer_output_name] = (
+                modified_layer_output_name
+            )
 
         return original_name_to_modified_name_mapper
 
-    def get_outputs(self, input_instance: Union[tf.Tensor, List[tf.Tensor], Tuple[tf.Tensor]]):
+    def get_outputs(
+        self, input_instance: Union[tf.Tensor, List[tf.Tensor], Tuple[tf.Tensor]]
+    ):
         """
         This function captures layer-outputs and renames them as per the AIMET exported model.
         :param input_instance: Single input instance for which we want to obtain layer-outputs.
@@ -130,9 +147,13 @@ class LayerOutputUtil:
         outs = self.intermediate_model(input_instance, training=False)
         output_pred = [out.numpy() for out in outs]
 
-        return dict(zip(self.original_name_to_modified_name_mapper.values(), output_pred))
+        return dict(
+            zip(self.original_name_to_modified_name_mapper.values(), output_pred)
+        )
 
-    def generate_layer_outputs(self, input_instance: Union[tf.Tensor, List[tf.Tensor], Tuple[tf.Tensor]]):
+    def generate_layer_outputs(
+        self, input_instance: Union[tf.Tensor, List[tf.Tensor], Tuple[tf.Tensor]]
+    ):
         """
         This method captures output of every layer of a model & saves the inputs and corresponding layer-outputs to disk.
 
@@ -152,4 +173,7 @@ class LayerOutputUtil:
 
         self.save_inp_out_obj.save(np.array(input_instance), layer_output_dict)
 
-        logger.info("Layer outputs saved for input instance %d", self.save_inp_out_obj.input_cntr)
+        logger.info(
+            "Layer outputs saved for input instance %d",
+            self.save_inp_out_obj.input_cntr,
+        )

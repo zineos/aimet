@@ -1,4 +1,4 @@
-#@@-COPYRIGHT-START-@@
+# @@-COPYRIGHT-START-@@
 #
 #  Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
 #
@@ -33,7 +33,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Mapping information for AIMET and backend"""
+"""Mapping information for AIMET and backend"""
+
 import torch
 from aimet_torch._base.nn.modules import custom
 

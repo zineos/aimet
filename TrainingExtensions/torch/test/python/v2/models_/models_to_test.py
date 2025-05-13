@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Models for use in unit testing """
+"""Models for use in unit testing"""
 
 import torch
 from torch import nn
@@ -48,10 +48,11 @@ class SimpleConditional(torch.nn.Module):
     Model using conditional paths
     Expected input shape = (1, 3)
     """
+
     def __init__(self):
         super(SimpleConditional, self).__init__()
-        self.prelu1 = torch.nn.PReLU(init=.3)
-        self.prelu2 = torch.nn.PReLU(init=.4)
+        self.prelu1 = torch.nn.PReLU(init=0.3)
+        self.prelu2 = torch.nn.PReLU(init=0.4)
         self.linear1 = torch.nn.Linear(3, 2)
         self.linear2 = torch.nn.Linear(3, 10)
         self.softmax = torch.nn.Softmax()
@@ -67,8 +68,8 @@ class SimpleConditional(torch.nn.Module):
         x = self.softmax(x)
         return x
 
-class ModelWithTwoInputs(nn.Module):
 
+class ModelWithTwoInputs(nn.Module):
     def __init__(self):
         super(ModelWithTwoInputs, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -114,7 +115,7 @@ class FakeMultiOutputOp(torch.autograd.Function):
         """
         Magic method that helps with exporting a custom ONNX node
         """
-        return g.op('aimet_torch::FakeMultiOutputOp', inp, outputs=5)
+        return g.op("aimet_torch::FakeMultiOutputOp", inp, outputs=5)
 
     @staticmethod
     def forward(ctx, x):
@@ -151,8 +152,8 @@ class SoftMaxAvgPoolModel(torch.nn.Module):
 
 
 class SingleResidual(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidual, self).__init__()
@@ -206,8 +207,8 @@ class SingleResidual(nn.Module):
 
 
 class SingleResidualWithAvgPool(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithAvgPool, self).__init__()
@@ -261,8 +262,8 @@ class SingleResidualWithAvgPool(nn.Module):
 
 
 class SingleResidualWithModuleAdd(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithModuleAdd, self).__init__()
@@ -317,8 +318,8 @@ class SingleResidualWithModuleAdd(nn.Module):
 
 
 class MultiInput(nn.Module):
-    """ A model with multiple inputs.
-        Use this model for unit testing purposes. """
+    """A model with multiple inputs.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=3):
         super(MultiInput, self).__init__()
@@ -344,7 +345,7 @@ class MultiInput(nn.Module):
 
 
 class ModelWithBertCustomLayerNormGelu(torch.nn.Module):
-    """ Model with PyTorch LayerNorm and gelu """
+    """Model with PyTorch LayerNorm and gelu"""
 
     def __init__(self):
         super().__init__()
@@ -363,7 +364,7 @@ class ModelWithBertCustomLayerNormGelu(torch.nn.Module):
 
 
 class QuantSimTinyModel(nn.Module):
-    """ Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32) """
+    """Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(QuantSimTinyModel, self).__init__()
@@ -415,7 +416,7 @@ class QuantizationModuleWith5Output(QuantizationMixin, ModuleWith5Output):
 
 
 class BasicConv2d(nn.Module):
-    """ A Simple Super Node Model used as building block in Hierarchical Model  """
+    """A Simple Super Node Model used as building block in Hierarchical Model"""
 
     def __init__(self, **kwargs):
         super(BasicConv2d, self).__init__()

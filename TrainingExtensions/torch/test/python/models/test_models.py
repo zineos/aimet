@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Models for use in unit testing """
+"""Models for use in unit testing"""
 
 # pylint: skip-file
 from collections import namedtuple
@@ -50,11 +50,11 @@ from torchvision.ops import roi_align
 import aimet_torch._base.nn.modules.custom as aimet_modules
 
 
-
 class ModelWithMatMul(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.PReLU()
@@ -67,10 +67,12 @@ class ModelWithMatMul(torch.nn.Module):
         y = y.reshape(10, 4, 5)
         return self.matmul(x, y)
 
+
 class ModelWithMatMul2(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.PReLU()
@@ -85,10 +87,12 @@ class ModelWithMatMul2(torch.nn.Module):
         y = y.reshape(10, 4, 5)
         return self.matmul(x, y)
 
+
 class ModelWithMatMul4(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.ReLU()
@@ -98,10 +102,12 @@ class ModelWithMatMul4(torch.nn.Module):
         x = self.act1(inputs[0])
         return self.matmul(x, inputs[1])
 
+
 class ModelWithMatMul5(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.matmul = aimet_modules.MatMul()
@@ -109,10 +115,12 @@ class ModelWithMatMul5(torch.nn.Module):
     def forward(self, *inputs):
         return self.matmul(inputs[0], inputs[1])
 
+
 class ModelWithMatMul6(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.ReLU()
@@ -124,16 +132,18 @@ class ModelWithMatMul6(torch.nn.Module):
         x = self.permute(x, (1, 0))
         return self.matmul(inputs[0], x)
 
-class ModelWithUnusedMatmul(ModelWithMatMul5):
 
+class ModelWithUnusedMatmul(ModelWithMatMul5):
     def __init__(self):
         super().__init__()
         self.unused_matmul = aimet_modules.MatMul()
+
 
 class ModelWithGroupNorm(torch.nn.Module):
     """
     Model with GroupNorm module
     """
+
     def __init__(self):
         super().__init__()
         self.gn = torch.nn.GroupNorm(2, 6)
@@ -142,10 +152,12 @@ class ModelWithGroupNorm(torch.nn.Module):
     def forward(self, *inputs):
         return self.gn_with_no_affine(self.gn(inputs[0]))
 
+
 class ModelWithEmbedding(torch.nn.Module):
     """
     Model with embedding module
     """
+
     def __init__(self):
         super().__init__()
         self.embedding = torch.nn.Embedding(8, 4)
@@ -153,9 +165,10 @@ class ModelWithEmbedding(torch.nn.Module):
     def forward(self, *inputs):
         return self.embedding(inputs[0])
 
+
 class SingleResidual(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidual, self).__init__()
@@ -209,8 +222,8 @@ class SingleResidual(nn.Module):
 
 
 class SingleResidualWithAvgPool(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithAvgPool, self).__init__()
@@ -264,8 +277,8 @@ class SingleResidualWithAvgPool(nn.Module):
 
 
 class SingleResidualWithModuleAdd(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithModuleAdd, self).__init__()
@@ -320,8 +333,8 @@ class SingleResidualWithModuleAdd(nn.Module):
 
 
 class MultiInput(nn.Module):
-    """ A model with multiple inputs.
-        Use this model for unit testing purposes. """
+    """A model with multiple inputs.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=3):
         super(MultiInput, self).__init__()
@@ -347,7 +360,8 @@ class MultiInput(nn.Module):
 
 
 class DictInputModel(nn.Module):
-    """ Model with dictionary as input. """
+    """Model with dictionary as input."""
+
     def __init__(self, num_classes=3):
         super(DictInputModel, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=3, bias=False)
@@ -359,9 +373,9 @@ class DictInputModel(nn.Module):
         self.fc = nn.Linear(288, num_classes)
 
     def forward(self, *inputs):
-        x1 = self.conv1(inputs[0]['inp_1'])
+        x1 = self.conv1(inputs[0]["inp_1"])
         x1 = self.conv2(x1)
-        x2 = self.conv3(inputs[0]['inp_2'])
+        x2 = self.conv3(inputs[0]["inp_2"])
         x = x1 + x2
         x = self.bn1(x)
         x = self.relu1(x)
@@ -372,9 +386,9 @@ class DictInputModel(nn.Module):
 
 
 class ConcatModel(nn.Module):
-    """ A model with concat op.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with concat op.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(ConcatModel, self).__init__()
@@ -395,23 +409,27 @@ class ConcatModel(nn.Module):
 
 
 class ModuleListModel(nn.Module):
-    """ A model with modules defined using ModuleLists.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with modules defined using ModuleLists.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(ModuleListModel, self).__init__()
-        self.mod_list = nn.ModuleList([
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),       # use 4th
-            nn.ReLU(inplace=True),      # use 3rd
-            nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),                # use 5th
-            nn.ReLU(),      # dummy unused op
-            nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False)        # use 1st
-        ])
+        self.mod_list = nn.ModuleList(
+            [
+                nn.MaxPool2d(kernel_size=2, stride=2, padding=1),  # use 4th
+                nn.ReLU(inplace=True),  # use 3rd
+                nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),  # use 5th
+                nn.ReLU(),  # dummy unused op
+                nn.Conv2d(
+                    3, 16, kernel_size=2, stride=2, padding=2, bias=False
+                ),  # use 1st
+            ]
+        )
         self.seq_list = nn.Sequential(
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),                # use 6th
-            nn.ReLU(),      # dummy unused op
-            nn.BatchNorm2d(16),     # use 2nd
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),  # use 6th
+            nn.ReLU(),  # dummy unused op
+            nn.BatchNorm2d(16),  # use 2nd
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -428,7 +446,7 @@ class ModuleListModel(nn.Module):
 
 
 class TinyModel(nn.Module):
-    """ Use this model for unit testing purposes. Expect input shape (1, 3, 32, 32) """
+    """Use this model for unit testing purposes. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(TinyModel, self).__init__()
@@ -462,8 +480,9 @@ class TinyModel(nn.Module):
         x = self.fc(x)
         return x
 
+
 class QuantSimTinyModel(nn.Module):
-    """ Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32) """
+    """Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(QuantSimTinyModel, self).__init__()
@@ -499,15 +518,15 @@ class QuantSimTinyModel(nn.Module):
 
 
 class ModelWithDropouts(nn.Module):
-    """ Use this model for unit testing purposes. """
+    """Use this model for unit testing purposes."""
 
     def __init__(self):
         super(ModelWithDropouts, self).__init__()
         self.conv1 = nn.Conv2d(3, 8, kernel_size=2, stride=2, padding=2, bias=False)
         self.bn1 = nn.BatchNorm2d(8)
         self.relu1 = nn.ReLU(inplace=True)
-        self.dropout1 = nn.Dropout(p=.4)
-        self.dropout2 = nn.Dropout2d(p=.6)
+        self.dropout1 = nn.Dropout(p=0.4)
+        self.dropout2 = nn.Dropout2d(p=0.6)
         self.fc = nn.Linear(2592, 10)
 
     def forward(self, *inputs):
@@ -522,7 +541,7 @@ class ModelWithDropouts(nn.Module):
 
 
 class ModelWithReusedNodes(nn.Module):
-    """ Model that reuses a relu module. Expects input of shape (1, 3, 32, 32) """
+    """Model that reuses a relu module. Expects input of shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(ModelWithReusedNodes, self).__init__()
@@ -544,7 +563,7 @@ class ModelWithReusedNodes(nn.Module):
 
 
 class ModelWithFunctionalOps(nn.Module):
-    """ Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(ModelWithFunctionalOps, self).__init__()
@@ -565,9 +584,9 @@ class ModelWithFunctionalOps(nn.Module):
 
 
 class SequentialModel(nn.Module):
-    """ A model with modules defined using nn.Sequential.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with modules defined using nn.Sequential.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(SequentialModel, self).__init__()
@@ -577,7 +596,7 @@ class SequentialModel(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2)
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -589,7 +608,7 @@ class SequentialModel(nn.Module):
 
 
 class BasicConv2d(nn.Module):
-    """ A Simple Super Node Model used as building block in Hierarchical Model  """
+    """A Simple Super Node Model used as building block in Hierarchical Model"""
 
     def __init__(self, **kwargs):
         super(BasicConv2d, self).__init__()
@@ -606,14 +625,14 @@ class BasicConv2d(nn.Module):
 
 
 class MultiConv2dModel(nn.Module):
-    """ Sequential Model contains sequences of BasicConv2d Model  """
+    """Sequential Model contains sequences of BasicConv2d Model"""
 
     def __init__(self):
         super(MultiConv2dModel, self).__init__()
         self.seq_list = nn.Sequential(
             BasicConv2d(kernel_size=3),
             BasicConv2d(kernel_size=1),
-            BasicConv2d(kernel_size=3)
+            BasicConv2d(kernel_size=3),
         )
 
     def forward(self, *inputs):
@@ -621,7 +640,7 @@ class MultiConv2dModel(nn.Module):
 
 
 class NestedModel(nn.Module):
-    """ Aggregation Model contains two instance of Tiny Model """
+    """Aggregation Model contains two instance of Tiny Model"""
 
     def __init__(self):
         super(NestedModel, self).__init__()
@@ -637,13 +656,13 @@ class NestedModel(nn.Module):
 
 
 class HierarchicalModel(nn.Module):
-    """ Aggregation Model contains multi-level of PyTorch Module
-        Expected 5 inputs with shapes  in the following order:
-            (1, 64, 32, 32)
-            (1,  3, 32, 32)
-            (1, 64, 32, 32)
-            (1,  3, 32, 32)
-            (1,  3,  8,  8) """
+    """Aggregation Model contains multi-level of PyTorch Module
+    Expected 5 inputs with shapes  in the following order:
+        (1, 64, 32, 32)
+        (1,  3, 32, 32)
+        (1, 64, 32, 32)
+        (1,  3, 32, 32)
+        (1,  3,  8,  8)"""
 
     def __init__(self):
         super(HierarchicalModel, self).__init__()
@@ -669,7 +688,7 @@ class HierarchicalModel(nn.Module):
 
 
 class PassThroughOpLastLayerModel(nn.Module):
-    """ Model with PassThroughOp as last layer. Expect input shape (1, 3, 32, 32) """
+    """Model with PassThroughOp as last layer. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(PassThroughOpLastLayerModel, self).__init__()
@@ -686,6 +705,7 @@ class TransposedConvModel(torch.nn.Module):
     """
     Model with transposed conv2D
     """
+
     def __init__(self):
         super(TransposedConvModel, self).__init__()
         self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3)
@@ -710,6 +730,7 @@ class TransposedConvModelWithoutBN(torch.nn.Module):
     """
     Model with transposed conv2D
     """
+
     def __init__(self):
         super(TransposedConvModelWithoutBN, self).__init__()
         self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3)
@@ -728,6 +749,7 @@ class TupleOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output
     """
+
     def __init__(self):
         super(TupleOutputModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(3, 2, kernel_size=3, padding=1, bias=False)
@@ -745,6 +767,7 @@ class MultiOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output
     """
+
     def __init__(self):
         super(MultiOutputModel, self).__init__()
         self.layer = TupleOutputModel()
@@ -764,6 +787,7 @@ class ConfigurableTupleOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output with configurable channels
     """
+
     def __init__(self, channels=(2, 4, 6)):
         super(ConfigurableTupleOutputModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(channels[0], channels[0], kernel_size=3, padding=1)
@@ -782,6 +806,7 @@ class SingleLayerRNNModel(nn.Module):
     Model using torch.nn.RNN module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(SingleLayerRNNModel, self).__init__()
         self.rnn = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=1)
@@ -795,9 +820,12 @@ class SingleLayerBidirectionalLstmModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(SingleLayerBidirectionalLstmModel, self).__init__()
-        self.lstm = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1, bidirectional=True)
+        self.lstm = torch.nn.LSTM(
+            input_size=3, hidden_size=5, num_layers=1, bidirectional=True
+        )
 
     def forward(self, x, hx=None):
         return self.lstm(x, hx)
@@ -808,9 +836,12 @@ class TwoLayerBidirectionalLSTMModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionalLSTMModel, self).__init__()
-        self.recurrent = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.LSTM(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     def forward(self, x, hx=None):
         return self.recurrent(x, hx)
@@ -821,9 +852,12 @@ class TwoLayerBidirectionaRNNModel(nn.Module):
     Model using torch.nn.RNN module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionaRNNModel, self).__init__()
-        self.recurrent = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.RNN(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     def forward(self, x, hx=None):
         return self.recurrent(x, hx)
@@ -834,9 +868,12 @@ class TwoLayerBidirectionalGRUModel(nn.Module):
     Model using torch.nn.GRU module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionalGRUModel, self).__init__()
-        self.recurrent = torch.nn.GRU(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.GRU(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     def forward(self, x, hx=None):
         return self.recurrent(x, hx)
@@ -847,6 +884,7 @@ class MultiLayerRNNModel(nn.Module):
     Model using torch.nn.RNN module with multiple layers
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(MultiLayerRNNModel, self).__init__()
         self.rnn = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=2)
@@ -860,6 +898,7 @@ class RNNCellModel(nn.Module):
     Model using torch.nn.RNNCell module
     Expected input shape = (SEQ_LENGTH=10, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(RNNCellModel, self).__init__()
         self.rnn_cell = torch.nn.RNNCell(input_size=3, hidden_size=5)
@@ -877,6 +916,7 @@ class LSTMModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(LSTMModel, self).__init__()
         self.rnn = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1)
@@ -890,18 +930,19 @@ class NestedSequentialModel(nn.Module):
     Model using nested Sequential modules
     Expected input shape = (1, 3, 8, 8)
     """
+
     def __init__(self, num_classes=3):
         super(NestedSequentialModel, self).__init__()
         self.inner_seq = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(16)
+            nn.BatchNorm2d(16),
         )
         self.seq_list = nn.Sequential(
             self.inner_seq,
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2)
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -913,7 +954,8 @@ class NestedSequentialModel(nn.Module):
 
 
 class ModelWithFunctionalReLU(nn.Module):
-    """ Model that uses functional ReLU instead of nn.Modules. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses functional ReLU instead of nn.Modules. Expects input of shape (1, 3, 32, 32)"""
+
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -935,7 +977,8 @@ class ModelWithFunctionalReLU(nn.Module):
 
 
 class ModelWithDuplicateReLU(nn.Module):
-    """ Model that uses single ReLU instances multiple times in the forward. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses single ReLU instances multiple times in the forward. Expects input of shape (1, 3, 32, 32)"""
+
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -963,7 +1006,6 @@ class ModelWithDuplicateReLU(nn.Module):
 
 
 class ModelWithTwoInputs(nn.Module):
-
     def __init__(self):
         super(ModelWithTwoInputs, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -999,7 +1041,6 @@ class ModelWithTwoInputs(nn.Module):
 
 
 class ModelWithTransposeConv(nn.Module):
-
     def __init__(self):
         super(ModelWithTransposeConv, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -1039,10 +1080,11 @@ class SimpleConditional(torch.nn.Module):
     Model using conditional paths
     Expected input shape = (1, 3)
     """
+
     def __init__(self):
         super(SimpleConditional, self).__init__()
-        self.prelu1 = torch.nn.PReLU(init=.3)
-        self.prelu2 = torch.nn.PReLU(init=.4)
+        self.prelu1 = torch.nn.PReLU(init=0.3)
+        self.prelu2 = torch.nn.PReLU(init=0.4)
         self.linear1 = torch.nn.Linear(3, 2)
         self.linear2 = torch.nn.Linear(3, 10)
         self.softmax = torch.nn.Softmax()
@@ -1064,7 +1106,7 @@ class LinearAndLSTMModel(torch.nn.Module):
         super(LinearAndLSTMModel, self).__init__()
 
         self.linear = torch.nn.Linear(10, 4)
-        self.prelu = torch.nn.PReLU(init=.3)
+        self.prelu = torch.nn.PReLU(init=0.3)
         self.recurrent = torch.nn.LSTM(input_size=4, hidden_size=5, num_layers=2)
 
     def forward(self, x, h_and_c=None):
@@ -1074,9 +1116,7 @@ class LinearAndLSTMModel(torch.nn.Module):
         return self.recurrent(x, h_and_c)
 
 
-
 class RoiAlignPyTorch(torch.nn.Module):
-
     def __init__(self, aligned_height, aligned_width, spatial_scale):
         super(RoiAlignPyTorch, self).__init__()
         self.aligned_width = int(aligned_width)
@@ -1084,14 +1124,16 @@ class RoiAlignPyTorch(torch.nn.Module):
         self.spatial_scale = float(spatial_scale)
 
     def forward(self, features, rois):
-        return roi_align(input=features,
-                         boxes = rois,
-                         output_size = [self.aligned_height, self.aligned_width],
-                         spatial_scale = self.spatial_scale,
-                         sampling_ratio = 0)
+        return roi_align(
+            input=features,
+            boxes=rois,
+            output_size=[self.aligned_height, self.aligned_width],
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=0,
+        )
+
 
 class RoiModel(torch.nn.Module):
-
     def __init__(self, height, width, scale):
         super(RoiModel, self).__init__()
         self.roi = RoiAlignPyTorch(height, width, scale)
@@ -1108,11 +1150,11 @@ class InputOutputDictModel(nn.Module):
         self.mul3 = aimet_modules.Multiply()
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
-        ab = self.mul1(inputs['a'], inputs['b'])
-        bc = self.mul2(inputs['b'], inputs['c'])
-        ca = self.mul3(inputs['c'], inputs['a'])
+        ab = self.mul1(inputs["a"], inputs["b"])
+        bc = self.mul2(inputs["b"], inputs["c"])
+        ca = self.mul3(inputs["c"], inputs["a"])
 
-        output_def = namedtuple('output_def', ['ab', 'bc', 'ca'])
+        output_def = namedtuple("output_def", ["ab", "bc", "ca"])
         return output_def(ab, bc, ca)
 
 
@@ -1120,6 +1162,7 @@ class Float32AndInt64InputModel(nn.Module):
     """
     This model uses a list of Tensors as input. The input Tensor list contains both float32 and int63 tensors.
     """
+
     def __init__(self):
         super(Float32AndInt64InputModel, self).__init__()
         self.index_feature_map = 0
@@ -1142,7 +1185,6 @@ class Float32AndInt64InputModel(nn.Module):
 
 
 class Conv3dModel(nn.Module):
-
     def __init__(self):
         super(Conv3dModel, self).__init__()
 
@@ -1155,7 +1197,6 @@ class Conv3dModel(nn.Module):
         self.relu2 = nn.ReLU()
 
     def forward(self, inp):
-
         out = self.conv1(inp)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -1168,7 +1209,6 @@ class Conv3dModel(nn.Module):
 
 
 class Conv3dModel1(nn.Module):
-
     def __init__(self):
         super(Conv3dModel1, self).__init__()
 
@@ -1181,7 +1221,6 @@ class Conv3dModel1(nn.Module):
         self.bn2 = nn.BatchNorm3d(8)
 
     def forward(self, inp):
-
         out = self.conv1(inp)
         out = self.relu1(out)
         out = self.bn1(out)
@@ -1197,9 +1236,7 @@ class ModuleWithListInputModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.reshape = aimet_modules.Reshape()
-        self.conv = torch.nn.Conv2d(in_channels=1,
-                                    out_channels=16,
-                                    kernel_size=3)
+        self.conv = torch.nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3)
 
     def forward(self, *inputs):
         # Module with list input (second argument)
@@ -1244,7 +1281,9 @@ class MultiplePReluModel(nn.Module):
 class GroupedConvModel(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, groups=2, bias=False)
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, groups=2, bias=False
+        )
 
     def forward(self, *inputs):
         return self.conv(inputs[0])
@@ -1274,7 +1313,9 @@ class NestedSeqModule(torch.nn.Module):
 class NestedSeqModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.m = torch.nn.Sequential(torch.nn.Sequential(torch.nn.ReLU(), NestedSeqModule()))
+        self.m = torch.nn.Sequential(
+            torch.nn.Sequential(torch.nn.ReLU(), NestedSeqModule())
+        )
 
     def forward(self, x):
         return self.m(x)
@@ -1290,7 +1331,6 @@ class NestedModelWithOverlappingNames(torch.nn.Module):
 
 
 class ModelWithModuleList(torch.nn.Module):
-
     def __init__(self):
         super(ModelWithModuleList, self).__init__()
         self.m = torch.nn.ModuleList([NestedSeqModule()])
@@ -1382,6 +1422,7 @@ class CustomFunctionalConv(nn.Module):
     Custom module with functional conv
     Expected input shape: (1, 3, 16, 16)
     """
+
     def __init__(self):
         super().__init__()
 
@@ -1406,6 +1447,7 @@ class CustomFunctionalConv(nn.Module):
     def forward(self, x):
         return F.conv2d(x, weight=self.weight, groups=self.channels, stride=self.stride)
 
+
 class SmallLinearModel(nn.Module):
     def __init__(self):
         super(SmallLinearModel, self).__init__()
@@ -1423,6 +1465,7 @@ class SmallLinearModel(nn.Module):
         x = self.groupnorm(x)
         x = self.prelu2(x)
         return self.linear2(x)
+
 
 class InnerLinear(nn.Module):
     def __init__(self):
@@ -1442,13 +1485,19 @@ class ModelWithMultiInputOps(torch.nn.Module):
         self.conv = nn.Conv2d(3, 8, kernel_size=2, stride=2, padding=0, bias=False)
         self.bn = nn.BatchNorm2d(8)
         self.relu = nn.ReLU(inplace=True)
-        self.register_buffer('gemm_weight', torch.ones([1, 8, 12, 24], dtype=torch.float32))
+        self.register_buffer(
+            "gemm_weight", torch.ones([1, 8, 12, 24], dtype=torch.float32)
+        )
         self.matmul = aimet_modules.MatMul()
         self.min = aimet_modules.Minimum()
-        self.register_buffer('constant', torch.ones([1, 8, 12, 12], dtype=torch.float32))
+        self.register_buffer(
+            "constant", torch.ones([1, 8, 12, 12], dtype=torch.float32)
+        )
         self.concat = aimet_modules.Concat()
-        self.register_buffer('conv_bias', torch.zeros([3], dtype=torch.float32))
-        self.dynamic_conv = aimet_modules.DynamicConv2d(stride=(1, 1), padding=(0, 0), dilation=(1, 1), groups=1)
+        self.register_buffer("conv_bias", torch.zeros([3], dtype=torch.float32))
+        self.dynamic_conv = aimet_modules.DynamicConv2d(
+            stride=(1, 1), padding=(0, 0), dilation=(1, 1), groups=1
+        )
         self.fc = nn.Linear(24, 3)
 
     def forward(self, inp, weight):
@@ -1460,7 +1509,7 @@ class ModelWithMultiInputOps(torch.nn.Module):
         x4 = self.min(self.constant, x1)
         x5 = self.concat(x1_bn, self.constant, x1)
         x6 = self.dynamic_conv(x5, weight, self.conv_bias)
-        return x3, x6+2, x4
+        return x3, x6 + 2, x4
 
 
 class SmallMnist(nn.Module):
@@ -1515,8 +1564,9 @@ class ModelWithMatMul3(nn.Module):
 class ModelWithFlatten(nn.Module):
     def __init__(self):
         super(ModelWithFlatten, self).__init__()
-        self.conv_1 = torch.nn.Conv2d(3, 8, kernel_size=2, stride=2,
-                                      padding=2, bias=False)
+        self.conv_1 = torch.nn.Conv2d(
+            3, 8, kernel_size=2, stride=2, padding=2, bias=False
+        )
         self.maxpool_1 = nn.MaxPool2d(2)
         self.relu_1 = torch.nn.ReLU(inplace=True)
         self.fc_1 = torch.nn.Linear(1, 10, bias=False)
@@ -1532,8 +1582,9 @@ class ModelWithFlatten(nn.Module):
 class ModelWithSeveralDataMovementOps(nn.Module):
     def __init__(self):
         super(ModelWithSeveralDataMovementOps, self).__init__()
-        self.conv_1 = torch.nn.Conv2d(3, 8, kernel_size=2, stride=2,
-                                      padding=2, bias=False)
+        self.conv_1 = torch.nn.Conv2d(
+            3, 8, kernel_size=2, stride=2, padding=2, bias=False
+        )
         self.maxpool_1 = nn.MaxPool2d(2)
         self.fc_1 = torch.nn.Linear(648, 10, bias=False)
         self.fc_2 = torch.nn.Linear(10, 10, bias=False)
@@ -1590,19 +1641,21 @@ class RoPE(nn.Module):
         return x
 
     def apply_rope_single(self, x, rope_vals: Tuple[torch.Tensor, torch.Tensor]):
-        '''
+        """
         Based on FacebookResearch's llama, provided by Carl
-        '''
-        rope_real = rope_vals[0] # shape should be 1, 1, seqlen, head_dim/2
-        rope_im = rope_vals[1] # shape should be 1, 1, seqlen, head_dim/2
+        """
+        rope_real = rope_vals[0]  # shape should be 1, 1, seqlen, head_dim/2
+        rope_im = rope_vals[1]  # shape should be 1, 1, seqlen, head_dim/2
 
-        x_real = x[:,:,:,:x.shape[-1]//2] # extract first half elements
-        x_im = x[:,:,:,x.shape[-1]//2:] # extract second half elements
+        x_real = x[:, :, :, : x.shape[-1] // 2]  # extract first half elements
+        x_im = x[:, :, :, x.shape[-1] // 2 :]  # extract second half elements
 
-        x_prod_real = self.sub(self.mul_rr(x_real,rope_real), self.mul_ii(x_im, rope_im))
-        x_prod_im = self.add(self.mul_ri(x_real,rope_im), self.mul_ir(x_im,rope_real))
+        x_prod_real = self.sub(
+            self.mul_rr(x_real, rope_real), self.mul_ii(x_im, rope_im)
+        )
+        x_prod_im = self.add(self.mul_ri(x_real, rope_im), self.mul_ir(x_im, rope_real))
 
-        x = self.stack(x_prod_real,x_prod_im).view(*x.shape)
+        x = self.stack(x_prod_real, x_prod_im).view(*x.shape)
         return x
 
 
@@ -1625,19 +1678,48 @@ class SingleHeadAttention(nn.Module):
                 f" and `num_heads`: {self.num_heads})."
             )
 
-        self.q_proj = nn.ModuleList([nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias) for _ in range(self.num_heads)])
-        self.k_proj = nn.ModuleList([nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias) for _ in range(self.num_key_value_heads)])
-        self.v_proj = nn.ModuleList([nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias) for _ in range(self.num_key_value_heads)])
-        self.o_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=config.attention_bias)
+        self.q_proj = nn.ModuleList(
+            [
+                nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias)
+                for _ in range(self.num_heads)
+            ]
+        )
+        self.k_proj = nn.ModuleList(
+            [
+                nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias)
+                for _ in range(self.num_key_value_heads)
+            ]
+        )
+        self.v_proj = nn.ModuleList(
+            [
+                nn.Linear(self.hidden_size, self.head_dim, bias=config.attention_bias)
+                for _ in range(self.num_key_value_heads)
+            ]
+        )
+        self.o_proj = nn.Linear(
+            self.hidden_size, self.hidden_size, bias=config.attention_bias
+        )
         self.q_rope = nn.ModuleList([RoPE() for _ in range(self.num_heads)])
         self.k_rope = nn.ModuleList([RoPE() for _ in range(self.num_key_value_heads)])
-        self.k_cat = nn.ModuleList([aimet_modules.Concat(2) for _ in range(self.num_key_value_heads)])
-        self.v_cat = nn.ModuleList([aimet_modules.Concat(2) for _ in range(self.num_key_value_heads)])
-        self.mm_qk = nn.ModuleList([aimet_modules.MatMul() for _ in range(self.num_heads)])
-        self.div = nn.ModuleList([aimet_modules.Divide() for _ in range(self.num_heads)])
-        self.mask_add = nn.ModuleList([aimet_modules.Add() for _ in range(self.num_heads)])
+        self.k_cat = nn.ModuleList(
+            [aimet_modules.Concat(2) for _ in range(self.num_key_value_heads)]
+        )
+        self.v_cat = nn.ModuleList(
+            [aimet_modules.Concat(2) for _ in range(self.num_key_value_heads)]
+        )
+        self.mm_qk = nn.ModuleList(
+            [aimet_modules.MatMul() for _ in range(self.num_heads)]
+        )
+        self.div = nn.ModuleList(
+            [aimet_modules.Divide() for _ in range(self.num_heads)]
+        )
+        self.mask_add = nn.ModuleList(
+            [aimet_modules.Add() for _ in range(self.num_heads)]
+        )
         self.sm = nn.ModuleList([nn.Softmax(dim=-1) for _ in range(self.num_heads)])
-        self.mm_qkv = nn.ModuleList([aimet_modules.MatMul() for _ in range(self.num_heads)])
+        self.mm_qkv = nn.ModuleList(
+            [aimet_modules.MatMul() for _ in range(self.num_heads)]
+        )
 
     def repeat_kv(self, hidden_states, n_rep: int):
         """
@@ -1649,23 +1731,25 @@ class SingleHeadAttention(nn.Module):
         if isinstance(hidden_states, list):
             return [state for state in hidden_states for _ in range(n_rep)]
         batch, num_key_value_heads, slen, head_dim = hidden_states.shape
-        hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
+        hidden_states = hidden_states[:, :, None, :, :].expand(
+            batch, num_key_value_heads, n_rep, slen, head_dim
+        )
         return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
 
     def apply_rope_single(self, x, rope_vals: Tuple[torch.Tensor, torch.Tensor]):
-        '''
+        """
         Based on FacebookResearch's llama, provided by Carl
-        '''
-        rope_real = rope_vals[0] # shape should be 1, 1, seqlen, head_dim/2
-        rope_im = rope_vals[1] # shape should be 1, 1, seqlen, head_dim/2
+        """
+        rope_real = rope_vals[0]  # shape should be 1, 1, seqlen, head_dim/2
+        rope_im = rope_vals[1]  # shape should be 1, 1, seqlen, head_dim/2
 
-        x_real = x[:,:,:,:x.shape[-1]//2] # extract first half elements
-        x_im = x[:,:,:,x.shape[-1]//2:] # extract second half elements
+        x_real = x[:, :, :, : x.shape[-1] // 2]  # extract first half elements
+        x_im = x[:, :, :, x.shape[-1] // 2 :]  # extract second half elements
 
-        x_prod_real = x_real*rope_real - x_im * rope_im
-        x_prod_im = x_real*rope_im + x_im*rope_real
+        x_prod_real = x_real * rope_real - x_im * rope_im
+        x_prod_im = x_real * rope_im + x_im * rope_real
 
-        x = torch.cat((x_prod_real,x_prod_im),dim=3).view(*x.shape)
+        x = torch.cat((x_prod_real, x_prod_im), dim=3).view(*x.shape)
         return x
 
     def forward(
@@ -1679,36 +1763,64 @@ class SingleHeadAttention(nn.Module):
     ) -> torch.Tensor:
         bsz, q_len, _ = hidden_states.size()
 
-        query_states = [q_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2) for q_proj in self.q_proj]
-        key_states = [k_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2) for k_proj in self.k_proj]
-        value_states = [v_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2) for v_proj in self.v_proj]
+        query_states = [
+            q_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2)
+            for q_proj in self.q_proj
+        ]
+        key_states = [
+            k_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2)
+            for k_proj in self.k_proj
+        ]
+        value_states = [
+            v_proj(hidden_states).view(bsz, q_len, 1, self.head_dim).transpose(1, 2)
+            for v_proj in self.v_proj
+        ]
 
         rope_embedding = position_ids
-        query_states = [rope(q, rope_embedding) for rope, q in zip(self.q_rope, query_states)]
-        key_states = [rope(k, rope_embedding) for rope, k in zip(self.k_rope, key_states)]
+        query_states = [
+            rope(q, rope_embedding) for rope, q in zip(self.q_rope, query_states)
+        ]
+        key_states = [
+            rope(k, rope_embedding) for rope, k in zip(self.k_rope, key_states)
+        ]
 
         if past_key_value is not None:
             past_key, past_value = past_key_value
-            past_key = [past_key[:, i:i+1, :, :] for i in self.num_key_value_heads]
-            past_value = [past_value[:, i:i+1, :, :] for i in self.num_key_value_heads]
-            key_states = [cat(pk, k) for cat, pk, k in zip(self.k_cat, past_key, key_states)]
-            value_states = [cat(pv, v) for cat, pv, v in zip(self.v_cat, past_value, value_states)]
+            past_key = [past_key[:, i : i + 1, :, :] for i in self.num_key_value_heads]
+            past_value = [
+                past_value[:, i : i + 1, :, :] for i in self.num_key_value_heads
+            ]
+            key_states = [
+                cat(pk, k) for cat, pk, k in zip(self.k_cat, past_key, key_states)
+            ]
+            value_states = [
+                cat(pv, v) for cat, pv, v in zip(self.v_cat, past_value, value_states)
+            ]
 
         key_states = self.repeat_kv(key_states, self.num_key_value_groups)
         value_states = self.repeat_kv(value_states, self.num_key_value_groups)
 
-        attn_weights = [div(mm(q, k.transpose(2, 3)), math.sqrt(self.head_dim))
-                        for mm, div, q, k in zip(self.mm_qk, self.div, query_states, key_states)]
+        attn_weights = [
+            div(mm(q, k.transpose(2, 3)), math.sqrt(self.head_dim))
+            for mm, div, q, k in zip(self.mm_qk, self.div, query_states, key_states)
+        ]
 
         if attention_mask is not None:
-            attn_weights = [self.mask_add[i](attn_weights[i], attention_mask)
-                            for i in range(len(attn_weights)//2)] + \
-                           [self.mask_add[i](attention_mask, attn_weights[i])
-                            for i in range(len(attn_weights)//2, len(attn_weights))]
+            attn_weights = [
+                self.mask_add[i](attn_weights[i], attention_mask)
+                for i in range(len(attn_weights) // 2)
+            ] + [
+                self.mask_add[i](attention_mask, attn_weights[i])
+                for i in range(len(attn_weights) // 2, len(attn_weights))
+            ]
 
         # upcast attention to fp32
-        attn_weights = [sm(aw).to(query_states[0].dtype) for sm, aw in zip(self.sm, attn_weights)]
-        attn_output = [mm(aw, v) for mm, aw, v in zip(self.mm_qkv, attn_weights, value_states)]
+        attn_weights = [
+            sm(aw).to(query_states[0].dtype) for sm, aw in zip(self.sm, attn_weights)
+        ]
+        attn_output = [
+            mm(aw, v) for mm, aw, v in zip(self.mm_qkv, attn_weights, value_states)
+        ]
 
         if attn_output[0].size() != (bsz, 1, q_len, self.head_dim):
             raise ValueError(
@@ -1725,5 +1837,3 @@ class SingleHeadAttention(nn.Module):
         attn_output = self.o_proj(attn_output)
 
         return attn_output
-
-

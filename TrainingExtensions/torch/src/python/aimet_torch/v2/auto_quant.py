@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=too-many-lines, disable=protected-access
-""" Concrete implementation for AIMET AutoQuant using v2 QuantSim """
+"""Concrete implementation for AIMET AutoQuant using v2 QuantSim"""
 
 import functools
 import itertools
@@ -64,7 +64,11 @@ from aimet_torch.v2.nn import BaseQuantizationMixin
 from aimet_torch.v2.quantization import encoding_analyzer
 from aimet_torch.v2.utils import flatten_nn_module_list
 from aimet_torch.v2.amp.utils import _mock_v1_quantizers
-from aimet_torch.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo, EvalCallbackFactory, _default_forward_fn
+from aimet_torch.amp.mixed_precision_algo import (
+    GreedyMixedPrecisionAlgo,
+    EvalCallbackFactory,
+    _default_forward_fn,
+)
 from aimet_torch.onnx_utils import OnnxExportApiArgs
 from aimet_common.defs import QuantScheme, CallbackFunc, QuantizationDataType
 from aimet_common.amp.utils import (
@@ -76,8 +80,8 @@ from aimet_common.amp.utils import (
 
 
 __all__ = [
-    'AutoQuant',
-    'AutoQuantWithAutoMixedPrecision',
+    "AutoQuant",
+    "AutoQuantWithAutoMixedPrecision",
 ]
 
 _MAP_QSCHEME_TO_ENCODING_ANALYZER = {
@@ -89,7 +93,7 @@ _MAP_QSCHEME_TO_ENCODING_ANALYZER = {
 }
 
 
-class AutoQuant(AutoQuantBase): # pylint: disable=too-many-instance-attributes
+class AutoQuant(AutoQuantBase):  # pylint: disable=too-many-instance-attributes
     """
     Integrate and apply post-training quantization techniques.
 
@@ -101,12 +105,12 @@ class AutoQuant(AutoQuantBase): # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _get_adaround():
-        """ returns AdaRound """
+        """returns AdaRound"""
         return Adaround
 
     @functools.wraps(AutoQuantBase.__init__)
-    def __init__(self, *args, rounding_mode: str = 'nearest', **kwargs):
-        if rounding_mode == 'stochastic':
+    def __init__(self, *args, rounding_mode: str = "nearest", **kwargs):
+        if rounding_mode == "stochastic":
             raise ValueError("Stochastic rounding mode is not supported.")
         super().__init__(*args, **kwargs)
 
@@ -114,26 +118,33 @@ class AutoQuant(AutoQuantBase): # pylint: disable=too-many-instance-attributes
     def _get_quantsim(model, dummy_input, **kwargs):
         return QuantizationSimModel(model, dummy_input, **kwargs)
 
-    def _configure_quantsim(self, # pylint: disable=too-many-arguments
-                            sim,
-                            output_bw,
-                            output_quant_scheme,
-                            output_percentile,
-                            param_bw,
-                            param_quant_scheme,
-                            param_percentile,
-                            adaround_encoding_path):
-
+    def _configure_quantsim(
+        self,  # pylint: disable=too-many-arguments
+        sim,
+        output_bw,
+        output_quant_scheme,
+        output_percentile,
+        param_bw,
+        param_quant_scheme,
+        param_percentile,
+        adaround_encoding_path,
+    ):
         for module in sim.model.modules():
             if isinstance(module, BaseQuantizationMixin):
                 # Set input/output quantizers' quant schemes
-                for quantizer in itertools.chain(flatten_nn_module_list(module.input_quantizers),
-                                                 flatten_nn_module_list(module.output_quantizers)):
-                    self._set_quantizer_qscheme(quantizer, output_quant_scheme, output_percentile)
+                for quantizer in itertools.chain(
+                    flatten_nn_module_list(module.input_quantizers),
+                    flatten_nn_module_list(module.output_quantizers),
+                ):
+                    self._set_quantizer_qscheme(
+                        quantizer, output_quant_scheme, output_percentile
+                    )
 
                 # Set param quantizers' quant schemes
                 for quantizer in module.param_quantizers.values():
-                    self._set_quantizer_qscheme(quantizer, param_quant_scheme, param_percentile)
+                    self._set_quantizer_qscheme(
+                        quantizer, param_quant_scheme, param_percentile
+                    )
 
         if adaround_encoding_path:
             sim.set_and_freeze_param_encodings(adaround_encoding_path)
@@ -144,26 +155,33 @@ class AutoQuant(AutoQuantBase): # pylint: disable=too-many-instance-attributes
         if param_bw == 32:
             self._disable_param_quantizers(sim)
 
-
     @staticmethod
     def _set_quantizer_qscheme(quantizer, quant_scheme, percentile):
         if quantizer is None:
             return
 
-        if quant_scheme in (QuantScheme.post_training_percentile, QuantScheme.post_training_tf,
-                            QuantScheme.post_training_tf_enhanced):
+        if quant_scheme in (
+            QuantScheme.post_training_percentile,
+            QuantScheme.post_training_tf,
+            QuantScheme.post_training_tf_enhanced,
+        ):
             quantizer.requires_grad_(False)
 
-        elif QuantScheme in (QuantScheme.training_range_learning, QuantScheme.training_range_learning_with_tf_init,
-                             QuantScheme.training_range_learning_with_tf_enhanced_init):
+        elif QuantScheme in (
+            QuantScheme.training_range_learning,
+            QuantScheme.training_range_learning_with_tf_init,
+            QuantScheme.training_range_learning_with_tf_enhanced_init,
+        ):
             quantizer.requires_grad_(True)
 
         enc_analyzer = _MAP_QSCHEME_TO_ENCODING_ANALYZER[quant_scheme](quantizer.shape)
-        if isinstance(enc_analyzer, encoding_analyzer.PercentileEncodingAnalyzer) and percentile is not None:
+        if (
+            isinstance(enc_analyzer, encoding_analyzer.PercentileEncodingAnalyzer)
+            and percentile is not None
+        ):
             enc_analyzer.set_percentile(percentile)
 
         quantizer.encoding_analyzer = enc_analyzer
-
 
     @staticmethod
     def _has_enabled_quantizers(sim):
@@ -194,7 +212,6 @@ class AutoQuant(AutoQuantBase): # pylint: disable=too-many-instance-attributes
                     module.param_quantizers[name] = None
 
 
-
 # The number of samples to be used for performance evaluation and AMP.
 # NOTE: None means "all".
 DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1 = EvalCallbackFactory._DEFAULT_SQNR_NUM_SAMPLES
@@ -210,21 +227,23 @@ class AutoQuantWithAutoMixedPrecision:
     These techniques will be applied in a best-effort manner until the model
     meets the evaluation goal given as allowed_accuracy_drop.
     """
-    def __init__( # pylint: disable=too-many-arguments, too-many-function-args
-            self,
-            model: torch.nn.Module,
-            dummy_input: Union[torch.Tensor, Tuple],
-            data_loader: DataLoader,
-            eval_callback: Callable[[torch.nn.Module], float],
-            param_bw: int = 8,
-            output_bw: int = 8,
-            quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-            rounding_mode: str = 'nearest',
-            config_file: str = None,
-            results_dir: str = "/tmp",
-            cache_id: str = None,
-            strict_validation: bool = True,
-            model_prepare_required: bool = True,) -> None:
+
+    def __init__(  # pylint: disable=too-many-arguments, too-many-function-args
+        self,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        data_loader: DataLoader,
+        eval_callback: Callable[[torch.nn.Module], float],
+        param_bw: int = 8,
+        output_bw: int = 8,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        config_file: str = None,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        strict_validation: bool = True,
+        model_prepare_required: bool = True,
+    ) -> None:
         """
         :param model: Model to be quantized. Assumes model is on the correct device
         :param dummy_input: Dummy input for the model. Assumes that dummy_input is on the correct device
@@ -240,32 +259,35 @@ class AutoQuantWithAutoMixedPrecision:
         :param strict_validation: Flag set to True by default.hen False, AutoQuant will proceed with execution and handle errors internally if possible. This may produce unideal or unintuitive results.
         :param model_prepare_required: Flag set to True by default.If False, AutoQuant will skip model prepare block in the pipeline.
         """
-        self._auto_quant_base = AutoQuant(model,
-                                          dummy_input,
-                                          data_loader,
-                                          eval_callback,
-                                          param_bw,
-                                          output_bw,
-                                          quant_scheme,
-                                          rounding_mode,
-                                          config_file,
-                                          results_dir,
-                                          cache_id,
-                                          strict_validation,
-                                          model_prepare_required)
+        self._auto_quant_base = AutoQuant(
+            model,
+            dummy_input,
+            data_loader,
+            eval_callback,
+            param_bw,
+            output_bw,
+            quant_scheme,
+            rounding_mode,
+            config_file,
+            results_dir,
+            cache_id,
+            strict_validation,
+            model_prepare_required,
+        )
         self._data_loader = data_loader
         self._amp_args = None
 
     def run_inference(self) -> Tuple[QuantizationSimModel, float]:
-        '''
+        """
         Creates a quantization model and performs inference
 
         :return: QuantizationSimModel, model accuracy as float
-        '''
+        """
         return self._auto_quant_base.run_inference()
 
-    def optimize(self, allowed_accuracy_drop: float = 0.0)\
-            -> Tuple[torch.nn.Module, float, str, ParetoFrontType]:
+    def optimize(
+        self, allowed_accuracy_drop: float = 0.0
+    ) -> Tuple[torch.nn.Module, float, str, ParetoFrontType]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -279,12 +301,15 @@ class AutoQuantWithAutoMixedPrecision:
             "auto_quant_diagnostics_template_with_amp.html",
         )
         with patch.object(_EvalManager, "HTML_TEMPLATE_FILE", html_template_file):
-            result = self._auto_quant_base._optimize_helper(self._optimize_main,
-                                                            allowed_accuracy_drop)
-            return result["model"],\
-                   result["accuracy"],\
-                   result["encoding_path"],\
-                   result["pareto_list"]
+            result = self._auto_quant_base._optimize_helper(
+                self._optimize_main, allowed_accuracy_drop
+            )
+            return (
+                result["model"],
+                result["accuracy"],
+                result["encoding_path"],
+                result["pareto_list"],
+            )
 
     def set_adaround_params(self, adaround_params: AdaroundParameters) -> None:
         """
@@ -296,9 +321,9 @@ class AutoQuantWithAutoMixedPrecision:
         """
         return self._auto_quant_base.set_adaround_params(adaround_params)
 
-    def set_export_params(self,
-                          onnx_export_args: OnnxExportApiArgs = -1,
-                          propagate_encodings: bool = None) -> None:
+    def set_export_params(
+        self, onnx_export_args: OnnxExportApiArgs = -1, propagate_encodings: bool = None
+    ) -> None:
         """
         Set parameters for QuantizationSimModel.export.
 
@@ -308,14 +333,16 @@ class AutoQuantWithAutoMixedPrecision:
                 (when one PyTorch ops results in multiple ONNX nodes) are filled with
                 the same BW and data_type as the output tensor for that series of ops.
         """
-        return self._auto_quant_base.set_export_params(onnx_export_args, propagate_encodings)
+        return self._auto_quant_base.set_export_params(
+            onnx_export_args, propagate_encodings
+        )
 
     def set_mixed_precision_params(
-            self,
-            candidates: List[CANDIDATE_WITH_DTYPE],
-            num_samples_for_phase_1: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1,
-            forward_fn: Callable = _default_forward_fn,
-            num_samples_for_phase_2: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_2,
+        self,
+        candidates: List[CANDIDATE_WITH_DTYPE],
+        num_samples_for_phase_1: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1,
+        forward_fn: Callable = _default_forward_fn,
+        num_samples_for_phase_2: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_2,
     ) -> None:
         """
         Set mixed precision parameters.
@@ -336,7 +363,9 @@ class AutoQuantWithAutoMixedPrecision:
                 evaluation in AMP phase 2.
         """
         if len(candidates) < 2:
-            raise ValueError(f"AMP requires at least two candidates. Got {len(candidates)}.")
+            raise ValueError(
+                f"AMP requires at least two candidates. Got {len(candidates)}."
+            )
 
         baseline_param_bw = self._auto_quant_base._quantsim_params["param_bw"]
         baseline_output_bw = self._auto_quant_base._quantsim_params["output_bw"]
@@ -380,16 +409,19 @@ class AutoQuantWithAutoMixedPrecision:
 
         self._amp_args = _MixedPrecisionArgs(
             candidates=candidates,
-            forward_pass_callback=CallbackFunc(self._auto_quant_base.forward_pass_callback, None),
+            forward_pass_callback=CallbackFunc(
+                self._auto_quant_base.forward_pass_callback, None
+            ),
             eval_callback_for_phase1=sqnr_eval_callback,
-            eval_callback_for_phase2=CallbackFunc(self._auto_quant_base.eval_callback,
-                                                  num_samples_for_phase_2),
+            eval_callback_for_phase2=CallbackFunc(
+                self._auto_quant_base.eval_callback, num_samples_for_phase_2
+            ),
         )
 
     def set_model_preparer_params(
-            self,
-            modules_to_exclude: List[torch.nn.Module] = None,
-            concrete_args: Optional[Dict[str, Any]] = None,
+        self,
+        modules_to_exclude: List[torch.nn.Module] = None,
+        concrete_args: Optional[Dict[str, Any]] = None,
     ):
         """
         Set parameters for model preparer.
@@ -400,7 +432,9 @@ class AutoQuantWithAutoMixedPrecision:
             model has control flow, torch.fx won't be able to trace the model. Check
             torch.fx.symbolic_trace API in detail.
         """
-        return self._auto_quant_base.set_model_preparer_params(modules_to_exclude, concrete_args)
+        return self._auto_quant_base.set_model_preparer_params(
+            modules_to_exclude, concrete_args
+        )
 
     def get_quant_scheme_candidates(self) -> Tuple[_QuantSchemePair, ...]:
         """
@@ -424,13 +458,13 @@ class AutoQuantWithAutoMixedPrecision:
 
     # @cache.mark("mixed_precision")
     def _apply_mixed_precision(
-            self,
-            model: torch.nn.Module,
-            dummy_input: Union[torch.Tensor, Tuple],
-            target_acc: float,
-            amp_args: _MixedPrecisionArgs,
-            results_dir: str,
-            adaround_encoding_path: str = None,
+        self,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        target_acc: float,
+        amp_args: _MixedPrecisionArgs,
+        results_dir: str,
+        adaround_encoding_path: str = None,
     ) -> _MixedPrecisionResult:
         """
         Apply mixed-precision and return the highest accuracy.
@@ -447,7 +481,9 @@ class AutoQuantWithAutoMixedPrecision:
         """
         if not amp_args:
             raise RuntimeError
-        sim = self._auto_quant_base._create_quantsim_and_encodings(model, adaround_encoding_path=adaround_encoding_path)
+        sim = self._auto_quant_base._create_quantsim_and_encodings(
+            model, adaround_encoding_path=adaround_encoding_path
+        )
 
         with _mock_v1_quantizers(sim):
             algo = GreedyMixedPrecisionAlgo(
@@ -458,7 +494,7 @@ class AutoQuantWithAutoMixedPrecision:
                 amp_args.eval_callback_for_phase2,
                 results_dir=results_dir,
                 clean_start=True,
-                forward_pass_callback=amp_args.forward_pass_callback
+                forward_pass_callback=amp_args.forward_pass_callback,
             )
 
             # Find baseline accuracy and bw corresponding to baseline accuracy
@@ -470,21 +506,25 @@ class AutoQuantWithAutoMixedPrecision:
             sensitivity_plot = None
             if algo.accuracy_list is not None:
                 # Visualize quantizer group sensitivity
-                sensitivity_plot = create_sensitivity_plot(algo.accuracy_list,
-                                                        algo.baseline_candidate,
-                                                        algo.fp32_accuracy)
+                sensitivity_plot = create_sensitivity_plot(
+                    algo.accuracy_list, algo.baseline_candidate, algo.fp32_accuracy
+                )
             pareto_plot = None
             if algo.pareto_list is not None:
                 # Create pareto list curve
                 pareto_plot = create_pareto_curve(algo.pareto_list)
 
-            return _MixedPrecisionResult(algo.pareto_list,
-                                        algo._sim,
-                                        algo._final_eval_score,
-                                        sensitivity_plot,
-                                        pareto_plot)
+            return _MixedPrecisionResult(
+                algo.pareto_list,
+                algo._sim,
+                algo._final_eval_score,
+                sensitivity_plot,
+                pareto_plot,
+            )
 
-    def _optimize_main(self, fp32_model: torch.nn.Module, target_acc: float) -> Dict[str, Any]:
+    def _optimize_main(
+        self, fp32_model: torch.nn.Module, target_acc: float
+    ) -> Dict[str, Any]:
         """
         Helper function of apply().
 
@@ -505,26 +545,38 @@ class AutoQuantWithAutoMixedPrecision:
         strict_validation = eval_manager._strict_validation
 
         sess = eval_manager.session("")
-        _multiconfig_adaround_fn = _adaround_wrapper(self._auto_quant_base._apply_adaround,
-                                                     self._auto_quant_base,
-                                                     candidates,
-                                                     target_acc,
-                                                     sess.eval)
+        _multiconfig_adaround_fn = _adaround_wrapper(
+            self._auto_quant_base._apply_adaround,
+            self._auto_quant_base,
+            candidates,
+            target_acc,
+            sess.eval,
+        )
         sess_eval_fn = _EvalSession.eval
+
         def eval_fn(_, model, param_bw=None, output_bw=None, **kwargs):
             if param_bw == 32:
                 # For W32 evaluation, use the highest output bitwidth
                 # among all the AMP candidates
                 output_bitwidths = [
-                    output_bw for (output_bw, output_dtype), _ in candidates
+                    output_bw
+                    for (output_bw, output_dtype), _ in candidates
                     if output_dtype == QuantizationDataType.int
                 ]
-                output_bitwidths.append(self._auto_quant_base._quantsim_params["output_bw"])
+                output_bitwidths.append(
+                    self._auto_quant_base._quantsim_params["output_bw"]
+                )
                 output_bw = max(output_bitwidths)
-            return sess_eval_fn(_, model, param_bw=param_bw, output_bw=output_bw, **kwargs)
+            return sess_eval_fn(
+                _, model, param_bw=param_bw, output_bw=output_bw, **kwargs
+            )
 
-        with patch.object(self._auto_quant_base, "_apply_adaround", _multiconfig_adaround_fn),\
-                patch.object(_EvalSession, "eval", eval_fn):
+        with (
+            patch.object(
+                self._auto_quant_base, "_apply_adaround", _multiconfig_adaround_fn
+            ),
+            patch.object(_EvalSession, "eval", eval_fn),
+        ):
             try:
                 result = self._auto_quant_base._optimize_main(fp32_model, target_acc)
 
@@ -534,11 +586,13 @@ class AutoQuantWithAutoMixedPrecision:
                 # An empty `result` dict means AutoQuant early-exited
                 # because W32 eval score didn't meet the target accuracy.
                 # In this case, do not proceed to AMP and exit immediately.
-                if result["model"] is None and\
-                        result["accuracy"] is None and\
-                        result["adaround_encoding_path"] is None and\
-                        result["encoding_path"] is None and\
-                        result["applied_techniques"] is None:
+                if (
+                    result["model"] is None
+                    and result["accuracy"] is None
+                    and result["adaround_encoding_path"] is None
+                    and result["encoding_path"] is None
+                    and result["applied_techniques"] is None
+                ):
                     return result
 
                 if result["accuracy"] >= target_acc or not self._amp_args:
@@ -547,14 +601,20 @@ class AutoQuantWithAutoMixedPrecision:
                 if len(candidates) < 2:
                     _logger.info(
                         "After Adaround, we have only one Adaround-compatible candidate left for AMP (W%dA%d). "
-                        "Return without proceeding to AMP", candidates[0].param_bw, candidates[0].output_bw
+                        "Return without proceeding to AMP",
+                        candidates[0].param_bw,
+                        candidates[0].output_bw,
                     )
                     return result
 
                 model = result["model"]
                 applied_techniques = result["applied_techniques"]
                 # Freeze weight encoding to adaround weight encoding
-                adaround_encoding_path = result["adaround_encoding_path"] if "adaround" in applied_techniques else None
+                adaround_encoding_path = (
+                    result["adaround_encoding_path"]
+                    if "adaround" in applied_techniques
+                    else None
+                )
             except Exception:
                 if strict_validation:
                     raise
@@ -568,7 +628,12 @@ class AutoQuantWithAutoMixedPrecision:
 
         with eval_manager.session("Automatic Mixed Precision", ptq=True) as sess:
             amp_result = self._apply_mixed_precision(
-                model, dummy_input, target_acc, amp_args, results_dir, adaround_encoding_path=adaround_encoding_path
+                model,
+                dummy_input,
+                target_acc,
+                amp_args,
+                results_dir,
+                adaround_encoding_path=adaround_encoding_path,
             )
             result["pareto_list"] = amp_result.pareto_list
 
@@ -578,8 +643,11 @@ class AutoQuantWithAutoMixedPrecision:
             if amp_result.pareto_plot is not None:
                 sess.diagnostics.add(amp_result.pareto_plot)
 
-            sess.set_ptq_result(sim=amp_result.sim, acc=amp_result.final_eval_score,
-                                applied_techniques=[*applied_techniques, "automatic_mixed_precision"])
+            sess.set_ptq_result(
+                sim=amp_result.sim,
+                acc=amp_result.final_eval_score,
+                applied_techniques=[*applied_techniques, "automatic_mixed_precision"],
+            )
 
         best_result = eval_manager.get_best_ptq_result()
         if best_result:
@@ -590,18 +658,21 @@ class AutoQuantWithAutoMixedPrecision:
             result.update(best_result.as_dict())
             return result
 
-        raise RuntimeError("None of batchnorm folding, CLE, or Adaround "
-                           "has been finished successfully.")
+        raise RuntimeError(
+            "None of batchnorm folding, CLE, or Adaround "
+            "has been finished successfully."
+        )
 
 
-
-def _adaround_wrapper(apply_adaround_fn: Callable,
-                      auto_quant: AutoQuantBase,
-                      amp_candidates: List[AmpCandidate],
-                      target_acc: float,
-                      eval_fn: Callable):
+def _adaround_wrapper(
+    apply_adaround_fn: Callable,
+    auto_quant: AutoQuantBase,
+    amp_candidates: List[AmpCandidate],
+    target_acc: float,
+    eval_fn: Callable,
+):
     @functools.wraps(apply_adaround_fn)
-    def _apply_adaround_wrapper(*args, **kwargs): # pylint: disable=too-many-locals
+    def _apply_adaround_wrapper(*args, **kwargs):  # pylint: disable=too-many-locals
         # If AMP candidates are empty (i.e. AMP is disabled),
         # perform normal (single-round) adaround.
         if not amp_candidates:
@@ -618,27 +689,36 @@ def _adaround_wrapper(apply_adaround_fn: Callable,
                 auto_quant._quantsim_params["param_bw"] = orig_param_bw
 
         int_candidates = [
-            candidate for candidate in amp_candidates
+            candidate
+            for candidate in amp_candidates
             if candidate.param_dtype == QuantizationDataType.int
         ]
-        sorted_int_candidates = sorted(int_candidates,
-                                       key=lambda candidate: (candidate.param_bw, candidate.output_bw))
+        sorted_int_candidates = sorted(
+            int_candidates,
+            key=lambda candidate: (candidate.param_bw, candidate.output_bw),
+        )
         # Run Adaround with the lowest-bitwidth candidate
         lowest_candidate = sorted_int_candidates[0]
-        model, adaround_encoding_path = apply_adaround(param_bw=lowest_candidate.param_bw)
+        model, adaround_encoding_path = apply_adaround(
+            param_bw=lowest_candidate.param_bw
+        )
 
         # If the lowest candidate is the only INT candidate, return immediately
         if len(sorted_int_candidates) == 1:
             return model, adaround_encoding_path
 
-        eval_score = eval_fn(model,
-                             param_bw=lowest_candidate.param_bw,
-                             output_bw=lowest_candidate.output_bw,
-                             adaround_encoding_path=adaround_encoding_path)
-        _logger.info("W%dA%d eval score after Adaround: %f",
-                     lowest_candidate.param_bw,
-                     lowest_candidate.output_bw,
-                     eval_score)
+        eval_score = eval_fn(
+            model,
+            param_bw=lowest_candidate.param_bw,
+            output_bw=lowest_candidate.output_bw,
+            adaround_encoding_path=adaround_encoding_path,
+        )
+        _logger.info(
+            "W%dA%d eval score after Adaround: %f",
+            lowest_candidate.param_bw,
+            lowest_candidate.output_bw,
+            eval_score,
+        )
 
         # If the lowest candidate satisfy the target accuracy, return immediately
         if eval_score >= target_acc:
@@ -650,21 +730,28 @@ def _adaround_wrapper(apply_adaround_fn: Callable,
         second_lowest_candidate = sorted_int_candidates[1]
 
         if second_lowest_candidate.param_bw != lowest_candidate.param_bw:
-            model, adaround_encoding_path = apply_adaround(param_bw=second_lowest_candidate.param_bw)
-            eval_score = eval_fn(model,
-                                 param_bw=second_lowest_candidate.param_bw,
-                                 output_bw=second_lowest_candidate.output_bw,
-                                 adaround_encoding_path=adaround_encoding_path)
-            _logger.info("W%dA%d eval score after Adaround: %f",
-                         second_lowest_candidate.param_bw,
-                         second_lowest_candidate.output_bw,
-                         eval_score)
+            model, adaround_encoding_path = apply_adaround(
+                param_bw=second_lowest_candidate.param_bw
+            )
+            eval_score = eval_fn(
+                model,
+                param_bw=second_lowest_candidate.param_bw,
+                output_bw=second_lowest_candidate.output_bw,
+                adaround_encoding_path=adaround_encoding_path,
+            )
+            _logger.info(
+                "W%dA%d eval score after Adaround: %f",
+                second_lowest_candidate.param_bw,
+                second_lowest_candidate.output_bw,
+                eval_score,
+            )
 
         # Only the candidates that are compatible with adaround can be used for AMP
         adaround_compatible_amp_candidates = [
-            candidate for candidate in amp_candidates
-            if candidate.param_bw == second_lowest_candidate.param_bw or\
-                    candidate.param_dtype == QuantizationDataType.float
+            candidate
+            for candidate in amp_candidates
+            if candidate.param_bw == second_lowest_candidate.param_bw
+            or candidate.param_dtype == QuantizationDataType.float
         ]
 
         # Fill in AMP candidates with Adaround-compatible candidates only

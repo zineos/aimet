@@ -43,21 +43,26 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from aimet_tensorflow.keras.utils.model_transform_utils import replace_separable_conv_with_depthwise_pointwise
+from aimet_tensorflow.keras.utils.model_transform_utils import (
+    replace_separable_conv_with_depthwise_pointwise,
+)
+
 
 def _simple_separable_conv_model(model_type="functional"):
     if model_type == "functional":
         inp = layers.Input((32, 32, 3))
         x = layers.SeparableConv2D(filters=32, kernel_size=3)(inp)
         x = layers.ReLU()(x)
-        x = layers.SeparableConv2D(filters=5, kernel_size=3, activation='relu')(x)
+        x = layers.SeparableConv2D(filters=5, kernel_size=3, activation="relu")(x)
         x = layers.Flatten()(x)
         x = layers.Dense(units=10, activation="relu")(x)
         out = layers.Dense(units=2, activation="softmax")(x)
         return tf.keras.Model(inp, out)
     elif model_type == "sequential":
         model = tf.keras.Sequential()
-        model.add(layers.SeparableConv2D(filters=32, kernel_size=2, input_shape=(32, 32, 3)))
+        model.add(
+            layers.SeparableConv2D(filters=32, kernel_size=2, input_shape=(32, 32, 3))
+        )
         model.add(layers.ReLU())
         model.add(layers.SeparableConv2D(filters=5, kernel_size=2, activation="relu"))
         model.add(layers.Flatten())
@@ -67,6 +72,7 @@ def _simple_separable_conv_model(model_type="functional"):
 
     raise ValueError("Unknown model type")
 
+
 def _get_layers(model, model_type="functional"):
     if model_type == "functional":
         return model.layers
@@ -75,10 +81,12 @@ def _get_layers(model, model_type="functional"):
 
     raise ValueError("Unknown model type")
 
+
 class TestSeparableConvReplacement:
     """
     Test class for separable conv to depthwise pointwise replacement
     """
+
     @pytest.mark.parametrize("model_type", ["functional", "sequential"])
     def test_separable_conv_replacement(self, model_type):
         """
@@ -89,10 +97,16 @@ class TestSeparableConvReplacement:
         inp = tf.random.uniform((1, *original_model.input_shape[1:]))
         original_model_out = original_model(inp)
 
-        transformed_model, _ = replace_separable_conv_with_depthwise_pointwise(original_model)
+        transformed_model, _ = replace_separable_conv_with_depthwise_pointwise(
+            original_model
+        )
 
-        depthwise_conv1, pointwise_conv1 = _get_layers(transformed_model, model_type)[1:3]
-        depthwise_conv2, pointwise_conv2 = _get_layers(transformed_model, model_type)[4:6]
+        depthwise_conv1, pointwise_conv1 = _get_layers(transformed_model, model_type)[
+            1:3
+        ]
+        depthwise_conv2, pointwise_conv2 = _get_layers(transformed_model, model_type)[
+            4:6
+        ]
 
         assert isinstance(depthwise_conv1, layers.DepthwiseConv2D)
         assert isinstance(pointwise_conv1, layers.Conv2D)
@@ -101,11 +115,23 @@ class TestSeparableConvReplacement:
         assert isinstance(pointwise_conv2, layers.Conv2D)
 
         # Check that the weights are the same
-        assert depthwise_conv1.get_weights()[0].shape == _get_layers(original_model, model_type)[1].get_weights()[0].shape
-        assert pointwise_conv1.get_weights()[0].shape == _get_layers(original_model, model_type)[1].get_weights()[1].shape
+        assert (
+            depthwise_conv1.get_weights()[0].shape
+            == _get_layers(original_model, model_type)[1].get_weights()[0].shape
+        )
+        assert (
+            pointwise_conv1.get_weights()[0].shape
+            == _get_layers(original_model, model_type)[1].get_weights()[1].shape
+        )
 
-        assert depthwise_conv2.get_weights()[0].shape == _get_layers(original_model, model_type)[3].get_weights()[0].shape
-        assert pointwise_conv2.get_weights()[0].shape == _get_layers(original_model, model_type)[3].get_weights()[1].shape
+        assert (
+            depthwise_conv2.get_weights()[0].shape
+            == _get_layers(original_model, model_type)[3].get_weights()[0].shape
+        )
+        assert (
+            pointwise_conv2.get_weights()[0].shape
+            == _get_layers(original_model, model_type)[3].get_weights()[1].shape
+        )
 
         # Check that the bias is the same
         assert pointwise_conv1.get_weights()[1].shape == (32,)
@@ -113,19 +139,31 @@ class TestSeparableConvReplacement:
         assert pointwise_conv2.get_weights()[1].shape == (5,)
 
         # Check that the weights are the same
-        assert np.array_equal(depthwise_conv1.get_weights()[0], _get_layers(original_model, model_type)[1].get_weights()[0]), \
-            "Depthwise 1 kernel weights are not the same"
-        assert np.array_equal(pointwise_conv1.get_weights()[0], _get_layers(original_model, model_type)[1].get_weights()[1]), \
-            "Pointwise 1 kernel weights are not the same"
-        assert np.array_equal(pointwise_conv1.get_weights()[1], _get_layers(original_model, model_type)[1].get_weights()[2]), \
-            "Pointwise 1 bias weights are not the same"
+        assert np.array_equal(
+            depthwise_conv1.get_weights()[0],
+            _get_layers(original_model, model_type)[1].get_weights()[0],
+        ), "Depthwise 1 kernel weights are not the same"
+        assert np.array_equal(
+            pointwise_conv1.get_weights()[0],
+            _get_layers(original_model, model_type)[1].get_weights()[1],
+        ), "Pointwise 1 kernel weights are not the same"
+        assert np.array_equal(
+            pointwise_conv1.get_weights()[1],
+            _get_layers(original_model, model_type)[1].get_weights()[2],
+        ), "Pointwise 1 bias weights are not the same"
 
-        assert np.array_equal(depthwise_conv2.get_weights()[0], _get_layers(original_model, model_type)[3].get_weights()[0]), \
-            "Depthwise 2 kernel weights are not the same"
-        assert np.array_equal(pointwise_conv2.get_weights()[0], _get_layers(original_model, model_type)[3].get_weights()[1]), \
-            "Pointwise 2 kernel weights are not the same"
-        assert np.array_equal(pointwise_conv2.get_weights()[1], _get_layers(original_model, model_type)[3].get_weights()[2]), \
-            "Pointwise 2 bias weights are not the same"
+        assert np.array_equal(
+            depthwise_conv2.get_weights()[0],
+            _get_layers(original_model, model_type)[3].get_weights()[0],
+        ), "Depthwise 2 kernel weights are not the same"
+        assert np.array_equal(
+            pointwise_conv2.get_weights()[0],
+            _get_layers(original_model, model_type)[3].get_weights()[1],
+        ), "Pointwise 2 kernel weights are not the same"
+        assert np.array_equal(
+            pointwise_conv2.get_weights()[1],
+            _get_layers(original_model, model_type)[3].get_weights()[2],
+        ), "Pointwise 2 bias weights are not the same"
 
         # Check that the output is the same
         transformed_model_out = transformed_model(inp)

@@ -57,7 +57,10 @@ from aimet_common import quantsim
 from aimet_common import libquant_info
 from aimet_common import libpymo
 from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType
-from aimet_common.quantsim_config.utils import get_path_for_per_channel_config, get_path_for_per_tensor_config
+from aimet_common.quantsim_config.utils import (
+    get_path_for_per_channel_config,
+    get_path_for_per_tensor_config,
+)
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx.quantsim import (
     QuantizationSimModel,
@@ -92,27 +95,33 @@ from .models.models_for_tests import (
     standalone_instancenorm,
     standalone_layernorm,
     transposed_conv_model,
-    _convert_to_onnx
+    _convert_to_onnx,
 )
 
 CPU_PROVIDERS = ["CPUExecutionProvider"]
 CUDA_PROVIDERS = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
+
 def _compare_encodings(dst, src):
-    return (dst.min == src.min and
-            dst.max == src.max and
-            dst.delta == src.delta and
-            dst.offset == src.offset)
+    return (
+        dst.min == src.min
+        and dst.max == src.max
+        and dst.delta == src.delta
+        and dst.offset == src.offset
+    )
 
 
 class DummyModel(SingleResidual):
     """
     Model
     """
+
     def __init__(self):
         super().__init__()
         # change padding size to 0, onnxruntime only support input size is the factor of output size for pooling
-        self.conv4 = torch.nn.Conv2d(32, 8, kernel_size=2, stride=2, padding=0, bias=True)
+        self.conv4 = torch.nn.Conv2d(
+            32, 8, kernel_size=2, stride=2, padding=0, bias=True
+        )
         # TODO
         # remove bn layer for currently not supporting non-4 dim param tensors
         del self.bn1
@@ -149,6 +158,7 @@ class DummyModel(SingleResidual):
 
         return x
 
+
 @contextlib.contextmanager
 def set_encoding_version(version):
     old_version = quantsim.encoding_version
@@ -158,10 +168,12 @@ def set_encoding_version(version):
 
     quantsim.encoding_version = old_version
 
+
 class TestQuantSim:
     """Tests for QuantizationSimModel"""
+
     def test_insert_quantize_op_nodes(self):
-        """ Test to insert qc quantize op to the graph"""
+        """Test to insert qc quantize op to the graph"""
         model = build_dummy_model()
         dummy_input = make_dummy_input(model)
         with tempfile.TemporaryDirectory() as tempdir:
@@ -169,32 +181,47 @@ class TestQuantSim:
             assert len(sim.model.nodes()) == 14
 
             node_ls = [node.op_type for node in sim.model.nodes()]
-            assert node_ls == ['Conv', 'Relu', 'MaxPool', 'Flatten', 'Gemm'] + ['QcQuantizeOp'] * 9
+            assert (
+                node_ls
+                == ["Conv", "Relu", "MaxPool", "Flatten", "Gemm"] + ["QcQuantizeOp"] * 9
+            )
 
             # Check if qc quantize op node is correctly connect to the corresponding onnx node
-            assert sim.model.find_node_by_name('QcQuantizeOp_input', [], sim.model.graph()).output[0] == \
-                   sim.model.find_node_by_name('conv', [], sim.model.graph()).input[0]
+            assert (
+                sim.model.find_node_by_name(
+                    "QcQuantizeOp_input", [], sim.model.graph()
+                ).output[0]
+                == sim.model.find_node_by_name("conv", [], sim.model.graph()).input[0]
+            )
             # Check if op_mode is set correctly for each qc quantize op node
             qc_quantize_op_dict = sim.get_qc_quantize_op()
             for name in sim.param_names:
-                assert qc_quantize_op_dict[name].op_mode == OpMode.oneShotQuantizeDequantize
+                assert (
+                    qc_quantize_op_dict[name].op_mode
+                    == OpMode.oneShotQuantizeDequantize
+                )
             for name in sim.activation_names:
                 assert qc_quantize_op_dict[name].op_mode == OpMode.updateStats
 
     def test_create_quantsim_dynamic_batch_size(self):
-        """ Test to insert qc quantize op to the graph"""
+        """Test to insert qc quantize op to the graph"""
         model = BNAfterConv()
         inputs = torch.randn((2, 10, 24, 24))
         with tempfile.TemporaryDirectory() as tempdir:
-            torch.onnx.export(model, inputs, os.path.join(tempdir, 'dummy_model.onnx'),
-                              training=torch.onnx.TrainingMode.PRESERVE,
-                              opset_version=12,
-                              input_names=['input'], output_names=['output'],
-                              dynamic_axes={
-                                  'input': {0: 'batch_size'},
-                                  'output': {0: 'batch_size'},
-                              })
-            onnx_model = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
+            torch.onnx.export(
+                model,
+                inputs,
+                os.path.join(tempdir, "dummy_model.onnx"),
+                training=torch.onnx.TrainingMode.PRESERVE,
+                opset_version=12,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes={
+                    "input": {0: "batch_size"},
+                    "output": {0: "batch_size"},
+                },
+            )
+            onnx_model = load_model(os.path.join(tempdir, "dummy_model.onnx"))
             dummy_input = make_dummy_input(onnx_model)
             sim = QuantizationSimModel(onnx_model, dummy_input, path=tempdir)
             sim.session.run(None, dummy_input)
@@ -212,7 +239,7 @@ class TestQuantSim:
                 assert not qc_op.is_initialized()
 
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
 
             sim.compute_encodings(callback, None)
@@ -228,8 +255,13 @@ class TestQuantSim:
         """Test to export encodings and model"""
         model = build_dummy_model()
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, default_activation_bw=16, default_param_bw=16,
-                                       quant_scheme=QuantScheme.post_training_tf, path=tempdir)
+            sim = QuantizationSimModel(
+                model,
+                default_activation_bw=16,
+                default_param_bw=16,
+                quant_scheme=QuantScheme.post_training_tf,
+                path=tempdir,
+            )
 
             for quantizer in sim.qc_quantize_op_dict:
                 sim.qc_quantize_op_dict[quantizer].enabled = True
@@ -238,8 +270,10 @@ class TestQuantSim:
                 session.run(None, make_dummy_input(model))
 
             sim.compute_encodings(dummy_callback, None)
-            sim.export(tempdir, 'quant_sim_model_with_quant_args')
-            with open(os.path.join(tempdir, 'quant_sim_model_with_quant_args.encodings')) as json_file:
+            sim.export(tempdir, "quant_sim_model_with_quant_args")
+            with open(
+                os.path.join(tempdir, "quant_sim_model_with_quant_args.encodings")
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
             assert "quantizer_args" in encoding_data
@@ -265,46 +299,71 @@ class TestQuantSim:
                 session.run(None, make_dummy_input(model))
 
             sim.compute_encodings(dummy_callback, None)
-            sim.export(tempdir, 'quant_sim_model', export_model=export_model)
+            sim.export(tempdir, "quant_sim_model", export_model=export_model)
 
-            assert os.path.exists(os.path.join(tempdir, "quant_sim_model.onnx")) == export_model
+            assert (
+                os.path.exists(os.path.join(tempdir, "quant_sim_model.onnx"))
+                == export_model
+            )
 
-            with open(os.path.join(tempdir, 'quant_sim_model.encodings'), 'rb') as json_file:
+            with open(
+                os.path.join(tempdir, "quant_sim_model.encodings"), "rb"
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
-            activation_names = {encoding['name'] for encoding in encoding_data['activation_encodings']}
-            param_names = {encoding['name'] for encoding in encoding_data['param_encodings']}
-            assert activation_names == {'3', '4', '5', 'input', 'output'}
-            assert param_names == {'conv_b', 'conv_w', 'fc_b', 'fc_w'}
+            activation_names = {
+                encoding["name"] for encoding in encoding_data["activation_encodings"]
+            }
+            param_names = {
+                encoding["name"] for encoding in encoding_data["param_encodings"]
+            }
+            assert activation_names == {"3", "4", "5", "input", "output"}
+            assert param_names == {"conv_b", "conv_w", "fc_b", "fc_w"}
 
     def test_export_model_1_0_0(self):
         """Test to export encodings and model in 1.0.0 format"""
         model = build_dummy_model()
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, path=tempdir, config_file=get_path_for_per_channel_config())
+            sim = QuantizationSimModel(
+                model, path=tempdir, config_file=get_path_for_per_channel_config()
+            )
 
             def dummy_callback(session, _):
                 session.run(None, make_dummy_input(model))
 
             sim.compute_encodings(dummy_callback, None)
             with set_encoding_version("1.0.0"):
-                sim.export(tempdir, 'quant_sim_model')
+                sim.export(tempdir, "quant_sim_model")
 
-            with open(os.path.join(tempdir, 'quant_sim_model.encodings'), 'rb') as json_file:
+            with open(
+                os.path.join(tempdir, "quant_sim_model.encodings"), "rb"
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
             assert encoding_data["version"] == "1.0.0"
             assert isinstance(encoding_data["activation_encodings"], list)
             assert isinstance(encoding_data["param_encodings"], list)
 
-            activation_keys = {enc["name"] for enc in encoding_data["activation_encodings"]}
+            activation_keys = {
+                enc["name"] for enc in encoding_data["activation_encodings"]
+            }
             param_keys = {enc["name"] for enc in encoding_data["param_encodings"]}
-            assert activation_keys == {'4', '5', 'input', 'output'}
-            assert param_keys == {'conv_w', 'fc_w'}
+            assert activation_keys == {"4", "5", "input", "output"}
+            assert param_keys == {"conv_w", "fc_w"}
 
-            for enc in itertools.chain(encoding_data["param_encodings"], encoding_data["activation_encodings"]):
+            for enc in itertools.chain(
+                encoding_data["param_encodings"], encoding_data["activation_encodings"]
+            ):
                 assert isinstance(enc, dict)
-                assert enc.keys() == {"name", "enc_type", "dtype", "bw", "is_sym", "scale", "offset"}
+                assert enc.keys() == {
+                    "name",
+                    "enc_type",
+                    "dtype",
+                    "bw",
+                    "is_sym",
+                    "scale",
+                    "offset",
+                }
                 assert isinstance(enc["scale"], list)
                 assert enc["dtype"] == "INT"
                 # Gemm layers do not use per-channel in the default_per_channel_config
@@ -313,7 +372,9 @@ class TestQuantSim:
                 else:
                     assert enc["enc_type"] == EncodingType.PER_TENSOR.name
 
-    @pytest.mark.skip(reason="FIXME: LSTM with per-channel quantzation fails at QuantizationSimModel.__init__")
+    @pytest.mark.skip(
+        reason="FIXME: LSTM with per-channel quantzation fails at QuantizationSimModel.__init__"
+    )
     def test_lstm_gru(self):
         """Test for LSTM and GRU dummy model"""
         model = build_lstm_gru_dummy_model()
@@ -324,7 +385,7 @@ class TestQuantSim:
                 sim.qc_quantize_op_dict[quantizer].enabled = True
 
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 8, 64).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 8, 64).astype(np.float32)}
                 session.run(None, in_tensor)
 
             sim.compute_encodings(callback, None)
@@ -336,20 +397,28 @@ class TestQuantSim:
                 assert qc_op.is_initialized()
                 assert qc_op.op_mode == OpMode.quantizeDequantize
 
-            sim.export(tempdir, 'quant_sim_model')
+            sim.export(tempdir, "quant_sim_model")
 
-            with open(os.path.join(tempdir, 'quant_sim_model.encodings'), 'rb') as json_file:
+            with open(
+                os.path.join(tempdir, "quant_sim_model.encodings"), "rb"
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
-            activation_names = {encoding['name'] for encoding in encoding_data['activation_encodings']}
-            param_names = {encoding['name'] for encoding in encoding_data['param_encodings']}
-            assert activation_names == {'2', 'input', 'output'}
-            assert param_names == {'gru_r_w', 'gru_w', 'lstm_r_w', 'lstm_w'}
+            activation_names = {
+                encoding["name"] for encoding in encoding_data["activation_encodings"]
+            }
+            param_names = {
+                encoding["name"] for encoding in encoding_data["param_encodings"]
+            }
+            assert activation_names == {"2", "input", "output"}
+            assert param_names == {"gru_r_w", "gru_w", "lstm_r_w", "lstm_w"}
 
     def test_single_residual(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, providers=["CPUExecutionProvider"], path=tempdir)
+            sim = QuantizationSimModel(
+                model, providers=["CPUExecutionProvider"], path=tempdir
+            )
             for quantizer in sim.qc_quantize_op_dict:
                 sim.qc_quantize_op_dict[quantizer].enabled = True
 
@@ -357,13 +426,16 @@ class TestQuantSim:
                 session.run(None, make_dummy_input(model))
 
             sim.compute_encodings(dummy_callback, None)
-            sim.export(tempdir, 'quant_sim_model')
+            sim.export(tempdir, "quant_sim_model")
 
-            with open(os.path.join(tempdir, 'quant_sim_model.encodings'), 'rb') as json_file:
+            with open(
+                os.path.join(tempdir, "quant_sim_model.encodings"), "rb"
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
-            assert len(encoding_data['activation_encodings']) + len(encoding_data['param_encodings']) == \
-                   len(sim.qc_quantize_op_dict.keys())
+            assert len(encoding_data["activation_encodings"]) + len(
+                encoding_data["param_encodings"]
+            ) == len(sim.qc_quantize_op_dict.keys())
 
             # Check that exported model is the same as original model
             model = single_residual_model().model
@@ -379,17 +451,23 @@ class TestQuantSim:
             exported_cg = ConnectedGraph(exported_model)
             for name, op in model_cg.get_all_ops().items():
                 for idx, tensor in enumerate(op.inputs):
-                    assert tensor.name == exported_cg.get_all_ops()[name].inputs[idx].name
+                    assert (
+                        tensor.name == exported_cg.get_all_ops()[name].inputs[idx].name
+                    )
 
                 for idx, tensor in enumerate(op.outputs):
-                    assert tensor.name == exported_cg.get_all_ops()[name].outputs[idx].name
+                    assert (
+                        tensor.name == exported_cg.get_all_ops()[name].outputs[idx].name
+                    )
 
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu(self):
         """Test to compare encodings with PT"""
+
         def onnx_callback(session, inputs):
-            in_tensor = {'input': inputs}
+            in_tensor = {"input": inputs}
             session.run(None, in_tensor)
+
         np.random.seed(0)
         torch.manual_seed(0)
 
@@ -398,21 +476,34 @@ class TestQuantSim:
         model.eval()
 
         with tempfile.TemporaryDirectory() as tempdir:
-            torch.onnx.export(model, torch.as_tensor(inputs), os.path.join(tempdir, 'dummy_model.onnx'),
-                              training=torch.onnx.TrainingMode.PRESERVE,
-                              input_names=['input'], output_names=['output'])
+            torch.onnx.export(
+                model,
+                torch.as_tensor(inputs),
+                os.path.join(tempdir, "dummy_model.onnx"),
+                training=torch.onnx.TrainingMode.PRESERVE,
+                input_names=["input"],
+                output_names=["output"],
+            )
 
-            onnx_model_cpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
-            onnx_model_gpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
+            onnx_model_cpu = load_model(os.path.join(tempdir, "dummy_model.onnx"))
+            onnx_model_gpu = load_model(os.path.join(tempdir, "dummy_model.onnx"))
 
-            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, providers=CPU_PROVIDERS,
-                                                quant_scheme=QuantScheme.post_training_tf_enhanced, path=tempdir)
-            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, providers=CUDA_PROVIDERS,
-                                                quant_scheme=QuantScheme.post_training_tf_enhanced, path=tempdir)
+            onnx_sim_cpu = QuantizationSimModel(
+                onnx_model_cpu,
+                providers=CPU_PROVIDERS,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                path=tempdir,
+            )
+            onnx_sim_gpu = QuantizationSimModel(
+                onnx_model_gpu,
+                providers=CUDA_PROVIDERS,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                path=tempdir,
+            )
 
             for node in onnx_sim_gpu.model.graph().node:
                 if node.op_type == "QcQuantizeOp":
-                    if 'CUDAExecutionProvider' in ort.get_available_providers():
+                    if "CUDAExecutionProvider" in ort.get_available_providers():
                         assert node.domain == "aimet.customop.cuda"
             for node in onnx_sim_cpu.model.graph().node:
                 if node.op_type == "QcQuantizeOp":
@@ -420,31 +511,49 @@ class TestQuantSim:
 
             onnx_sim_cpu.compute_encodings(onnx_callback, inputs)
             onnx_sim_gpu.compute_encodings(onnx_callback, inputs)
-            out_cpu = onnx_sim_cpu.session.run(None, {'input': inputs})[0]
-            out_gpu = onnx_sim_gpu.session.run(None, {'input': inputs})[0]
-            onnx_sim_cpu.export(tempdir, 'onnx_sim_cpu')
-            onnx_sim_gpu.export(tempdir, 'onnx_sim_gpu')
+            out_cpu = onnx_sim_cpu.session.run(None, {"input": inputs})[0]
+            out_gpu = onnx_sim_gpu.session.run(None, {"input": inputs})[0]
+            onnx_sim_cpu.export(tempdir, "onnx_sim_cpu")
+            onnx_sim_gpu.export(tempdir, "onnx_sim_gpu")
 
-            assert(np.max(np.abs(out_cpu - out_gpu)) < 0.05)
+            assert np.max(np.abs(out_cpu - out_gpu)) < 0.05
             print(np.max(np.abs(out_cpu - out_gpu)))
 
-            with open(os.path.join(tempdir, 'onnx_sim_cpu.encodings')) as f:
+            with open(os.path.join(tempdir, "onnx_sim_cpu.encodings")) as f:
                 cpu_encodings = json.load(f)
-            with open(os.path.join(tempdir, 'onnx_sim_gpu.encodings')) as f:
+            with open(os.path.join(tempdir, "onnx_sim_gpu.encodings")) as f:
                 gpu_encodings = json.load(f)
 
-            for i, name in enumerate(cpu_encodings['activation_encodings']):
-                assert (np.max(np.abs(cpu_encodings['activation_encodings'][i]['scale'][0] -
-                                      gpu_encodings['activation_encodings'][i]['scale'][0])) < 0.05)
-                assert cpu_encodings['activation_encodings'][i]['offset'] == \
-                       gpu_encodings['activation_encodings'][i]['offset']
+            for i, name in enumerate(cpu_encodings["activation_encodings"]):
+                assert (
+                    np.max(
+                        np.abs(
+                            cpu_encodings["activation_encodings"][i]["scale"][0]
+                            - gpu_encodings["activation_encodings"][i]["scale"][0]
+                        )
+                    )
+                    < 0.05
+                )
+                assert (
+                    cpu_encodings["activation_encodings"][i]["offset"]
+                    == gpu_encodings["activation_encodings"][i]["offset"]
+                )
 
-            for i, name in enumerate(cpu_encodings['param_encodings']):
+            for i, name in enumerate(cpu_encodings["param_encodings"]):
                 # Comparing the scale for first channel only
-                assert (np.max(np.abs(cpu_encodings['param_encodings'][i]['scale'][0] -
-                                      gpu_encodings['param_encodings'][i]['scale'][0])) < 0.05)
-                assert cpu_encodings['param_encodings'][i]['offset'] == \
-                       gpu_encodings['param_encodings'][i]['offset']
+                assert (
+                    np.max(
+                        np.abs(
+                            cpu_encodings["param_encodings"][i]["scale"][0]
+                            - gpu_encodings["param_encodings"][i]["scale"][0]
+                        )
+                    )
+                    < 0.05
+                )
+                assert (
+                    cpu_encodings["param_encodings"][i]["offset"]
+                    == gpu_encodings["param_encodings"][i]["offset"]
+                )
 
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu_fp16(self):
@@ -456,62 +565,90 @@ class TestQuantSim:
         model = DummyModel()
         model.eval()
         with tempfile.TemporaryDirectory() as tempdir:
-            torch.onnx.export(model, torch.as_tensor(inputs), os.path.join(tempdir, 'dummy_model.onnx'),
-                              training=torch.onnx.TrainingMode.PRESERVE,
-                              input_names=['input'], output_names=['output'])
+            torch.onnx.export(
+                model,
+                torch.as_tensor(inputs),
+                os.path.join(tempdir, "dummy_model.onnx"),
+                training=torch.onnx.TrainingMode.PRESERVE,
+                input_names=["input"],
+                output_names=["output"],
+            )
 
-            onnx_model_cpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
-            onnx_model_gpu = load_model(os.path.join(tempdir, 'dummy_model.onnx'))
+            onnx_model_cpu = load_model(os.path.join(tempdir, "dummy_model.onnx"))
+            onnx_model_gpu = load_model(os.path.join(tempdir, "dummy_model.onnx"))
 
-            onnx_sim_cpu = QuantizationSimModel(onnx_model_cpu, providers=CPU_PROVIDERS,
-                                                quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                default_data_type=QuantizationDataType.float, default_param_bw=16,
-                                                default_activation_bw=16, path=tempdir)
-            onnx_sim_gpu = QuantizationSimModel(onnx_model_gpu, providers=CUDA_PROVIDERS,
-                                                quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                                default_data_type=QuantizationDataType.float, default_param_bw=16,
-                                                default_activation_bw=16, path=tempdir)
+            onnx_sim_cpu = QuantizationSimModel(
+                onnx_model_cpu,
+                providers=CPU_PROVIDERS,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                default_data_type=QuantizationDataType.float,
+                default_param_bw=16,
+                default_activation_bw=16,
+                path=tempdir,
+            )
+            onnx_sim_gpu = QuantizationSimModel(
+                onnx_model_gpu,
+                providers=CUDA_PROVIDERS,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                default_data_type=QuantizationDataType.float,
+                default_param_bw=16,
+                default_activation_bw=16,
+                path=tempdir,
+            )
 
             for node in onnx_sim_gpu.model.graph().node:
                 if node.op_type == "QcQuantizeOp":
-                    if 'CUDAExecutionProvider' in ort.get_available_providers():
+                    if "CUDAExecutionProvider" in ort.get_available_providers():
                         assert node.domain == "aimet.customop.cuda"
             for node in onnx_sim_cpu.model.graph().node:
                 if node.op_type == "QcQuantizeOp":
                     assert node.domain == "aimet.customop.cpu"
 
-            out_cpu = onnx_sim_cpu.session.run(None, {'input': inputs})[0]
-            out_gpu = onnx_sim_gpu.session.run(None, {'input': inputs})[0]
+            out_cpu = onnx_sim_cpu.session.run(None, {"input": inputs})[0]
+            out_gpu = onnx_sim_gpu.session.run(None, {"input": inputs})[0]
 
-            assert (np.max(np.abs(out_cpu - out_gpu)) < 0.05)
+            assert np.max(np.abs(out_cpu - out_gpu)) < 0.05
 
     def test_per_channel_quantization(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, providers=CPU_PROVIDERS, config_file=get_path_for_per_channel_config(),
-                                       path=tempdir)
+            sim = QuantizationSimModel(
+                model,
+                providers=CPU_PROVIDERS,
+                config_file=get_path_for_per_channel_config(),
+                path=tempdir,
+            )
+
             def dummy_callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
-            sim.qc_quantize_op_dict['fc.weight'].enable_per_channel_quantization()
+
+            sim.qc_quantize_op_dict["fc.weight"].enable_per_channel_quantization()
             sim.compute_encodings(dummy_callback, None)
 
-            sim.export(tempdir, 'encodings')
-            with open(os.path.join(tempdir, 'encodings.encodings')) as json_file:
+            sim.export(tempdir, "encodings")
+            with open(os.path.join(tempdir, "encodings.encodings")) as json_file:
                 encoding_data = json.load(json_file)
-                param_encodings = {encoding['name']: encoding for encoding in encoding_data['param_encodings']}
+                param_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encoding_data["param_encodings"]
+                }
 
             for param_name in sim.param_names:
                 qc_op = sim.qc_quantize_op_dict[param_name]
                 if qc_op.quant_info.usePerChannelMode and qc_op.enabled:
-                    num_channels = qc_op.tensor_quantizer_params.tensor_shape[qc_op.tensor_quantizer_params.channel_axis]
+                    num_channels = qc_op.tensor_quantizer_params.tensor_shape[
+                        qc_op.tensor_quantizer_params.channel_axis
+                    ]
                     assert num_channels == len(qc_op.encodings)
-                    assert num_channels == len(param_encodings[param_name]['scale'])
+                    assert num_channels == len(param_encodings[param_name]["scale"])
                     for encoding in qc_op.encodings:
                         assert encoding.bw == 8
                         assert encoding.min != encoding.max
 
-    @pytest.mark.parametrize("model_factory", (transposed_conv_model, depthwise_transposed_conv_model))
+    @pytest.mark.parametrize(
+        "model_factory", (transposed_conv_model, depthwise_transposed_conv_model)
+    )
     def test_per_channel_quant_conv_transpose(self, model_factory):
         model = model_factory()
         conv_transpose_weight_names = []
@@ -520,11 +657,15 @@ class TestQuantSim:
                 conv_transpose_weight_names.append(node.input[1])
 
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, providers=CPU_PROVIDERS, config_file=get_path_for_per_channel_config(),
-                                       path=tempdir)
+            sim = QuantizationSimModel(
+                model,
+                providers=CPU_PROVIDERS,
+                config_file=get_path_for_per_channel_config(),
+                path=tempdir,
+            )
 
             def dummy_callback(session, args):
-                in_tensor = {'input': np.random.rand(10, 10, 4, 4).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(10, 10, 4, 4).astype(np.float32)}
                 session.run(None, in_tensor)
 
             sim.compute_encodings(dummy_callback, None)
@@ -548,20 +689,20 @@ class TestQuantSim:
             sim = QuantizationSimModel(model, path=tempdir)
 
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
 
-            dummy_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
 
             sim.compute_encodings(callback, None)
-            sim.export(tempdir, 'onnx_sim')
+            sim.export(tempdir, "onnx_sim")
 
             out2 = sim.session.run(None, dummy_tensor)
 
             del sim
 
             sim = QuantizationSimModel(model, path=tempdir)
-            load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'))
+            load_encodings_to_sim(sim, os.path.join(tempdir, "onnx_sim.encodings"))
             out3 = sim.session.run(None, dummy_tensor)
 
             assert np.allclose(out2, out3)
@@ -569,55 +710,70 @@ class TestQuantSim:
     def test_load_encodings_pcq(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, config_file=get_path_for_per_channel_config(), path=tempdir)
+            sim = QuantizationSimModel(
+                model, config_file=get_path_for_per_channel_config(), path=tempdir
+            )
 
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
 
-            dummy_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
 
             sim.compute_encodings(callback, None)
-            sim.export(tempdir, 'onnx_sim')
+            sim.export(tempdir, "onnx_sim")
 
             out2 = sim.session.run(None, dummy_tensor)
 
             del sim
 
-            sim = QuantizationSimModel(model, config_file=get_path_for_per_channel_config(), path=tempdir)
-            load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'))
+            sim = QuantizationSimModel(
+                model, config_file=get_path_for_per_channel_config(), path=tempdir
+            )
+            load_encodings_to_sim(sim, os.path.join(tempdir, "onnx_sim.encodings"))
             out3 = sim.session.run(None, dummy_tensor)
             assert np.allclose(out2, out3)
 
     def test_load_encodings_assertion(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, config_file=get_path_for_per_channel_config(), path=tempdir)
+            sim = QuantizationSimModel(
+                model, config_file=get_path_for_per_channel_config(), path=tempdir
+            )
+
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
 
             sim.compute_encodings(callback, None)
-            sim.export(tempdir, 'onnx_sim')
+            sim.export(tempdir, "onnx_sim")
             model = multi_output_model().model
             sim = QuantizationSimModel(model, path=tempdir)
             with pytest.raises(AssertionError):
-                load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'), strict=False)
+                load_encodings_to_sim(
+                    sim, os.path.join(tempdir, "onnx_sim.encodings"), strict=False
+                )
 
     def test_load_encodings_with_missing_quantizer(self, tmp_path):
         model = models_for_tests.conv_relu_model()
-        sim = QuantizationSimModel(copy.deepcopy(model),
-                                   providers=["CPUExecutionProvider"],
-                                   path=tmp_path)
+        sim = QuantizationSimModel(
+            copy.deepcopy(model), providers=["CPUExecutionProvider"], path=tmp_path
+        )
         dummy_input = make_dummy_input(sim.model.model)
 
-        sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(sim.model.model)))
-        quantized_tensors = {name for name, q in sim.qc_quantize_op_dict.items() if q.enabled}
+        sim.compute_encodings(
+            lambda sess: sess.run(None, make_dummy_input(sim.model.model))
+        )
+        quantized_tensors = {
+            name for name, q in sim.qc_quantize_op_dict.items() if q.enabled
+        }
         output = sim.session.run(None, dummy_input)
-        sim.export(tmp_path, 'onnx_sim')
+        sim.export(tmp_path, "onnx_sim")
 
         # Create a new quantsim model
-        sim_2 = QuantizationSimModel(copy.deepcopy(model), providers=["CPUExecutionProvider"], path=tmp_path)
+        sim_2 = QuantizationSimModel(
+            copy.deepcopy(model), providers=["CPUExecutionProvider"], path=tmp_path
+        )
 
         # Clear all quantizers from the sim
         for node in list(sim_2.model.graph().node):
@@ -627,8 +783,12 @@ class TestQuantSim:
         sim_2.qc_quantize_op_dict = {}
 
         # Loading encodings with strict=False should re-load all the quantizers
-        load_encodings_to_sim(sim_2, os.path.join(tmp_path, 'onnx_sim.encodings'), strict=False)
-        loaded_quantized_tensors = {name for name, q in sim_2.qc_quantize_op_dict.items() if q.enabled}
+        load_encodings_to_sim(
+            sim_2, os.path.join(tmp_path, "onnx_sim.encodings"), strict=False
+        )
+        loaded_quantized_tensors = {
+            name for name, q in sim_2.qc_quantize_op_dict.items() if q.enabled
+        }
         assert loaded_quantized_tensors == quantized_tensors
 
         # Outputs should exactly match after loading
@@ -636,7 +796,7 @@ class TestQuantSim:
         for tensor1, tensor2 in zip(output, output_after_load):
             assert np.all(tensor1 == tensor2)
 
-    @pytest.mark.parametrize('strict', [False, True])
+    @pytest.mark.parametrize("strict", [False, True])
     def test_load_encodings_strict_and_non_strict(self, strict):
         torch.random.manual_seed(0)
         np.random.seed(0)
@@ -644,17 +804,31 @@ class TestQuantSim:
         output_name = model.graph.output[0].name
 
         # Update weights for testing is_unsigned_symmetric override later
-        weight_initializers = [i.name for i in model.graph.initializer if len(i.dims) > 1]
-        weight_initializer_3 = [i for i in model.graph.initializer if i.name == weight_initializers[3]][0]
+        weight_initializers = [
+            i.name for i in model.graph.initializer if len(i.dims) > 1
+        ]
+        weight_initializer_3 = [
+            i for i in model.graph.initializer if i.name == weight_initializers[3]
+        ][0]
         weight_initializer_3_data = onnx.numpy_helper.to_array(weight_initializer_3)
-        weight_initializer_3.raw_data = np.asarray(np.abs(weight_initializer_3_data), dtype=np.float32).tobytes()
+        weight_initializer_3.raw_data = np.asarray(
+            np.abs(weight_initializer_3_data), dtype=np.float32
+        ).tobytes()
 
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(model, path=tempdir)
 
-            conv_ops = [node for node in sim.model.model.graph.node if node.op_type == 'Conv']
-            relu_ops = [node for node in sim.model.model.graph.node if node.op_type == 'Relu']
-            avgpool_ops = [node for node in sim.model.model.graph.node if node.op_type == 'AveragePool']
+            conv_ops = [
+                node for node in sim.model.model.graph.node if node.op_type == "Conv"
+            ]
+            relu_ops = [
+                node for node in sim.model.model.graph.node if node.op_type == "Relu"
+            ]
+            avgpool_ops = [
+                node
+                for node in sim.model.model.graph.node
+                if node.op_type == "AveragePool"
+            ]
 
             act_1 = conv_ops[0].output[0]
             act_2 = relu_ops[0].output[0]
@@ -665,49 +839,85 @@ class TestQuantSim:
             sim.get_qc_quantize_op()[act_3].data_type = QuantizationDataType.float
             sim.get_qc_quantize_op()[weight_initializers[0]].bitwidth = 16
             sim.get_qc_quantize_op()[act_4].bitwidth = 4
-            sim.get_qc_quantize_op()[weight_initializers[1]].use_symmetric_encodings = False
+            sim.get_qc_quantize_op()[
+                weight_initializers[1]
+            ].use_symmetric_encodings = False
             sim.get_qc_quantize_op()[weight_initializers[2]].use_strict_symmetric = True
-            sim.get_qc_quantize_op()[weight_initializers[3]].use_unsigned_symmetric = True
+            sim.get_qc_quantize_op()[
+                weight_initializers[3]
+            ].use_unsigned_symmetric = True
 
             def callback(session, args):
-                in_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+                in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
                 session.run(None, in_tensor)
 
-            dummy_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+            dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
 
             sim.compute_encodings(callback, None)
-            sim.export(tempdir, 'onnx_sim')
+            sim.export(tempdir, "onnx_sim")
             out2 = sim.session.run(None, dummy_tensor)
             del sim
 
             sim = QuantizationSimModel(model, path=tempdir)
             if strict:
                 with pytest.raises(AssertionError):
-                    load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'), strict=strict)
+                    load_encodings_to_sim(
+                        sim, os.path.join(tempdir, "onnx_sim.encodings"), strict=strict
+                    )
             else:
-                mismatched_encodings = load_encodings_to_sim(sim, os.path.join(tempdir, 'onnx_sim.encodings'), strict=strict)
+                mismatched_encodings = load_encodings_to_sim(
+                    sim, os.path.join(tempdir, "onnx_sim.encodings"), strict=strict
+                )
                 out3 = sim.session.run(None, dummy_tensor)
-                sim.export(tempdir, 'loaded_onnx_sim')
+                sim.export(tempdir, "loaded_onnx_sim")
 
                 assert sim.get_qc_quantize_op()[act_1].enabled
                 assert not sim.get_qc_quantize_op()[act_2].enabled
-                assert sim.get_qc_quantize_op()[act_3].data_type == QuantizationDataType.float
+                assert (
+                    sim.get_qc_quantize_op()[act_3].data_type
+                    == QuantizationDataType.float
+                )
                 assert sim.get_qc_quantize_op()[weight_initializers[0]].bitwidth == 16
                 assert sim.get_qc_quantize_op()[act_4].bitwidth == 4
-                assert not sim.get_qc_quantize_op()[weight_initializers[1]].use_symmetric_encodings
-                assert sim.get_qc_quantize_op()[weight_initializers[2]].use_strict_symmetric
-                assert sim.get_qc_quantize_op()[weight_initializers[3]].use_unsigned_symmetric
+                assert not sim.get_qc_quantize_op()[
+                    weight_initializers[1]
+                ].use_symmetric_encodings
+                assert sim.get_qc_quantize_op()[
+                    weight_initializers[2]
+                ].use_strict_symmetric
+                assert sim.get_qc_quantize_op()[
+                    weight_initializers[3]
+                ].use_unsigned_symmetric
                 assert len(mismatched_encodings) == 8
-                assert np.allclose(out2, out3, atol=sim.qc_quantize_op_dict[output_name].get_encodings()[0].delta) # Bit flip is possible from recomputing min/max during load
+                assert np.allclose(
+                    out2,
+                    out3,
+                    atol=sim.qc_quantize_op_dict[output_name].get_encodings()[0].delta,
+                )  # Bit flip is possible from recomputing min/max during load
 
-    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(partial(set_grouped_blockwise_quantization_for_weights,
-                                                                       op_types=("MatMul", "Conv", "Gemm"),
-                                                                       decompressed_bw=8,
-                                                                       strict=False), True),
-                                                              (partial(set_blockwise_quantization_for_weights,
-                                                                       op_types=("MatMul", "Conv", "Gemm"),
-                                                                       strict=False,
-                                                                       symmetric=True), False)])
+    @pytest.mark.parametrize(
+        "swap_quantizer_func, is_lpbq",
+        [
+            (
+                partial(
+                    set_grouped_blockwise_quantization_for_weights,
+                    op_types=("MatMul", "Conv", "Gemm"),
+                    decompressed_bw=8,
+                    strict=False,
+                ),
+                True,
+            ),
+            (
+                partial(
+                    set_blockwise_quantization_for_weights,
+                    op_types=("MatMul", "Conv", "Gemm"),
+                    strict=False,
+                    symmetric=True,
+                ),
+                False,
+            ),
+        ],
+    )
     def test_load_per_block_and_lpbq_encodings(self, swap_quantizer_func, is_lpbq):
         torch.manual_seed(0)
         np.random.seed(0)
@@ -725,52 +935,76 @@ class TestQuantSim:
         # Input shape is not compatible with block size
         bq_weights.remove(model.graph().node[0].input[1])
 
-        sim = QuantizationSimModel(model, dummy_input, default_param_bw=16, default_activation_bw=16)
+        sim = QuantizationSimModel(
+            model, dummy_input, default_param_bw=16, default_activation_bw=16
+        )
         swap_quantizer_func(sim=sim, bitwidth=4, block_size=4)
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
         out1 = sim.session.run(None, dummy_input)
-        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version('1.0.0'):
-            sim.export(tempdir, 'export')
+        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version("1.0.0"):
+            sim.export(tempdir, "export")
 
-            sim_2 = QuantizationSimModel(model_2, dummy_input, default_param_bw=16, default_activation_bw=16)
+            sim_2 = QuantizationSimModel(
+                model_2, dummy_input, default_param_bw=16, default_activation_bw=16
+            )
             swap_quantizer_func(sim=sim_2, bitwidth=4, block_size=4)
 
-            load_encodings_to_sim(sim_2, os.path.join(tempdir, 'export.encodings'), strict=True)
+            load_encodings_to_sim(
+                sim_2, os.path.join(tempdir, "export.encodings"), strict=True
+            )
             out2 = sim_2.session.run(None, dummy_input)
-            sim_2.export(tempdir, 'export_2')
-            with open(os.path.join(tempdir, 'export.encodings'), 'rb') as f1:
+            sim_2.export(tempdir, "export_2")
+            with open(os.path.join(tempdir, "export.encodings"), "rb") as f1:
                 encodings_1 = json.load(f1)
-            with open(os.path.join(tempdir, 'export_2.encodings'), 'rb') as f2:
+            with open(os.path.join(tempdir, "export_2.encodings"), "rb") as f2:
                 encodings_2 = json.load(f2)
             assert encodings_1 == encodings_2
             seen_lpbq_or_per_block = False
-            for encoding in encodings_1['param_encodings']:
+            for encoding in encodings_1["param_encodings"]:
                 if is_lpbq:
-                    if encoding['enc_type'] == 'LPBQ':
+                    if encoding["enc_type"] == "LPBQ":
                         seen_lpbq_or_per_block = True
                 else:
-                    if encoding['enc_type'] == 'PER_BLOCK':
+                    if encoding["enc_type"] == "PER_BLOCK":
                         seen_lpbq_or_per_block = True
             assert seen_lpbq_or_per_block
             assert np.allclose(out1, out2)
 
-            sim_3 = QuantizationSimModel(model_3, dummy_input, default_param_bw=16, default_activation_bw=16)
+            sim_3 = QuantizationSimModel(
+                model_3, dummy_input, default_param_bw=16, default_activation_bw=16
+            )
 
             # TODO: switch to strict=True when we support swapping to LPBQ quantizer from non-LPBQ quantizer
             if is_lpbq:
                 with pytest.raises(AssertionError):
-                    load_encodings_to_sim(sim_3, os.path.join(tempdir, 'export.encodings'), strict=False)
+                    load_encodings_to_sim(
+                        sim_3, os.path.join(tempdir, "export.encodings"), strict=False
+                    )
 
-    @pytest.mark.parametrize('swap_quantizer_func, is_lpbq', [(partial(set_grouped_blockwise_quantization_for_weights,
-                                                                       op_types=("ConvTranspose",),
-                                                                       decompressed_bw=8,
-                                                                       strict=True), True),
-                                                              (partial(set_blockwise_quantization_for_weights,
-                                                                       op_types=("ConvTranspose",),
-                                                                       strict=True,
-                                                                       symmetric=True), False)
-                                                              ])
+    @pytest.mark.parametrize(
+        "swap_quantizer_func, is_lpbq",
+        [
+            (
+                partial(
+                    set_grouped_blockwise_quantization_for_weights,
+                    op_types=("ConvTranspose",),
+                    decompressed_bw=8,
+                    strict=True,
+                ),
+                True,
+            ),
+            (
+                partial(
+                    set_blockwise_quantization_for_weights,
+                    op_types=("ConvTranspose",),
+                    strict=True,
+                    symmetric=True,
+                ),
+                False,
+            ),
+        ],
+    )
     def test_load_per_block_and_lpbq_conv_transpose(self, swap_quantizer_func, is_lpbq):
         torch.manual_seed(0)
         np.random.seed(0)
@@ -782,34 +1016,36 @@ class TestQuantSim:
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
         out1 = sim.session.run(None, dummy_input)
-        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version('1.0.0'):
-            sim.export(tempdir, 'export')
+        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version("1.0.0"):
+            sim.export(tempdir, "export")
 
             sim2 = QuantizationSimModel(model_2)
             swap_quantizer_func(sim=sim2, bitwidth=4, block_size=4)
 
-            load_encodings_to_sim(sim2, os.path.join(tempdir, 'export.encodings'), strict=True)
+            load_encodings_to_sim(
+                sim2, os.path.join(tempdir, "export.encodings"), strict=True
+            )
             out2 = sim2.session.run(None, dummy_input)
 
-            sim2.export(tempdir, 'export_2')
-            with open(os.path.join(tempdir, 'export.encodings'), 'rb') as f1:
+            sim2.export(tempdir, "export_2")
+            with open(os.path.join(tempdir, "export.encodings"), "rb") as f1:
                 encodings_1 = json.load(f1)
-            with open(os.path.join(tempdir, 'export_2.encodings'), 'rb') as f2:
+            with open(os.path.join(tempdir, "export_2.encodings"), "rb") as f2:
                 encodings_2 = json.load(f2)
             assert encodings_1 == encodings_2
             seen_lpbq_or_per_block = False
-            for encoding in encodings_1['param_encodings']:
+            for encoding in encodings_1["param_encodings"]:
                 if is_lpbq:
-                    if encoding['enc_type'] == 'LPBQ':
+                    if encoding["enc_type"] == "LPBQ":
                         seen_lpbq_or_per_block = True
                 else:
-                    if encoding['enc_type'] == 'PER_BLOCK':
+                    if encoding["enc_type"] == "PER_BLOCK":
                         seen_lpbq_or_per_block = True
             assert seen_lpbq_or_per_block
-            assert encodings_1['param_encodings']
+            assert encodings_1["param_encodings"]
             assert np.allclose(out1, out2)
 
-    @pytest.mark.parametrize('strict', [False])
+    @pytest.mark.parametrize("strict", [False])
     def test_mismatching_lpbq_settings(self, strict):
         torch.manual_seed(0)
         np.random.seed(0)
@@ -817,41 +1053,55 @@ class TestQuantSim:
         model_2 = copy.deepcopy(model)
         dummy_input = make_dummy_input(model.model)
 
-        sim = QuantizationSimModel(model, dummy_input, default_param_bw=16, default_activation_bw=16)
-        set_grouped_blockwise_quantization_for_weights(sim,
-                                                       op_types=("MatMul", "Conv", "Gemm"),
-                                                       bitwidth=4,
-                                                       decompressed_bw=8,
-                                                       block_size=4,
-                                                       strict=False)
+        sim = QuantizationSimModel(
+            model, dummy_input, default_param_bw=16, default_activation_bw=16
+        )
+        set_grouped_blockwise_quantization_for_weights(
+            sim,
+            op_types=("MatMul", "Conv", "Gemm"),
+            bitwidth=4,
+            decompressed_bw=8,
+            block_size=4,
+            strict=False,
+        )
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
         out1 = sim.session.run(None, dummy_input)
-        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version('1.0.0'):
-            sim.export(tempdir, 'export')
+        with tempfile.TemporaryDirectory() as tempdir, set_encoding_version("1.0.0"):
+            sim.export(tempdir, "export")
 
-            sim_2 = QuantizationSimModel(model_2, dummy_input, default_param_bw=16, default_activation_bw=16)
-            set_grouped_blockwise_quantization_for_weights(sim_2,
-                                                           op_types=("MatMul", "Conv", "Gemm"),
-                                                           bitwidth=2,
-                                                           decompressed_bw=4,
-                                                           block_size=2,
-                                                           strict=False)
+            sim_2 = QuantizationSimModel(
+                model_2, dummy_input, default_param_bw=16, default_activation_bw=16
+            )
+            set_grouped_blockwise_quantization_for_weights(
+                sim_2,
+                op_types=("MatMul", "Conv", "Gemm"),
+                bitwidth=2,
+                decompressed_bw=4,
+                block_size=2,
+                strict=False,
+            )
 
-            sim_2.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+            sim_2.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
             out2 = sim_2.session.run(None, dummy_input)
             assert not np.allclose(out1, out2)
 
             if strict:
                 with pytest.raises(AssertionError):
-                    load_encodings_to_sim(sim_2, os.path.join(tempdir, 'export.encodings'), strict=strict)
+                    load_encodings_to_sim(
+                        sim_2, os.path.join(tempdir, "export.encodings"), strict=strict
+                    )
             else:
-                load_encodings_to_sim(sim_2, os.path.join(tempdir, 'export.encodings'), strict=strict)
+                load_encodings_to_sim(
+                    sim_2, os.path.join(tempdir, "export.encodings"), strict=strict
+                )
                 out2 = sim_2.session.run(None, dummy_input)
-                sim_2.export(tempdir, 'export_2')
-                with open(os.path.join(tempdir, 'export.encodings'), 'rb') as f1:
+                sim_2.export(tempdir, "export_2")
+                with open(os.path.join(tempdir, "export.encodings"), "rb") as f1:
                     encodings_1 = json.load(f1)
-                with open(os.path.join(tempdir, 'export_2.encodings'), 'rb') as f2:
+                with open(os.path.join(tempdir, "export_2.encodings"), "rb") as f2:
                     encodings_2 = json.load(f2)
                 assert encodings_1 == encodings_2
                 assert np.allclose(out1, out2)
@@ -860,48 +1110,70 @@ class TestQuantSim:
         model = multi_input_with_constant_model()
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(model, path=tempdir)
-            assert sim.qc_quantize_op_dict['/add0/Constant_output_0'].enabled == True
-            assert sim.qc_quantize_op_dict['/add2/Constant_output_0'].enabled == True
-
+            assert sim.qc_quantize_op_dict["/add0/Constant_output_0"].enabled == True
+            assert sim.qc_quantize_op_dict["/add2/Constant_output_0"].enabled == True
 
     def test_multiple_output_quantsim(self):
         model = multi_output_model()
         sample_input = np.random.rand(128, 3, 32, 32).astype(np.float32)
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model=model,
-                                       quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       default_activation_bw=8,
-                                       default_param_bw=8,
-                                       path=tempdir)
-            sim.session.run(None, {'input': sample_input})
+            sim = QuantizationSimModel(
+                model=model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                default_activation_bw=8,
+                default_param_bw=8,
+                path=tempdir,
+            )
+            sim.session.run(None, {"input": sample_input})
 
     def test_quantsim_init_memory_usage(self):
         """
         When: Instantiate a quantsim model with high activation memory usage
         Then: Memory usage should not spike
         """
-        num_layers = 2 ** 9
-        activation_dim = 2 ** 13
-        batch_size = 2 ** 8
+        num_layers = 2**9
+        activation_dim = 2**13
+        batch_size = 2**8
         total_act_memory = num_layers * activation_dim * batch_size
 
         # Create a model with very high total activation memory usage
         layers = [
-            onnx.helper.make_node("Constant", inputs=[], outputs=["shape"], name="shape",
-                                  value=onnx.numpy_helper.from_array(np.array([batch_size, activation_dim], dtype=np.dtype("int64")))),
-            onnx.helper.make_node("Expand", inputs=["input", "shape"], outputs=["act0"], name="reshape"),
+            onnx.helper.make_node(
+                "Constant",
+                inputs=[],
+                outputs=["shape"],
+                name="shape",
+                value=onnx.numpy_helper.from_array(
+                    np.array([batch_size, activation_dim], dtype=np.dtype("int64"))
+                ),
+            ),
+            onnx.helper.make_node(
+                "Expand", inputs=["input", "shape"], outputs=["act0"], name="reshape"
+            ),
         ]
         for idx in range(num_layers):
             layers.append(
-                onnx.helper.make_node("Sigmoid", inputs=[f"act{idx}"], outputs=[f"act{idx + 1}"],
-                                      name=f"layer_{idx}")
+                onnx.helper.make_node(
+                    "Sigmoid",
+                    inputs=[f"act{idx}"],
+                    outputs=[f"act{idx + 1}"],
+                    name=f"layer_{idx}",
+                )
             )
 
-        input_tensor = onnx.helper.make_tensor_value_info("input", onnx.TensorProto.FLOAT, [1, 1])
-        output_tensor = onnx.helper.make_tensor_value_info(f"act{num_layers}", onnx.TensorProto.FLOAT,
-                                                           [batch_size, activation_dim])
-        graph = onnx.helper.make_graph(layers, "graph", initializer=[], inputs=[input_tensor],
-                                       outputs=[output_tensor])
+        input_tensor = onnx.helper.make_tensor_value_info(
+            "input", onnx.TensorProto.FLOAT, [1, 1]
+        )
+        output_tensor = onnx.helper.make_tensor_value_info(
+            f"act{num_layers}", onnx.TensorProto.FLOAT, [batch_size, activation_dim]
+        )
+        graph = onnx.helper.make_graph(
+            layers,
+            "graph",
+            initializer=[],
+            inputs=[input_tensor],
+            outputs=[output_tensor],
+        )
         model = onnx.helper.make_model(graph)
 
         with tempfile.TemporaryDirectory() as tempdir:
@@ -913,67 +1185,67 @@ class TestQuantSim:
         assert peak_mem < current_mem + 0.25 * total_act_memory
         assert peak_mem < current_mem * 5
 
-    @pytest.mark.skip(reason="test requires exact version of torch that the code has built against.")
+    @pytest.mark.skip(
+        reason="test requires exact version of torch that the code has built against."
+    )
     def test_model_with_custom_ops(self):
         custom_ops_path = os.path.dirname(libquant_info.__file__)
         custom_ops_path = os.path.join(custom_ops_path, "customops")
         onnx_library = os.path.join(custom_ops_path, "libonnx_custom_add.so")
 
         def dummy_callback(session, args):
-            calib_data = {'input': np.random.rand(1, 3, 64, 64).astype(np.float32)}
+            calib_data = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
             _ = session.run(None, calib_data)
 
         model = custom_add_model()
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model=model,
-                                      quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                      default_activation_bw=8,
-                                      default_param_bw=8,
-                                      user_onnx_libs=[onnx_library],
-                                      path=tempdir)
+            sim = QuantizationSimModel(
+                model=model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                default_activation_bw=8,
+                default_param_bw=8,
+                user_onnx_libs=[onnx_library],
+                path=tempdir,
+            )
             sim.save_model_graph("./quantized_custom_model")
             sim.compute_encodings(dummy_callback, None)
-            sim.export(tempdir, 'custom_op_model')
+            sim.export(tempdir, "custom_op_model")
 
-
-    @pytest.mark.parametrize("model", [models_for_tests.weight_matmul_model(10, 20),
-                                       models_for_tests.weight_gemm_model(10, 20, False),
-                                       models_for_tests.weight_gemm_model(10, 20, True)])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            models_for_tests.weight_matmul_model(10, 20),
+            models_for_tests.weight_gemm_model(10, 20, False),
+            models_for_tests.weight_gemm_model(10, 20, True),
+        ],
+    )
     def test_matmul_quantization_axis(self, model):
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "strict_symmetric": "False",
-                "per_channel_quantization": "True"
+                "per_channel_quantization": "True",
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True"}},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         output_features = model.graph.output[0].type.tensor_type.shape.dim[-1].dim_value
         dummy_input = make_dummy_input(model)
         with tempfile.TemporaryDirectory() as temp_dir:
-            config_file = os.path.join(temp_dir, 'config.json')
-            with open(config_file, 'w') as f:
+            config_file = os.path.join(temp_dir, "config.json")
+            with open(config_file, "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model=model,
-                                       config_file=config_file,
-                                       path=temp_dir)
+            sim = QuantizationSimModel(
+                model=model, config_file=config_file, path=temp_dir
+            )
 
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
             assert len(sim.qc_quantize_op_dict["weight"].encodings) == output_features
 
     def test_linear_split_into_matmul_add(self):
@@ -984,18 +1256,25 @@ class TestQuantSim:
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
-            dummy_tensor = {'input': np.random.rand(1, 2, 4).astype(np.float32)}
+            dummy_tensor = {"input": np.random.rand(1, 2, 4).astype(np.float32)}
             sim.compute_encodings(callback, dummy_tensor)
-            sim.export(tempdir, 'linear_matmul_add_pattern')
-            with open(os.path.join(tempdir, 'linear_matmul_add_pattern.encodings')) as json_file:
+            sim.export(tempdir, "linear_matmul_add_pattern")
+            with open(
+                os.path.join(tempdir, "linear_matmul_add_pattern.encodings")
+            ) as json_file:
                 encoding_data = json.load(json_file)
                 # Ensure that the encodings for the second input of Add op (bias) and output of MatMul aren't in JSON file.
-                assert len(encoding_data['activation_encodings']) == 2
-                assert len(encoding_data['param_encodings']) == 1
-                activation_names = {encoding['name'] for encoding in encoding_data['activation_encodings']}
+                assert len(encoding_data["activation_encodings"]) == 2
+                assert len(encoding_data["param_encodings"]) == 1
+                activation_names = {
+                    encoding["name"]
+                    for encoding in encoding_data["activation_encodings"]
+                }
                 assert activation_names == {"input", "output"}
 
-    @pytest.mark.skip("OOM issues from high CPU memory usage, optimize quantsim memory usage before enabling")
+    @pytest.mark.skip(
+        "OOM issues from high CPU memory usage, optimize quantsim memory usage before enabling"
+    )
     def test_large_model(self):
         """
         When: Model is > 2GB
@@ -1005,27 +1284,44 @@ class TestQuantSim:
         """
         # First create a model with is >= 2GB
         # Model size: (2 ** 5 layers) * (2 ** 15 * 2 ** 15 weights/layer) * (4 bytes/weight) = 2 ** 31 bytes
-        num_layers = 2 ** 5
-        weight_shape = [2 ** 12, 2 ** 12]
+        num_layers = 2**5
+        weight_shape = [2**12, 2**12]
         weights = []
         layers = []
         for idx in range(num_layers):
             layers.append(
-                onnx.helper.make_node("MatMul", inputs=[f"act{idx}", f"weight_{idx}"], outputs=[f"act{idx+1}_relu"], name=f"matmul_{idx}")
+                onnx.helper.make_node(
+                    "MatMul",
+                    inputs=[f"act{idx}", f"weight_{idx}"],
+                    outputs=[f"act{idx + 1}_relu"],
+                    name=f"matmul_{idx}",
+                )
             )
             layers.append(
-                onnx.helper.make_node("Relu", inputs=[f"act{idx+1}_relu"], outputs=[f"act{idx + 1}"],
-                                      name=f"relu_{idx}")
+                onnx.helper.make_node(
+                    "Relu",
+                    inputs=[f"act{idx + 1}_relu"],
+                    outputs=[f"act{idx + 1}"],
+                    name=f"relu_{idx}",
+                )
             )
             data = np.empty(weight_shape, dtype=np.float32)
-            data[0][0] = idx # Prevents simplifier from combining weights
-            weights.append(
-                onnx.numpy_helper.from_array(data, name=f"weight_{idx}")
-            )
+            data[0][0] = idx  # Prevents simplifier from combining weights
+            weights.append(onnx.numpy_helper.from_array(data, name=f"weight_{idx}"))
 
-        input_tensor = onnx.helper.make_tensor_value_info("act0", onnx.TensorProto.FLOAT, [1, weight_shape[0]])
-        output_tensor = onnx.helper.make_tensor_value_info(f"act{num_layers}", onnx.TensorProto.FLOAT, [1, weight_shape[1]])
-        graph = onnx.helper.make_graph(layers, "large_graph", initializer=weights, inputs=[input_tensor], outputs=[output_tensor])
+        input_tensor = onnx.helper.make_tensor_value_info(
+            "act0", onnx.TensorProto.FLOAT, [1, weight_shape[0]]
+        )
+        output_tensor = onnx.helper.make_tensor_value_info(
+            f"act{num_layers}", onnx.TensorProto.FLOAT, [1, weight_shape[1]]
+        )
+        graph = onnx.helper.make_graph(
+            layers,
+            "large_graph",
+            initializer=weights,
+            inputs=[input_tensor],
+            outputs=[output_tensor],
+        )
         model = onnx.helper.make_model(graph)
 
         assert model.ByteSize() > onnx.checker.MAXIMUM_PROTOBUF
@@ -1040,247 +1336,215 @@ class TestQuantSim:
 
         # Check that the model data is unchanged
         for idx in range(num_layers):
-            assert onnx.numpy_helper.to_array(sim.model.graph().initializer[idx])[0][0] == idx
+            assert (
+                onnx.numpy_helper.to_array(sim.model.graph().initializer[idx])[0][0]
+                == idx
+            )
 
     def test_op_params_to_ignore(self):
         model = models_for_tests.resize_op_model()
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(model, path=tempdir)
             # params of specific ops shouldn't be quantized (here resize op param is testified)
-            assert not sim.qc_quantize_op_dict.get('const_scale', None)
+            assert not sim.qc_quantize_op_dict.get("const_scale", None)
 
     def test_groupnorm_exception_rule(self):
         model = models_for_tests.model_with_exceptional_ops()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "True"
-                        },
-                    "per_channel_quantization": "True",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
-            "params": {
-                "bias":
-                    {
-                        "is_quantized": "False"
-                    }
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
             },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
-                "GroupNormalization":
-                    {
-                        "per_channel_quantization": "False",
-                        "params": {
-                            "bias":
-                                {
-                                    "is_quantized": "True"
-                                }
-                        }
-                    },
+                "GroupNormalization": {
+                    "per_channel_quantization": "False",
+                    "params": {"bias": {"is_quantized": "True"}},
+                },
             },
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, default_param_bw=8, default_activation_bw=16,
-                                       path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=8,
+                default_activation_bw=16,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
             dummy_input = make_dummy_input(model)
             sim.compute_encodings(callback, dummy_input)
-            sim.export(tempdir, 'conv_matmul_groupnorm_model')
+            sim.export(tempdir, "conv_matmul_groupnorm_model")
 
-            with open(os.path.join(tempdir, 'conv_matmul_groupnorm_model.encodings')) as json_file:
+            with open(
+                os.path.join(tempdir, "conv_matmul_groupnorm_model.encodings")
+            ) as json_file:
                 encoding_data = json.load(json_file)
-                param_encodings = {encoding['name']: encoding for encoding in encoding_data['param_encodings']}
-                groupnorm_weight_enc = param_encodings['groupnorm_0.scale']
-                groupnorm_bias_enc = param_encodings['groupnorm_0.bias']
+                param_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encoding_data["param_encodings"]
+                }
+                groupnorm_weight_enc = param_encodings["groupnorm_0.scale"]
+                groupnorm_bias_enc = param_encodings["groupnorm_0.bias"]
 
                 # groupnorm param-encodings should follow output-activation-encoding config
-                assert groupnorm_weight_enc['bw'] == 16
-                assert groupnorm_weight_enc['is_sym'] is False
+                assert groupnorm_weight_enc["bw"] == 16
+                assert groupnorm_weight_enc["is_sym"] is False
 
-                assert groupnorm_bias_enc['bw'] == 16
-                assert groupnorm_bias_enc['is_sym'] is False
+                assert groupnorm_bias_enc["bw"] == 16
+                assert groupnorm_bias_enc["is_sym"] is False
 
     def test_matmul_v73_lower_exception_rule(self):
         model = models_for_tests.model_with_exceptional_ops()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V66",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "True",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
-            "params": {
-                "bias":
-                    {
-                        "is_quantized": "False"
-                    }
+            "defaults": {
+                "hw_version": "V66",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
             },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, default_param_bw=16, default_activation_bw=8,
-                                       path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=16,
+                default_activation_bw=8,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
             dummy_tensor = make_dummy_input(model)
             sim.compute_encodings(callback, dummy_tensor)
-            sim.export(tempdir, 'conv_matmul_groupnorm_model')
+            sim.export(tempdir, "conv_matmul_groupnorm_model")
 
-            with open(os.path.join(tempdir, 'conv_matmul_groupnorm_model.encodings')) as json_file:
+            with open(
+                os.path.join(tempdir, "conv_matmul_groupnorm_model.encodings")
+            ) as json_file:
                 encoding_data = json.load(json_file)
-                activation_encodings = {encoding['name']: encoding for encoding in encoding_data['activation_encodings']}
-                matmul_second_input = activation_encodings['matmul_0.weight']
+                activation_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encoding_data["activation_encodings"]
+                }
+                matmul_second_input = activation_encodings["matmul_0.weight"]
 
                 # matmul's second input encoding should be of 8 bitwidth and symmetric
-                assert matmul_second_input['bw'] == 8
-                assert matmul_second_input['is_sym'] is True
+                assert matmul_second_input["bw"] == 8
+                assert matmul_second_input["is_sym"] is True
 
     def test_matmul_v73_higher_exception_rule(self):
         model = models_for_tests.model_with_exceptional_ops()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "True",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
-            "params": {
-                "bias":
-                    {
-                        "is_quantized": "False"
-                    }
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
             },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, default_param_bw=8, default_activation_bw=16,
-                                       path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=8,
+                default_activation_bw=16,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
             dummy_tensor = make_dummy_input(model)
             sim.compute_encodings(callback, dummy_tensor)
-            sim.export(tempdir, 'conv_matmul_groupnorm_model')
+            sim.export(tempdir, "conv_matmul_groupnorm_model")
 
-            with open(os.path.join(tempdir, 'conv_matmul_groupnorm_model.encodings')) as json_file:
+            with open(
+                os.path.join(tempdir, "conv_matmul_groupnorm_model.encodings")
+            ) as json_file:
                 encoding_data = json.load(json_file)
-                activation_encodings = {encoding['name']: encoding for encoding in encoding_data['activation_encodings']}
-                matmul_second_input = activation_encodings['matmul_0.weight']
+                activation_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encoding_data["activation_encodings"]
+                }
+                matmul_second_input = activation_encodings["matmul_0.weight"]
 
                 # if matmul's second input is 16bw then first input should also be 16bw
-                assert matmul_second_input['is_sym'] is True
+                assert matmul_second_input["is_sym"] is True
 
     def test_matmul_v73_exception_rule_matmul_branch(self, tmpdir):
         model = models_for_tests.add_matmul_model()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "True",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
-            "op_type": {
-                "Gather":
-                    {
-                        "is_output_quantized": "False"
-                    }
-            },
+            "op_type": {"Gather": {"is_output_quantized": "False"}},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
-        with open(os.path.join(tmpdir, 'quantsim_config.json'), 'w') as f:
+        with open(os.path.join(tmpdir, "quantsim_config.json"), "w") as f:
             json.dump(quantsim_config, f)
 
-        sim = QuantizationSimModel(model, default_param_bw=16, default_activation_bw=16,
-                                   path=tmpdir, config_file=os.path.join(tmpdir, 'quantsim_config.json'))
+        sim = QuantizationSimModel(
+            model,
+            default_param_bw=16,
+            default_activation_bw=16,
+            path=tmpdir,
+            config_file=os.path.join(tmpdir, "quantsim_config.json"),
+        )
 
         def callback(session, dummy_input):
             session.run(None, dummy_input)
 
-        dummy_tensor = {'input': np.random.rand(3, 3).astype(np.float32),
-                        'input_2': np.random.rand(3, 3).astype(np.float32)}
+        dummy_tensor = {
+            "input": np.random.rand(3, 3).astype(np.float32),
+            "input_2": np.random.rand(3, 3).astype(np.float32),
+        }
         sim.compute_encodings(callback, dummy_tensor)
 
         quantizer_1 = sim.qc_quantize_op_dict.get("added_output")
@@ -1288,13 +1552,22 @@ class TestQuantSim:
         assert quantizer_1.use_symmetric_encodings
         assert len(quantizer_1.encodings) == 1
 
-    @pytest.mark.parametrize("model", (models_for_tests.pointwise_conv1d((1, 64, 32)),
-                                       models_for_tests.conv_model((64, 64, 3, 3), (1, 64, 32, 32), (1, 64, 32, 32), transpose=False),
-                                       models_for_tests.pointwise_conv3d((1, 64, 32, 32, 4))))
+    @pytest.mark.parametrize(
+        "model",
+        (
+            models_for_tests.pointwise_conv1d((1, 64, 32)),
+            models_for_tests.conv_model(
+                (64, 64, 3, 3), (1, 64, 32, 32), (1, 64, 32, 32), transpose=False
+            ),
+            models_for_tests.pointwise_conv3d((1, 64, 32, 32, 4)),
+        ),
+    )
     def test_blockwise_quantization_conv(self, model):
         block_size = 16
         sim = QuantizationSimModel(model)
-        set_blockwise_quantization_for_weights(sim, "Conv", 4, True, block_size=block_size, strict=True)
+        set_blockwise_quantization_for_weights(
+            sim, "Conv", 4, True, block_size=block_size, strict=True
+        )
         dummy_input = make_dummy_input(model)
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
@@ -1305,13 +1578,22 @@ class TestQuantSim:
         assert weight_quantizer.quant_info.blockAxis == 1
         assert len(weight_quantizer.encodings) == 64 * 64 / block_size
 
-    @pytest.mark.parametrize("model", (models_for_tests.pointwise_convtranspose1d((1, 64, 32)),
-                                       models_for_tests.conv_model((64, 64, 3, 3), (1, 64, 32, 32), (1, 64, 32, 32), transpose=True),
-                                       models_for_tests.pointwise_convtranspose3d((1, 64, 32, 32, 4))))
+    @pytest.mark.parametrize(
+        "model",
+        (
+            models_for_tests.pointwise_convtranspose1d((1, 64, 32)),
+            models_for_tests.conv_model(
+                (64, 64, 3, 3), (1, 64, 32, 32), (1, 64, 32, 32), transpose=True
+            ),
+            models_for_tests.pointwise_convtranspose3d((1, 64, 32, 32, 4)),
+        ),
+    )
     def test_blockwise_quantization_convtranspose(self, model):
         block_size = 16
         sim = QuantizationSimModel(model)
-        set_blockwise_quantization_for_weights(sim, "ConvTranspose", 4, True, block_size=block_size, strict=True)
+        set_blockwise_quantization_for_weights(
+            sim, "ConvTranspose", 4, True, block_size=block_size, strict=True
+        )
         dummy_input = make_dummy_input(model)
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
@@ -1322,24 +1604,40 @@ class TestQuantSim:
         assert weight_quantizer.quant_info.blockAxis == 0
         assert len(weight_quantizer.encodings) == 64 * 64 / block_size
 
-    @pytest.mark.parametrize("model", (models_for_tests.weight_gemm_model(in_features=16, out_features=32, transposed_weight=False),
-                                       models_for_tests.weight_gemm_model(in_features=16, out_features=32, transposed_weight=True),
-                                       models_for_tests.weight_matmul_model(in_features=16, out_features=32)))
+    @pytest.mark.parametrize(
+        "model",
+        (
+            models_for_tests.weight_gemm_model(
+                in_features=16, out_features=32, transposed_weight=False
+            ),
+            models_for_tests.weight_gemm_model(
+                in_features=16, out_features=32, transposed_weight=True
+            ),
+            models_for_tests.weight_matmul_model(in_features=16, out_features=32),
+        ),
+    )
     def test_blockwise_quantization_matmul(self, model):
         block_size = 4
         input_features = model.graph.input[0].type.tensor_type.shape.dim[-1].dim_value
         output_features = model.graph.output[0].type.tensor_type.shape.dim[-1].dim_value
         transposed_weight = model.graph.initializer[0].dims[0] == output_features
         sim = QuantizationSimModel(model)
-        set_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, True, block_size=block_size, strict=True)
+        set_blockwise_quantization_for_weights(
+            sim, ("MatMul", "Gemm"), 4, True, block_size=block_size, strict=True
+        )
         dummy_input = make_dummy_input(model)
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
 
         weight_quantizer = sim.get_qc_quantize_op()["weight"]
-        assert len(weight_quantizer.encodings) == output_features * input_features / block_size
+        assert (
+            len(weight_quantizer.encodings)
+            == output_features * input_features / block_size
+        )
         assert weight_quantizer.quant_info.usePerChannelMode
-        assert weight_quantizer.quant_info.channelAxis == (0 if transposed_weight else 1)
+        assert weight_quantizer.quant_info.channelAxis == (
+            0 if transposed_weight else 1
+        )
         assert weight_quantizer.quant_info.blockAxis == (1 if transposed_weight else 0)
         assert weight_quantizer.quant_info.blockSize == block_size
         sim.session.run(None, dummy_input)
@@ -1348,7 +1646,9 @@ class TestQuantSim:
         block_size = 2
         model = models_for_tests.dynamic_matmul_model(batch_size=1)
         sim = QuantizationSimModel(model)
-        set_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, True, block_size=block_size)
+        set_blockwise_quantization_for_weights(
+            sim, ("MatMul", "Gemm"), 4, True, block_size=block_size
+        )
 
         assert sim.qc_quantize_op_dict["linear.weight"].quant_info.blockSize == 2
 
@@ -1361,17 +1661,25 @@ class TestQuantSim:
         model = models_for_tests.weight_matmul_model(in_features=16, out_features=32)
         sim = QuantizationSimModel(model)
         with pytest.raises(ValueError):
-            set_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, True, block_size=7, strict=True)
+            set_blockwise_quantization_for_weights(
+                sim, ("MatMul", "Gemm"), 4, True, block_size=7, strict=True
+            )
 
-        set_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, True, block_size=7, strict=False)
+        set_blockwise_quantization_for_weights(
+            sim, ("MatMul", "Gemm"), 4, True, block_size=7, strict=False
+        )
 
         weight_quantizer = sim.get_qc_quantize_op()["weight"]
         assert weight_quantizer.quant_info.blockSize == 0
         sim.session.run(None, make_dummy_input(model))
 
-
-    @pytest.mark.parametrize("model, block_size", ((models_for_tests.single_residual_model(), 4),
-                                                   (test_models.linear_layer_model(), 64)))
+    @pytest.mark.parametrize(
+        "model, block_size",
+        (
+            (models_for_tests.single_residual_model(), 4),
+            (test_models.linear_layer_model(), 64),
+        ),
+    )
     def test_blockwise_quantization(self, model, block_size, tmpdir):
         dummy_input = make_dummy_input(model.model)
         bq_layers = ("MatMul", "Conv", "Gemm")
@@ -1385,12 +1693,12 @@ class TestQuantSim:
         bq_weights.remove(model.graph().node[0].input[1])
 
         sim = QuantizationSimModel(model, dummy_input)
-        set_blockwise_quantization_for_weights(sim, ("MatMul", "Conv", "Gemm"), 8, True, block_size, strict=False)
+        set_blockwise_quantization_for_weights(
+            sim, ("MatMul", "Conv", "Gemm"), 8, True, block_size, strict=False
+        )
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
 
-        initializers = {
-            param.name: param for param in sim.model.graph().initializer
-        }
+        initializers = {param.name: param for param in sim.model.graph().initializer}
 
         for name, quantizer in sim.qc_quantize_op_dict.items():
             if not quantizer.enabled:
@@ -1401,7 +1709,10 @@ class TestQuantSim:
             if name in bq_weights:
                 assert quantizer.quant_info.usePerChannelMode
                 assert quantizer.quant_info.blockSize == block_size
-                assert len(quantizer.encodings) == param.dims[0] * param.dims[1] / block_size
+                assert (
+                    len(quantizer.encodings)
+                    == param.dims[0] * param.dims[1] / block_size
+                )
             elif quantizer.quant_info.usePerChannelMode:
                 assert quantizer.quant_info.blockSize == 0
                 assert len(quantizer.encodings) in tuple(param.dims)
@@ -1414,21 +1725,21 @@ class TestQuantSim:
             encodings = json.load(f)
 
         for enc in encodings["param_encodings"]:
-            quantizer = sim.qc_quantize_op_dict[enc['name']]
-            param = initializers[enc['name']]
-            if enc['name'] in bq_weights:
-                assert len(enc['scale']) == param.dims[0] * param.dims[1] / block_size
-                assert enc['enc_type'] == 'PER_BLOCK'
+            quantizer = sim.qc_quantize_op_dict[enc["name"]]
+            param = initializers[enc["name"]]
+            if enc["name"] in bq_weights:
+                assert len(enc["scale"]) == param.dims[0] * param.dims[1] / block_size
+                assert enc["enc_type"] == "PER_BLOCK"
             elif quantizer.quant_info.usePerChannelMode:
-                assert len(enc['scale']) in tuple(param.dims)
-                assert enc['enc_type'] == 'PER_CHANNEL'
+                assert len(enc["scale"]) in tuple(param.dims)
+                assert enc["enc_type"] == "PER_CHANNEL"
             else:
-                assert len(enc['scale']) == 1
-                assert enc['enc_type'] == 'PER_TENSOR'
+                assert len(enc["scale"]) == 1
+                assert enc["enc_type"] == "PER_TENSOR"
 
         for enc in encodings["activation_encodings"]:
-            assert len(enc['scale']) == 1
-            assert enc['enc_type'] == 'PER_TENSOR'
+            assert len(enc["scale"]) == 1
+            assert enc["enc_type"] == "PER_TENSOR"
 
     def test_model_with_initializers_as_activations(self):
         model = models_for_tests.model_with_initializers_as_activations()
@@ -1438,139 +1749,152 @@ class TestQuantSim:
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
-            dummy_tensor = {'model_input': np.random.rand(1, 3, 8, 8).astype(np.float32)}
+            dummy_tensor = {
+                "model_input": np.random.rand(1, 3, 8, 8).astype(np.float32)
+            }
             sim.compute_encodings(callback, dummy_tensor)
-            sim.export(tempdir, 'model_with_initializers_as_activations')
+            sim.export(tempdir, "model_with_initializers_as_activations")
 
-            with open(os.path.join(tempdir, 'model_with_initializers_as_activations.encodings')) as json_file:
+            with open(
+                os.path.join(
+                    tempdir, "model_with_initializers_as_activations.encodings"
+                )
+            ) as json_file:
                 encoding_data = json.load(json_file)
 
-            assert all(x in [i.name for i in model.graph.initializer] for x in ['add_input2', 'mul_input2'])
-            activation_encodings = {encoding['name']: encoding for encoding in encoding_data['activation_encodings']}
-            assert activation_encodings['add_input2']
-            assert activation_encodings['mul_input2']
+            assert all(
+                x in [i.name for i in model.graph.initializer]
+                for x in ["add_input2", "mul_input2"]
+            )
+            activation_encodings = {
+                encoding["name"]: encoding
+                for encoding in encoding_data["activation_encodings"]
+            }
+            assert activation_encodings["add_input2"]
+            assert activation_encodings["mul_input2"]
 
     def test_load_float16_encodings(self, tmpdir):
         model = models_for_tests.weight_matmul_model(10, 10)
-        sim = QuantizationSimModel(model, default_activation_bw=16, default_param_bw=16,
-                                   default_data_type=QuantizationDataType.float)
+        sim = QuantizationSimModel(
+            model,
+            default_activation_bw=16,
+            default_param_bw=16,
+            default_data_type=QuantizationDataType.float,
+        )
         sim.export(tmpdir, "model")
 
         model = models_for_tests.weight_matmul_model(10, 10)
-        sim = QuantizationSimModel(model, default_activation_bw=16, default_param_bw=16,
-                                   default_data_type=QuantizationDataType.float)
+        sim = QuantizationSimModel(
+            model,
+            default_activation_bw=16,
+            default_param_bw=16,
+            default_data_type=QuantizationDataType.float,
+        )
         load_encodings_to_sim(sim, os.path.join(tmpdir, "model.encodings"), strict=True)
-
 
     def test_gather_exception_rule_for_float_data(self):
         model = models_for_tests.gather_op_model()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "True"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
-            "op_type": {
-                "Gather":
-                    {
-                        "is_output_quantized": "False"
-                    }
-            },
+            "op_type": {"Gather": {"is_output_quantized": "False"}},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, default_param_bw=8, default_activation_bw=16,
-                                       path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                default_param_bw=8,
+                default_activation_bw=16,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
-            dummy_input = {'model_input': np.asarray([[0, 1, 2, 3]], dtype=np.int64)}
+            dummy_input = {"model_input": np.asarray([[0, 1, 2, 3]], dtype=np.int64)}
             sim.compute_encodings(callback, dummy_input)
-            sim.export(tempdir, 'gather_model')
+            sim.export(tempdir, "gather_model")
 
-            with open(os.path.join(tempdir, 'gather_model.encodings')) as json_file:
+            with open(os.path.join(tempdir, "gather_model.encodings")) as json_file:
                 encoding_data = json.load(json_file)
-                activation_encodings = {encoding['name']: encoding for encoding in encoding_data['activation_encodings']}
-                gather_weight_enc = activation_encodings['gather_weight']
+                activation_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encoding_data["activation_encodings"]
+                }
+                gather_weight_enc = activation_encodings["gather_weight"]
 
                 # gather param-encodings should follow output-activation-encoding config
-                assert gather_weight_enc['bw'] == 16
-                assert gather_weight_enc['is_sym'] is False
+                assert gather_weight_enc["bw"] == 16
+                assert gather_weight_enc["is_sym"] is False
 
     def test_gather_with_int_data(self):
         model = models_for_tests.gather_op_with_int_data_model()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "True"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
-            "params": {},
-            "op_type": {
-                "Gather":
-                    {
-                        "is_output_quantized": "False"
-                    }
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
             },
+            "params": {},
+            "op_type": {"Gather": {"is_output_quantized": "False"}},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            dummy_input = {'model_input': np.asarray([[0, 1, 2, 3]], dtype=np.int64)}
+            dummy_input = {"model_input": np.asarray([[0, 1, 2, 3]], dtype=np.int64)}
 
-            sim = QuantizationSimModel(model, dummy_input, default_param_bw=8, default_activation_bw=16,
-                                       path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                dummy_input,
+                default_param_bw=8,
+                default_activation_bw=16,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
 
             sim.compute_encodings(callback, dummy_input)
-            sim.export(tempdir, 'gather_model')
+            sim.export(tempdir, "gather_model")
 
-            with open(os.path.join(tempdir, 'gather_model.encodings')) as json_file:
+            with open(os.path.join(tempdir, "gather_model.encodings")) as json_file:
                 encoding_data = json.load(json_file)
-                activation_encoding_names = {encoding['name'] for encoding in encoding_data['activation_encodings']}
-                assert 'gather_weight' not in activation_encoding_names
+                activation_encoding_names = {
+                    encoding["name"]
+                    for encoding in encoding_data["activation_encodings"]
+                }
+                assert "gather_weight" not in activation_encoding_names
 
-    @pytest.mark.parametrize("model, block_size", ((models_for_tests.single_residual_model(), 4),
-                                                   (test_models.linear_layer_model(), 64)),)
+    @pytest.mark.parametrize(
+        "model, block_size",
+        (
+            (models_for_tests.single_residual_model(), 4),
+            (test_models.linear_layer_model(), 64),
+        ),
+    )
     def test_low_power_blockwise_quantization(self, model, block_size, tmpdir):
         dummy_input = make_dummy_input(model.model)
         bq_layers = ("MatMul", "Conv", "Gemm")
@@ -1585,13 +1909,17 @@ class TestQuantSim:
         # Input shape is not compatible with block size
         bq_weights.remove(model.graph().node[0].input[1])
 
-        sim = QuantizationSimModel(model, dummy_input, default_param_bw=16, default_activation_bw=16)
-        set_grouped_blockwise_quantization_for_weights(sim,
-                                                       ("MatMul", "Conv", "Gemm"),
-                                                       bitwidth,
-                                                       decompressed_bw,
-                                                       block_size,
-                                                       strict=False)
+        sim = QuantizationSimModel(
+            model, dummy_input, default_param_bw=16, default_activation_bw=16
+        )
+        set_grouped_blockwise_quantization_for_weights(
+            sim,
+            ("MatMul", "Conv", "Gemm"),
+            bitwidth,
+            decompressed_bw,
+            block_size,
+            strict=False,
+        )
 
         sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
         for name, quantizer in sim.qc_quantize_op_dict.items():
@@ -1613,7 +1941,10 @@ class TestQuantSim:
 
         for enc in encodings["param_encodings"]:
             if enc["name"] not in bq_weights:
-                assert enc["enc_type"] in (EncodingType.PER_TENSOR.name, EncodingType.PER_CHANNEL.name)
+                assert enc["enc_type"] in (
+                    EncodingType.PER_TENSOR.name,
+                    EncodingType.PER_CHANNEL.name,
+                )
             else:
                 assert enc["enc_type"] == EncodingType.LPBQ.name
                 assert enc["compressed_bw"] == bitwidth
@@ -1621,16 +1952,25 @@ class TestQuantSim:
 
     def test_lpbq_strict(self):
         model = models_for_tests.weight_matmul_model(in_features=16, out_features=32)
-        sim = QuantizationSimModel(model, default_activation_bw=16, default_param_bw=16, default_data_type=QuantizationDataType.float)
+        sim = QuantizationSimModel(
+            model,
+            default_activation_bw=16,
+            default_param_bw=16,
+            default_data_type=QuantizationDataType.float,
+        )
         quantizers = set(sim.qc_quantize_op_dict.values())
 
         with pytest.raises(ValueError):
-            set_grouped_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, 8, block_size=7, strict=True)
+            set_grouped_blockwise_quantization_for_weights(
+                sim, ("MatMul", "Gemm"), 4, 8, block_size=7, strict=True
+            )
         """
         When: Call block size is incompatible with weight shape
         Then: Original quantizer/quant_info should be unchanged from the call
         """
-        set_grouped_blockwise_quantization_for_weights(sim, ("MatMul", "Gemm"), 4, 8, block_size=7, strict=False)
+        set_grouped_blockwise_quantization_for_weights(
+            sim, ("MatMul", "Gemm"), 4, 8, block_size=7, strict=False
+        )
         assert quantizers == set(sim.qc_quantize_op_dict.values())
 
         for quantizer in sim.qc_quantize_op_dict.values():
@@ -1641,105 +1981,101 @@ class TestQuantSim:
 
     def test_encoding_constraints(self, tmp_path):
         quantsim_config = {
-            "defaults":
-                {
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "True"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
             "op_type": {
-                "Softmax":
-                    {
-                        "encoding_constraints":
-                            {
-                                "min": 0.0,
-                                "max": 1.0
-                            }
-                    },
-                "Sigmoid":
-                    {
-                        "encoding_constraints":
-                            {
-                                "min": 0.0,
-                                "max": 2.0
-                            }
-                    },
+                "Softmax": {"encoding_constraints": {"min": 0.0, "max": 1.0}},
+                "Sigmoid": {"encoding_constraints": {"min": 0.0, "max": 2.0}},
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        config_name = os.path.join(tmp_path, 'quantsim_config.json')
-        with open(config_name, 'w') as f:
+        config_name = os.path.join(tmp_path, "quantsim_config.json")
+        with open(config_name, "w") as f:
             json.dump(quantsim_config, f)
         model = models_for_tests.softmax_model()
         sim = QuantizationSimModel(model, config_file=config_name)
-        sim.compute_encodings(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
-        assert sim.qc_quantize_op_dict['model_output'].encodings[0].max == 2.0
-        assert sim.qc_quantize_op_dict['model_output'].encodings[0].min == 0.0
-        assert sim.qc_quantize_op_dict['softmax.output'].encodings[0].max == 1.0
-        assert sim.qc_quantize_op_dict['softmax.output'].encodings[0].min == 0.0
-        assert sim.qc_quantize_op_dict['matmul.output'].encodings[0].max not in (1.0, 2.0)
-        assert sim.qc_quantize_op_dict['matmul.output'].encodings[0].min != 0.0
+        sim.compute_encodings(
+            lambda sess, _: sess.run(None, make_dummy_input(model)), None
+        )
+        assert sim.qc_quantize_op_dict["model_output"].encodings[0].max == 2.0
+        assert sim.qc_quantize_op_dict["model_output"].encodings[0].min == 0.0
+        assert sim.qc_quantize_op_dict["softmax.output"].encodings[0].max == 1.0
+        assert sim.qc_quantize_op_dict["softmax.output"].encodings[0].min == 0.0
+        assert sim.qc_quantize_op_dict["matmul.output"].encodings[0].max not in (
+            1.0,
+            2.0,
+        )
+        assert sim.qc_quantize_op_dict["matmul.output"].encodings[0].min != 0.0
 
     def test_matmul_3d_weight(self, tmp_path):
         quantsim_config = {
-            "defaults":
-                {
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "True"
-                        },
-                    "per_channel_quantization": "True",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        config_name = os.path.join(tmp_path, 'quantsim_config.json')
-        with open(config_name, 'w') as f:
+        config_name = os.path.join(tmp_path, "quantsim_config.json")
+        with open(config_name, "w") as f:
             json.dump(quantsim_config, f)
         model = models_for_tests.model_with_4d_matmul_weight()
         sim = QuantizationSimModel(model, config_file=config_name)
-        sim.compute_encodings(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
+        sim.compute_encodings(
+            lambda sess, _: sess.run(None, make_dummy_input(model)), None
+        )
 
         quantizer = sim.qc_quantize_op_dict["matmul_weight"]
         assert len(quantizer.get_encodings()) == model.graph.initializer[0].dims[-1]
 
         block_size = 8
         quantizer._enable_blockwise_quantization(block_size)
-        sim.compute_encodings(lambda sess, _: sess.run(None, make_dummy_input(model)), None)
-        assert len(quantizer.get_encodings()) == model.graph.initializer[0].dims[-1] * model.graph.initializer[0].dims[-2] // block_size
+        sim.compute_encodings(
+            lambda sess, _: sess.run(None, make_dummy_input(model)), None
+        )
+        assert (
+            len(quantizer.get_encodings())
+            == model.graph.initializer[0].dims[-1]
+            * model.graph.initializer[0].dims[-2]
+            // block_size
+        )
 
     @pytest.mark.cuda
     def test_quantsim_init_args(self):
         with pytest.raises(RuntimeError):
-            QuantizationSimModel(single_residual_model(), use_cuda=True, providers=["CPUExecutionProvider"])
+            QuantizationSimModel(
+                single_residual_model(),
+                use_cuda=True,
+                providers=["CPUExecutionProvider"],
+            )
 
         with pytest.raises(RuntimeError):
-            QuantizationSimModel(single_residual_model(), use_cuda=False, providers=["CPUExecutionProvider"])
+            QuantizationSimModel(
+                single_residual_model(),
+                use_cuda=False,
+                providers=["CPUExecutionProvider"],
+            )
 
         with pytest.raises(RuntimeError):
-            QuantizationSimModel(single_residual_model(), device=0, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+            QuantizationSimModel(
+                single_residual_model(),
+                device=0,
+                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+            )
 
         with pytest.raises(TypeError):
             QuantizationSimModel(single_residual_model(), rounding_mode="stochastic")
@@ -1750,13 +2086,21 @@ class TestQuantSim:
         sim = QuantizationSimModel(single_residual_model(), providers=CPU_PROVIDERS)
         assert sim.session.get_providers() == CPU_PROVIDERS
 
-        providers = [('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT'}), 'CPUExecutionProvider']
+        providers = [
+            ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),
+            "CPUExecutionProvider",
+        ]
         sim = QuantizationSimModel(single_residual_model(), providers=providers)
         assert sim.session.get_providers() == CUDA_PROVIDERS
-        assert sim.session.get_provider_options()["CUDAExecutionProvider"]["cudnn_conv_algo_search"] == "DEFAULT"
+        assert (
+            sim.session.get_provider_options()["CUDAExecutionProvider"][
+                "cudnn_conv_algo_search"
+            ]
+            == "DEFAULT"
+        )
+
 
 class TestEncodingPropagation:
-
     def test_output(self):
         """
         Given: model as below
@@ -1765,12 +2109,13 @@ class TestEncodingPropagation:
           [input] -+                                           concat -> q_out3 -> [output]
                    +-> q_in2 -> conv2 -> relu2 ---> q_out2 -------^
         """
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3,3,3)
+                self.conv1 = torch.nn.Conv2d(3, 3, 3)
                 self.relu1 = torch.nn.ReLU()
-                self.conv2 = torch.nn.Conv2d(3,3,3)
+                self.conv2 = torch.nn.Conv2d(3, 3, 3)
                 self.relu2 = torch.nn.ReLU()
 
             def forward(self, x):
@@ -1780,6 +2125,7 @@ class TestEncodingPropagation:
                 x2 = self.conv2(x2)
                 x2 = self.relu2(x2)
                 return torch.cat([x1, x2])
+
         """
        When: _apply_constraints(True)
 
@@ -1796,11 +2142,17 @@ class TestEncodingPropagation:
         with _apply_constraints(True):
             sim = QuantizationSimModel(model, dummy_input)
 
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
-            assert _compare_encodings(sim.qc_quantize_op_dict['/relu1/Relu_output_0'].encodings[0],
-                                      sim.qc_quantize_op_dict['output'].encodings[0])
-            assert _compare_encodings(sim.qc_quantize_op_dict['/relu2/Relu_output_0'].encodings[0],
-                                      sim.qc_quantize_op_dict['output'].encodings[0])
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
+            assert _compare_encodings(
+                sim.qc_quantize_op_dict["/relu1/Relu_output_0"].encodings[0],
+                sim.qc_quantize_op_dict["output"].encodings[0],
+            )
+            assert _compare_encodings(
+                sim.qc_quantize_op_dict["/relu2/Relu_output_0"].encodings[0],
+                sim.qc_quantize_op_dict["output"].encodings[0],
+            )
 
     def test_math_invariant(self):
         """
@@ -1810,6 +2162,7 @@ class TestEncodingPropagation:
           [input] -+                                          concat -> q_out2 -> [output]
                    +-> q_in2 -> reshape -> permute --------------^
         """
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -1823,13 +2176,14 @@ class TestEncodingPropagation:
                 x2 = torch.reshape(x2, (-1, 24, 24, 3))
                 x2 = torch.permute(x2, (0, 3, 1, 2))
                 return torch.cat([x1, x2])
+
         """
         When: _apply_constraints(True)
 
         Then: q_out1 and q_in2 are replaced with q_out3 as below
 
                    +-> q_in1 -> conv1 ---> relu1 -----> **q_out2**- --------v
-          [input] -+                                                     concat -> q_out2 -> [output] 
+          [input] -+                                                     concat -> q_out2 -> [output]
                    +-> **q_out2** -> reshape -> transpose -> permute -------^
         """
         pt_model = Model().eval()
@@ -1838,12 +2192,18 @@ class TestEncodingPropagation:
         dummy_input = make_dummy_input(model.model)
         with _apply_constraints(True):
             sim = QuantizationSimModel(model, dummy_input)
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
 
-            assert _compare_encodings(sim.qc_quantize_op_dict['/relu1/Relu_output_0'].encodings[0],
-                                      sim.qc_quantize_op_dict['output'].encodings[0])
-            assert _compare_encodings(sim.qc_quantize_op_dict['input'].encodings[0],
-                                      sim.qc_quantize_op_dict['output'].encodings[0])
+            assert _compare_encodings(
+                sim.qc_quantize_op_dict["/relu1/Relu_output_0"].encodings[0],
+                sim.qc_quantize_op_dict["output"].encodings[0],
+            )
+            assert _compare_encodings(
+                sim.qc_quantize_op_dict["input"].encodings[0],
+                sim.qc_quantize_op_dict["output"].encodings[0],
+            )
 
     def test_concat_tree(self):
         """
@@ -1855,13 +2215,14 @@ class TestEncodingPropagation:
                     +-> q_in2a -> conv2a -> q_out2a -> concat2 -> q_out2c -------------^
                     +-> q_in2b -> conv2b -> q_out2b ------^
         """
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1a = torch.nn.Conv2d(3,3,3)
-                self.conv1b = torch.nn.Conv2d(3,3,3)
-                self.conv2a = torch.nn.Conv2d(3,3,3)
-                self.conv2b = torch.nn.Conv2d(3,3,3)
+                self.conv1a = torch.nn.Conv2d(3, 3, 3)
+                self.conv1b = torch.nn.Conv2d(3, 3, 3)
+                self.conv2a = torch.nn.Conv2d(3, 3, 3)
+                self.conv2b = torch.nn.Conv2d(3, 3, 3)
 
             def forward(self, x):
                 x1a = x1b = x2a = x2b = x
@@ -1892,34 +2253,45 @@ class TestEncodingPropagation:
         """
         with _apply_constraints(True):
             sim = QuantizationSimModel(model, dummy_input)
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
 
             for cg_op in sim.connected_graph.ordered_ops:
-                if cg_op.type in ['Conv', 'Concat']:
+                if cg_op.type in ["Conv", "Concat"]:
                     _, out_qtzr, __ = sim.get_op_quantizers(cg_op)
-                    assert _compare_encodings(out_qtzr[0].encodings[0], sim.qc_quantize_op_dict['output'].encodings[0])
+                    assert _compare_encodings(
+                        out_qtzr[0].encodings[0],
+                        sim.qc_quantize_op_dict["output"].encodings[0],
+                    )
 
-    @pytest.mark.parametrize('op_type_under_test', [torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.Upsample])
+    @pytest.mark.parametrize(
+        "op_type_under_test",
+        [torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.Upsample],
+    )
     def test_output_parametrized(self, op_type_under_test):
         """
         Given: model as below
            [input] -+-> q_in1 -> conv1 -> q_out1 -> op_type_under_test -> q_out2 -> [output]
         """
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
-                self.conv1 = torch.nn.Conv2d(3,3,3)
+                self.conv1 = torch.nn.Conv2d(3, 3, 3)
                 self.op_type_under_test = op_type_under_test(3)
+
             def forward(self, x):
                 x1 = self.conv1(x)
                 return self.op_type_under_test(x1)
+
         """
        When: _apply_constraints(True)
 
        Then: q_out1 will be replaced with q_out2 as below
-       
+
              [input] -+-> q_in1 -> conv1 -> *q_out2* -> op_type_under_test -> q_out2 -> [output]
-        
+
         """
         pt_model = Model().eval()
         x = torch.randn(1, 3, 24, 24)
@@ -1929,12 +2301,17 @@ class TestEncodingPropagation:
         dummy_input = make_dummy_input(model.model)
         with _apply_constraints(True):
             sim = QuantizationSimModel(model, dummy_input)
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_input), None
+            )
 
             for cg_op in sim.connected_graph.ordered_ops:
-                if cg_op.type in ['Conv']:
+                if cg_op.type in ["Conv"]:
                     _, out_qtzr, __ = sim.get_op_quantizers(cg_op)
-                    assert _compare_encodings(out_qtzr[0].encodings[0], sim.qc_quantize_op_dict['output'].encodings[0])
+                    assert _compare_encodings(
+                        out_qtzr[0].encodings[0],
+                        sim.qc_quantize_op_dict["output"].encodings[0],
+                    )
 
     def test_integer_concat(self):
         """
@@ -1953,15 +2330,25 @@ class TestEncodingPropagation:
         with _apply_constraints(True):
             sim = QuantizationSimModel(model)
 
-        sim.compute_encodings(lambda sess, x: sess.run(None, x), make_dummy_input(model))
+        sim.compute_encodings(
+            lambda sess, x: sess.run(None, x), make_dummy_input(model)
+        )
         concat_out_scale = sim.qc_quantize_op_dict["out"].get_encodings()[0].delta
 
         # Encoding should propagate through the 'x' input of Gather
-        assert sim.qc_quantize_op_dict["x_2"].get_encodings()[0].delta == concat_out_scale
+        assert (
+            sim.qc_quantize_op_dict["x_2"].get_encodings()[0].delta == concat_out_scale
+        )
         # Encoding should not propagate through the 'indices' input of Gather
-        assert not sim.qc_quantize_op_dict["z"].get_encodings()[0].delta == concat_out_scale
+        assert (
+            not sim.qc_quantize_op_dict["z"].get_encodings()[0].delta
+            == concat_out_scale
+        )
         # Encoding should not propagate through Mul
-        assert not sim.qc_quantize_op_dict["x"].get_encodings()[0].delta == concat_out_scale
+        assert (
+            not sim.qc_quantize_op_dict["x"].get_encodings()[0].delta
+            == concat_out_scale
+        )
 
     def test_set_quantizers(self):
         model = models_for_tests.gather_concat_model()
@@ -1995,7 +2382,7 @@ class TestEncodingPropagation:
         """
         with pytest.raises(TypeError):
             sim.set_quantizers({"out": "x"})
-        
+
         quantizer.set_bitwidth(4)
         sim.compute_encodings(lambda sess: sess.run(None, make_dummy_input(model)))
 
@@ -2005,40 +2392,35 @@ class TestEncodingPropagation:
 
     def test_clamp_activation_encodings(self):
         model = models_for_tests.matmul_add_model()
-        dummy_input = {'model_input': np.expand_dims(np.identity(8, np.float32), axis=(0, 1))}
+        dummy_input = {
+            "model_input": np.expand_dims(np.identity(8, np.float32), axis=(0, 1))
+        }
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, dummy_input, path=tempdir, config_file=os.path.join(tempdir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                dummy_input,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
 
             def callback(session, dummy_input):
                 session.run(None, dummy_input)
@@ -2046,59 +2428,62 @@ class TestEncodingPropagation:
             sim.compute_encodings(callback, dummy_input)
             clamp_activation_encodings(sim, 100.0)
 
-            sim.export(tempdir, 'matmul_add_quantsim')
+            sim.export(tempdir, "matmul_add_quantsim")
 
-            with open(os.path.join(tempdir, 'matmul_add_quantsim.encodings')) as json_file:
+            with open(
+                os.path.join(tempdir, "matmul_add_quantsim.encodings")
+            ) as json_file:
                 encodings = json.load(json_file)
 
-            activation_encodings = {encoding['name']: encoding for encoding in encodings['activation_encodings']}
-            add_act_encoding = activation_encodings['add_1.output']
-            matmul_act_encoding = activation_encodings['matmul_2.output']
+            activation_encodings = {
+                encoding["name"]: encoding
+                for encoding in encodings["activation_encodings"]
+            }
+            add_act_encoding = activation_encodings["add_1.output"]
+            matmul_act_encoding = activation_encodings["matmul_2.output"]
 
-            assert round(add_act_encoding['scale'][0] * (255 + add_act_encoding['offset'][0])) == 100.0
-            assert round(matmul_act_encoding['scale'][0] * (255 + matmul_act_encoding['offset'][0])) == 100.0
+            assert (
+                round(
+                    add_act_encoding["scale"][0] * (255 + add_act_encoding["offset"][0])
+                )
+                == 100.0
+            )
+            assert (
+                round(
+                    matmul_act_encoding["scale"][0]
+                    * (255 + matmul_act_encoding["offset"][0])
+                )
+                == 100.0
+            )
 
     def test_matmul_with_constant_first_input(self):
         model = models_for_tests.matmul_with_constant_first_input()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V73",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "hw_version": "V73",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
-            "op_type": {
-                "Unsqueeze": {
-                    "is_output_quantized" : "False"
-                }
-            },
+            "op_type": {"Unsqueeze": {"is_output_quantized": "False"}},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, path=tempdir,
-                                       config_file=os.path.join(tempdir, 'quantsim_config.json'),
-                                       default_activation_bw=16)
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
             assert sim.qc_quantize_op_dict["model_input"].enabled
             assert sim.qc_quantize_op_dict["model_input"].use_symmetric_encodings
             assert sim.qc_quantize_op_dict["matmul.weight"].enabled
@@ -2106,40 +2491,32 @@ class TestEncodingPropagation:
     def test_matmul_with_constant_second_input(self):
         model = models_for_tests.weight_matmul_model()
         quantsim_config = {
-            "defaults":
-                {
-                    "hw_version": "V69",
-                    "ops":
-                        {
-                            "is_output_quantized": "True"
-                        },
-                    "params":
-                        {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        },
-                    "per_channel_quantization": "False",
-                    "strict_symmetric": "False",
-                    "unsigned_symmetric": "False"
-                },
+            "defaults": {
+                "hw_version": "V69",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
             "params": {},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, path=tempdir,
-                                       config_file=os.path.join(tempdir, 'quantsim_config.json'),
-                                       default_activation_bw=16, default_param_bw=4)
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+                default_param_bw=4,
+            )
             """
             Exception rule should not be applied to non-dynamic matmuls
             """
@@ -2149,15 +2526,17 @@ class TestEncodingPropagation:
     def test_matmul_add_bias_quantizer(self, per_channel: bool):
         quantsim_config = {
             "defaults": {
-                "ops": { "is_output_quantized": "True" },
-                "params": { "is_quantized": "True", "is_symmetric": "True" },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
                 "per_channel_quantization": str(per_channel),
                 "strict_symmetric": "False",
                 "unsigned_symmetric": "False",
             },
-            "params": {}, "op_type": {}, "supergroups": [],
-            "model_input": { "is_input_quantized": "True" },
-            "model_output": { "is_output_quantized": "True" }
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
         }
 
         """
@@ -2175,7 +2554,7 @@ class TestEncodingPropagation:
         """
         with tempfile.TemporaryDirectory() as tempdir:
             config_file = os.path.join(tempdir, "quantsim_config.json")
-            with open(config_file, 'w') as f:
+            with open(config_file, "w") as f:
                 json.dump(quantsim_config, f)
             sim = QuantizationSimModel(model, config_file=config_file)
 
@@ -2183,7 +2562,10 @@ class TestEncodingPropagation:
         weight_qtzr = sim.qc_quantize_op_dict[f"matmul.weight"]
         bias_qtzr = sim.qc_quantize_op_dict[f"add.bias"]
         assert not bias_qtzr.enabled
-        assert bias_qtzr.quant_info.usePerChannelMode == weight_qtzr.quant_info.usePerChannelMode
+        assert (
+            bias_qtzr.quant_info.usePerChannelMode
+            == weight_qtzr.quant_info.usePerChannelMode
+        )
 
         _, _, param_quantizers = sim.get_op_quantizers(sim.connected_graph._ops["add"])
         assert list(param_quantizers.values()) == [bias_qtzr]
@@ -2193,65 +2575,83 @@ class TestEncodingPropagation:
         Then: Bias scale should be derived as input_scale * weight_scale of matmul
         """
         with aimet_onnx.compute_encodings(sim):
-            _ = sim.session.run(None, {"input": np.random.randn(10, 10).astype(np.float32)})
+            _ = sim.session.run(
+                None, {"input": np.random.randn(10, 10).astype(np.float32)}
+            )
 
         sim._concretize_int32_bias_quantizers()
         assert bias_qtzr.enabled
-        bias_scale = np.array(bias_qtzr.export_encodings("2.0.0")["y_scale"]) ,
-        expected = np.array(weight_qtzr.export_encodings("2.0.0")["y_scale"]) * \
-                   np.array(input_qtzr.export_encodings("2.0.0")["y_scale"])
+        bias_scale = (np.array(bias_qtzr.export_encodings("2.0.0")["y_scale"]),)
+        expected = np.array(
+            weight_qtzr.export_encodings("2.0.0")["y_scale"]
+        ) * np.array(input_qtzr.export_encodings("2.0.0")["y_scale"])
         assert np.allclose(bias_scale, expected)
 
     def test_identity_conv_perchannel(self):
         model = models_for_tests.conv_with_weight_identity_input()
 
         with tempfile.TemporaryDirectory() as tempdir:
-
-            sim = QuantizationSimModel(model, path=tempdir,
-                                       config_file=get_path_for_per_channel_config())
-            assert sim.qc_quantize_op_dict["identity.input"].quant_info.usePerChannelMode
+            sim = QuantizationSimModel(
+                model, path=tempdir, config_file=get_path_for_per_channel_config()
+            )
+            assert sim.qc_quantize_op_dict[
+                "identity.input"
+            ].quant_info.usePerChannelMode
             assert sim.qc_quantize_op_dict["identity.input"].quant_info.channelAxis == 0
 
     def test_customop_model(self):
         from onnxruntime_extensions import get_library_path
+
         model = models_for_tests.custom_op_model()
         sim = QuantizationSimModel(model, user_onnx_libs=[get_library_path()])
-        assert {"model_input", "output", "model_output", "y", "z"} == sim.qc_quantize_op_dict.keys()
+        assert {
+            "model_input",
+            "output",
+            "model_output",
+            "y",
+            "z",
+        } == sim.qc_quantize_op_dict.keys()
 
     def test_set_and_freeze_param_encodings(self):
         torch.manual_seed(0)
         np.random.seed(0)
         model = single_residual_model().model
         model_2 = copy.deepcopy(model)
-        dummy_tensor = {'input': np.random.rand(1, 3, 32, 32).astype(np.float32)}
+        dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(model, path=tempdir)
-            sim.compute_encodings(lambda session, _: session.run(None, dummy_tensor), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_tensor), None
+            )
             pre_load_out = sim.session.run(None, dummy_tensor)
             new_encoding = libpymo.TfEncoding()
             new_encoding.min = -16.0
             new_encoding.max = 15.875
             new_encoding.bw = 8
-            new_encoding.delta = .125
+            new_encoding.delta = 0.125
             new_encoding.offset = -128
-            sim.qc_quantize_op_dict['conv3.weight'].load_encodings([new_encoding] * 8)
+            sim.qc_quantize_op_dict["conv3.weight"].load_encodings([new_encoding] * 8)
             post_load_out = sim.session.run(None, dummy_tensor)
 
-            sim.export(tempdir, 'onnx_sim')
+            sim.export(tempdir, "onnx_sim")
 
             del sim
 
             sim = QuantizationSimModel(model_2, path=tempdir)
-            sim.compute_encodings(lambda session, _: session.run(None,dummy_tensor), None)
+            sim.compute_encodings(
+                lambda session, _: session.run(None, dummy_tensor), None
+            )
             pre_load_out_2 = sim.session.run(None, dummy_tensor)
 
-            with open(os.path.join(tempdir, 'onnx_sim.encodings'), 'r') as f:
+            with open(os.path.join(tempdir, "onnx_sim.encodings"), "r") as f:
                 encodings = json.load(f)
 
-            with open(os.path.join(tempdir, 'param_encodings.json'), 'w') as f:
-                json.dump(encodings['param_encodings'], f, sort_keys=True, indent=4)
+            with open(os.path.join(tempdir, "param_encodings.json"), "w") as f:
+                json.dump(encodings["param_encodings"], f, sort_keys=True, indent=4)
 
-            sim.set_and_freeze_param_encodings(os.path.join(tempdir, 'param_encodings.json'))
+            sim.set_and_freeze_param_encodings(
+                os.path.join(tempdir, "param_encodings.json")
+            )
             post_load_out_2 = sim.session.run(None, dummy_tensor)
 
             assert np.allclose(pre_load_out, pre_load_out_2)
@@ -2259,19 +2659,21 @@ class TestEncodingPropagation:
 
 
 @pytest.mark.parametrize(
-    "model_factory,             input_shape,     block_size, lpbq", [
-    (single_residual_model,     (1, 3, 32, 32),  None,       False),
-    (single_residual_model,     (1, 3, 32, 32),  4,          False),
-    (single_residual_model,     (1, 3, 32, 32),  4,          True),
-    (transposed_conv_model,     (10, 10, 4, 4),  None,       False),
-    (transposed_conv_model,     (10, 10, 4, 4),  5,          False),
-    (transposed_conv_model,     (10, 10, 4, 4),  5,          True),
-    (batchnorm_model,           (10, 10, 8, 8),  None,       False),
-    (batchnorm_model_constants, (10, 10, 8, 8),  None,       False),
-    (instance_norm_model,       (2, 10, 24, 24), None,       False),
-    (layernorm_model,           (1, 4, 64, 64),  None,       False),
-    # TODO: Add tests with GroupNormalization
-])
+    "model_factory,             input_shape,     block_size, lpbq",
+    [
+        (single_residual_model, (1, 3, 32, 32), None, False),
+        (single_residual_model, (1, 3, 32, 32), 4, False),
+        (single_residual_model, (1, 3, 32, 32), 4, True),
+        (transposed_conv_model, (10, 10, 4, 4), None, False),
+        (transposed_conv_model, (10, 10, 4, 4), 5, False),
+        (transposed_conv_model, (10, 10, 4, 4), 5, True),
+        (batchnorm_model, (10, 10, 8, 8), None, False),
+        (batchnorm_model_constants, (10, 10, 8, 8), None, False),
+        (instance_norm_model, (2, 10, 24, 24), None, False),
+        (layernorm_model, (1, 4, 64, 64), None, False),
+        # TODO: Add tests with GroupNormalization
+    ],
+)
 def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
     model = model_factory()
     input = np.random.randn(*input_shape).astype(np.float32)
@@ -2284,19 +2686,23 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
     if block_size:
         op_types = ("Conv", "ConvTranspose", "Gemm")
         if lpbq:
-            set_grouped_blockwise_quantization_for_weights(sim,
-                                                           op_types,
-                                                           bitwidth=4,
-                                                           decompressed_bw=8,
-                                                           block_size=block_size,
-                                                           strict=False)
+            set_grouped_blockwise_quantization_for_weights(
+                sim,
+                op_types,
+                bitwidth=4,
+                decompressed_bw=8,
+                block_size=block_size,
+                strict=False,
+            )
         else:
-            set_blockwise_quantization_for_weights(sim,
-                                                   op_types,
-                                                   bitwidth=4,
-                                                   symmetric=True,
-                                                   block_size=block_size,
-                                                   strict=False)
+            set_blockwise_quantization_for_weights(
+                sim,
+                op_types,
+                bitwidth=4,
+                symmetric=True,
+                block_size=block_size,
+                strict=False,
+            )
 
     sim.compute_encodings(lambda sess, _: sess.run(None, {"input": input}), None)
     sim._concretize_int32_bias_quantizers()
@@ -2307,7 +2713,9 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
 
     exported_encodings = {
         enc["name"]: enc
-        for enc in itertools.chain(encodings["activation_encodings"], encodings["param_encodings"])
+        for enc in itertools.chain(
+            encodings["activation_encodings"], encodings["param_encodings"]
+        )
     }
 
     # sanity check
@@ -2331,20 +2739,25 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
           bias encoding should be derived analytically from input and weight encodings
     """
     linear_ops_with_bias = {
-        op for op in sim.connected_graph.get_all_ops().values()
-        if op.type in ("Conv", "ConvTranspose", "Gemm") and
-           "bias" in [param_type for _, param_type in op.parameters.values()]
+        op
+        for op in sim.connected_graph.get_all_ops().values()
+        if op.type in ("Conv", "ConvTranspose", "Gemm")
+        and "bias" in [param_type for _, param_type in op.parameters.values()]
     }
 
     for op in linear_ops_with_bias:
         input, weight, bias = op.inputs
         assert bias.name in exported_encodings
-        assert all(offset == -2**31 for offset in exported_encodings[bias.name]["offset"])
+        assert all(
+            offset == -(2**31) for offset in exported_encodings[bias.name]["offset"]
+        )
 
         weight_scale = np.array(exported_encodings[weight.name]["scale"])
 
         if exported_encodings[weight.name]["enc_type"] == "PER_BLOCK":
-            weight_scale = weight_scale.reshape(sim.qc_quantize_op_dict[weight.name]._encoding_shape())
+            weight_scale = weight_scale.reshape(
+                sim.qc_quantize_op_dict[weight.name]._encoding_shape()
+            )
             block_axis = 0 if op.type == "ConvTranspose" else 1
             weight_scale = weight_scale.max(axis=block_axis).flatten()
 
@@ -2352,7 +2765,7 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         try:
             input_scale = np.array(exported_encodings[input.name]["scale"])
         except KeyError:
-            continue # TODO: Remove this exception. Find input scale more smartly
+            continue  # TODO: Remove this exception. Find input scale more smartly
 
         assert np.allclose(bias_scale, input_scale * weight_scale)
 
@@ -2361,10 +2774,14 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
           and GroupNormalization, bias encoding should be calibrated statistically
     """
     nonlinear_ops_with_bias = {
-        op for op in sim.connected_graph.get_all_ops().values()
-        if op.type in ("BatchNormalization", "InstanceNormalization"
-                       "LayerNormalization" "GroupNormalization") and
-           "bias" in [param_type for _, param_type in op.parameters.values()]
+        op
+        for op in sim.connected_graph.get_all_ops().values()
+        if op.type
+        in (
+            "BatchNormalization",
+            "InstanceNormalizationLayerNormalizationGroupNormalization",
+        )
+        and "bias" in [param_type for _, param_type in op.parameters.values()]
     }
 
     for op in nonlinear_ops_with_bias:
@@ -2372,7 +2789,9 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         if bias.name not in exported_encodings:
             print()
             assert False
-        assert all(offset == -2**31 for offset in exported_encodings[bias.name]["offset"])
+        assert all(
+            offset == -(2**31) for offset in exported_encodings[bias.name]["offset"]
+        )
 
         weight_scale = np.array(exported_encodings[weight.name]["scale"])
         bias_scale = np.array(exported_encodings[bias.name]["scale"])
@@ -2381,11 +2800,13 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         except KeyError:
             continue
 
-        bias_proto = sim.model.get_initializer(bias.name) or \
-            next(iter(
-                node.attribute[0].t for node in sim.model.graph().node
+        bias_proto = sim.model.get_initializer(bias.name) or next(
+            iter(
+                node.attribute[0].t
+                for node in sim.model.graph().node
                 if node.output == [bias.name]
-            ))
+            )
+        )
 
         bias_value = onnx.numpy_helper.to_array(bias_proto)
         expected_bias_scale = np.maximum(abs(bias_value) / 2**31, _INT32_MINIMUM_SCALE)
@@ -2405,42 +2826,49 @@ def _parse_type(type_str: str) -> tuple[str, int]:
 @pytest.mark.parametrize("seed", range(10))
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize(
-    "param_dtype, activation_dtype", [
-    ("int4",      "uint16"),
-    ("int4",      "float16"),
-    ("int8",      "uint8"),
-    ("int8",      "uint16"),
-    ("float16",   "float16"),
-])
+    "param_dtype, activation_dtype",
+    [
+        ("int4", "uint16"),
+        ("int4", "float16"),
+        ("int8", "uint8"),
+        ("int8", "uint16"),
+        ("float16", "float16"),
+    ],
+)
 @pytest.mark.parametrize(
-    "model_factory,                                               tolerance", [
-    (partial(single_residual_model, opset_version=21),            1),
-    (partial(transposed_conv_model, opset_version=21),            1),
-
-    # normalization layers tolerance rationale:
-    #   * off-by-one in input/output qtzn respectively
-    #   * No off-by-one in weight qtzn; weights are exported spot-on
-    (partial(standalone_batchnorm, (1, 32, 4096, 10)),            2),
-    (partial(standalone_batchnorm_constants, (1, 32, 4096, 10)),  2),
-    (partial(standalone_instancenorm, (1, 32, 40960)),            2),
-    (partial(standalone_layernorm, (1, 40960, 32)),               2),
-])
-def test_onnx_qdq(model_factory,
-                  tolerance: int,
-                  param_dtype: str,
-                  activation_dtype: str,
-                  export_int32_bias_encodings: bool,
-                  seed: int):
+    "model_factory,                                               tolerance",
+    [
+        (partial(single_residual_model, opset_version=21), 1),
+        (partial(transposed_conv_model, opset_version=21), 1),
+        # normalization layers tolerance rationale:
+        #   * off-by-one in input/output qtzn respectively
+        #   * No off-by-one in weight qtzn; weights are exported spot-on
+        (partial(standalone_batchnorm, (1, 32, 4096, 10)), 2),
+        (partial(standalone_batchnorm_constants, (1, 32, 4096, 10)), 2),
+        (partial(standalone_instancenorm, (1, 32, 40960)), 2),
+        (partial(standalone_layernorm, (1, 40960, 32)), 2),
+    ],
+)
+def test_onnx_qdq(
+    model_factory,
+    tolerance: int,
+    param_dtype: str,
+    activation_dtype: str,
+    export_int32_bias_encodings: bool,
+    seed: int,
+):
     ort.set_seed(seed)
     np.random.seed(seed)
 
     model = model_factory()
     param_kind, param_bw = _parse_type(param_dtype)
     activation_kind, activation_bw = _parse_type(activation_dtype)
-    sim = QuantizationSimModel(model,
-                               default_param_bw=param_bw,
-                               default_activation_bw=activation_bw,
-                               config_file="htp_v81")
+    sim = QuantizationSimModel(
+        model,
+        default_param_bw=param_bw,
+        default_activation_bw=activation_bw,
+        config_file="htp_v81",
+    )
 
     if param_kind == "float":
         for op in sim.connected_graph.get_all_ops().values():
@@ -2455,8 +2883,8 @@ def test_onnx_qdq(model_factory,
                 qtzr.data_type = QuantizationDataType.float
 
     input_shape = tuple(
-        dim.dim_value for dim
-        in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
     )
     input = np.random.randn(*input_shape).astype(np.float32)
 
@@ -2470,20 +2898,27 @@ def test_onnx_qdq(model_factory,
         # FIXME: Need extra tolerance due to numerical instability of AIMET int32 bias qdq.
         tolerance += 1
 
-    out_sim, = sim.session.run(None, {"input": input})
+    (out_sim,) = sim.session.run(None, {"input": input})
 
     onnx_qdq_model = sim._to_onnx_qdq()
 
     """
     Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
     """
-    assert len([node for node in onnx_qdq_model.graph.node if node.op_type == "DequantizeLinear"]) \
-           == \
-           len([
-               qtzr for qtzr in sim.qc_quantize_op_dict.values()
-               if qtzr.enabled and
-                  (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
-            ])
+    assert len(
+        [
+            node
+            for node in onnx_qdq_model.graph.node
+            if node.op_type == "DequantizeLinear"
+        ]
+    ) == len(
+        [
+            qtzr
+            for qtzr in sim.qc_quantize_op_dict.values()
+            if qtzr.enabled
+            and (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
+        ]
+    )
 
     # NOTE: Should disable all ORT graph optimization to circumvent known bugs
     # in CPUExecutionProvider operator fusing.
@@ -2512,40 +2947,48 @@ def test_onnx_qdq(model_factory,
         atol = 3 * np.finfo(np.float16).eps
 
     rtol = 1e-3 * tolerance
-    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
-    out_onnx_qdq, = sess.run(None, {"input": input})
+    sess = ort.InferenceSession(
+        onnx_qdq_model.SerializeToString(), sess_options=sess_options
+    )
+    (out_onnx_qdq,) = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
 
 
 @pytest.mark.parametrize("input_model_opset", range(9, 22))
 @pytest.mark.parametrize(
-    "param_bw, act_bw, per_channel, minimum_required_opset", [
-    (4,        16,     False,       21),
-    (8,        8,      False,       10),
-    (8,        16,     False,       21),
-    (16,       16,     False,       21),
-    (4,        16,     True,        21),
-    (8,        8,      True,        13),
-    (8,        16,     True,        21),
-    (16,       16,     True,        21),
-    (8,        12,     True,        -1),
-])
-def test_onnx_qdq_opset_compatibility(input_model_opset: int,
-                                      param_bw: int,
-                                      act_bw: int,
-                                      per_channel: bool,
-                                      minimum_required_opset: int):
+    "param_bw, act_bw, per_channel, minimum_required_opset",
+    [
+        (4, 16, False, 21),
+        (8, 8, False, 10),
+        (8, 16, False, 21),
+        (16, 16, False, 21),
+        (4, 16, True, 21),
+        (8, 8, True, 13),
+        (8, 16, True, 21),
+        (16, 16, True, 21),
+        (8, 12, True, -1),
+    ],
+)
+def test_onnx_qdq_opset_compatibility(
+    input_model_opset: int,
+    param_bw: int,
+    act_bw: int,
+    per_channel: bool,
+    minimum_required_opset: int,
+):
     ort.set_seed(1)
     np.random.seed(1)
 
     input_shape = (1, 3, 32, 32)
     model = single_residual_model(opset_version=input_model_opset)
     config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
-    sim = QuantizationSimModel(model,
-                               default_param_bw=param_bw,
-                               default_activation_bw=act_bw,
-                               use_cuda=False,
-                               config_file=config_file)
+    sim = QuantizationSimModel(
+        model,
+        default_param_bw=param_bw,
+        default_activation_bw=act_bw,
+        use_cuda=False,
+        config_file=config_file,
+    )
     input = np.random.randn(*input_shape).astype(np.float32)
     sim.compute_encodings(lambda sess, _: sess.run(None, {"input": input}), None)
 
@@ -2554,7 +2997,7 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
             onnx_qdq_model = sim._to_onnx_qdq()
         return
 
-    out_sim, = sim.session.run(None, {"input": input})
+    (out_sim,) = sim.session.run(None, {"input": input})
 
     """
     When: Create a pure onnx model with sim._to_onnx_qdq()
@@ -2579,13 +3022,12 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
         for param, _ in op.parameters.values()
     )
     q_nodes = [
-        node for node in onnx_qdq_model.graph.node
-        if node.op_type == "QuantizeLinear"
+        node for node in onnx_qdq_model.graph.node if node.op_type == "QuantizeLinear"
     ]
     expected_output_dtypes = {
         q.output[0]: getattr(onnx.TensorProto, f"INT{param_bw}")
-                     if q.input[0] in param_names
-                     else getattr(onnx.TensorProto, f"UINT{act_bw}")
+        if q.input[0] in param_names
+        else getattr(onnx.TensorProto, f"UINT{act_bw}")
         for q in q_nodes
     }
 
@@ -2626,6 +3068,8 @@ def test_onnx_qdq_opset_compatibility(input_model_opset: int,
     # Allow off-by-1 error
     atol = sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
     rtol = 1e-3
-    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString(), sess_options=sess_options)
-    out_onnx_qdq, = sess.run(None, {"input": input})
+    sess = ort.InferenceSession(
+        onnx_qdq_model.SerializeToString(), sess_options=sess_options
+    )
+    (out_onnx_qdq,) = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)

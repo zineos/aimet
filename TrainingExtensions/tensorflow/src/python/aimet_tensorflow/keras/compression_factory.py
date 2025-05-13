@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Provides a factory to construct various aimet model compression classes based on a scheme """
+"""Provides a factory to construct various aimet model compression classes based on a scheme"""
 
 from typing import List
 import tensorflow as tf
@@ -43,23 +43,35 @@ import tensorflow as tf
 from aimet_common.bokeh_plots import BokehServerSession
 from aimet_common.defs import CostMetric, EvalFunction, LayerCompRatioPair
 from aimet_common.cost_calculator import SpatialSvdCostCalculator
-from aimet_common.comp_ratio_select import GreedyCompRatioSelectAlgo, ManualCompRatioSelectAlgo
+from aimet_common.comp_ratio_select import (
+    GreedyCompRatioSelectAlgo,
+    ManualCompRatioSelectAlgo,
+)
 from aimet_common.comp_ratio_rounder import RankRounder
 from aimet_common.compression_algo import CompressionAlgo
 
 from aimet_tensorflow.keras.defs import SpatialSvdParameters, ModuleCompRatioPair
-from aimet_tensorflow.keras.layer_selector import ConvNoDepthwiseLayerSelector, ManualLayerSelector
+from aimet_tensorflow.keras.layer_selector import (
+    ConvNoDepthwiseLayerSelector,
+    ManualLayerSelector,
+)
 from aimet_tensorflow.keras.layer_database import LayerDatabase
 from aimet_tensorflow.keras.svd_pruner import SpatialSvdPruner
 
 
 class CompressionFactory:
-    """ Factory to construct various aimet model compression classes based on a scheme """
+    """Factory to construct various aimet model compression classes based on a scheme"""
 
     @classmethod
-    def create_spatial_svd_algo(cls, model: tf.keras.Model, eval_callback: EvalFunction, eval_iterations: int,
-                                cost_metric: CostMetric, params: SpatialSvdParameters,
-                                bokeh_session: BokehServerSession = None) -> CompressionAlgo:
+    def create_spatial_svd_algo(
+        cls,
+        model: tf.keras.Model,
+        eval_callback: EvalFunction,
+        eval_iterations: int,
+        cost_metric: CostMetric,
+        params: SpatialSvdParameters,
+        bokeh_session: BokehServerSession = None,
+    ) -> CompressionAlgo:
         """
         Factory method to construct SpatialSvdCompressionAlgo
 
@@ -88,36 +100,58 @@ class CompressionFactory:
         # Create a comp-ratio selection algorithm
         if params.mode == SpatialSvdParameters.Mode.auto:
             greedy_params = params.mode_params.greedy_params
-            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db, pruner, cost_calculator, eval_callback,
-                                                               eval_iterations, cost_metric,
-                                                               greedy_params.target_comp_ratio,
-                                                               greedy_params.num_comp_ratio_candidates,
-                                                               greedy_params.use_monotonic_fit,
-                                                               greedy_params.saved_eval_scores_dict,
-                                                               comp_ratio_rounding_algo, use_cuda,
-                                                               bokeh_session=bokeh_session)
+            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+                layer_db,
+                pruner,
+                cost_calculator,
+                eval_callback,
+                eval_iterations,
+                cost_metric,
+                greedy_params.target_comp_ratio,
+                greedy_params.num_comp_ratio_candidates,
+                greedy_params.use_monotonic_fit,
+                greedy_params.saved_eval_scores_dict,
+                comp_ratio_rounding_algo,
+                use_cuda,
+                bokeh_session=bokeh_session,
+            )
             layer_selector = ConvNoDepthwiseLayerSelector()
             modules_to_ignore = params.mode_params.modules_to_ignore
 
         else:
             # Convert (module,comp-ratio) pairs to (layer,comp-ratio) pairs
-            layer_comp_ratio_pairs = cls._get_layer_pairs(layer_db, params.mode_params.list_of_module_comp_ratio_pairs)
+            layer_comp_ratio_pairs = cls._get_layer_pairs(
+                layer_db, params.mode_params.list_of_module_comp_ratio_pairs
+            )
 
-            comp_ratio_select_algo = ManualCompRatioSelectAlgo(layer_db,
-                                                               layer_comp_ratio_pairs,
-                                                               comp_ratio_rounding_algo, cost_metric=cost_metric)
+            comp_ratio_select_algo = ManualCompRatioSelectAlgo(
+                layer_db,
+                layer_comp_ratio_pairs,
+                comp_ratio_rounding_algo,
+                cost_metric=cost_metric,
+            )
 
             layer_selector = ManualLayerSelector(layer_comp_ratio_pairs)
             modules_to_ignore = []
 
         # Create the overall Spatial SVD compression algorithm
-        spatial_svd_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner, eval_callback,
-                                           layer_selector, modules_to_ignore, cost_calculator, use_cuda)
+        spatial_svd_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            eval_callback,
+            layer_selector,
+            modules_to_ignore,
+            cost_calculator,
+            use_cuda,
+        )
 
         return spatial_svd_algo
 
     @staticmethod
-    def _get_layer_pairs(layer_db: LayerDatabase, module_comp_ratio_pairs: List[ModuleCompRatioPair]) -> List[LayerCompRatioPair]:
+    def _get_layer_pairs(
+        layer_db: LayerDatabase, module_comp_ratio_pairs: List[ModuleCompRatioPair]
+    ) -> List[LayerCompRatioPair]:
         """
         Converts the List of module to compresion-ratio pair to List of Layer to compression-ratio pairs.
 
@@ -128,8 +162,9 @@ class CompressionFactory:
         layer_comp_ratio_pairs = []
 
         for pair in module_comp_ratio_pairs:
-            layer_comp_ratio_pair = LayerCompRatioPair(layer_db.find_layer_by_module(pair.module),
-                                                       pair.comp_ratio)
+            layer_comp_ratio_pair = LayerCompRatioPair(
+                layer_db.find_layer_by_module(pair.module), pair.comp_ratio
+            )
             layer_comp_ratio_pairs.append(layer_comp_ratio_pair)
 
         return layer_comp_ratio_pairs

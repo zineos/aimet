@@ -51,11 +51,11 @@ class TestTensorQuantizer(unittest.TestCase):
         helper to calculate delta
         :return:
         """
-        n_levels = 2 ** n_bits
-        delta = float(x_max - x_min) / (n_levels - 1)  #scaling
+        n_levels = 2**n_bits
+        delta = float(x_max - x_min) / (n_levels - 1)  # scaling
 
         if delta < 1e-8:
-            print('Quantization range close to zero: [{}, {}]'.format(x_min, x_max))
+            print("Quantization range close to zero: [{}, {}]".format(x_min, x_max))
             delta = 1e-8
 
         return delta
@@ -81,11 +81,11 @@ class TestTensorQuantizer(unittest.TestCase):
         :return:
         """
         scaling = self.get_delta(n_bits, x_min, x_max)
-        offset = self.get_offset_qat(x_min, scaling) #zero_point
+        offset = self.get_offset_qat(x_min, scaling)  # zero_point
 
         x = np.where(x <= x_max, x, x_max)
         x = np.where(x >= x_min, x, x_min)
-        x_int = x/scaling + offset
+        x_int = x / scaling + offset
         x_int = np.round(x_int)
         x_float_q = (x_int - offset) * scaling
 
@@ -104,8 +104,10 @@ class TestTensorQuantizer(unittest.TestCase):
 
     @unittest.skip
     def test_sanity(self):
-        quantizer = libpymo.TensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED,
-                                            libpymo.RoundingMode.ROUND_NEAREST)
+        quantizer = libpymo.TensorQuantizer(
+            libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED,
+            libpymo.RoundingMode.ROUND_NEAREST,
+        )
 
         np.random.seed(10)
         random_input = np.random.randn(1, 3, 224, 224).astype(np.float32)
@@ -115,16 +117,25 @@ class TestTensorQuantizer(unittest.TestCase):
         self.assertFalse(quantizer.isEncodingValid)
 
         encoding = quantizer.computeEncoding(8, False, False, False)
-        print(quantizer.encoding.min, quantizer.encoding.max, quantizer.encoding.delta, quantizer.encoding.offset)
+        print(
+            quantizer.encoding.min,
+            quantizer.encoding.max,
+            quantizer.encoding.delta,
+            quantizer.encoding.offset,
+        )
         self.assertTrue(quantizer.isEncodingValid)
 
-        self.assertEqual(quantizer.quantScheme, libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED)
+        self.assertEqual(
+            quantizer.quantScheme, libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED
+        )
         self.assertEqual(quantizer.roundingMode, libpymo.RoundingMode.ROUND_NEAREST)
 
         input_tensor = np.random.randn(1, 3, 224, 224).astype(np.float32)
         output_tensor = np.zeros((1, 3, 224, 224)).astype(np.float32)
 
-        quantizer.quantizeDequantize(input_tensor, output_tensor, encoding.min, encoding.max, 8, False)
+        quantizer.quantizeDequantize(
+            input_tensor, output_tensor, encoding.min, encoding.max, 8, False
+        )
 
         # Check that the output tensor did get updated
         self.assertFalse(np.all(output_tensor == 0))
@@ -139,18 +150,17 @@ class TestTensorQuantizer(unittest.TestCase):
         :return:
         """
 
-        quantizer = libpymo.TensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF,
-                                            libpymo.RoundingMode.ROUND_NEAREST)
+        quantizer = libpymo.TensorQuantizer(
+            libpymo.QuantizationMode.QUANTIZATION_TF, libpymo.RoundingMode.ROUND_NEAREST
+        )
 
         np.random.seed(11)
         # random_input = np.random.randn(1, 3, 224, 224).astype(np.float32)
-        random_input = 5 * (np.random.normal(size=[1,
-                                              3,
-                                              224, 224])) + 20
+        random_input = 5 * (np.random.normal(size=[1, 3, 224, 224])) + 20
 
         # Full range min, max  (no scaling input)
-        x_min = min(0., float(random_input.min()))
-        x_max = max(0., float(random_input.max()))
+        x_min = min(0.0, float(random_input.min()))
+        x_max = max(0.0, float(random_input.max()))
 
         x_min = min(x_min, 0)
         x_max = max(x_max, 0)
@@ -161,10 +171,14 @@ class TestTensorQuantizer(unittest.TestCase):
 
         # aimet quantizer
         output_tensor = np.zeros((1, 3, 224, 224)).astype(np.float32)
-        quantizer.quantizeDequantize(random_input, output_tensor, x_min, x_max, 8, False)
+        quantizer.quantizeDequantize(
+            random_input, output_tensor, x_min, x_max, 8, False
+        )
 
         # qat asymmenteic quantizer output as float32
-        x_quant = self.qat_python_asymmetric_quantizer(random_input, 8, x_max, x_min).astype(np.float32)
+        x_quant = self.qat_python_asymmetric_quantizer(
+            random_input, 8, x_max, x_min
+        ).astype(np.float32)
 
         # compare qc quantize output and qat asymmetric quantizer output
         self.assertTrue(np.allclose(x_quant, output_tensor))
@@ -175,15 +189,16 @@ class TestTensorQuantizer(unittest.TestCase):
         :return:
         """
 
-        quantizer = libpymo.TensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF,
-                                            libpymo.RoundingMode.ROUND_NEAREST)
+        quantizer = libpymo.TensorQuantizer(
+            libpymo.QuantizationMode.QUANTIZATION_TF, libpymo.RoundingMode.ROUND_NEAREST
+        )
 
         np.random.seed(11)
         random_input = 5 * (np.random.normal(size=[1, 3 * 224 * 224])) + 20
 
         # Full range min, max  (no scaling input)
-        x_min = min(0., float(random_input.min()))
-        x_max = max(0., float(random_input.max()))
+        x_min = min(0.0, float(random_input.min()))
+        x_max = max(0.0, float(random_input.max()))
 
         x_min = min(x_min, 0)
         x_max = max(x_max, 0)
@@ -194,10 +209,14 @@ class TestTensorQuantizer(unittest.TestCase):
 
         # aimet quantizer
         output_tensor = np.zeros((1, 3 * 224 * 224)).astype(np.float32)
-        quantizer.quantizeDequantize(random_input, output_tensor, x_min, x_max, 8, False)
+        quantizer.quantizeDequantize(
+            random_input, output_tensor, x_min, x_max, 8, False
+        )
 
         # qat asymmetric quantizer output as float32
-        x_quant = self.qat_python_asymmetric_quantizer(random_input, 8, x_max, x_min).astype(np.float32)
+        x_quant = self.qat_python_asymmetric_quantizer(
+            random_input, 8, x_max, x_min
+        ).astype(np.float32)
 
         # compare qc quantize output and qat asymmetric quantizer output
         self.assertTrue(np.allclose(x_quant, output_tensor))
@@ -208,18 +227,17 @@ class TestTensorQuantizer(unittest.TestCase):
         :return:
         """
 
-        quantizer = libpymo.TensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF,
-                                            libpymo.RoundingMode.ROUND_NEAREST)
+        quantizer = libpymo.TensorQuantizer(
+            libpymo.QuantizationMode.QUANTIZATION_TF, libpymo.RoundingMode.ROUND_NEAREST
+        )
 
         np.random.seed(10)
 
         # Half range min, max  (no scaling input)
-        random_input = 10 * np.random.normal(size=[1,
-                                              3,
-                                              224, 224]) + 20
+        random_input = 10 * np.random.normal(size=[1, 3, 224, 224]) + 20
 
-        x_min = min(0., 0.25*float(random_input.min()))
-        x_max = max(0., 0.25*float(random_input.max()))
+        x_min = min(0.0, 0.25 * float(random_input.min()))
+        x_max = max(0.0, 0.25 * float(random_input.max()))
 
         x_min = min(x_min, 0)
         x_max = max(x_max, 0)
@@ -230,10 +248,14 @@ class TestTensorQuantizer(unittest.TestCase):
 
         # aimet quantizer
         output_tensor = np.zeros((1, 3, 224, 224)).astype(np.float32)
-        quantizer.quantizeDequantize(random_input, output_tensor, x_min, x_max, 8, False)
+        quantizer.quantizeDequantize(
+            random_input, output_tensor, x_min, x_max, 8, False
+        )
 
         # qat asymmenteic quantizer output as float32
-        x_quant = self.qat_python_asymmetric_quantizer(random_input, 8, x_max, x_min).astype(np.float32)
+        x_quant = self.qat_python_asymmetric_quantizer(
+            random_input, 8, x_max, x_min
+        ).astype(np.float32)
 
         # compare qc quantize output and qat asymmetric quantizer output
         self.assertTrue(np.allclose(x_quant, output_tensor))
@@ -244,17 +266,16 @@ class TestTensorQuantizer(unittest.TestCase):
         :return:
         """
 
-        quantizer = libpymo.TensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF,
-                                            libpymo.RoundingMode.ROUND_NEAREST)
+        quantizer = libpymo.TensorQuantizer(
+            libpymo.QuantizationMode.QUANTIZATION_TF, libpymo.RoundingMode.ROUND_NEAREST
+        )
 
         np.random.seed(1)
-        random_input = 10 * np.random.normal(size=[1,
-                                              3,
-                                              224, 224]) - 20
+        random_input = 10 * np.random.normal(size=[1, 3, 224, 224]) - 20
 
         # 1/4 range min, max  (no scaling input)
-        x_min = min(0., 0.5*float(random_input.min()))
-        x_max = max(0., 0.5*float(random_input.max()))
+        x_min = min(0.0, 0.5 * float(random_input.min()))
+        x_max = max(0.0, 0.5 * float(random_input.max()))
 
         x_min = min(x_min, 0)
         x_max = max(x_max, 0)
@@ -265,10 +286,14 @@ class TestTensorQuantizer(unittest.TestCase):
 
         # aimet quantizer
         output_tensor = np.zeros((1, 3, 224, 224)).astype(np.float32)
-        quantizer.quantizeDequantize(random_input, output_tensor, x_min, x_max, 8, False)
+        quantizer.quantizeDequantize(
+            random_input, output_tensor, x_min, x_max, 8, False
+        )
 
         # qat asymmenteic quantizer output as float32
-        x_quant = self.qat_python_asymmetric_quantizer(random_input, 8, x_max, x_min).astype(np.float32)
+        x_quant = self.qat_python_asymmetric_quantizer(
+            random_input, 8, x_max, x_min
+        ).astype(np.float32)
 
         # compare qc quantize output and qat asymmetric quantizer output
         self.assertTrue(np.allclose(x_quant, output_tensor))
@@ -283,15 +308,16 @@ class TestTensorQuantizer(unittest.TestCase):
         random_input = 5 * (np.random.normal(size=[1, 3, 224, 224])) + 2
 
         # Full range min, max  (no scaling input)
-        x_min = np.min([0., random_input.min()])
-        x_max = np.max([0., random_input.max()])
+        x_min = np.min([0.0, random_input.min()])
+        x_max = np.max([0.0, random_input.max()])
         delta = (x_max - x_min) / 255
-        offset = np.round(x_min/delta)
+        offset = np.round(x_min / delta)
         x_min = offset * delta
         x_max = x_min + 255 * delta
 
-
-        enc_analyzer = libpymo.EncodingAnalyzerForPython(libpymo.QuantizationMode.QUANTIZATION_TF)
+        enc_analyzer = libpymo.EncodingAnalyzerForPython(
+            libpymo.QuantizationMode.QUANTIZATION_TF
+        )
         enc_analyzer.updateStats(random_input, False)
         encoding, is_valid = enc_analyzer.computeEncoding(8, False, False, False)
 
@@ -301,7 +327,6 @@ class TestTensorQuantizer(unittest.TestCase):
         self.assertTrue(is_valid)
         self.assertAlmostEqual(x_min, encoding.min, places=5)
         self.assertAlmostEqual(x_max, encoding.max, places=5)
-
 
     def test_encoding_analyzer_with_numpy_interface_other_dimensions(self):
         """
@@ -313,17 +338,19 @@ class TestTensorQuantizer(unittest.TestCase):
         random_input = 5 * (np.random.normal(size=[1, 3, 224, 224])) + 2
 
         # Full range min, max  (no scaling input)
-        x_min = np.min([0., random_input.min()])
-        x_max = np.max([0., random_input.max()])
+        x_min = np.min([0.0, random_input.min()])
+        x_max = np.max([0.0, random_input.max()])
         delta = (x_max - x_min) / 255
-        offset = np.round(x_min/delta)
+        offset = np.round(x_min / delta)
         x_min = offset * delta
         x_max = x_min + 255 * delta
 
         # 2-dimensional tensor
         random_input = random_input.reshape(3, -1)
 
-        enc_analyzer = libpymo.EncodingAnalyzerForPython(libpymo.QuantizationMode.QUANTIZATION_TF)
+        enc_analyzer = libpymo.EncodingAnalyzerForPython(
+            libpymo.QuantizationMode.QUANTIZATION_TF
+        )
         enc_analyzer.updateStats(random_input, False)
         encoding, is_valid = enc_analyzer.computeEncoding(8, False, False, False)
 
@@ -337,7 +364,9 @@ class TestTensorQuantizer(unittest.TestCase):
         # 3-dimensional tensor
         random_input = random_input.reshape(3, 2, -1)
 
-        enc_analyzer = libpymo.EncodingAnalyzerForPython(libpymo.QuantizationMode.QUANTIZATION_TF)
+        enc_analyzer = libpymo.EncodingAnalyzerForPython(
+            libpymo.QuantizationMode.QUANTIZATION_TF
+        )
         enc_analyzer.updateStats(random_input, False)
         encoding, is_valid = enc_analyzer.computeEncoding(8, False, False, False)
 
@@ -351,7 +380,9 @@ class TestTensorQuantizer(unittest.TestCase):
         # 1-dimensional tensor
         random_input = random_input.flatten()
 
-        enc_analyzer = libpymo.EncodingAnalyzerForPython(libpymo.QuantizationMode.QUANTIZATION_TF)
+        enc_analyzer = libpymo.EncodingAnalyzerForPython(
+            libpymo.QuantizationMode.QUANTIZATION_TF
+        )
         enc_analyzer.updateStats(random_input, False)
         encoding, is_valid = enc_analyzer.computeEncoding(8, False, False, False)
 
@@ -365,7 +396,9 @@ class TestTensorQuantizer(unittest.TestCase):
         # 1-dimensional tensor
         random_input = random_input.reshape(2, 2, 2, 2, -1)
 
-        enc_analyzer = libpymo.EncodingAnalyzerForPython(libpymo.QuantizationMode.QUANTIZATION_TF)
+        enc_analyzer = libpymo.EncodingAnalyzerForPython(
+            libpymo.QuantizationMode.QUANTIZATION_TF
+        )
         enc_analyzer.updateStats(random_input, False)
         encoding, is_valid = enc_analyzer.computeEncoding(8, False, False, False)
 
@@ -392,45 +425,36 @@ class TestTensorQuantizer(unittest.TestCase):
         # Perform calibration
         enc_analyzer = libpymo.EncodingAnalyzerForPython(quant_scheme)
         enc_analyzer.updateStats(inp, use_cuda)
-        encoding, is_valid = enc_analyzer.computeEncoding(bitwidth,
-                                                          is_symmetric,
-                                                          strict_symmetric,
-                                                          unsigned_symmetric)
+        encoding, is_valid = enc_analyzer.computeEncoding(
+            bitwidth, is_symmetric, strict_symmetric, unsigned_symmetric
+        )
         assert is_valid
         # Quantized to integer and then scales back to original domain
         quantizer = libpymo.TensorQuantizationSimForPython()
         # 4-dimensional tensor
-        out = quantizer.quantizeDequantize(inp,
-                                           encoding,
-                                           libpymo.RoundingMode.ROUND_NEAREST,
-                                           bitwidth,
-                                           use_cuda)
+        out = quantizer.quantizeDequantize(
+            inp, encoding, libpymo.RoundingMode.ROUND_NEAREST, bitwidth, use_cuda
+        )
         delta = float((encoding.max - encoding.min) / 15)
         assert np.allclose(inp, out, atol=delta)  # Allow 1-tick difference
         # 3-dimensional tensor
         inp = inp.reshape(3, 2, -1)
-        out = quantizer.quantizeDequantize(inp,
-                                           encoding,
-                                           libpymo.RoundingMode.ROUND_NEAREST,
-                                           bitwidth,
-                                           use_cuda)
+        out = quantizer.quantizeDequantize(
+            inp, encoding, libpymo.RoundingMode.ROUND_NEAREST, bitwidth, use_cuda
+        )
         delta = float((encoding.max - encoding.min) / 15)
         assert np.allclose(inp, out, atol=delta)  # Allow 1-tick difference
         # 2-dimensional tensor
         inp = inp.reshape(3, -1)
-        out = quantizer.quantizeDequantize(inp,
-                                           encoding,
-                                           libpymo.RoundingMode.ROUND_NEAREST,
-                                           bitwidth,
-                                           use_cuda)
+        out = quantizer.quantizeDequantize(
+            inp, encoding, libpymo.RoundingMode.ROUND_NEAREST, bitwidth, use_cuda
+        )
         delta = float((encoding.max - encoding.min) / 15)
         assert np.allclose(inp, out, atol=delta)  # Allow 1-tick difference
         # 1-dimensional tensor
         inp = inp.flatten()
-        out = quantizer.quantizeDequantize(inp,
-                                           encoding,
-                                           libpymo.RoundingMode.ROUND_NEAREST,
-                                           bitwidth,
-                                           use_cuda)
+        out = quantizer.quantizeDequantize(
+            inp, encoding, libpymo.RoundingMode.ROUND_NEAREST, bitwidth, use_cuda
+        )
         delta = float((encoding.max - encoding.min) / 15)
         assert np.allclose(inp, out, atol=delta)  # Allow 1-tick difference

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Sample output from original module for Adaround feature """
+"""Sample output from original module for Adaround feature"""
 
 from typing import Tuple, List, Dict, Union
 
@@ -46,7 +46,11 @@ from packaging import version
 
 from aimet_common.utils import AimetLogger
 from aimet_onnx.quantsim import QuantizationSimModel
-from aimet_onnx.utils import add_hook_to_get_activation, remove_activation_hooks, create_input_dict
+from aimet_onnx.utils import (
+    add_hook_to_get_activation,
+    remove_activation_hooks,
+    create_input_dict,
+)
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
@@ -62,9 +66,17 @@ class ActivationSampler:
     For a module in the original model and the corresponding module in the weight quantized QuantSim model,
     collect the module's output and input activation data respectively
     """
-    def __init__(self, orig_op: str, quant_op: str,
-                 orig_model: ModelProto, quant_model: QuantizationSimModel, use_cuda: bool,
-                 device: int = 0, user_onnx_libs: List[str] = None):
+
+    def __init__(
+        self,
+        orig_op: str,
+        quant_op: str,
+        orig_model: ModelProto,
+        quant_model: QuantizationSimModel,
+        use_cuda: bool,
+        device: int = 0,
+        user_onnx_libs: List[str] = None,
+    ):
         """
         :param orig_op: Single un quantized op from the original session
         :param quant_op: Corresponding quant op from the Quant sim session
@@ -78,15 +90,25 @@ class ActivationSampler:
         self._org_model = orig_model
         self._use_cuda = use_cuda
 
-        if 'CUDAExecutionProvider' not in ort.get_available_providers():
+        if "CUDAExecutionProvider" not in ort.get_available_providers():
             self._use_cuda = False
         if self._use_cuda:
-            self.providers = [('CUDAExecutionProvider', {'device_id': device, 'cudnn_conv_algo_search': 'DEFAULT'}), 'CPUExecutionProvider']
+            self.providers = [
+                (
+                    "CUDAExecutionProvider",
+                    {"device_id": device, "cudnn_conv_algo_search": "DEFAULT"},
+                ),
+                "CPUExecutionProvider",
+            ]
         else:
-            self.providers = ['CPUExecutionProvider']
+            self.providers = ["CPUExecutionProvider"]
 
-        self._orig_module_collector = ModuleData(orig_model, orig_op, self.providers, user_onnx_libs)
-        self._quant_module_collector = ModuleData(quant_model, quant_op, self.providers, user_onnx_libs)
+        self._orig_module_collector = ModuleData(
+            orig_model, orig_op, self.providers, user_onnx_libs
+        )
+        self._quant_module_collector = ModuleData(
+            quant_model, quant_op, self.providers, user_onnx_libs
+        )
 
     def sample_and_place_all_acts_on_cpu(self, dataset) -> Tuple:
         """
@@ -105,7 +127,9 @@ class ActivationSampler:
         iterator = iter(dataset)
         for batch_index in range(len(dataset)):
             model_inputs = next(iterator)
-            inp_data, out_data = self.sample_acts(create_input_dict(self._org_model.model, model_inputs))
+            inp_data, out_data = self.sample_acts(
+                create_input_dict(self._org_model.model, model_inputs)
+            )
 
             all_inp_data.append(inp_data[0])
             all_out_data.append(out_data[0])
@@ -115,7 +139,9 @@ class ActivationSampler:
 
         return all_inp_data, all_out_data
 
-    def sample_acts(self, model_inputs: Dict[str, List[np.ndarray]]) -> Tuple[List, List]:
+    def sample_acts(
+        self, model_inputs: Dict[str, List[np.ndarray]]
+    ) -> Tuple[List, List]:
         """
         For given model_inputs, collect input activations data to quant module and
         output activations data from original module.
@@ -125,13 +151,13 @@ class ActivationSampler:
         """
         # Collect input activation data to quantized wrapper module
         # (with all preceding weight modules quantized)
-        inp_data, _ = self._quant_module_collector.collect_inp_out_data(model_inputs,
-                                                                        collect_input=True,
-                                                                        collect_output=False)
+        inp_data, _ = self._quant_module_collector.collect_inp_out_data(
+            model_inputs, collect_input=True, collect_output=False
+        )
         # Collect output activation data from original module
-        _, out_data = self._orig_module_collector.collect_inp_out_data(model_inputs,
-                                                                       collect_input=False,
-                                                                       collect_output=True)
+        _, out_data = self._orig_module_collector.collect_inp_out_data(
+            model_inputs, collect_input=False, collect_output=True
+        )
         return inp_data, out_data
 
 
@@ -140,7 +166,13 @@ class ModuleData:
     Collect input and output data to and from module
     """
 
-    def __init__(self, model: ModelProto, node_name: str, providers: List, user_onnx_libs: List[str] = None):
+    def __init__(
+        self,
+        model: ModelProto,
+        node_name: str,
+        providers: List,
+        user_onnx_libs: List[str] = None,
+    ):
         """
         :param session: ONNX session
         :param node: Module reference
@@ -152,8 +184,12 @@ class ModuleData:
         self._providers = providers
         self._user_onnx_libs = user_onnx_libs
 
-    def collect_inp_out_data(self, model_input: Dict[str, List[np.ndarray]],
-                             collect_input: bool, collect_output: bool) -> Union[Tuple[None, List], Tuple[List, None]]:
+    def collect_inp_out_data(
+        self,
+        model_input: Dict[str, List[np.ndarray]],
+        collect_input: bool,
+        collect_output: bool,
+    ) -> Union[Tuple[None, List], Tuple[List, None]]:
         """
         Collect input and output data depending on the collect_input and collect_output flag
 
@@ -164,7 +200,9 @@ class ModuleData:
         """
 
         handle = add_hook_to_get_activation(self._model.model, self._module_name)
-        sess = QuantizationSimModel.build_session(self._model.model, self._providers, self._user_onnx_libs)
+        sess = QuantizationSimModel.build_session(
+            self._model.model, self._providers, self._user_onnx_libs
+        )
         if self._module_name in model_input:
             # Workaround memory corruption bug in onnxruntime >= 1.19 when a graph output is also a graph input
             # https://github.com/microsoft/onnxruntime/issues/21922

@@ -43,8 +43,13 @@ from torch import nn
 import spconv.pytorch as spconv
 
 from aimet_common.defs import QuantScheme
-from aimet_torch.v1.qc_quantize_op import StaticGridQuantWrapper, StaticGridPerTensorQuantizer,\
-    StaticGridPerChannelQuantizer, LearnedGridQuantWrapper, LearnedGridTensorQuantizer
+from aimet_torch.v1.qc_quantize_op import (
+    StaticGridQuantWrapper,
+    StaticGridPerTensorQuantizer,
+    StaticGridPerChannelQuantizer,
+    LearnedGridQuantWrapper,
+    LearnedGridTensorQuantizer,
+)
 from aimet_torch.v1.quantsim import QuantizationSimModel
 from aimet_common.libpymo import TfEncoding
 
@@ -78,20 +83,38 @@ class TestSparseConv(unittest.TestCase):
 
         # Check if Quantizers were created
         self.assertTrue(isinstance(sim.model.conv, StaticGridQuantWrapper))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['weight'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['bias'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer))
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["weight"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["bias"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer)
+        )
 
         # Check if encodings were created
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['weight'].encoding, TfEncoding))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0].encoding, TfEncoding))
+        self.assertTrue(
+            isinstance(sim.model.conv.param_quantizers["weight"].encoding, TfEncoding)
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.output_quantizers[0].encoding, TfEncoding)
+        )
 
     def test_sparse_conv_quantsim_enhanced(self):
         dummy_input = torch.rand(2, 1, 5, 5)
 
         spconv_model = SpconvModel()
-        sim = QuantizationSimModel(spconv_model, dummy_input, 'tf_enhanced')
+        sim = QuantizationSimModel(spconv_model, dummy_input, "tf_enhanced")
 
         def dummy_forward(model, args):
             model.eval()
@@ -102,13 +125,27 @@ class TestSparseConv(unittest.TestCase):
 
         # Check if Quantizers were created
         self.assertTrue(isinstance(sim.model.conv, StaticGridQuantWrapper))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['weight'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['bias'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer))
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["weight"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["bias"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer)
+        )
 
         # Check if encodings were created
-        self.assertTrue(sim.model.conv.param_quantizers['weight'].encoding)
+        self.assertTrue(sim.model.conv.param_quantizers["weight"].encoding)
         self.assertTrue(sim.model.conv.output_quantizers[0].encoding)
 
     def test_sparse_conv_per_channel(self):
@@ -127,15 +164,31 @@ class TestSparseConv(unittest.TestCase):
 
         # Check if Quantizers were created
         self.assertTrue(isinstance(sim.model.conv, StaticGridQuantWrapper))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['weight'], StaticGridPerChannelQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['bias'], StaticGridPerChannelQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer))
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["weight"], StaticGridPerChannelQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["bias"], StaticGridPerChannelQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.output_quantizers[0], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.input_quantizers[0], StaticGridPerTensorQuantizer)
+        )
 
         # Check if encodings were created
-        for encoding in sim.model.conv.param_quantizers['weight'].encoding:
+        for encoding in sim.model.conv.param_quantizers["weight"].encoding:
             self.assertTrue(isinstance(encoding, TfEncoding))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0].encoding, TfEncoding))
+        self.assertTrue(
+            isinstance(sim.model.conv.output_quantizers[0].encoding, TfEncoding)
+        )
 
     def test_sparse_conv_qat(self):
         # NOTE: Use asymmetric quantization for parameter, which have gradients both encoding min/max
@@ -144,16 +197,13 @@ class TestSparseConv(unittest.TestCase):
                 "ops": {
                     "is_output_quantized": "True",
                 },
-                "params": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_file_path = Path(tmp_dir, "quantsim_config.json")
@@ -168,17 +218,32 @@ class TestSparseConv(unittest.TestCase):
                 with torch.no_grad():
                     model(dummy_input)
 
-            sim = QuantizationSimModel(spconv_model, dummy_input,
-                                    quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                    config_file=config_file_path)
+            sim = QuantizationSimModel(
+                spconv_model,
+                dummy_input,
+                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+                config_file=config_file_path,
+            )
             sim.compute_encodings(dummy_forward, None)
 
         # Check if correct Quantizers are created
         self.assertTrue(isinstance(sim.model.conv, LearnedGridQuantWrapper))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['weight'], LearnedGridTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.param_quantizers['bias'], LearnedGridTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.output_quantizers[0], LearnedGridTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.conv.input_quantizers[0], LearnedGridTensorQuantizer))
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["weight"], LearnedGridTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.conv.param_quantizers["bias"], LearnedGridTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.output_quantizers[0], LearnedGridTensorQuantizer)
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.input_quantizers[0], LearnedGridTensorQuantizer)
+        )
 
         # Check if gradients for weights are initialized as None
         self.assertEqual(sim.model.conv._module_to_wrap.weight.grad, None)
@@ -194,13 +259,23 @@ class TestSparseConv(unittest.TestCase):
         loss.backward()
 
         # Check if gradients for weights are calculated
-        self.assertTrue(isinstance(sim.model.conv._module_to_wrap.weight.grad, torch.Tensor))
+        self.assertTrue(
+            isinstance(sim.model.conv._module_to_wrap.weight.grad, torch.Tensor)
+        )
 
         # Check if gradients for encodings are calculated
-        self.assertTrue(isinstance(sim.model.conv.output0_encoding_max.grad, torch.Tensor))
-        self.assertTrue(isinstance(sim.model.conv.output0_encoding_min.grad, torch.Tensor))
-        self.assertTrue(isinstance(sim.model.conv.weight_encoding_max.grad, torch.Tensor))
-        self.assertTrue(isinstance(sim.model.conv.weight_encoding_min.grad, torch.Tensor))
+        self.assertTrue(
+            isinstance(sim.model.conv.output0_encoding_max.grad, torch.Tensor)
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.output0_encoding_min.grad, torch.Tensor)
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.weight_encoding_max.grad, torch.Tensor)
+        )
+        self.assertTrue(
+            isinstance(sim.model.conv.weight_encoding_min.grad, torch.Tensor)
+        )
 
         if os.path.exists(config_file_path):
             os.remove(config_file_path)
@@ -210,8 +285,7 @@ class TestSparseConv(unittest.TestCase):
             def __init__(self):
                 super().__init__()
                 self.seq = spconv.SparseSequential(
-                    spconv.SparseConv2d(1, 10, 1),
-                    nn.ReLU()
+                    spconv.SparseConv2d(1, 10, 1), nn.ReLU()
                 )
 
             def forward(self, x):
@@ -220,6 +294,7 @@ class TestSparseConv(unittest.TestCase):
                 return self.seq(x).dense()
 
         dummy_input = torch.rand(1, 1, 5, 5)
+
         def dummy_forward(model, args):
             model.eval()
             with torch.no_grad():
@@ -228,10 +303,16 @@ class TestSparseConv(unittest.TestCase):
         sequential_model = SequentialModel()
 
         from aimet_torch.utils import replace_modules
-        from aimet_torch.custom.custom_modules import create_quantizable_sparse_sequential, QuantizableSparseSequential
-        replace_modules(sequential_model,
-                        lambda module: isinstance(module, spconv.SparseSequential),
-                        create_quantizable_sparse_sequential)
+        from aimet_torch.custom.custom_modules import (
+            create_quantizable_sparse_sequential,
+            QuantizableSparseSequential,
+        )
+
+        replace_modules(
+            sequential_model,
+            lambda module: isinstance(module, spconv.SparseSequential),
+            create_quantizable_sparse_sequential,
+        )
         self.assertTrue(isinstance(sequential_model.seq, QuantizableSparseSequential))
 
         sim = QuantizationSimModel(sequential_model, dummy_input)

@@ -16,7 +16,9 @@ import shlex
 import subprocess
 
 __all__ = ["dynamic_metadata"]
-_PKG_ROOT = pathlib.Path(os.path.dirname(__file__), "..", "..", "..").absolute().resolve()
+_PKG_ROOT = (
+    pathlib.Path(os.path.dirname(__file__), "..", "..", "..").absolute().resolve()
+)
 
 
 def __dir__() -> list[str]:
@@ -25,8 +27,19 @@ def __dir__() -> list[str]:
 
 def is_cmake_option_enabled(option_name: str) -> bool:
     """Returns True if CMAKE_ARGS environment variable contains `-D{option_name}=ON/YES/1/TRUE` and False otherwise."""
-    cmake_args = {k:v for k,v in (arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", "")))}
-    return not cmake_args.get(f"-D{option_name}", "").upper() in {"OFF", "NO", "FALSE", "0", "N" }
+    cmake_args = {
+        k: v
+        for k, v in (
+            arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", ""))
+        )
+    }
+    return not cmake_args.get(f"-D{option_name}", "").upper() in {
+        "OFF",
+        "NO",
+        "FALSE",
+        "0",
+        "N",
+    }
 
 
 def get_aimet_variant() -> str:
@@ -45,13 +58,17 @@ def get_aimet_variant() -> str:
     elif enable_onnx:
         variant = "onnx-"
     else:
-        raise RuntimeError("\n".join([
-            "Only one or all of ENABLE_{TORCH, TENSORFLOW, ONNX} should set to ON."
-            "Your passed:"
-            f"  * ENABLE_TORCH:      {'ON' if enable_torch else 'OFF'}",
-            f"  * ENABLE_ONNX:       {'ON' if enable_onnx else 'OFF'}",
-            f"  * ENABLE_TENSORFLOW: {'ON' if enable_onnx else 'OFF'}",
-        ]))
+        raise RuntimeError(
+            "\n".join(
+                [
+                    "Only one or all of ENABLE_{TORCH, TENSORFLOW, ONNX} should set to ON."
+                    "Your passed:"
+                    f"  * ENABLE_TORCH:      {'ON' if enable_torch else 'OFF'}",
+                    f"  * ENABLE_ONNX:       {'ON' if enable_onnx else 'OFF'}",
+                    f"  * ENABLE_TENSORFLOW: {'ON' if enable_onnx else 'OFF'}",
+                ]
+            )
+        )
 
     variant += "gpu" if enable_cuda else "cpu"
     return variant
@@ -76,14 +93,26 @@ def get_aimet_dependencies() -> list[str]:
     aimet_variant = get_aimet_variant()
 
     if aimet_variant in ("torch-gpu", "onnx-cpu", "tf-torch-cpu"):
-        deps_path = pathlib.Path(_PKG_ROOT, "packaging", "dependencies", "fast-release", aimet_variant)
+        deps_path = pathlib.Path(
+            _PKG_ROOT, "packaging", "dependencies", "fast-release", aimet_variant
+        )
     else:
         deps_path = pathlib.Path(_PKG_ROOT, "packaging", "dependencies", aimet_variant)
 
     deps_files = [*deps_path.glob("reqs_pip_*.txt")]
     print(f"CMAKE_ARGS='{os.environ.get('CMAKE_ARGS', '')}'")
-    print(f"Read dependencies for variant '{get_aimet_variant()}' from the following files: {deps_files}")
-    deps = {d for d in itertools.chain.from_iterable(line.replace(" -f ", "\n-f ").split("\n") for f in deps_files for line in f.read_text(encoding="utf8").splitlines()) if not d.startswith(("#", "-f"))}
+    print(
+        f"Read dependencies for variant '{get_aimet_variant()}' from the following files: {deps_files}"
+    )
+    deps = {
+        d
+        for d in itertools.chain.from_iterable(
+            line.replace(" -f ", "\n-f ").split("\n")
+            for f in deps_files
+            for line in f.read_text(encoding="utf8").splitlines()
+        )
+        if not d.startswith(("#", "-f"))
+    }
     return list(sorted(deps))
 
 
@@ -91,11 +120,11 @@ def get_cuda_version():
     cuda_version = ""
     try:
         # Run the nvcc command to get CUDA version
-        output = subprocess.check_output(['nvcc', '--version']).decode('utf-8')
+        output = subprocess.check_output(["nvcc", "--version"]).decode("utf-8")
         # Extract the version number from the output
-        for line in output.split('\n'):
-            if 'release' in line:
-                cuda_version = line.split('release')[-1].strip().split(',')[0]
+        for line in output.split("\n"):
+            if "release" in line:
+                cuda_version = line.split("release")[-1].strip().split(",")[0]
                 # Remove the decimal point
                 cuda_version = cuda_version.replace(".", "")
     except Exception:
@@ -105,11 +134,20 @@ def get_cuda_version():
 
 
 def get_version() -> str:
-    version = pathlib.Path(_PKG_ROOT, "packaging", "version.txt").read_text(encoding="utf8").splitlines()[0]
+    version = (
+        pathlib.Path(_PKG_ROOT, "packaging", "version.txt")
+        .read_text(encoding="utf8")
+        .splitlines()[0]
+    )
     cuda_version = get_cuda_version()
 
     # For PyPi releases, just return the version without appending the variant string
-    cmake_args = {k:v for k,v in (arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", "")))}
+    cmake_args = {
+        k: v
+        for k, v in (
+            arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", ""))
+        )
+    }
     if cmake_args.get("-DPIP_INDEX", "") == "pypi":
         return version
 
@@ -141,7 +179,7 @@ def optional_dependencies() -> dict[str, list[str]]:
             "safetensors",
             "torchvision",
             "transformers",
-            "datasets"
+            "datasets",
         ],
         "docs": [
             "furo",
@@ -155,7 +193,7 @@ def optional_dependencies() -> dict[str, list[str]]:
             "sphinx-rtd-theme",
             "sphinx-tabs",
         ],
-        "v1-deps": [] # This is empty for aimet-onnx and aimet-tensorflow
+        "v1-deps": [],  # This is empty for aimet-onnx and aimet-tensorflow
     }
 
     aimet_variant = get_aimet_variant()
@@ -171,6 +209,7 @@ def optional_dependencies() -> dict[str, list[str]]:
         return optional_dependencies
 
     from packaging import version
+
     v = version.parse(torch.__version__)
 
     optional_dependencies["test"].append("spconv")
@@ -185,7 +224,7 @@ def get_description() -> str:
     variant_map = {
         "torch": "AIMET torch package",
         "onnx": "AIMET onnx package",
-        "tf": "AIMET tensorflow package"
+        "tf": "AIMET tensorflow package",
     }
 
     for key in variant_map:

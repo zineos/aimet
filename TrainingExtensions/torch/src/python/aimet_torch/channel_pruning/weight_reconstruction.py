@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module contains code to reconstruct weights post winnowing for the channel pruning feature """
+"""This module contains code to reconstruct weights post winnowing for the channel pruning feature"""
 
 from typing import Tuple
 import numpy as np
@@ -56,9 +56,9 @@ class WeightReconstructor:
     """
 
     @staticmethod
-    def _linear_regression(input_data: np.ndarray, output_data: np.ndarray, bias: bool) \
-            -> Tuple[np.ndarray, np.ndarray]:
-
+    def _linear_regression(
+        input_data: np.ndarray, output_data: np.ndarray, bias: bool
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         least square linear regression
         Given a matrix of input_data (X) and output_data (y), linear regression attempts to find solution vector (W)
@@ -93,7 +93,9 @@ class WeightReconstructor:
         return new_weight, new_bias
 
     @staticmethod
-    def _update_layer_params(layer: torch.nn.Conv2d, new_weight: np.ndarray, new_bias: np.ndarray):
+    def _update_layer_params(
+        layer: torch.nn.Conv2d, new_weight: np.ndarray, new_bias: np.ndarray
+    ):
         """
         update parameters (weights and bias) for given layer
 
@@ -128,8 +130,9 @@ class WeightReconstructor:
             layer.bias.data = new_bias
 
     @classmethod
-    def reconstruct_params_for_conv2d(cls, layer: torch.nn.Module, input_data: np.ndarray,
-                                      output_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def reconstruct_params_for_conv2d(
+        cls, layer: torch.nn.Module, input_data: np.ndarray, output_data: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Reconstruction of conv2d params (weights and biases) is performed using linear regression from sckit -learn.
 
@@ -159,12 +162,15 @@ class WeightReconstructor:
         calculate_bias = bool(layer.bias is not None)
 
         # reconstruct newer weight and bias
-        new_weight, new_bias = cls._linear_regression(input_data=input_data, output_data=output_data,
-                                                      bias=calculate_bias)
+        new_weight, new_bias = cls._linear_regression(
+            input_data=input_data, output_data=output_data, bias=calculate_bias
+        )
 
         # reshape the new weights
-        new_weight = new_weight.reshape([layer.out_channels, layer.in_channels, *layer.kernel_size])
+        new_weight = new_weight.reshape(
+            [layer.out_channels, layer.in_channels, *layer.kernel_size]
+        )
 
         # update layer with newer weights and bias (if exist)
-        #TODO: PyLint crashes here with the error: "RecursionError: maximum recursion depth exceeded"
-        cls._update_layer_params(layer=layer, new_weight=new_weight, new_bias=new_bias) # pylint: disable=all
+        # TODO: PyLint crashes here with the error: "RecursionError: maximum recursion depth exceeded"
+        cls._update_layer_params(layer=layer, new_weight=new_weight, new_bias=new_bias)  # pylint: disable=all

@@ -37,6 +37,7 @@
 """
 Models for use in unit testing
 """
+
 import tensorflow as tf
 
 
@@ -213,19 +214,19 @@ def sequential_in_functional():
 
 
 def lambda_model():
-    """ Model using TF functional calls """
+    """Model using TF functional calls"""
 
-    inputs = tf.keras.Input(batch_size= 1, shape=(32, 32, 3))
+    inputs = tf.keras.Input(batch_size=1, shape=(32, 32, 3))
 
     conv1 = tf.keras.layers.Conv2D(16, kernel_size=3)(inputs)
     conv2 = tf.keras.layers.Conv2D(16, kernel_size=3)(inputs)
     x = tf.concat([conv1, conv2], axis=1)
     shape = tf.shape(x)
-    
+
     y = [tf.multiply(2, s) for s in shape]
     y = y[0]  # getitem
     y = tf.cast(y, tf.float32)
-    y = tf.reshape(y, [1,-1])
+    y = tf.reshape(y, [1, -1])
     x = tf.add(x, y)
 
     return tf.keras.Model(inputs=inputs, outputs=x)
@@ -239,13 +240,17 @@ def tiny_conv_net():
     x = tf.keras.layers.Conv2D(
         32, kernel_size=2, strides=2, padding="same", use_bias=False
     )(inputs)
-    x = tf.keras.layers.BatchNormalization(beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform")(x)
+    x = tf.keras.layers.BatchNormalization(
+        beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform"
+    )(x)
     x = tf.keras.layers.ReLU()(x)
     x = tf.keras.layers.MaxPooling2D(strides=2, padding="same")(x)
     x = tf.keras.layers.Conv2D(
         16, kernel_size=2, strides=1, padding="same", use_bias=False
     )(x)
-    x = tf.keras.layers.BatchNormalization(beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform")(x)
+    x = tf.keras.layers.BatchNormalization(
+        beta_initializer="glorot_uniform", gamma_initializer="glorot_uniform"
+    )(x)
     x = tf.keras.layers.ReLU()(x)
     x = tf.keras.layers.Conv2D(
         8, kernel_size=2, strides=1, padding="same", use_bias=False
@@ -282,14 +287,14 @@ def resnet_34():
     """
 
     class ResBlock(tf.keras.Model):
-        def __init__(self, channels, stride=1, name=''):
+        def __init__(self, channels, stride=1, name=""):
             super(ResBlock, self).__init__(name=name)
-            self.flag = (stride != 1)
+            self.flag = stride != 1
             self.channels = channels
             self.stride = stride
-            self.conv1 = tf.keras.layers.Conv2D(channels, 3, stride, padding='same')
+            self.conv1 = tf.keras.layers.Conv2D(channels, 3, stride, padding="same")
             self.bn1 = tf.keras.layers.BatchNormalization()
-            self.conv2 = tf.keras.layers.Conv2D(channels, 3, padding='same')
+            self.conv2 = tf.keras.layers.Conv2D(channels, 3, padding="same")
             self.bn2 = tf.keras.layers.BatchNormalization()
             self.relu = tf.keras.layers.ReLU()
             self.relu_2 = tf.keras.layers.ReLU()
@@ -299,11 +304,9 @@ def resnet_34():
 
         def get_config(self):
             config = super().get_config()
-            config.update({
-                'channels': self.channels,
-                'stride': self.stride,
-                'name': self.name
-            })
+            config.update(
+                {"channels": self.channels, "stride": self.stride, "name": self.name}
+            )
             return config
 
         def call(self, x):
@@ -321,36 +324,36 @@ def resnet_34():
 
     class ResNet34(tf.keras.Model):
         def __init__(self):
-            super(ResNet34, self).__init__(name='ResNet34')
-            self.conv1 = tf.keras.layers.Conv2D(64, 7, 2, padding='same')
+            super(ResNet34, self).__init__(name="ResNet34")
+            self.conv1 = tf.keras.layers.Conv2D(64, 7, 2, padding="same")
             self.bn = tf.keras.layers.BatchNormalization()
             self.relu = tf.keras.layers.ReLU()
             self.mp1 = tf.keras.layers.MaxPooling2D(3, 2)
 
-            self.conv2_1 = ResBlock(64, name='ResBlock')
-            self.conv2_2 = ResBlock(64, name='ResBlock_1')
-            self.conv2_3 = ResBlock(64, name='ResBlock_2')
+            self.conv2_1 = ResBlock(64, name="ResBlock")
+            self.conv2_2 = ResBlock(64, name="ResBlock_1")
+            self.conv2_3 = ResBlock(64, name="ResBlock_2")
 
-            self.conv3_1 = ResBlock(128, 2, name='ResBlock_3')
-            self.conv3_2 = ResBlock(128, name='ResBlock_4')
-            self.conv3_3 = ResBlock(128, name='ResBlock_5')
-            self.conv3_4 = ResBlock(128, name='ResBlock_6')
+            self.conv3_1 = ResBlock(128, 2, name="ResBlock_3")
+            self.conv3_2 = ResBlock(128, name="ResBlock_4")
+            self.conv3_3 = ResBlock(128, name="ResBlock_5")
+            self.conv3_4 = ResBlock(128, name="ResBlock_6")
 
-            self.conv4_1 = ResBlock(256, 2, name='ResBlock_7')
-            self.conv4_2 = ResBlock(256, name='ResBlock_8')
-            self.conv4_3 = ResBlock(256, name='ResBlock_9')
-            self.conv4_4 = ResBlock(256, name='ResBlock_10')
-            self.conv4_5 = ResBlock(256, name='ResBlock_11')
-            self.conv4_6 = ResBlock(256, name='ResBlock_12')
+            self.conv4_1 = ResBlock(256, 2, name="ResBlock_7")
+            self.conv4_2 = ResBlock(256, name="ResBlock_8")
+            self.conv4_3 = ResBlock(256, name="ResBlock_9")
+            self.conv4_4 = ResBlock(256, name="ResBlock_10")
+            self.conv4_5 = ResBlock(256, name="ResBlock_11")
+            self.conv4_6 = ResBlock(256, name="ResBlock_12")
 
-            self.conv5_1 = ResBlock(512, 2, name='ResBlock_13')
-            self.conv5_2 = ResBlock(512, name='ResBlock_14')
-            self.conv5_3 = ResBlock(512, name='ResBlock_15')
+            self.conv5_1 = ResBlock(512, 2, name="ResBlock_13")
+            self.conv5_2 = ResBlock(512, name="ResBlock_14")
+            self.conv5_3 = ResBlock(512, name="ResBlock_15")
 
             self.pool = tf.keras.layers.GlobalAveragePooling2D()
-            self.fc1 = tf.keras.layers.Dense(512, activation='relu')
+            self.fc1 = tf.keras.layers.Dense(512, activation="relu")
             self.dp1 = tf.keras.layers.Dropout(0.5)
-            self.fc2 = tf.keras.layers.Dense(512, activation='relu')
+            self.fc2 = tf.keras.layers.Dense(512, activation="relu")
             self.dp2 = tf.keras.layers.Dropout(0.5)
             self.fc3 = tf.keras.layers.Dense(64)
 
@@ -398,17 +401,13 @@ def model_with_sigmoid_and_softmax():
     Functional model with sigmoid and softmax activations
     """
     input1 = tf.keras.layers.Input(shape=(1,))
-    dense1 = tf.keras.layers.Dense(
-        2, input_dim=2, use_bias=True
-    )(input1)
-    dense1_1 = tf.keras.layers.Activation('sigmoid')(dense1)
+    dense1 = tf.keras.layers.Dense(2, input_dim=2, use_bias=True)(input1)
+    dense1_1 = tf.keras.layers.Activation("sigmoid")(dense1)
     dense2 = tf.keras.layers.Dense(
         1, activation=tf.keras.activations.relu, use_bias=True
     )(dense1_1)
-    output = tf.keras.layers.Dense(
-        1, use_bias=True
-    )(dense2)
-    output_1 = tf.keras.layers.Activation('softmax')(output)
+    output = tf.keras.layers.Dense(1, use_bias=True)(dense2)
+    output_1 = tf.keras.layers.Activation("softmax")(output)
     model = tf.keras.Model(inputs=[input1], outputs=[output_1])
 
     return model

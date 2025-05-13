@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantized tensor class implementation """
+"""Quantized tensor class implementation"""
 
 import abc
 import copy
@@ -48,14 +48,22 @@ from torch.utils._pytree import tree_map
 from aimet_torch.v2.quantization.base import EncodingBase
 
 
-__all__ = ['QuantizedTensorBase', 'QuantizedTensor', 'DequantizedTensor', 'EncodingError']
+__all__ = [
+    "QuantizedTensorBase",
+    "QuantizedTensor",
+    "DequantizedTensor",
+    "EncodingError",
+]
 
 
 HANDLED_FUNCTIONS = {}
+
+
 def implements(torch_function):
     """
     Register an override for QuantizedTensorBase
     """
+
     def decorator(func):
         @functools.wraps(func)
         def wrapped_func(*args, **kwargs):
@@ -74,7 +82,9 @@ def implements(torch_function):
 
 
 @implements(F.embedding)
-def _embedding(input: torch.Tensor, weight: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+def _embedding(
+    input: torch.Tensor, weight: torch.Tensor, *args, **kwargs
+) -> torch.Tensor:
     # pylint: disable=protected-access, redefined-builtin, import-outside-toplevel
     from .affine import AffineEncoding
 
@@ -94,7 +104,9 @@ def _embedding(input: torch.Tensor, weight: torch.Tensor, *args, **kwargs) -> to
     blk_0, *blk_1 = out.encoding.block_size or (-1, -1)
 
     if blk_0 == -1:
-        blk_0 = weight.shape[0] // (out_scale.shape[0] if out_scale.dim() == weight.dim() else 1)
+        blk_0 = weight.shape[0] // (
+            out_scale.shape[0] if out_scale.dim() == weight.dim() else 1
+        )
 
     if blk_0 == weight.shape[0]:
         # Edge case:
@@ -123,14 +135,18 @@ def _embedding(input: torch.Tensor, weight: torch.Tensor, *args, **kwargs) -> to
         out_offset = F.embedding(input, out_offset, *args, **kwargs)
 
     # NOTE: output tensor can't inherit blk_0 since F.embedding has dismantled axis 0
-    out_block_size = (*repeat(-1, out_scale.dim()-1), *blk_1) if out_scale.dim() > 0 else None
+    out_block_size = (
+        (*repeat(-1, out_scale.dim() - 1), *blk_1) if out_scale.dim() > 0 else None
+    )
 
-    out.encoding = AffineEncoding(scale=out_scale,
-                                  offset=out_offset,
-                                  qmin=out.encoding.qmin,
-                                  qmax=out.encoding.qmax,
-                                  symmetry=out.encoding.symmetry,
-                                  block_size=out_block_size)
+    out.encoding = AffineEncoding(
+        scale=out_scale,
+        offset=out_offset,
+        qmin=out.encoding.qmin,
+        qmax=out.encoding.qmax,
+        symmetry=out.encoding.symmetry,
+        block_size=out_block_size,
+    )
     return out
 
 
@@ -166,16 +182,19 @@ class QuantizedTensorBase(torch.Tensor):
 
     _attr_descriptors = {
         # attribute descriptor        attribute type
-        ( torch.Tensor.dtype.__get__,  torch.dtype),
-        ( torch.Tensor.device.__get__, torch.device),
-        ( torch.Tensor.layout.__get__, torch.layout),
-        ( torch.Tensor.shape.__get__,  torch.Size),
-        ( torch.Tensor.size,           torch.Size),
-        ( torch.Tensor.type,           str), # NOTE: Tensor.type is overloaded with two different specs:
-                                             #   1) Without argument: `tensor.type() -> str`;
-                                             #      should be considered a attribute descriptor
-                                             #   2) With arguments: `tensor.type(dtype) -> torch.Tensor`;
-                                             #      should be considered a typecasting operator
+        (torch.Tensor.dtype.__get__, torch.dtype),
+        (torch.Tensor.device.__get__, torch.device),
+        (torch.Tensor.layout.__get__, torch.layout),
+        (torch.Tensor.shape.__get__, torch.Size),
+        (torch.Tensor.size, torch.Size),
+        (
+            torch.Tensor.type,
+            str,
+        ),  # NOTE: Tensor.type is overloaded with two different specs:
+        #   1) Without argument: `tensor.type() -> str`;
+        #      should be considered a attribute descriptor
+        #   2) With arguments: `tensor.type(dtype) -> torch.Tensor`;
+        #      should be considered a typecasting operator
     }
 
     _cast_ops = {
@@ -343,22 +362,44 @@ class QuantizedTensorBase(torch.Tensor):
 
     @classmethod
     def __new__(cls, *args, **kwargs):
-        encoding = kwargs.pop('encoding', None)
+        encoding = kwargs.pop("encoding", None)
         ret = super().__new__(*args, **kwargs)
         if not ret.is_floating_point():
-            raise RuntimeError(f"Non-floating point dtype `{ret.dtype}` is not allowed for quantized tensors.")
+            raise RuntimeError(
+                f"Non-floating point dtype `{ret.dtype}` is not allowed for quantized tensors."
+            )
         ret.encoding = encoding
         return ret
 
-    def new_empty(self, size, *, dtype=None, device=None, requires_grad=False,
-                  layout=torch.strided, pin_memory=False, **kwargs) -> "QuantizedTensorBase":
-        """ Overrides torch.Tensor.new_empty """
+    def new_empty(
+        self,
+        size,
+        *,
+        dtype=None,
+        device=None,
+        requires_grad=False,
+        layout=torch.strided,
+        pin_memory=False,
+        **kwargs,
+    ) -> "QuantizedTensorBase":
+        """Overrides torch.Tensor.new_empty"""
         # PyTorch requires subclasses of torch.Tensor to override this method such that
         # it returns an instance of the subclass, not a plain torch.Tensor,
         # for the subclass to be deep-copyable
-        encoding = kwargs.pop('encoding', None)
-        t = super().new_empty(size, dtype=dtype, device=device, requires_grad=requires_grad,
-                              layout=layout, pin_memory=pin_memory, **kwargs).as_subclass(type(self))
+        encoding = kwargs.pop("encoding", None)
+        t = (
+            super()
+            .new_empty(
+                size,
+                dtype=dtype,
+                device=device,
+                requires_grad=requires_grad,
+                layout=layout,
+                pin_memory=pin_memory,
+                **kwargs,
+            )
+            .as_subclass(type(self))
+        )
         t.encoding = encoding
         return t
 
@@ -370,8 +411,10 @@ class QuantizedTensorBase(torch.Tensor):
         :param memory_format: Desired memory format of the returned tensor (default=torch.preserve_format)
         """
         # Note: use encoding.clone() here instead of deepcopy to propagate gradient through operation
-        encoding_clone = self.encoding and self.encoding._clone() # pylint:disable = protected-access
-        self_clone = super().clone(memory_format=memory_format).as_subclass(self.__class__)
+        encoding_clone = self.encoding and self.encoding._clone()  # pylint:disable = protected-access
+        self_clone = (
+            super().clone(memory_format=memory_format).as_subclass(self.__class__)
+        )
         self_clone.encoding = encoding_clone
         return self_clone
 
@@ -381,11 +424,11 @@ class QuantizedTensorBase(torch.Tensor):
         Returns a new QuantizedTensorBase with data and encoding detached from the current graph
         """
         self_detached = super().detach().as_subclass(self.__class__)
-        self_detached.encoding = self.encoding and self.encoding._detach() # pylint:disable = protected-access
+        self_detached.encoding = self.encoding and self.encoding._detach()  # pylint:disable = protected-access
         return self_detached
 
     @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None): # pylint: disable=too-many-return-statements
+    def __torch_function__(cls, func, types, args=(), kwargs=None):  # pylint: disable=too-many-return-statements
         if func in HANDLED_FUNCTIONS:
             kwargs = kwargs if kwargs is not None else {}
             return HANDLED_FUNCTIONS[func](*args, **kwargs)
@@ -398,7 +441,12 @@ class QuantizedTensorBase(torch.Tensor):
 
         if not isinstance(self, QuantizedTensorBase):
             # If self is not a subclass of QuantizedTensorBase, return a plain torch.Tensor
-            return tree_map(lambda t: t.as_subclass(torch.Tensor) if isinstance(t, QuantizedTensorBase) else t, ret)
+            return tree_map(
+                lambda t: t.as_subclass(torch.Tensor)
+                if isinstance(t, QuantizedTensorBase)
+                else t,
+                ret,
+            )
 
         if func in cls._cast_ops:
             if not ret.dtype.is_floating_point:
@@ -442,7 +490,7 @@ class QuantizedTensorBase(torch.Tensor):
             return ret
 
         def set_encoding(qtensor):
-            if not hasattr(qtensor, 'encoding'):
+            if not hasattr(qtensor, "encoding"):
                 qtensor.encoding = None
 
             if qtensor.encoding is None:

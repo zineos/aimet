@@ -61,7 +61,7 @@ class MnistModel(nn.Module):
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5, padding=(2, 2))
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5, padding=(2, 2))
         self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(7*7*64, 1024)
+        self.fc1 = nn.Linear(7 * 7 * 64, 1024)
         self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, x):
@@ -102,9 +102,9 @@ class MnistSequentialModel(nn.Module):
 
 
 class TestTrainingExtensionsSvd:
-
     def test_set_parent_attribute_two_deep(self):
         """With a two-deep model"""
+
         class SubNet(nn.Module):
             def __init__(self):
                 super(SubNet, self).__init__()
@@ -134,12 +134,15 @@ class TestTrainingExtensionsSvd:
         # create layer attribute
         output_activation_shape = None
 
-        layers = {id(model.subnet1.conv2): Layer(model.subnet1.conv2, id(model.subnet1.conv2),
-                                                 output_activation_shape),
-                  id(model.subnet2.conv1): Layer(model.subnet2.conv1, id(model.subnet2.conv1),
-                                                 output_activation_shape),
-                  id(model.fc2):           Layer(model.fc2, id(model.fc2),
-                                                 output_activation_shape)}
+        layers = {
+            id(model.subnet1.conv2): Layer(
+                model.subnet1.conv2, id(model.subnet1.conv2), output_activation_shape
+            ),
+            id(model.subnet2.conv1): Layer(
+                model.subnet2.conv1, id(model.subnet2.conv1), output_activation_shape
+            ),
+            id(model.fc2): Layer(model.fc2, id(model.fc2), output_activation_shape),
+        }
 
         LayerDatabase.set_reference_to_parent_module(model, layers)
 
@@ -152,6 +155,7 @@ class TestTrainingExtensionsSvd:
 
     def test_set_attributes_with_sequentials(self):
         """With a one-deep model"""
+
         class Net(nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -159,15 +163,11 @@ class TestTrainingExtensionsSvd:
                 self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
                 self.conv2_drop = nn.Dropout2d()
                 self.subnet1 = nn.Sequential(
-                    nn.Conv2d(1, 10, 5),
-                    nn.ReLU(),
-                    nn.Conv2d(10, 20, 5)
+                    nn.Conv2d(1, 10, 5), nn.ReLU(), nn.Conv2d(10, 20, 5)
                 )
                 self.fc1 = nn.Linear(320, 50)
                 self.subnet2 = nn.Sequential(
-                    nn.Conv2d(1, 10, 5),
-                    nn.ReLU(),
-                    nn.Conv2d(1, 10, 5)
+                    nn.Conv2d(1, 10, 5), nn.ReLU(), nn.Conv2d(1, 10, 5)
                 )
                 self.fc2 = nn.Linear(50, 10)
 
@@ -180,12 +180,15 @@ class TestTrainingExtensionsSvd:
         # create layer attribute
         output_activation_shape = None
 
-        layers = {id(model.subnet1[2]): Layer(model.subnet1[2], id(model.subnet1[2]),
-                                              output_activation_shape),
-                  id(model.subnet2[0]): Layer(model.subnet2[0], id(model.subnet2[0]),
-                                              output_activation_shape),
-                  id(model.fc2): Layer(model.fc2, id(model.fc2),
-                                       output_activation_shape)}
+        layers = {
+            id(model.subnet1[2]): Layer(
+                model.subnet1[2], id(model.subnet1[2]), output_activation_shape
+            ),
+            id(model.subnet2[0]): Layer(
+                model.subnet2[0], id(model.subnet2[0]), output_activation_shape
+            ),
+            id(model.fc2): Layer(model.fc2, id(model.fc2), output_activation_shape),
+        }
 
         LayerDatabase.set_reference_to_parent_module(model, layers)
 
@@ -198,6 +201,7 @@ class TestTrainingExtensionsSvd:
 
     def test_set_parent_attribute_with_sequential_two_deep(self):
         """With a two-deep model"""
+
         class Net(nn.Module):
             def __init__(self):
                 super(Net, self).__init__()
@@ -207,12 +211,8 @@ class TestTrainingExtensionsSvd:
                 self.subnet1 = nn.Sequential(
                     nn.Conv2d(1, 10, 5),
                     nn.ReLU(),
-                    nn.Sequential(
-                        nn.Conv2d(1, 10, 5),
-                        nn.ReLU(),
-                        nn.Conv2d(20, 50, 5)
-                    ),
-                    nn.Conv2d(1, 10, 5)
+                    nn.Sequential(nn.Conv2d(1, 10, 5), nn.ReLU(), nn.Conv2d(20, 50, 5)),
+                    nn.Conv2d(1, 10, 5),
                 )
                 self.fc1 = nn.Linear(320, 50)
                 self.fc2 = nn.Linear(50, 10)
@@ -226,9 +226,17 @@ class TestTrainingExtensionsSvd:
         # create layer attribute
         output_activation_shape = None
 
-        layers = {id(model.subnet1[0]):     Layer(model.subnet1[0], None, output_activation_shape),
-                  id(model.subnet1[2][0]):  Layer(model.subnet1[2][0], None, output_activation_shape),
-                  id(model.subnet1[2][2]):  Layer(model.subnet1[2][2], None, output_activation_shape)}
+        layers = {
+            id(model.subnet1[0]): Layer(
+                model.subnet1[0], None, output_activation_shape
+            ),
+            id(model.subnet1[2][0]): Layer(
+                model.subnet1[2][0], None, output_activation_shape
+            ),
+            id(model.subnet1[2][2]): Layer(
+                model.subnet1[2][2], None, output_activation_shape
+            ),
+        }
 
         LayerDatabase.set_reference_to_parent_module(model, layers)
         # child : model.subnet1.0 --> parent : model.subnet1
@@ -240,9 +248,7 @@ class TestTrainingExtensionsSvd:
 
 
 class TestWeightSvdPruning:
-
     def test_prune_layer(self):
-
         model = mnist_model.Net()
 
         # Create a layer database
@@ -253,12 +259,14 @@ class TestWeightSvdPruning:
         # Copy the db
         comp_layer_db = copy.deepcopy(orig_layer_db)
 
-        conv2 = comp_layer_db.find_layer_by_name('conv2')
+        conv2 = comp_layer_db.find_layer_by_name("conv2")
         weight_svd_pruner = WeightSvdPruner()
-        weight_svd_pruner._prune_layer(orig_layer_db, comp_layer_db, conv2, 0.5, aimet_common.defs.CostMetric.mac)
+        weight_svd_pruner._prune_layer(
+            orig_layer_db, comp_layer_db, conv2, 0.5, aimet_common.defs.CostMetric.mac
+        )
 
-        conv2_a = comp_layer_db.find_layer_by_name('conv2.0')
-        conv2_b = comp_layer_db.find_layer_by_name('conv2.1')
+        conv2_a = comp_layer_db.find_layer_by_name("conv2.0")
+        conv2_b = comp_layer_db.find_layer_by_name("conv2.1")
 
         assert (1, 1) == conv2_a.module.kernel_size
         assert 32 == conv2_a.module.in_channels
@@ -277,7 +285,7 @@ class TestWeightSvdPruning:
         print(comp_layer_db.model)
 
     @pytest.mark.cuda
-    @pytest.mark.parametrize("device", ['cpu', 'cuda'])
+    @pytest.mark.parametrize("device", ["cpu", "cuda"])
     @pytest.mark.parametrize("channels", [(16, 32), (32, 16)])
     @pytest.mark.parametrize("comp_ratio", [Decimal(0.25), Decimal(0.5), Decimal(0.75)])
     @pytest.mark.parametrize("bias", [True, False])
@@ -296,34 +304,48 @@ class TestWeightSvdPruning:
         model = Model().eval().to(device)
         dummy_input = torch.randn(1, channels[0]).to(device)
         layer_db = LayerDatabase(model, dummy_input)
-        fc1 = layer_db.find_layer_by_name('fc1')
+        fc1 = layer_db.find_layer_by_name("fc1")
         layer_comp_ratio_list = [LayerCompRatioPair(fc1, comp_ratio)]
         # Using MO implementation
         pruner = WeightSvdPruner()
-        mo_layer_db = pruner.prune_model(layer_db, layer_comp_ratio_list, aimet_common.defs.CostMetric.mac,
-                                         trainer=None)
+        mo_layer_db = pruner.prune_model(
+            layer_db,
+            layer_comp_ratio_list,
+            aimet_common.defs.CostMetric.mac,
+            trainer=None,
+        )
         # Using python implementation
         pruner = PyWeightSvdPruner()
-        py_layer_db = pruner.prune_model(layer_db, layer_comp_ratio_list, aimet_common.defs.CostMetric.mac,
-                                         trainer=None)
+        py_layer_db = pruner.prune_model(
+            layer_db,
+            layer_comp_ratio_list,
+            aimet_common.defs.CostMetric.mac,
+            trainer=None,
+        )
 
         assert id(mo_layer_db.model) != id(py_layer_db.model)
         with torch.no_grad():
             atol = torch.finfo(torch.float16).eps
-            assert torch.allclose(mo_layer_db.model(dummy_input), py_layer_db.model(dummy_input), atol=atol)
-
+            assert torch.allclose(
+                mo_layer_db.model(dummy_input),
+                py_layer_db.model(dummy_input),
+                atol=atol,
+            )
 
     @pytest.mark.cuda
-    @pytest.mark.parametrize("device", ['cpu', 'cuda'])
+    @pytest.mark.parametrize("device", ["cpu", "cuda"])
     @pytest.mark.parametrize("channels", [(16, 32), (32, 16)])
     @pytest.mark.parametrize("comp_ratio", [Decimal(0.25), Decimal(0.5), Decimal(0.75)])
     @pytest.mark.parametrize("bias", [True, False])
     def test_prune_model_conv(self, device, channels, comp_ratio, bias):
         torch.manual_seed(0)
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super(Model, self).__init__()
-                self.conv1 = nn.Conv2d(channels[0], channels[1], kernel_size=1, bias=bias)
+                self.conv1 = nn.Conv2d(
+                    channels[0], channels[1], kernel_size=1, bias=bias
+                )
                 self.conv2 = nn.Conv2d(channels[1], 6, kernel_size=1, bias=bias)
 
             def forward(self, x):
@@ -334,18 +356,30 @@ class TestWeightSvdPruning:
         model = Model().eval().to(device)
         dummy_input = torch.randn(1, channels[0], 10, 10).to(device)
         layer_db = LayerDatabase(model, dummy_input)
-        conv1 = layer_db.find_layer_by_name('conv1')
+        conv1 = layer_db.find_layer_by_name("conv1")
         layer_comp_ratio_list = [LayerCompRatioPair(conv1, comp_ratio)]
         # Using MO implementation
         pruner = WeightSvdPruner()
-        mo_layer_db = pruner.prune_model(layer_db, layer_comp_ratio_list, aimet_common.defs.CostMetric.mac,
-                                         trainer=None)
+        mo_layer_db = pruner.prune_model(
+            layer_db,
+            layer_comp_ratio_list,
+            aimet_common.defs.CostMetric.mac,
+            trainer=None,
+        )
         # Using python implementation
         pruner = PyWeightSvdPruner()
-        py_layer_db = pruner.prune_model(layer_db, layer_comp_ratio_list, aimet_common.defs.CostMetric.mac,
-                                         trainer=None)
+        py_layer_db = pruner.prune_model(
+            layer_db,
+            layer_comp_ratio_list,
+            aimet_common.defs.CostMetric.mac,
+            trainer=None,
+        )
 
         assert id(mo_layer_db.model) != id(py_layer_db.model)
         with torch.no_grad():
             atol = torch.finfo(torch.float16).eps
-            assert torch.allclose(mo_layer_db.model(dummy_input), py_layer_db.model(dummy_input), atol=atol)
+            assert torch.allclose(
+                mo_layer_db.model(dummy_input),
+                py_layer_db.model(dummy_input),
+                atol=atol,
+            )

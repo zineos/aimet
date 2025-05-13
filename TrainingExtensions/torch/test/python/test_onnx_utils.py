@@ -69,7 +69,6 @@ from .models.test_models import (
 
 
 class OutOfOrderModel(torch.nn.Module):
-
     def __init__(self):
         super(OutOfOrderModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(16, 32, 3, padding=1)
@@ -99,8 +98,8 @@ class OutOfOrderModel(torch.nn.Module):
 
         return x1 + y1
 
-class MultiplyModuleAndFunctional(torch.nn.Module):
 
+class MultiplyModuleAndFunctional(torch.nn.Module):
     def __init__(self, factor):
         super().__init__()
         self.mul = aimet_modules.Multiply()
@@ -108,6 +107,7 @@ class MultiplyModuleAndFunctional(torch.nn.Module):
 
     def forward(self, x):
         return self.mul(x, self.factor) * 3
+
 
 class HierarchicalMultiplyModule(torch.nn.Module):
     def __init__(self):
@@ -121,77 +121,98 @@ class HierarchicalMultiplyModule(torch.nn.Module):
 
 
 class TestOnnxUtils:
-
     @staticmethod
     def check_onnx_node_name_uniqueness(onnx_model):
         """
         utility to check if node names are unique
         """
         onnx_node_names = [node.name for node in onnx_model.graph.node]
-        assert len(onnx_node_names) == len(set(onnx_node_names)), f'list size mismatch, check if names are unique'
+        assert len(onnx_node_names) == len(set(onnx_node_names)), (
+            f"list size mismatch, check if names are unique"
+        )
 
     def test_add_pytorch_node_names_to_onnx_resnet(self):
-
         AimetLogger.set_level_for_all_areas(logging.DEBUG)
 
-        model_name = 'resnet18'
+        model_name = "resnet18"
         model = models.resnet18(pretrained=False)
         dummy_input = torch.randn(1, 3, 224, 224)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, model_name + '.onnx'), model, dummy_input,
-                                                is_conditional=False, module_marker_map={})
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, model_name + ".onnx"),
+                model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+            )
 
-            onnx_model = onnx.load(os.path.join(tmp_dir,  model_name + '.onnx'))
+            onnx_model = onnx.load(os.path.join(tmp_dir, model_name + ".onnx"))
             self.check_onnx_node_names(onnx_model)
 
     def check_onnx_node_names(self, onnx_model):
         name_to_bn_node_map = {}
         for node in onnx_model.graph.node:
-            if node.op_type in ('Conv', 'Gemm', 'MaxPool'):
+            if node.op_type in ("Conv", "Gemm", "MaxPool"):
                 assert node.name
-            if node.op_type == 'BatchNormalization':
+            if node.op_type == "BatchNormalization":
                 name_to_bn_node_map[node.name] = node
 
             for in_tensor in node.input:
-                if in_tensor.endswith('weight'):
+                if in_tensor.endswith("weight"):
                     tensor_context = in_tensor[:-7]
-                    assert node.name == tensor_context or tensor_context in name_to_bn_node_map
+                    assert (
+                        node.name == tensor_context
+                        or tensor_context in name_to_bn_node_map
+                    )
 
     def test_add_pytorch_node_names_to_onnx_ooo(self):
-
         AimetLogger.set_level_for_all_areas(logging.DEBUG)
 
-        model_name = 'out_of_order'
+        model_name = "out_of_order"
         model = OutOfOrderModel()
         dummy_input = torch.randn(1, 16, 20, 20)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir,  model_name + '.onnx'), model, dummy_input,
-                                                is_conditional=False, module_marker_map={})
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, model_name + ".onnx"),
+                model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+            )
 
-            onnx_model = onnx.load(os.path.join(tmp_dir,  model_name + '.onnx'))
+            onnx_model = onnx.load(os.path.join(tmp_dir, model_name + ".onnx"))
             self.check_onnx_node_names(onnx_model)
 
     def test_onnx_node_name_to_input_output_names_util(self):
-        """ test onxx based utility to find mapping between onnx node names and io tensors"""
+        """test onxx based utility to find mapping between onnx node names and io tensors"""
         model = models.resnet18(pretrained=False)
         dummy_input = torch.randn(1, 3, 224, 224)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            torch.onnx.export(model, dummy_input, os.path.join(tmp_dir, 'resnet18.onnx'))
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'resnet18.onnx'), model, dummy_input,
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'resnet18.onnx'))
+            torch.onnx.export(
+                model, dummy_input, os.path.join(tmp_dir, "resnet18.onnx")
+            )
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "resnet18.onnx"),
+                model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "resnet18.onnx"))
 
             # Get Dict mapping node name to the input and output names
-            node_to_io_dict,_ = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            node_to_io_dict, _ = (
+                onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            )
 
             node_0 = onnx_model.graph.node[0]
             assert node_0.input == node_to_io_dict[node_0.name].inputs
             assert node_0.output == node_to_io_dict[node_0.name].outputs
 
     def test_single_pytorch_module_mapping_to_many_onnx_nodes(self):
-        """ test onxx based utility to find mapping between onnx node names and io tensors
+        """test onxx based utility to find mapping between onnx node names and io tensors
         when more than one onnx node maps to the same torch module
         """
 
@@ -201,6 +222,7 @@ class TestOnnxUtils:
             """
             Model using torch.nn.LSTM module
             """
+
             def __init__(self):
                 super(TwoLayerLstmModel, self).__init__()
                 self.lstm = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=3)
@@ -208,25 +230,35 @@ class TestOnnxUtils:
             def forward(self, x, hx=None):
                 return self.lstm(x, hx)
 
-        model_name = 'multilayer_lstm'
+        model_name = "multilayer_lstm"
         model = TwoLayerLstmModel()
         dummy_input = torch.randn(10, 1, 3)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            torch.onnx.export(model, dummy_input, os.path.join(tmp_dir, model_name + '.onnx'))
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, model_name + '.onnx'), model, dummy_input,
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, model_name + '.onnx'))
+            torch.onnx.export(
+                model, dummy_input, os.path.join(tmp_dir, model_name + ".onnx")
+            )
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, model_name + ".onnx"),
+                model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, model_name + ".onnx"))
 
-            lstm_nodes = [node for node in onnx_model.graph.node if node.op_type == 'LSTM']
+            lstm_nodes = [
+                node for node in onnx_model.graph.node if node.op_type == "LSTM"
+            ]
             assert 3 == len(lstm_nodes)
 
-            node_to_io_dict, _ = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
-            assert isinstance(node_to_io_dict['lstm#root_node'], list)
-            assert 3 == len(node_to_io_dict['lstm#root_node'])
+            node_to_io_dict, _ = (
+                onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            )
+            assert isinstance(node_to_io_dict["lstm#root_node"], list)
+            assert 3 == len(node_to_io_dict["lstm#root_node"])
 
     def test_onnx_export_complex_model(self):
-
         from aimet_torch._base.nn.modules.custom import Add
 
         class ResidualLayer1(torch.nn.Module):
@@ -336,22 +368,45 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
-            expected_conv_names = ['conv1', 'conv2', 'block1.conv1', 'block1.conv2', 'block2.conv1', 'block2.conv2',
-                                   'block2.conv3', 'block2.conv4', 'block3.conv1', 'block3.conv3', 'block3.conv4']
-            expected_other_node_names = ['relu1', 'add', 'block1.relu1', 'block2.relu1', 'block2.relu2', 'block2.relu3',
-                                         'block2.relu4']
-            not_expected_names = ['conv0']
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
+            expected_conv_names = [
+                "conv1",
+                "conv2",
+                "block1.conv1",
+                "block1.conv2",
+                "block2.conv1",
+                "block2.conv2",
+                "block2.conv3",
+                "block2.conv4",
+                "block3.conv1",
+                "block3.conv3",
+                "block3.conv4",
+            ]
+            expected_other_node_names = [
+                "relu1",
+                "add",
+                "block1.relu1",
+                "block2.relu1",
+                "block2.relu2",
+                "block2.relu3",
+                "block2.relu4",
+            ]
+            not_expected_names = ["conv0"]
 
-            module_names = { module_name for module_name, _ in model.named_modules()}
+            module_names = {module_name for module_name, _ in model.named_modules()}
             for node in onnx_model.graph.node:
-                if not node.name.startswith('.'):
-                    name = node.name.split('#')[0]
-                    assert '.'.join(name.split('.')[:-1]) in module_names
+                if not node.name.startswith("."):
+                    name = node.name.split("#")[0]
+                    assert ".".join(name.split(".")[:-1]) in module_names
 
-                if node.op_type == 'Conv':
+                if node.op_type == "Conv":
                     assert node.name in expected_conv_names
 
             actual_node_names = [node.name for node in onnx_model.graph.node]
@@ -361,7 +416,6 @@ class TestOnnxUtils:
                 assert name not in actual_node_names
 
     def test_onnx_export_model_input_empty_layer(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -381,11 +435,16 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv0', 'conv2']
+            expected_nodes = ["conv0", "conv2"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -393,7 +452,6 @@ class TestOnnxUtils:
                 assert name in actual_nodes
 
     def test_onnx_export_model_output_empty_layer(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -413,11 +471,16 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv0', 'conv2']
+            expected_nodes = ["conv0", "conv2"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -425,7 +488,6 @@ class TestOnnxUtils:
                 assert name in actual_nodes
 
     def test_onnx_export_model_empty_layer_consumed_by_multiple_nodes(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -446,11 +508,16 @@ class TestOnnxUtils:
 
         model = MyModel()
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv0', 'conv1', 'conv2']
+            expected_nodes = ["conv0", "conv1", "conv2"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -458,7 +525,6 @@ class TestOnnxUtils:
                 assert name in actual_nodes
 
     def test_onnx_export_model_input_empty_layer_consumed_by_multiple_nodes(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -478,11 +544,16 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv1', 'conv2']
+            expected_nodes = ["conv1", "conv2"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -490,7 +561,6 @@ class TestOnnxUtils:
                 assert name in actual_nodes
 
     def test_onnx_export_intermediate_tensor_also_model_output(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -509,11 +579,16 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model, dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv1', 'conv2', 'conv3']
+            expected_nodes = ["conv1", "conv2", "conv3"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -521,7 +596,6 @@ class TestOnnxUtils:
                 assert name in actual_nodes
 
     def test_onnx_export_intermediate_tensor_also_model_output_via_empty_marker(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -544,12 +618,16 @@ class TestOnnxUtils:
         model = MyModel()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'MyModel.onnx'), model,
-                                                dummy_input=torch.rand(1, 10, 24, 24),
-                                                is_conditional=False, module_marker_map={})
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'MyModel.onnx'))
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "MyModel.onnx"),
+                model,
+                dummy_input=torch.rand(1, 10, 24, 24),
+                is_conditional=False,
+                module_marker_map={},
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "MyModel.onnx"))
 
-            expected_nodes = ['conv1', 'conv2', 'conv3']
+            expected_nodes = ["conv1", "conv2", "conv3"]
             actual_nodes = [node.name for node in onnx_model.graph.node]
             assert len(actual_nodes) == len(expected_nodes)
 
@@ -563,6 +641,7 @@ class TestOnnxUtils:
         """
         Test that node names are set correctly for linear ops turned into matmul/add in onnx.
         """
+
         class Linear(torch.nn.Module):
             def __init__(self):
                 super(Linear, self).__init__()
@@ -575,30 +654,44 @@ class TestOnnxUtils:
         model = Linear()
         # Using an input to linear op with dimension != 2 causes torch to use matmul->add instead of gemm op
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path = os.path.join(tmp_dir, 'MyModel.onnx')
-            onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 1, 3), onnx_export_args=copy.deepcopy(export_args))
+            onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
+            onnx_utils.OnnxSaver.set_node_names(
+                onnx_path,
+                model,
+                dummy_input=torch.randn(1, 1, 3),
+                onnx_export_args=copy.deepcopy(export_args),
+            )
             onnx_model = onnx.load(onnx_path)
-            expected_node_names = ['linear', 'linear#1.end']
+            expected_node_names = ["linear", "linear#1.end"]
 
             actual_node_names = [node.name for node in onnx_model.graph.node]
             for name in expected_node_names:
                 assert name in actual_node_names
 
-            expected_param_names = ['linear.weight', 'linear.bias']
-            _, valid_param_set = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            expected_param_names = ["linear.weight", "linear.bias"]
+            _, valid_param_set = (
+                onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            )
             for name in expected_param_names:
                 assert name in valid_param_set
 
             # Check that gemm still works as expected
-            onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input=torch.randn(1, 3), onnx_export_args=copy.deepcopy(export_args))
+            onnx_utils.OnnxSaver.set_node_names(
+                onnx_path,
+                model,
+                dummy_input=torch.randn(1, 3),
+                onnx_export_args=copy.deepcopy(export_args),
+            )
             onnx_model = onnx.load(onnx_path)
 
             actual_node_names = [node.name for node in onnx_model.graph.node]
-            assert 'linear' in actual_node_names
-            assert 'linear#1' not in actual_node_names
+            assert "linear" in actual_node_names
+            assert "linear#1" not in actual_node_names
 
-            expected_param_names = ['linear.weight', 'linear.bias']
-            _, valid_param_set = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            expected_param_names = ["linear.weight", "linear.bias"]
+            _, valid_param_set = (
+                onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+            )
             for name in expected_param_names:
                 assert name in valid_param_set
 
@@ -606,12 +699,15 @@ class TestOnnxUtils:
 
     # @pytest.mark.skipif(Version(torch.__version__) < Version('1.10.0'),
     #                     reason="Need Pytorch1.10.0 https://github.com/pytorch/pytorch/pull/60244")
-    @pytest.mark.skip(reason="This test causes sporadic subprocess abort failures due to possible excess process/memory usage.")
+    @pytest.mark.skip(
+        reason="This test causes sporadic subprocess abort failures due to possible excess process/memory usage."
+    )
     def test_set_node_name_for_large_model(self):
         class LargeModel(torch.nn.Module):
             def __init__(self):
                 super(LargeModel, self).__init__()
-                self.fc = torch.nn.Linear(1024, 1024*1024)
+                self.fc = torch.nn.Linear(1024, 1024 * 1024)
+
             def forward(self, input):
                 return self.fc(input)
 
@@ -620,17 +716,21 @@ class TestOnnxUtils:
         with tempfile.TemporaryDirectory() as tmp_dir:
             onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
             export_args = onnx_utils.OnnxExportApiArgs(opset_version=11)
-            onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input, onnx_export_args=export_args)
+            onnx_utils.OnnxSaver.set_node_names(
+                onnx_path, model, dummy_input, onnx_export_args=export_args
+            )
             assert os.path.exists(onnx_path)
 
     def test_set_unique_node_names(self):
         """
         Test that node names are uniquely set.
         """
+
         class TwoLayerLstmModel(torch.nn.Module):
             """
             Model using torch.nn.LSTM module
             """
+
             def __init__(self):
                 super(TwoLayerLstmModel, self).__init__()
                 self.lstm = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=3)
@@ -641,7 +741,7 @@ class TestOnnxUtils:
         model = TwoLayerLstmModel()
         dummy_input = torch.randn(10, 1, 3)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path = os.path.join(tmp_dir, 'MyModel.onnx')
+            onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
 
             torch.onnx.export(model, dummy_input, onnx_path)
             onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input)
@@ -650,14 +750,15 @@ class TestOnnxUtils:
             self.check_onnx_node_name_uniqueness(onnx_model)
 
     def test_non_leaf_module_names(self):
-
         """
         Test that node names are uniquely set.
         """
+
         class Net(torch.nn.Module):
             """
             Model using multiply as functional and module at different depths
             """
+
             def __init__(self):
                 super().__init__()
                 self.layer = HierarchicalMultiplyModule()
@@ -668,7 +769,7 @@ class TestOnnxUtils:
         model = Net()
         dummy_input = torch.randn(10, 1, 3)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path = os.path.join(tmp_dir, 'MyModel.onnx')
+            onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
 
             torch.onnx.export(model, dummy_input, onnx_path)
             onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input)
@@ -679,19 +780,18 @@ class TestOnnxUtils:
 
             expected_names = [
                 # names compatible with torch 1.9.1 version (should be removed in the future)
-                'layer.mul1.mul',
-                'layer.mul1.Mul_7',
-                'layer.mul2.mul',
-                'layer.mul2.Mul_15',
-                'layer.Mul_18',
-
+                "layer.mul1.mul",
+                "layer.mul1.Mul_7",
+                "layer.mul2.mul",
+                "layer.mul2.Mul_15",
+                "layer.Mul_18",
                 # names compatible with torch 1.13.1 version
-                '/layer/mul1/Mul',
-                '/layer/mul2/Mul',
-                '/layer/Mul'
+                "/layer/mul1/Mul",
+                "/layer/mul2/Mul",
+                "/layer/Mul",
             ]
             for node in onnx_model.graph.node:
-                assert 'Constant' in node.name or node.name in expected_names
+                assert "Constant" in node.name or node.name in expected_names
 
     def test_model_with_input_last_onnx_node(self):
         """
@@ -700,25 +800,33 @@ class TestOnnxUtils:
 
         roi_model = RoiModel(height=7, width=7, scale=0.25)
         x = torch.rand(1, 1, 6, 6)
-        rois = torch.tensor([ [0, -2.0, -2.0, 22.0, 22.0], ])
+        rois = torch.tensor(
+            [
+                [0, -2.0, -2.0, 22.0, 22.0],
+            ]
+        )
         dummy_input = (x, rois)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_utils.OnnxSaver.set_node_names(os.path.join(tmp_dir, 'roi.onnx'), roi_model, dummy_input, is_conditional=False,
-                                                module_marker_map={},
-                                                onnx_export_args=(onnx_utils.OnnxExportApiArgs(opset_version=11))
-                                                )
-            onnx_model = onnx.load(os.path.join(tmp_dir, 'roi.onnx'))
-            end_nodes = [ n.name for n in onnx_model.graph.node if 'end' in n.name]
+            onnx_utils.OnnxSaver.set_node_names(
+                os.path.join(tmp_dir, "roi.onnx"),
+                roi_model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+                onnx_export_args=(onnx_utils.OnnxExportApiArgs(opset_version=11)),
+            )
+            onnx_model = onnx.load(os.path.join(tmp_dir, "roi.onnx"))
+            end_nodes = [n.name for n in onnx_model.graph.node if "end" in n.name]
             assert len(end_nodes) == 1
 
     def test_export_dict_input_output(self):
-        """ test dictionary input and output  layers"""
-
+        """test dictionary input and output  layers"""
 
         class Net(torch.nn.Module):
             """
             Model using multiply as functional and module at different depths
             """
+
             def __init__(self):
                 super().__init__()
                 self.layer = InputOutputDictModel()
@@ -731,13 +839,15 @@ class TestOnnxUtils:
         # Add an empty dictionary as the last element to not treat as named arguments.
         # see torch.onnx.export() API for more details.
         dummy_input = (
-            {'a': torch.randn(1, 10, 10, 10),
-             'b': torch.randn(1, 10, 10, 10),
-             'c': torch.randn(1, 10, 10, 10)
-             }, {}
+            {
+                "a": torch.randn(1, 10, 10, 10),
+                "b": torch.randn(1, 10, 10, 10),
+                "c": torch.randn(1, 10, 10, 10),
+            },
+            {},
         )
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path = os.path.join(tmp_dir, 'MyModel.onnx')
+            onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
 
             torch.onnx.export(model, dummy_input, onnx_path)
             onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input)
@@ -748,10 +858,10 @@ class TestOnnxUtils:
 
             for node in onnx_model.graph.node:
                 print(node.name)
-                assert node.name.startswith('layer')
+                assert node.name.startswith("layer")
 
     def test_kwargs_input_dict_output(self):
-        """ test dictionary input as kwargs in an intermediate layer """
+        """test dictionary input as kwargs in an intermediate layer"""
 
         class KwargModel(torch.nn.Module):
             def __init__(self):
@@ -763,12 +873,13 @@ class TestOnnxUtils:
                 bc = b * c
                 ca = self.mul(c, a)
 
-                return {'ab': ab, 'bc': bc, 'ca': ca}
+                return {"ab": ab, "bc": bc, "ca": ca}
 
         class Net(torch.nn.Module):
             """
             Model using multiply as functional and module at different depths
             """
+
             def __init__(self):
                 super().__init__()
                 self.layer = KwargModel()
@@ -781,13 +892,15 @@ class TestOnnxUtils:
         # Add an empty dictionary as the last element to not treat as named arguments.
         # see torch.onnx.export() API for more details.
         dummy_input = (
-            {'a': torch.randn(1, 10, 10, 10),
-             'b': torch.randn(1, 10, 10, 10),
-             'c': torch.randn(1, 10, 10, 10)
-             }, {}
+            {
+                "a": torch.randn(1, 10, 10, 10),
+                "b": torch.randn(1, 10, 10, 10),
+                "c": torch.randn(1, 10, 10, 10),
+            },
+            {},
         )
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path = os.path.join(tmp_dir, 'MyModel.onnx')
+            onnx_path = os.path.join(tmp_dir, "MyModel.onnx")
 
             torch.onnx.export(model, dummy_input, onnx_path)
             onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input)
@@ -797,39 +910,55 @@ class TestOnnxUtils:
             self.check_onnx_node_name_uniqueness(onnx_model)
 
             for node in onnx_model.graph.node:
-                assert node.name.startswith('layer') or node.name.startswith('/layer')
+                assert node.name.startswith("layer") or node.name.startswith("/layer")
 
             if os.path.exists(onnx_path):
                 os.remove(onnx_path)
 
     def test_naming_for_model_with_deep_graph(self):
-        """ test naming works for model have large number of sequential nodes """
+        """test naming works for model have large number of sequential nodes"""
 
         model = models.resnet152(pretrained=False)
         dummy_input = torch.randn(1, 3, 224, 224)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_path= os.path.join(tmp_dir, model.__class__.__name__ + '.onnx')
-            onnx_utils.OnnxSaver.set_node_names(onnx_path, model, dummy_input,
-                                                is_conditional=False, module_marker_map={})
+            onnx_path = os.path.join(tmp_dir, model.__class__.__name__ + ".onnx")
+            onnx_utils.OnnxSaver.set_node_names(
+                onnx_path,
+                model,
+                dummy_input,
+                is_conditional=False,
+                module_marker_map={},
+            )
 
             onnx_model = onnx.load(onnx_path)
             onnx.checker.check_model(onnx_model)
             self.check_onnx_node_names(onnx_model)
 
             counts = defaultdict(int)
-            top_level_nodes = tuple(['conv1', 'bn1', 'relu', 'maxpool', 'avgpool', 'Flatten_', '/Flatten', 'fc'])
+            top_level_nodes = tuple(
+                [
+                    "conv1",
+                    "bn1",
+                    "relu",
+                    "maxpool",
+                    "avgpool",
+                    "Flatten_",
+                    "/Flatten",
+                    "fc",
+                ]
+            )
             for node in onnx_model.graph.node:
                 if node.name.startswith(top_level_nodes):
                     continue
-                elif '.' in node.name:
-                    layer_name = '.'.join(node.name.split('#')[0].split('.')[:-1])
+                elif "." in node.name:
+                    layer_name = ".".join(node.name.split("#")[0].split(".")[:-1])
                     counts[layer_name] += 1
-                elif node.name.startswith('/'):
-                    layer_name = '.'.join(node.name.split('/')[1:-1])
+                elif node.name.startswith("/"):
+                    layer_name = ".".join(node.name.split("/")[1:-1])
                     counts[layer_name] += 1
 
             for name, counts in counts.items():
-                if 'downsample' in name:
+                if "downsample" in name:
                     assert counts == 2
                 else:
                     print(name, counts)
@@ -851,7 +980,9 @@ class TestOnnxUtils:
         for name in expected_initializer_names:
             assert name in actual_initializer_names
 
-        _, valid_param_set = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+        _, valid_param_set = onnx_utils.OnnxSaver.get_onnx_node_to_io_tensor_names_map(
+            onnx_model
+        )
         for name in expected_initializer_names:
             assert name in valid_param_set
 
@@ -866,21 +997,33 @@ class TestOnnxUtils:
             torch.onnx.export(model, dummy_input, original_model_path)
 
             original_model = onnx.load(original_model_path)
-            identity_node_outputs = {x.output[0] for x in original_model.graph.node if x.op_type == "Identity"}
-            p_relu_slopes = [x.input[1] for x in original_model.graph.node if x.op_type == "PRelu"]
+            identity_node_outputs = {
+                x.output[0]
+                for x in original_model.graph.node
+                if x.op_type == "Identity"
+            }
+            p_relu_slopes = [
+                x.input[1] for x in original_model.graph.node if x.op_type == "PRelu"
+            ]
 
             # At least one slope is related to the identity node in original ONNX model
             assert any([slope in identity_node_outputs for slope in p_relu_slopes])
 
             restored_model_path = f"{tmp_dir}/restored_multiple_p_relu_model.onnx"
-            save_initializer_restored_onnx_graph(original_model_path, restored_model_path)
+            save_initializer_restored_onnx_graph(
+                original_model_path, restored_model_path
+            )
             restored_model = onnx.load(restored_model_path)
 
         # All slope should be initializers in restored ONNX model
         restored_model_initializers = {x.name for x in restored_model.graph.initializer}
-        restored_p_relu_slopes = [x.input[1] for x in restored_model.graph.node if x.op_type == "PRelu"]
+        restored_p_relu_slopes = [
+            x.input[1] for x in restored_model.graph.node if x.op_type == "PRelu"
+        ]
 
-        assert all([slope in restored_model_initializers for slope in restored_p_relu_slopes])
+        assert all(
+            [slope in restored_model_initializers for slope in restored_p_relu_slopes]
+        )
 
     @pytest.mark.parametrize("inplace", [True, False])
     def test_restore_onnx_graph_initializers(self, inplace):
@@ -892,24 +1035,43 @@ class TestOnnxUtils:
             torch.onnx.export(model, dummy_input, original_model_path)
 
             original_model = onnx.load(original_model_path)
-            restored_model = restore_onnx_graph_initializers(original_model, inplace=inplace)
+            restored_model = restore_onnx_graph_initializers(
+                original_model, inplace=inplace
+            )
 
             # Both inplace=True and inplace=False, restored model should have separate initializers
-            restored_model_initializers = {x.name for x in restored_model.graph.initializer}
-            restored_p_relu_slopes = [x.input[1] for x in restored_model.graph.node if x.op_type == "PRelu"]
-            assert all([slope in restored_model_initializers for slope in restored_p_relu_slopes])
+            restored_model_initializers = {
+                x.name for x in restored_model.graph.initializer
+            }
+            restored_p_relu_slopes = [
+                x.input[1] for x in restored_model.graph.node if x.op_type == "PRelu"
+            ]
+            assert all(
+                [
+                    slope in restored_model_initializers
+                    for slope in restored_p_relu_slopes
+                ]
+            )
 
             if inplace:
                 assert id(original_model) == id(restored_model)
             else:
                 # Original model shouldn't be modified if inplace=False
-                identity_node_outputs = {x.output[0] for x in original_model.graph.node if x.op_type == "Identity"}
-                p_relu_slopes = [x.input[1] for x in original_model.graph.node if x.op_type == "PRelu"]
+                identity_node_outputs = {
+                    x.output[0]
+                    for x in original_model.graph.node
+                    if x.op_type == "Identity"
+                }
+                p_relu_slopes = [
+                    x.input[1]
+                    for x in original_model.graph.node
+                    if x.op_type == "PRelu"
+                ]
                 assert any([slope in identity_node_outputs for slope in p_relu_slopes])
                 assert id(original_model) != id(restored_model)
 
     def test_get_pytorch_name_from_onnx_name(self):
-        """ test get_pytorch_name_from_onnx_name utility """
+        """test get_pytorch_name_from_onnx_name utility"""
         # model w/ nested sequntials
         model = NestedSeqModel().eval()
         dummy_input = torch.randn(4, 1, 4, 4)
@@ -948,7 +1110,7 @@ class TestOnnxUtils:
 
     @pytest.mark.parametrize("inplace", [True])
     def test_restore_onnx_graph_reused_initializers(self, inplace):
-        """ test to verify that Initializers are added and correponding Identity nodes are removed correctly """
+        """test to verify that Initializers are added and correponding Identity nodes are removed correctly"""
         repetition = 2
         model = ModelWithReusedInitializers(repetition).eval()
         dummy_input = torch.randn(1, 256)
@@ -960,13 +1122,19 @@ class TestOnnxUtils:
             torch.onnx.export(prepared_model, dummy_input, original_model_path)
 
             original_model = onnx.load(original_model_path)
-            identity_nodes = [node for node in original_model.graph.node if node.op_type == "Identity"]
+            identity_nodes = [
+                node for node in original_model.graph.node if node.op_type == "Identity"
+            ]
             assert len(identity_nodes) == 6
             initializers = [ini for ini in original_model.graph.initializer]
             assert len(initializers) == 6
 
-            restored_model = restore_onnx_graph_initializers(original_model, inplace=inplace)
-            identity_nodes = [node for node in restored_model.graph.node if node.op_type == "Identity"]
+            restored_model = restore_onnx_graph_initializers(
+                original_model, inplace=inplace
+            )
+            identity_nodes = [
+                node for node in restored_model.graph.node if node.op_type == "Identity"
+            ]
             # There shouldn't be any "Identity" type nodes in the restored model.
             assert len(identity_nodes) == 0
             initializers = [ini for ini in restored_model.graph.initializer]
@@ -982,8 +1150,8 @@ class TestOnnxUtils:
         # Return its name without modification
         # node_output_name_counter will have an entry and set to value as 0
         # param_name_to_updated_name will be updated with param_name to unique_node_output_name
-        updated_name = '/down_blocks.0/conv1_1/Conv_output_0'
-        param_name = '/down_blocks.0/marked_module/conv1/marked_module_1/Conv_output_0'
+        updated_name = "/down_blocks.0/conv1_1/Conv_output_0"
+        param_name = "/down_blocks.0/marked_module/conv1/marked_module_1/Conv_output_0"
         base_node_name_counter = {}
         param_name_to_updated_name = {}
         assert (
@@ -996,20 +1164,17 @@ class TestOnnxUtils:
             == updated_name
         )
         assert base_node_name_counter[updated_name] == 0
-        assert (
-            param_name_to_updated_name[param_name]
-            == updated_name
-        )
+        assert param_name_to_updated_name[param_name] == updated_name
 
         # Case 2. If updated_name is not first time
         # Postfix with count will be appended to node output name (e.g., Conv_output_0 -> Conv_output_0_dup1)
         # base_node_name_counter will be incremented (x to x + 1)
         # param_name_to_updated_name will be updated with param_name to unique_node_output_name
-        updated_name = '/down_blocks.0/Add_1/Add_output_0'
-        param_name = '/down_blocks.0/marked_module/Add/marked_module_1/Add_output_0'
+        updated_name = "/down_blocks.0/Add_1/Add_output_0"
+        param_name = "/down_blocks.0/marked_module/Add/marked_module_1/Add_output_0"
         base_node_name_counter = {updated_name: 0}
         param_name_to_updated_name = {
-            '/down_blocks.0/marked_module/Add_1/marked_module/Add_0_output_0': updated_name
+            "/down_blocks.0/marked_module/Add_1/marked_module/Add_0_output_0": updated_name
         }
         assert (
             OnnxSaver._get_unique_node_output_name(
@@ -1018,15 +1183,17 @@ class TestOnnxUtils:
                 node_output_name_counter=base_node_name_counter,
                 param_name_to_updated_name=param_name_to_updated_name,
             )
-            == '/down_blocks.0/Add_1/Add_output_0_dup1'
+            == "/down_blocks.0/Add_1/Add_output_0_dup1"
         )
         assert base_node_name_counter[updated_name] == 1
         assert (
-            param_name_to_updated_name[param_name] == '/down_blocks.0/Add_1/Add_output_0_dup1'
+            param_name_to_updated_name[param_name]
+            == "/down_blocks.0/Add_1/Add_output_0_dup1"
         )
 
     def test_node_names(self):
-        """ Check if the 'marked_module' string is removed correctly """
+        """Check if the 'marked_module' string is removed correctly"""
+
         class Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
@@ -1035,25 +1202,27 @@ class TestOnnxUtils:
             def forward(self, x):
                 return self.conv1(x)
 
-
         pt_model = Model().eval()
         dummy_input = torch.randn(1, 3, 24, 24)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            torch.onnx.export(pt_model.eval(),
-                              dummy_input,
-                              os.path.join(tmp_dir, "model.onnx"),
-                              training=torch.onnx.TrainingMode.EVAL,
-                              export_params=True,
-                              input_names=['input'],
-                              output_names=['output'])
+            torch.onnx.export(
+                pt_model.eval(),
+                dummy_input,
+                os.path.join(tmp_dir, "model.onnx"),
+                training=torch.onnx.TrainingMode.EVAL,
+                export_params=True,
+                input_names=["input"],
+                output_names=["output"],
+            )
             model = onnx.load_model(os.path.join(tmp_dir, "model.onnx"))
 
             # Add 'marked_module' string in input and output field of onnx.GraphProto object.
-            model.graph.input[0].name = model.graph.input[0].name + '/marked_module'
-            model.graph.output[0].name = model.graph.input[0].name + '/marked_module'
+            model.graph.input[0].name = model.graph.input[0].name + "/marked_module"
+            model.graph.output[0].name = model.graph.input[0].name + "/marked_module"
 
             # An exception should be raised since the node input/output names are not consistent.
             from onnx.checker import ValidationError
+
             with pytest.raises(ValidationError):
                 onnx.checker.check_model(model)
 

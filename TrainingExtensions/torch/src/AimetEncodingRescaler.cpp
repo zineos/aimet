@@ -65,27 +65,27 @@ public:
 
         for (auto size: sizes)
             inputTensorSize *= size;
-        
-        //scaling_params.numel() will return the total number of elements in the input tensor, 
-        //if scaling_params.numel() is zero, we need to create an empty tensor here. 
-        //For the torch::TensorOptions(), it just make sure that scaling_params has same 
+
+        //scaling_params.numel() will return the total number of elements in the input tensor,
+        //if scaling_params.numel() is zero, we need to create an empty tensor here.
+        //For the torch::TensorOptions(), it just make sure that scaling_params has same
         //data type and compute device with input tensor.
         if(!scaling_params.numel())
         {
-            auto options = torch::TensorOptions().dtype(torch::kFloat32).device(input.device().type(), 
+            auto options = torch::TensorOptions().dtype(torch::kFloat32).device(input.device().type(),
                                                                                 input.device().index());
             scaling_params = torch::empty({weight_scale.size()}, options);
         }
         else
         {
-            if((input.device().type() != scaling_params.device().type()) || 
+            if((input.device().type() != scaling_params.device().type()) ||
                (input.device().type() == torch::kCUDA && (input.device().index() != scaling_params.device().index())))
             {
-                auto options = torch::TensorOptions().dtype(torch::kFloat32).device(input.device().type(), 
+                auto options = torch::TensorOptions().dtype(torch::kFloat32).device(input.device().type(),
                                                                                     input.device().index());
                 scaling_params = torch::empty({weight_scale.size()}, options);
             }
-        }    
+        }
         DlQuantization::ConvSpecArgs<float> encodingArgs = {.out_encoding_delta = static_cast<float>(out_enc.delta),
                                                               .out_encoding_offset = static_cast<float>(out_enc.offset),
                                                               .input_scale = input_scale,

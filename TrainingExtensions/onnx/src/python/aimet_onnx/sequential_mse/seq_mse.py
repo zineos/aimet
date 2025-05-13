@@ -36,7 +36,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Sequential MSE implementation """
+"""Sequential MSE implementation"""
 
 # pylint: disable=no-name-in-module, ungrouped-imports, too-many-lines
 
@@ -55,7 +55,10 @@ from aimet_common.defs import QuantScheme
 from aimet_common.utils import AimetLogger
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import QcQuantizeOp
-from aimet_onnx.sequential_mse.dependency_graph import DependencyGraph, SUPPORTED_MODULES
+from aimet_onnx.sequential_mse.dependency_graph import (
+    DependencyGraph,
+    SUPPORTED_MODULES,
+)
 from aimet_onnx.sequential_mse.dependency_graph import DependencyNode
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
@@ -71,10 +74,11 @@ class SeqMseParams:
     :param inp_symmetry: Input symmetry. Available options are 'asym', 'symfp' and 'symqt'. Default 'symqt'.
     :param loss_fn: Loss function. Available options are 'mse', 'l1' and 'sqnr'. Default 'mse'.
     """
+
     num_batches: int
     num_candidates: int = 20
-    inp_symmetry: str = 'symqt'
-    loss_fn: str = 'mse'
+    inp_symmetry: str = "symqt"
+    loss_fn: str = "mse"
 
 
 # pylint: disable=too-many-instance-attributes
@@ -83,11 +87,13 @@ class SequentialMse:
     Sequentially minimizing activation MSE loss in layer-wise way to decide optimal param quantization encodings.
     """
 
-    def __init__(self,
-                 model: onnx.ModelProto,
-                 sim: QuantizationSimModel,
-                 params: SeqMseParams,
-                 data_loader: Iterable):
+    def __init__(
+        self,
+        model: onnx.ModelProto,
+        sim: QuantizationSimModel,
+        params: SeqMseParams,
+        data_loader: Iterable,
+    ):
         """
         Initialize the sequential mse object
 
@@ -97,8 +103,10 @@ class SequentialMse:
         :param data_loader: Torch Dataloader
         """
         # pylint: disable=protected-access
-        assert sim._quant_scheme in (QuantScheme.post_training_tf, QuantScheme.training_range_learning_with_tf_init), \
-            "Use TF quant-scheme with sequential MSE."
+        assert sim._quant_scheme in (
+            QuantScheme.post_training_tf,
+            QuantScheme.training_range_learning_with_tf_init,
+        ), "Use TF quant-scheme with sequential MSE."
 
         self.sim = sim
         self.params = params
@@ -107,7 +115,7 @@ class SequentialMse:
         raw_data = {}
         # Store and clear raw_data from initializers
         for initializer in self.sim.model.model.graph.initializer:
-            if initializer.HasField('raw_data'):
+            if initializer.HasField("raw_data"):
                 raw_data[initializer.name] = initializer.raw_data
                 initializer.ClearField("raw_data")
 
@@ -128,11 +136,12 @@ class SequentialMse:
 
         self._update_value_info()
 
-        self.dependency_graph = DependencyGraph(self._extractor.model, data_loader, params.num_batches)
+        self.dependency_graph = DependencyGraph(
+            self._extractor.model, data_loader, params.num_batches
+        )
         self._extractor.model = self.sim.model.model
         self._extractor.graph = self.sim.model.model.graph
         self.data_loader = data_loader
-
 
     def _update_value_info_for_output(self, node):
         """
@@ -144,7 +153,10 @@ class SequentialMse:
 
         input_name = node.input[0]
         output_name = node.output[0]
-        if input_name in self._extractor.vimap and output_name not in self._extractor.vimap:
+        if (
+            input_name in self._extractor.vimap
+            and output_name not in self._extractor.vimap
+        ):
             value_info_for_output = copy.deepcopy(self._extractor.vimap[input_name])
             value_info_for_output.name = node.output[0]
             self._extractor.vimap[node.output[0]] = value_info_for_output
@@ -159,7 +171,10 @@ class SequentialMse:
 
         input_name = node.input[0]
         output_name = node.output[0]
-        if output_name in self._extractor.vimap and input_name not in self._extractor.vimap:
+        if (
+            output_name in self._extractor.vimap
+            and input_name not in self._extractor.vimap
+        ):
             value_info_for_input = copy.deepcopy(self._extractor.vimap[output_name])
             value_info_for_input.name = node.input[0]
             self._extractor.vimap[node.input[0]] = value_info_for_input
@@ -188,10 +203,12 @@ class SequentialMse:
                 self._update_value_info_for_input(node)
 
     @staticmethod
-    def apply_seq_mse(model: onnx.ModelProto,
-                      sim: QuantizationSimModel,
-                      params: SeqMseParams,
-                      data_loader: Iterable):
+    def apply_seq_mse(
+        model: onnx.ModelProto,
+        sim: QuantizationSimModel,
+        params: SeqMseParams,
+        data_loader: Iterable,
+    ):
         """
         It performs following steps:
         1) creates seq_mse object
@@ -236,7 +253,10 @@ class SequentialMse:
         for cg_op in self.dependency_graph.conn_graph.ordered_ops:
             if cg_op.type in SUPPORTED_MODULES:
                 for param_name in cg_op.parameters:
-                    if param_name in self.sim.qc_quantize_op_dict and self.sim.qc_quantize_op_dict[param_name].enabled:
+                    if (
+                        param_name in self.sim.qc_quantize_op_dict
+                        and self.sim.qc_quantize_op_dict[param_name].enabled
+                    ):
                         param_quantizer_names.append(param_name)
 
         # Get list of all the quantizers that are not part of param quantizers of supported ops
@@ -263,8 +283,12 @@ class SequentialMse:
 
     @contextmanager
     def _disable_subgraph_quantizers(self, model: onnx.ModelProto):
-        quantizer_keys = [node.input[0] for node in model.graph.node if node.op_type == "QcQuantizeOp"]
-        enabled = {name: self.sim.qc_quantize_op_dict[name].enabled for name in quantizer_keys}
+        quantizer_keys = [
+            node.input[0] for node in model.graph.node if node.op_type == "QcQuantizeOp"
+        ]
+        enabled = {
+            name: self.sim.qc_quantize_op_dict[name].enabled for name in quantizer_keys
+        }
         try:
             for name in quantizer_keys:
                 self.sim.qc_quantize_op_dict[name].enabled = False
@@ -283,12 +307,14 @@ class SequentialMse:
         :return: per_channel_min and per_channel_max
         """
         # pylint: disable=protected-access
-        channel_axis = QuantizationSimModel._get_quantization_axes(dependency_node.cg_op)[0]
+        channel_axis = QuantizationSimModel._get_quantization_axes(
+            dependency_node.cg_op
+        )[0]
 
         weight_data = self.dependency_graph.get_param_value(dependency_node)
         # Handle negative indexing
-        if channel_axis  < 0:
-            channel_axis +=  len(weight_data.shape)
+        if channel_axis < 0:
+            channel_axis += len(weight_data.shape)
 
         axis = tuple(i for i in range(len(weight_data.shape)) if i != channel_axis)
         per_channel_max = np.max(abs(weight_data), axis=axis)
@@ -309,7 +335,9 @@ class SequentialMse:
             candidates.append((cand_max, cand_min))
         return candidates
 
-    def _compute_encoding_from_candidate(self, candidate, dependency_node: DependencyNode):
+    def _compute_encoding_from_candidate(
+        self, candidate, dependency_node: DependencyNode
+    ):
         """
         computes the encoding using candidate min and candidate max
 
@@ -331,11 +359,16 @@ class SequentialMse:
         num_encodings = np.prod(quantizer_shape)
 
         if num_encodings != len(cand) and num_encodings != 1:
-            raise ValueError(weight_name, " should be per-tensor or number of "
-                                          "quantizer must match with number of channels")
+            raise ValueError(
+                weight_name,
+                " should be per-tensor or number of "
+                "quantizer must match with number of channels",
+            )
 
         if quantizer_shape:
-            quantize_op.update_encoding_stats(np.reshape(cand, (*quantizer_shape[0:-1], 2 * quantizer_shape[-1])))
+            quantize_op.update_encoding_stats(
+                np.reshape(cand, (*quantizer_shape[0:-1], 2 * quantizer_shape[-1]))
+            )
         else:
             quantize_op.update_encoding_stats(cand)
 
@@ -365,8 +398,8 @@ class SequentialMse:
         """
         # pylint: disable=unused-argument
         quant_error = target - pred
-        exp_noise = torch.mean(quant_error ** 2, 0, keepdim=True) + eps
-        exp_signal = torch.mean(target ** 2, 0, keepdim=True)
+        exp_noise = torch.mean(quant_error**2, 0, keepdim=True) + eps
+        exp_signal = torch.mean(target**2, 0, keepdim=True)
         sqnr = exp_signal / exp_noise
         sqnr_db = 10 * torch.log10(sqnr)
         return -sqnr_db
@@ -411,6 +444,7 @@ class SequentialMse:
 
         :param dep_nodes_to_parallelize: Dependency nodes to be parallelized.
         """
+
         def _set_candidates(index: int):
             """
             Helper function to set candidate based on index for ops at same level.
@@ -457,16 +491,24 @@ class SequentialMse:
         # Perform grid search
         for dep_node in dep_nodes_to_parallelize:
             per_channel_min, per_channel_max = self._get_min_max_from_weights(dep_node)
-            min_max_candidates[dep_node.cg_op.name] = self._get_candidates(per_channel_max, per_channel_min)
+            min_max_candidates[dep_node.cg_op.name] = self._get_candidates(
+                per_channel_max, per_channel_min
+            )
 
-        subgraph_inp_names, subgraph_outs_names = _get_dep_node_io_names(dep_nodes_to_parallelize)
+        subgraph_inp_names, subgraph_outs_names = _get_dep_node_io_names(
+            dep_nodes_to_parallelize
+        )
 
         # For now, we only expose "symqt" input symmetry.
-        assert self.params.inp_symmetry == "symqt", "Only symmetric quantsim inputs ('symqt') are supported."
+        assert self.params.inp_symmetry == "symqt", (
+            "Only symmetric quantsim inputs ('symqt') are supported."
+        )
         sim_inputs = self.dependency_graph.get_sim_data(dep_nodes_to_parallelize)
 
         # Create inference session for subgraph from float model
-        subgraph_model = self._split_onnx_graph(self._extractor, subgraph_inp_names, subgraph_outs_names)
+        subgraph_model = self._split_onnx_graph(
+            self._extractor, subgraph_inp_names, subgraph_outs_names
+        )
         with self._create_session(subgraph_model) as session:
             with self._disable_subgraph_quantizers(subgraph_model):
                 fp_outputs = self._run_onnx_graph(session, sim_inputs)
@@ -484,21 +526,31 @@ class SequentialMse:
             loss = total_loss[dep_node.cg_op.name]
             stacked_loss = np.stack(loss, axis=0)
             arg_min_ = np.argmin(stacked_loss, axis=0, keepdims=True)
-            best_max = \
-            torch.stack([torch.tensor(cand_max) for cand_max, _ in min_max_candidates[dep_node.cg_op.name]]).gather(
-                0, torch.tensor(arg_min_))[0]
-            best_min = \
-            torch.stack([torch.tensor(cand_min) for _, cand_min in min_max_candidates[dep_node.cg_op.name]]).gather(
-                0, torch.tensor(arg_min_))[0]
+            best_max = torch.stack(
+                [
+                    torch.tensor(cand_max)
+                    for cand_max, _ in min_max_candidates[dep_node.cg_op.name]
+                ]
+            ).gather(0, torch.tensor(arg_min_))[0]
+            best_min = torch.stack(
+                [
+                    torch.tensor(cand_min)
+                    for _, cand_min in min_max_candidates[dep_node.cg_op.name]
+                ]
+            ).gather(0, torch.tensor(arg_min_))[0]
             best_candidate = (best_max, best_min)
             self._compute_encoding_from_candidate(best_candidate, dep_node)
             self._freeze_encodings(dep_node)
 
         dep_node_names = [dep_node.cg_op.name for dep_node in dep_nodes_to_parallelize]
-        _logger.info(f"Computed optimal parameter encodings for ops: {', '.join(dep_node_names)}")
+        _logger.info(
+            f"Computed optimal parameter encodings for ops: {', '.join(dep_node_names)}"
+        )
 
     @staticmethod
-    def _split_onnx_graph(extractor: Extractor, input_names: List[str], output_names: List[str]) -> onnx.ModelProto:
+    def _split_onnx_graph(
+        extractor: Extractor, input_names: List[str], output_names: List[str]
+    ) -> onnx.ModelProto:
         """
         Splits the onnx graph from input names to output names using extractor
 
@@ -508,7 +560,9 @@ class SequentialMse:
         """
         return extractor.extract_model(list(input_names), list(output_names))
 
-    def _run_onnx_graph(self, session: onnxruntime.InferenceSession, inputs: Dict) -> List[List[np.ndarray]]:
+    def _run_onnx_graph(
+        self, session: onnxruntime.InferenceSession, inputs: Dict
+    ) -> List[List[np.ndarray]]:
         """
         Run the onnx graph using onnx runtime
 
@@ -541,18 +595,28 @@ class SequentialMse:
         :param dep_nodes: List of dependency nodes at same level
         """
         dep_node_names = [dep_node.cg_op.name for dep_node in dep_nodes]
-        _logger.debug(f"Started caching inputs for dep nodes: {', '.join(dep_node_names)}")
+        _logger.debug(
+            f"Started caching inputs for dep nodes: {', '.join(dep_node_names)}"
+        )
 
-        subgraph_inp_names, subgraph_out_names = self.dependency_graph.get_subgraph_inp_out_names(dep_nodes)
+        subgraph_inp_names, subgraph_out_names = (
+            self.dependency_graph.get_subgraph_inp_out_names(dep_nodes)
+        )
         subgraph_inps = self.dependency_graph.dependency_node_inputs(dep_nodes)
         assert len(subgraph_inp_names) == len(subgraph_inps)
 
-        _logger.debug(f"Subgraph input names: {subgraph_inp_names}, Subgraph output names: {subgraph_out_names}")
-        sim_split_model = self._split_onnx_graph(self._extractor, subgraph_inp_names, subgraph_out_names)
+        _logger.debug(
+            f"Subgraph input names: {subgraph_inp_names}, Subgraph output names: {subgraph_out_names}"
+        )
+        sim_split_model = self._split_onnx_graph(
+            self._extractor, subgraph_inp_names, subgraph_out_names
+        )
         with self._create_session(sim_split_model) as session:
             subgraph_outs = self._run_onnx_graph(session, subgraph_inps)
         self.dependency_graph.update_sim_data(subgraph_out_names, subgraph_outs)
-        _logger.debug(f"Collected intermediate data for output names: {subgraph_out_names}")
+        _logger.debug(
+            f"Collected intermediate data for output names: {subgraph_out_names}"
+        )
         del subgraph_inps, subgraph_outs
 
         # Decrease the reference count for the input data.
@@ -577,7 +641,9 @@ class SequentialMse:
             if i != 0:
                 self._cache_subgraph_input_data([node for node in sorted_nodes])
 
-            dep_nodes_to_parallelize = [node for node in sorted_nodes if node.cg_op.type in SUPPORTED_MODULES]
+            dep_nodes_to_parallelize = [
+                node for node in sorted_nodes if node.cg_op.type in SUPPORTED_MODULES
+            ]
             if dep_nodes_to_parallelize:
                 self._run_seq_mse(dep_nodes_to_parallelize)
 
@@ -590,11 +656,16 @@ class SequentialMse:
         :return: Session
         """
         try:
-            session = QuantizationSimModel.build_session(model, self.sim.providers,
-                                                         user_onnx_libs=self.sim._user_onnx_libs, path=self.sim._path)
+            session = QuantizationSimModel.build_session(
+                model,
+                self.sim.providers,
+                user_onnx_libs=self.sim._user_onnx_libs,
+                path=self.sim._path,
+            )
             yield session
         finally:
             del session
+
 
 @contextmanager
 def _remove_session(sim: QuantizationSimModel):
@@ -605,4 +676,4 @@ def _remove_session(sim: QuantizationSimModel):
         del sim.session
         yield
     finally:
-        sim._rebuild_session() # pylint:disable = protected-access
+        sim._rebuild_session()  # pylint:disable = protected-access

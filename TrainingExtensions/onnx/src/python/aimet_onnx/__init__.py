@@ -36,6 +36,7 @@
 # =============================================================================
 # pylint: disable=missing-module-docstring
 from aimet_common import _version
+
 __version__ = _version.__version__
 
 from .quantsim import QuantizationSimModel, compute_encodings

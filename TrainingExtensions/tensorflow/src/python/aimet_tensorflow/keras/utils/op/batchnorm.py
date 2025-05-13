@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" BN Utilities for tf 2.x """
+"""BN Utilities for tf 2.x"""
 
 import tensorflow as tf
 import numpy as np
@@ -45,6 +45,7 @@ class BNUtils:
     """
     Batch Norm/ fused Batch Norm op related utils
     """
+
     @staticmethod
     def modify_bn_params_to_make_as_passthrough(bn: tf.keras.layers.BatchNormalization):
         """

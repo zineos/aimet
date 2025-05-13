@@ -47,6 +47,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from aimet_torch.utils import in_eval_mode, in_train_mode
 from aimet_common.utils import Handle
 
+
 def _get_active_bn_modules(model: torch.nn.Module) -> Iterable[_BatchNorm]:
     for module in model.modules():
         if isinstance(module, _BatchNorm):
@@ -55,8 +56,9 @@ def _get_active_bn_modules(model: torch.nn.Module) -> Iterable[_BatchNorm]:
                 yield bn
 
 
-def _for_each_module(modules: Iterable[torch.nn.Module],
-                     action: Callable[[torch.nn.Module], Handle]) -> Handle:
+def _for_each_module(
+    modules: Iterable[torch.nn.Module], action: Callable[[torch.nn.Module], Handle]
+) -> Handle:
     """
     Apply an undoable action to each module.
 
@@ -129,10 +131,12 @@ def _reset_momentum(module: _BatchNorm) -> Handle:
 DEFAULT_NUM_BATCHES = 100
 
 
-def reestimate_bn_stats(model: torch.nn.Module,
-                        dataloader: DataLoader,
-                        num_batches: int = DEFAULT_NUM_BATCHES,
-                        forward_fn: Callable[[torch.nn.Module, Any], Any] = None) -> Handle:
+def reestimate_bn_stats(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    num_batches: int = DEFAULT_NUM_BATCHES,
+    forward_fn: Callable[[torch.nn.Module, Any], Any] = None,
+) -> Handle:
     """
     Reestimate BatchNorm statistics (running mean and var).
 
@@ -154,17 +158,19 @@ def reestimate_bn_stats(model: torch.nn.Module,
             try:
                 # Batchnorm statistics accumulation buffer
                 buffer = {
-                    bn: {"sum_mean": torch.zeros_like(bn.running_mean),
-                         "sum_var":  torch.zeros_like(bn.running_var)}
+                    bn: {
+                        "sum_mean": torch.zeros_like(bn.running_mean),
+                        "sum_var": torch.zeros_like(bn.running_var),
+                    }
                     for bn in bn_modules
                 }
 
                 num_batches = min(len(dataloader), num_batches)
                 dataloader_slice = itertools.islice(dataloader, num_batches)
 
-                for data in tqdm(dataloader_slice,
-                                 total=num_batches,
-                                 desc="batchnorm reestimation"):
+                for data in tqdm(
+                    dataloader_slice, total=num_batches, desc="batchnorm reestimation"
+                ):
                     forward_fn(model, data)
 
                     for bn in bn_modules:

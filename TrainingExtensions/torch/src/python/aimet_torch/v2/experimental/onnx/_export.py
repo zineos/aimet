@@ -58,14 +58,20 @@ aimet_opset = onnxscript.values.Opset(domain="aimet", version=1)
 
 def _quantize_template(opset: onnxscript.values.Opset) -> onnxscript.OnnxFunction:
     @onnxscript.script(aimet_opset, default_opset=opset)
-    def quantize(tensor, scale, offset, qmin: int, qmax: int, block_size: Sequence[int]):
+    def quantize(
+        tensor, scale, offset, qmin: int, qmax: int, block_size: Sequence[int]
+    ):
         """Onnxscript implementation of affine quantize"""
         # Upscale scale/offset by the factor of block_size
         upscaled_shape = opset.Shape(scale) * block_size
-        scale = opset.Resize(scale, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        scale = opset.Resize(
+            scale, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         upscaled_shape = opset.Shape(offset) * block_size
-        offset = opset.Resize(offset, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        offset = opset.Resize(
+            offset, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         x_round = opset.Round(tensor / scale) - offset
         x_int = opset.Clip(x_round, qmin, qmax)
@@ -73,32 +79,46 @@ def _quantize_template(opset: onnxscript.values.Opset) -> onnxscript.OnnxFunctio
 
     return quantize
 
+
 def _dequantize_template(opset: onnxscript.values.Opset) -> onnxscript.OnnxFunction:
     @onnxscript.script(aimet_opset, default_opset=opset)
     def dequantize(tensor, scale, offset, block_size: Sequence[int]):
         """Onnxscript implementation of affine dequantize"""
         # Upscale scale/offset by the factor of block_size
         upscaled_shape = opset.Shape(scale) * block_size
-        scale = opset.Resize(scale, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        scale = opset.Resize(
+            scale, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         upscaled_shape = opset.Shape(offset) * block_size
-        offset = opset.Resize(offset, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        offset = opset.Resize(
+            offset, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         x_dq = (tensor + offset) * scale
         return opset.Reshape(x_dq, opset.Shape(tensor))
 
     return dequantize
 
-def _quantize_dequantize_template(opset: onnxscript.values.Opset) -> onnxscript.OnnxFunction:
+
+def _quantize_dequantize_template(
+    opset: onnxscript.values.Opset,
+) -> onnxscript.OnnxFunction:
     @onnxscript.script(aimet_opset, default_opset=opset)
-    def quantize_dequantize(tensor, scale, offset, qmin: int, qmax: int, block_size: Sequence[int]):
+    def quantize_dequantize(
+        tensor, scale, offset, qmin: int, qmax: int, block_size: Sequence[int]
+    ):
         """Onnxscript implementation of affine quantize-dequantize"""
         # Upscale scale/offset by the factor of block_size
         upscaled_shape = opset.Shape(scale) * block_size
-        scale = opset.Resize(scale, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        scale = opset.Resize(
+            scale, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         upscaled_shape = opset.Shape(offset) * block_size
-        offset = opset.Resize(offset, roi=None, scales=None, sizes=upscaled_shape, mode='nearest')
+        offset = opset.Resize(
+            offset, roi=None, scales=None, sizes=upscaled_shape, mode="nearest"
+        )
 
         x_round = opset.Round(tensor / scale) - offset
         x_int = opset.Clip(x_round, qmin, qmax)
@@ -115,27 +135,41 @@ class _opset:
     quantize_dequantize: onnxscript.OnnxFunction
 
 
-_opset15 = _opset(_quantize_template(opset15),
-                  _dequantize_template(opset15),
-                  _quantize_dequantize_template(opset15))
-_opset16 = _opset(_quantize_template(opset16),
-                  _dequantize_template(opset16),
-                  _quantize_dequantize_template(opset16))
-_opset17 = _opset(_quantize_template(opset17),
-                  _dequantize_template(opset17),
-                  _quantize_dequantize_template(opset17))
-_opset18 = _opset(_quantize_template(opset18),
-                  _dequantize_template(opset18),
-                  _quantize_dequantize_template(opset18))
-_opset19 = _opset(_quantize_template(opset19),
-                  _dequantize_template(opset19),
-                  _quantize_dequantize_template(opset19))
-_opset20 = _opset(_quantize_template(opset20),
-                  _dequantize_template(opset20),
-                  _quantize_dequantize_template(opset20))
-_opset21 = _opset(_quantize_template(opset21),
-                  _dequantize_template(opset21),
-                  _quantize_dequantize_template(opset21))
+_opset15 = _opset(
+    _quantize_template(opset15),
+    _dequantize_template(opset15),
+    _quantize_dequantize_template(opset15),
+)
+_opset16 = _opset(
+    _quantize_template(opset16),
+    _dequantize_template(opset16),
+    _quantize_dequantize_template(opset16),
+)
+_opset17 = _opset(
+    _quantize_template(opset17),
+    _dequantize_template(opset17),
+    _quantize_dequantize_template(opset17),
+)
+_opset18 = _opset(
+    _quantize_template(opset18),
+    _dequantize_template(opset18),
+    _quantize_dequantize_template(opset18),
+)
+_opset19 = _opset(
+    _quantize_template(opset19),
+    _dequantize_template(opset19),
+    _quantize_dequantize_template(opset19),
+)
+_opset20 = _opset(
+    _quantize_template(opset20),
+    _dequantize_template(opset20),
+    _quantize_dequantize_template(opset20),
+)
+_opset21 = _opset(
+    _quantize_template(opset21),
+    _dequantize_template(opset21),
+    _quantize_dequantize_template(opset21),
+)
 
 
 def _unsqueeze_scalar(g, tensor):
@@ -147,7 +181,7 @@ def _unsqueeze_scalar(g, tensor):
 
 
 def _shape(tensor):
-    return symbolic_helper._get_tensor_sizes(tensor) # pylint: disable=protected-access
+    return symbolic_helper._get_tensor_sizes(tensor)  # pylint: disable=protected-access
 
 
 def quantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_size=None):
@@ -163,22 +197,46 @@ def quantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_size=None):
     if any(b == -1 for b in block_size):
         # Concretize wildcard block sizes
         old_block_size = block_size
-        new_block_size = list(reversed([
-            input_dim // num_blocks for input_dim, num_blocks in zip(_shape(tensor)[::-1], _shape(scale)[::-1])
-        ]))
-        assert all(old == new for old, new in zip(old_block_size, new_block_size) if old != -1)
+        new_block_size = list(
+            reversed(
+                [
+                    input_dim // num_blocks
+                    for input_dim, num_blocks in zip(
+                        _shape(tensor)[::-1], _shape(scale)[::-1]
+                    )
+                ]
+            )
+        )
+        assert all(
+            old == new for old, new in zip(old_block_size, new_block_size) if old != -1
+        )
         block_size = new_block_size
 
-    opset = _opset15 if g.opset <= 15 else \
-            _opset16 if g.opset == 16 else \
-            _opset17 if g.opset == 17 else \
-            _opset18 if g.opset == 18 else \
-            _opset19 if g.opset == 19 else \
-            _opset20 if g.opset == 20 else \
-            _opset21
+    opset = (
+        _opset15
+        if g.opset <= 15
+        else _opset16
+        if g.opset == 16
+        else _opset17
+        if g.opset == 17
+        else _opset18
+        if g.opset == 18
+        else _opset19
+        if g.opset == 19
+        else _opset20
+        if g.opset == 20
+        else _opset21
+    )
 
-    return g.onnxscript_op(opset.quantize, tensor, scale, offset,
-                           qmin_i=qmin, qmax_i=qmax, block_size_i=block_size).setType(tensor.type())
+    return g.onnxscript_op(
+        opset.quantize,
+        tensor,
+        scale,
+        offset,
+        qmin_i=qmin,
+        qmax_i=qmax,
+        block_size_i=block_size,
+    ).setType(tensor.type())
 
 
 def dequantize_symbolic(g, tensor, scale, offset, block_size=None):
@@ -194,30 +252,53 @@ def dequantize_symbolic(g, tensor, scale, offset, block_size=None):
     if any(b == -1 for b in block_size):
         # Concretize wildcard block sizes
         old_block_size = block_size
-        new_block_size = list(reversed([
-            input_dim // num_blocks for input_dim, num_blocks in zip(_shape(tensor)[::-1], _shape(scale)[::-1])
-        ]))
-        assert all(old == new for old, new in zip(old_block_size, new_block_size) if old != -1)
+        new_block_size = list(
+            reversed(
+                [
+                    input_dim // num_blocks
+                    for input_dim, num_blocks in zip(
+                        _shape(tensor)[::-1], _shape(scale)[::-1]
+                    )
+                ]
+            )
+        )
+        assert all(
+            old == new for old, new in zip(old_block_size, new_block_size) if old != -1
+        )
         block_size = new_block_size
 
-    opset = _opset15 if g.opset <= 15 else \
-            _opset16 if g.opset == 16 else \
-            _opset17 if g.opset == 17 else \
-            _opset18 if g.opset == 18 else \
-            _opset19 if g.opset == 19 else \
-            _opset20 if g.opset == 20 else \
-            _opset21
+    opset = (
+        _opset15
+        if g.opset <= 15
+        else _opset16
+        if g.opset == 16
+        else _opset17
+        if g.opset == 17
+        else _opset18
+        if g.opset == 18
+        else _opset19
+        if g.opset == 19
+        else _opset20
+        if g.opset == 20
+        else _opset21
+    )
 
-    return g.onnxscript_op(opset.dequantize, tensor, scale, offset, block_size_i=block_size).setType(tensor.type())
+    return g.onnxscript_op(
+        opset.dequantize, tensor, scale, offset, block_size_i=block_size
+    ).setType(tensor.type())
 
 
-def quantize_dequantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_size=None, zero_point_shift=0.0):
+def quantize_dequantize_symbolic(
+    g, tensor, scale, offset, qmin, qmax, block_size=None, zero_point_shift=0.0
+):
     """Onnx symbolic function definition for affine quantize-dequantize"""
     # Unsqueeze scale, offset if scalars.
     # This is necessary because ONNX Resize operator requires non-scalar input tensors
 
     if zero_point_shift != 0.0:
-        raise RuntimeError('torch.onnx.export not supported for nonzero zero_point_shift')
+        raise RuntimeError(
+            "torch.onnx.export not supported for nonzero zero_point_shift"
+        )
     scale = _unsqueeze_scalar(g, scale)
     offset = _unsqueeze_scalar(g, offset)
 
@@ -227,34 +308,59 @@ def quantize_dequantize_symbolic(g, tensor, scale, offset, qmin, qmax, block_siz
     if any(b == -1 for b in block_size):
         # Concretize wildcard block sizes
         old_block_size = block_size
-        new_block_size = list(reversed([
-            input_dim // num_blocks for input_dim, num_blocks in zip(_shape(tensor)[::-1], _shape(scale)[::-1])
-        ]))
-        assert all(old == new for old, new in zip(old_block_size, new_block_size) if old != -1)
+        new_block_size = list(
+            reversed(
+                [
+                    input_dim // num_blocks
+                    for input_dim, num_blocks in zip(
+                        _shape(tensor)[::-1], _shape(scale)[::-1]
+                    )
+                ]
+            )
+        )
+        assert all(
+            old == new for old, new in zip(old_block_size, new_block_size) if old != -1
+        )
         block_size = new_block_size
 
-    opset = _opset15 if g.opset <= 15 else \
-            _opset16 if g.opset == 16 else \
-            _opset17 if g.opset == 17 else \
-            _opset18 if g.opset == 18 else \
-            _opset19 if g.opset == 19 else \
-            _opset20 if g.opset == 20 else \
-            _opset21
+    opset = (
+        _opset15
+        if g.opset <= 15
+        else _opset16
+        if g.opset == 16
+        else _opset17
+        if g.opset == 17
+        else _opset18
+        if g.opset == 18
+        else _opset19
+        if g.opset == 19
+        else _opset20
+        if g.opset == 20
+        else _opset21
+    )
 
-    return g.onnxscript_op(opset.quantize_dequantize, tensor, scale, offset,
-                           qmin_i=qmin, qmax_i=qmax, block_size_i=block_size).setType(tensor.type())
-
+    return g.onnxscript_op(
+        opset.quantize_dequantize,
+        tensor,
+        scale,
+        offset,
+        qmin_i=qmin,
+        qmax_i=qmax,
+        block_size_i=block_size,
+    ).setType(tensor.type())
 
 
 def register_symbolic(symbolic_fn):
     """
     Register ONNX symbolic function definition for a regular python function.
     """
+
     def decorator(python_fn):
-        class SymbolicHelper(torch.autograd.Function): # pylint: disable=abstract-method
+        class SymbolicHelper(torch.autograd.Function):  # pylint: disable=abstract-method
             """Helper class for coupling an arbitrary python function with a onnx symbolic function"""
+
             @staticmethod
-            def forward(ctx, *args, **kwargs): # pylint:disable=arguments-differ, unused-argument
+            def forward(ctx, *args, **kwargs):  # pylint:disable=arguments-differ, unused-argument
                 return python_fn(*args, **kwargs)
 
             symbolic = staticmethod(symbolic_fn)
@@ -283,14 +389,18 @@ def export(model: torch.nn.Module, *args, **kwargs):
         return torch.onnx.export(model, *args, **kwargs)
 
 
-def remove_quantization_nodes_from_onnx_graph(model: onnx.ModelProto): # pylint: disable=too-many-locals, too-many-branches
+def remove_quantization_nodes_from_onnx_graph(model: onnx.ModelProto):  # pylint: disable=too-many-locals, too-many-branches
     """
     Remove quantization nodes from ONNX graph with quantization nodes
     :param model: ONNX model with quantization nodes
     """
     tensor_to_encoding_map = {}
-    name_to_producer, name_to_consumer = _get_producer_consumer_info_from_onnx_graph(model)
-    qtzr_nodes = list(node for node in model.graph.node if node.op_type in ONNX_QUANTIZER_OP_TYPES)
+    name_to_producer, name_to_consumer = _get_producer_consumer_info_from_onnx_graph(
+        model
+    )
+    qtzr_nodes = list(
+        node for node in model.graph.node if node.op_type in ONNX_QUANTIZER_OP_TYPES
+    )
 
     for node in qtzr_nodes:
         # Get quantizer name in torch model
@@ -307,7 +417,9 @@ def remove_quantization_nodes_from_onnx_graph(model: onnx.ModelProto): # pylint:
                         next_node.input.insert(input_index, node.input[0])
                         break
                 else:
-                    raise ValueError(f"Could not find input name {node.output[0]} from node {next_node.name}")
+                    raise ValueError(
+                        f"Could not find input name {node.output[0]} from node {next_node.name}"
+                    )
 
         # Connect prev node to the next node of quantizer node if above is not possible
         elif node.input[0] in name_to_producer:
@@ -319,7 +431,9 @@ def remove_quantization_nodes_from_onnx_graph(model: onnx.ModelProto): # pylint:
                     prev_node.output.insert(output_index, node.output[0])
 
         else:
-            raise ValueError(f"Cannot find prev node and next node for quantization node {node.name}")
+            raise ValueError(
+                f"Cannot find prev node and next node for quantization node {node.name}"
+            )
 
     for node in qtzr_nodes:
         # Remove qdq node from graph
@@ -351,16 +465,24 @@ def _get_tensor_from_constant_name(onnx_model: onnx.ModelProto, constant_name: s
             for attr in node.attribute:
                 if attr.name == "value":
                     return onnx.numpy_helper.to_array(attr.t)
-            raise RuntimeError(f"Cannot find value attribute inside constant node {constant_name}")
+            raise RuntimeError(
+                f"Cannot find value attribute inside constant node {constant_name}"
+            )
     raise RuntimeError(f"Cannot find constant with name {constant_name} in onnx model")
 
 
-def _get_encoding_from_onnx_node(onnx_model: onnx.ModelProto, quant_node: onnx.NodeProto):
+def _get_encoding_from_onnx_node(
+    onnx_model: onnx.ModelProto, quant_node: onnx.NodeProto
+):
     """
     Get encoding from quantization node.
     """
     # pylint: disable=import-outside-toplevel, protected-access
-    from aimet_torch.v2.quantization.affine.encoding import AffineEncoding, GroupedBlockEncoding
+    from aimet_torch.v2.quantization.affine.encoding import (
+        AffineEncoding,
+        GroupedBlockEncoding,
+    )
+
     assert quant_node.op_type in ONNX_QUANTIZER_OP_TYPES
 
     scale, offset = None, None
@@ -390,7 +512,9 @@ def _get_encoding_from_onnx_node(onnx_model: onnx.ModelProto, quant_node: onnx.N
     centroid = math.ceil((qmin + qmax) / 2)
     symmetry = bool(torch.all(offset == -centroid))
 
-    encoding = AffineEncoding(scale, offset, qmin, qmax, symmetry=symmetry, block_size=block_size)
+    encoding = AffineEncoding(
+        scale, offset, qmin, qmax, symmetry=symmetry, block_size=block_size
+    )
 
     try:
         # Try converting affine encoding to LPBQ encoding if possible
@@ -434,10 +558,13 @@ def _get_producer_consumer_info_from_onnx_graph(onnx_model: onnx.ModelProto):
 def _precompute_encodings(model: torch.nn.Module):
     # pylint: disable=import-outside-toplevel
     from aimet_torch.quantization.base import QuantizerBase
+
     with ExitStack() as stack:
         for q in model.modules():
             if isinstance(q, QuantizerBase):
-                ctx = patch_attr(q, 'get_encodings', functools.lru_cache(q.get_encodings))
+                ctx = patch_attr(
+                    q, "get_encodings", functools.lru_cache(q.get_encodings)
+                )
                 stack.enter_context(ctx)
                 with torch.no_grad():
                     q.get_encodings()

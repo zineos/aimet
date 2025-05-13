@@ -37,6 +37,7 @@
 
 import os
 from aimet_tensorflow.keras.compress import ModelCompressor
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 from unittest.mock import MagicMock
 import tensorflow as tf
@@ -48,10 +49,10 @@ def get_model():
     tf.keras.backend.clear_session()
 
     inp = tf.keras.Input((28, 28, 3))
-    x = tf.keras.layers.Conv2D(32, 3, strides=(2, 2), name='conv1', padding='same')(inp)
-    x = tf.keras.layers.Conv2D(64, 32, name='conv2', padding='same')(x)
+    x = tf.keras.layers.Conv2D(32, 3, strides=(2, 2), name="conv1", padding="same")(inp)
+    x = tf.keras.layers.Conv2D(64, 32, name="conv2", padding="same")(x)
     x = tf.keras.layers.Flatten()(x)
-    out = tf.keras.layers.Dense(10, name='linear')(x)
+    out = tf.keras.layers.Dense(10, name="linear")(x)
 
     return tf.keras.Model(inp, out)
 
@@ -69,9 +70,12 @@ class TestSpatialSVD:
 
         greedy_params = GreedySelectionParameters(0.5, 4)
         auto_params = SpatialSvdParameters.AutoModeParams(greedy_params)
-        svd_params = SpatialSvdParameters(input_op_names=model.inputs, output_op_names=model.outputs,
-                                          mode=SpatialSvdParameters.Mode.auto, params=auto_params)
-
+        svd_params = SpatialSvdParameters(
+            input_op_names=model.inputs,
+            output_op_names=model.outputs,
+            mode=SpatialSvdParameters.Mode.auto,
+            params=auto_params,
+        )
 
         # Scheme is Spatial SVD:
         scheme = aimet_common_defs.CompressionScheme.spatial_svd
@@ -79,19 +83,46 @@ class TestSpatialSVD:
         # Cost metric is MAC, it can be MAC or Memory
         cost_metric = aimet_common_defs.CostMetric.mac
 
-        compressed_model, stats = ModelCompressor.compress_model(model=model,
-                                                 eval_callback=eval_callback,
-                                                 eval_iterations=10,
-                                                 compress_scheme=scheme,
-                                                 cost_metric=cost_metric,
-                                                 parameters=svd_params)
+        compressed_model, stats = ModelCompressor.compress_model(
+            model=model,
+            eval_callback=eval_callback,
+            eval_iterations=10,
+            compress_scheme=scheme,
+            cost_metric=cost_metric,
+            parameters=svd_params,
+        )
 
         # Check for evaluation result for each compression ratio based on the dummy result provided using Mock
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv1'][0.25] == 0.4
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv1'][0.5] == 0.6
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv1'][0.75] == 0.6
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv1"][
+                0.25
+            ]
+            == 0.4
+        )
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv1"][0.5]
+            == 0.6
+        )
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv1"][
+                0.75
+            ]
+            == 0.6
+        )
 
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv2'][0.25] == 0.5
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv2'][0.5] == 0.4
-        assert stats.compression_ratio_selection_stats.eval_scores_dictionary['conv2'][0.75] == 0.6
-
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv2"][
+                0.25
+            ]
+            == 0.5
+        )
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv2"][0.5]
+            == 0.4
+        )
+        assert (
+            stats.compression_ratio_selection_stats.eval_scores_dictionary["conv2"][
+                0.75
+            ]
+            == 0.6
+        )

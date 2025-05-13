@@ -48,14 +48,28 @@ import pytest
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 from aimet_tensorflow.keras.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo
 from aimet_tensorflow.keras.amp.quantizer_groups import QuantizerGroup
-from aimet_tensorflow.keras.amp.mixed_precision_algo import _compute_sqnr, EvalCallbackFactory, disable_all_quantizers
-from aimet_tensorflow.keras.mixed_precision import choose_mixed_precision, choose_fast_mixed_precision
+from aimet_tensorflow.keras.amp.mixed_precision_algo import (
+    _compute_sqnr,
+    EvalCallbackFactory,
+    disable_all_quantizers,
+)
+from aimet_tensorflow.keras.mixed_precision import (
+    choose_mixed_precision,
+    choose_fast_mixed_precision,
+)
 from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import QcQuantizeWrapper
 
 from aimet_common.defs import CallbackFunc
-from aimet_common.amp.utils import calculate_starting_bit_ops, QuantizationDataType, AMPSearchAlgo
+from aimet_common.amp.utils import (
+    calculate_starting_bit_ops,
+    QuantizationDataType,
+    AMPSearchAlgo,
+)
 import aimet_common.amp.mixed_precision_algo
-from aimet_common.amp.mixed_precision_algo import brute_force_search, interpolation_search
+from aimet_common.amp.mixed_precision_algo import (
+    brute_force_search,
+    interpolation_search,
+)
 
 
 W8A8 = ((8, QuantizationDataType.int), (8, QuantizationDataType.int))
@@ -113,7 +127,11 @@ def eval_func(model: tf.keras.Model, eval_score_lookup_table):
         layer = model.get_layer("qc_quantize_wrapper")
         layer = model.get_layer("qc_quantize_wrapper_1")
         for layer in model.layers:
-            for quantizer in layer.input_quantizers + layer.output_quantizers + layer.param_quantizers:
+            for quantizer in (
+                layer.input_quantizers
+                + layer.output_quantizers
+                + layer.param_quantizers
+            ):
                 if quantizer.name == quantizer_name:
                     return quantizer
         raise RuntimeError("Not found")
@@ -153,12 +171,11 @@ def eval_callback_phase1():
 def eval_callback_phase2():
     return CallbackFunc(eval_func, phase2_eval_score_lookup_table)
 
+
 @pytest.fixture
 def data_loader_wrapper():
-    data_loader = [
-        tf.random.uniform((128, 28, 28, 3)) for _ in range(1)
-    ]
-    data_loader_wrapper=lambda: data_loader
+    data_loader = [tf.random.uniform((128, 28, 28, 3)) for _ in range(1)]
+    data_loader_wrapper = lambda: data_loader
     return data_loader_wrapper
 
 
@@ -174,37 +191,42 @@ def forward_pass_callback():
 @pytest.fixture
 def sim():
     tf.keras.backend.clear_session()
-    model = tf.keras.Sequential((
-        tf.keras.layers.Conv2D(32, kernel_size=3, input_shape=(28, 28, 3), activation='relu'),
-        tf.keras.layers.Conv2D(64, kernel_size=3),
-        tf.keras.layers.DepthwiseConv2D(kernel_size=3)
-    ))
+    model = tf.keras.Sequential(
+        (
+            tf.keras.layers.Conv2D(
+                32, kernel_size=3, input_shape=(28, 28, 3), activation="relu"
+            ),
+            tf.keras.layers.Conv2D(64, kernel_size=3),
+            tf.keras.layers.DepthwiseConv2D(kernel_size=3),
+        )
+    )
     sim = QuantizationSimModel(model, default_output_bw=4, default_param_bw=6)
     yield sim
 
 
 @pytest.fixture
 def quantizer_config_dict(sim):
-    quantizer = sim.get_quant_wrapper_for_layer_name('conv2d')
-    quantizer0 = sim.get_quant_wrapper_for_layer_name('conv2d_1')
+    quantizer = sim.get_quant_wrapper_for_layer_name("conv2d")
+    quantizer0 = sim.get_quant_wrapper_for_layer_name("conv2d_1")
 
     return {
-        'conv2d/kernel': quantizer,
-        'conv2d_input_quantizer_0': quantizer,
-        'conv2d_1/kernel': quantizer0,
-        'conv2d_1_input_quantizer_0': quantizer0,
+        "conv2d/kernel": quantizer,
+        "conv2d_input_quantizer_0": quantizer,
+        "conv2d_1/kernel": quantizer0,
+        "conv2d_1_input_quantizer_0": quantizer0,
     }
+
 
 @pytest.fixture
 def quantizer_groups():
     return [
         QuantizerGroup(
-            parameter_quantizers=('conv2d/kernel',),
-            input_quantizers=('conv2d_input_quantizer_0',),
+            parameter_quantizers=("conv2d/kernel",),
+            input_quantizers=("conv2d_input_quantizer_0",),
         ),
         QuantizerGroup(
-            parameter_quantizers=('conv2d_1/kernel',),
-            input_quantizers=('conv2d_1_input_quantizer_0',),
+            parameter_quantizers=("conv2d_1/kernel",),
+            input_quantizers=("conv2d_1_input_quantizer_0",),
         ),
     ]
 
@@ -224,64 +246,108 @@ def int_candidates():
 
 class TestAutoMixedPrecision:
     def test_fp32_accuracy_and_algo_params(
-            self, sim, eval_callback_phase1, eval_callback_phase2,
-            forward_pass_callback, results_dir, int_candidates
+        self,
+        sim,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
     ):
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.set_baseline()
 
         assert algo.fp32_accuracy == phase2_eval_score_lookup_table[(FP32, FP32)]
         assert algo.baseline_candidate == W16A16
 
     def test_eval_func_edge_cases(
-            self, sim, forward_pass_callback, results_dir, int_candidates
+        self, sim, forward_pass_callback, results_dir, int_candidates
     ):
         # Edge case: None-float eval score
         eval_callback = CallbackFunc(lambda *_: (0.1, 0.2), None)
         with pytest.raises(RuntimeError):
-            algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                            eval_callback, eval_callback, results_dir, True, forward_pass_callback)
+            algo = GreedyMixedPrecisionAlgo(
+                sim,
+                int_candidates,
+                eval_callback,
+                eval_callback,
+                results_dir,
+                True,
+                forward_pass_callback,
+            )
             algo.set_baseline()
 
-    def test_early_exit_best_quantized_accuracy_inadequate(self, sim, eval_callback_phase1, eval_callback_phase2,
-                                                           forward_pass_callback, results_dir, int_candidates):
-        json_file_path = os.path.join(results_dir, 'pareto_list.json')
-        pickle_file_path = os.path.join(results_dir, '.cache', 'pareto_list.pkl')
-        #Remove the files before invoking AMP
-        if(os.path.isfile(json_file_path)):
+    def test_early_exit_best_quantized_accuracy_inadequate(
+        self,
+        sim,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
+    ):
+        json_file_path = os.path.join(results_dir, "pareto_list.json")
+        pickle_file_path = os.path.join(results_dir, ".cache", "pareto_list.pkl")
+        # Remove the files before invoking AMP
+        if os.path.isfile(json_file_path):
             try:
                 os.remove(json_file_path)
             except:
-                assert(False)
+                assert False
 
-        if(os.path.isfile(pickle_file_path)):
+        if os.path.isfile(pickle_file_path):
             try:
                 os.remove(pickle_file_path)
             except:
-                assert(False)
+                assert False
 
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2, results_dir, True,
-                                        forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.run(allowed_accuracy_drop=0.0001, search_algo=AMPSearchAlgo.BruteForce)
 
-        baseline_accuracy, _= algo._get_best_candidate()
+        baseline_accuracy, _ = algo._get_best_candidate()
         assert algo._final_eval_score == baseline_accuracy
-        assert (not os.path.isfile(json_file_path))
-        assert (not os.path.isfile(pickle_file_path))
+        assert not os.path.isfile(json_file_path)
+        assert not os.path.isfile(pickle_file_path)
 
     def test_create_accuracy_list(
-            self, sim, quantizer_groups, quantizer_config_dict, eval_callback_phase1,
-            eval_callback_phase2, forward_pass_callback, results_dir, int_candidates
+        self,
+        sim,
+        quantizer_groups,
+        quantizer_config_dict,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
     ):
         fp32_accuracy = phase2_eval_score_lookup_table[(W16A16, W16A16)]
         baseline_candidate = W16A16
 
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.set_baseline(fp32_accuracy, baseline_candidate)
 
         # quantizer_groups = algo.quantizer_groups
@@ -290,21 +356,27 @@ class TestAutoMixedPrecision:
         algo._supported_candidates_per_quantizer_group = {}
 
         for quantizer_group in quantizer_groups:
-            algo._supported_candidates_per_quantizer_group[quantizer_group] = int_candidates
+            algo._supported_candidates_per_quantizer_group[quantizer_group] = (
+                int_candidates
+            )
 
         active_quantizers = {
-            quantizer_group: quantizer_group.get_active_quantizers(algo._module_name_dict)
+            quantizer_group: quantizer_group.get_active_quantizers(
+                algo._module_name_dict
+            )
             for quantizer_group in quantizer_groups
         }
 
         call_count = 0
+
         def assert_only_one_quantizer_group_enabled(*args, **kwargs):
             nonlocal call_count
 
             all_active_quantizers = []
             for quantizer_group in quantizer_groups:
-                all_active_quantizers +=\
-                        quantizer_group.get_active_quantizers(algo._module_name_dict)
+                all_active_quantizers += quantizer_group.get_active_quantizers(
+                    algo._module_name_dict
+                )
 
             if call_count < len(quantizer_groups) * (len(int_candidates) - 1):
                 # During phase 1 loop, only one quantizer group can be activated at a time
@@ -313,35 +385,52 @@ class TestAutoMixedPrecision:
             call_count += 1
 
         with unittest.mock.patch(
-            'aimet_tensorflow.keras.amp.mixed_precision_algo.EvalCallbackFactory.sqnr',
-            side_effect=assert_only_one_quantizer_group_enabled
+            "aimet_tensorflow.keras.amp.mixed_precision_algo.EvalCallbackFactory.sqnr",
+            side_effect=assert_only_one_quantizer_group_enabled,
         ):
             accuracy_list = algo._create_and_save_accuracy_list(algo.baseline_candidate)
 
         # All the active quantizers should be still active
         for quantizer_group in quantizer_groups:
-            active_quantizers[quantizer_group] ==\
-                    quantizer_group.get_active_quantizers(algo._module_name_dict)
+            active_quantizers[quantizer_group] == quantizer_group.get_active_quantizers(
+                algo._module_name_dict
+            )
 
         assert len(accuracy_list) == 2
         assert accuracy_list[0][2] >= accuracy_list[1][2]
 
         # Check save and load accuracy list
-        accuracy_list_path = os.path.join(results_dir, '.cache', 'accuracy_list.pkl')
-        with open(accuracy_list_path, 'rb') as f:
+        accuracy_list_path = os.path.join(results_dir, ".cache", "accuracy_list.pkl")
+        with open(accuracy_list_path, "rb") as f:
             loaded_accuracy_list = pickle.load(f)
         assert loaded_accuracy_list == accuracy_list
 
-    @pytest.mark.parametrize("fp32_accuracy", [0.9, 0.001, -0.1]) # To test accuracy list of positive, negative, and mixture of both values.
+    @pytest.mark.parametrize(
+        "fp32_accuracy", [0.9, 0.001, -0.1]
+    )  # To test accuracy list of positive, negative, and mixture of both values.
     def test_pareto_list_base(
-            self, sim, quantizer_groups, quantizer_config_dict, eval_callback_phase1, eval_callback_phase2,
-            forward_pass_callback, results_dir, int_candidates, fp32_accuracy,
+        self,
+        sim,
+        quantizer_groups,
+        quantizer_config_dict,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
+        fp32_accuracy,
     ):
         baseline_candidate = W16A16
 
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, True, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            True,
+            forward_pass_callback,
+        )
         algo.set_baseline(fp32_accuracy, baseline_candidate)
         algo.min_candidate = W8A16
         algo.quantizer_groups = quantizer_groups
@@ -349,45 +438,75 @@ class TestAutoMixedPrecision:
         algo._supported_candidates_per_quantizer_group = {}
 
         for quantizer_group in quantizer_groups:
-            algo._supported_candidates_per_quantizer_group[quantizer_group] = int_candidates
+            algo._supported_candidates_per_quantizer_group[quantizer_group] = (
+                int_candidates
+            )
 
         accuracy_list = [
             (quantizer_groups[0], W8A16, fp32_accuracy, 584064 * (16 * 8 - 8 * 8)),
-            (quantizer_groups[1], W8A16, fp32_accuracy - 0.005, 2230272 * (16 * 8 - 8 * 8)),
+            (
+                quantizer_groups[1],
+                W8A16,
+                fp32_accuracy - 0.005,
+                2230272 * (16 * 8 - 8 * 8),
+            ),
         ]
-        with unittest.mock.patch('aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings'):
-            pareto_front_list = algo._create_pareto_front_list(0.2,
-                                                               accuracy_list,
-                                                               fp32_accuracy,
-                                                               algo.baseline_candidate,
-                                                               algo.min_candidate,
-                                                               brute_force_search,
-                                                               phase2_reverse = False)
+        with unittest.mock.patch(
+            "aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings"
+        ):
+            pareto_front_list = algo._create_pareto_front_list(
+                0.2,
+                accuracy_list,
+                fp32_accuracy,
+                algo.baseline_candidate,
+                algo.min_candidate,
+                brute_force_search,
+                phase2_reverse=False,
+            )
 
         mac_dict = algo._mac_dict
         starting_bit_ops = calculate_starting_bit_ops(mac_dict, W16A16)
-        running_bit_ops = starting_bit_ops - mac_dict['conv2d'] * 16 * 16 + \
-                          mac_dict['conv2d'] * 16 * 8
+        running_bit_ops = (
+            starting_bit_ops
+            - mac_dict["conv2d"] * 16 * 16
+            + mac_dict["conv2d"] * 16 * 8
+        )
         relative_bit_ops = running_bit_ops / starting_bit_ops
 
         assert len(pareto_front_list) == 2
         assert relative_bit_ops == pareto_front_list[0][0]
 
-        running_bit_ops = running_bit_ops - mac_dict['conv2d_1'] * 16 * 16 + \
-                          mac_dict['conv2d_1'] * 16 * 8
+        running_bit_ops = (
+            running_bit_ops
+            - mac_dict["conv2d_1"] * 16 * 16
+            + mac_dict["conv2d_1"] * 16 * 8
+        )
         relative_bit_ops = running_bit_ops / starting_bit_ops
         assert relative_bit_ops == pareto_front_list[1][0]
 
     def test_pareto_list_drop_less_than_before(
-            self, sim, quantizer_groups, quantizer_config_dict, eval_callback_phase1,
-            eval_callback_phase2, forward_pass_callback, results_dir, int_candidates
+        self,
+        sim,
+        quantizer_groups,
+        quantizer_config_dict,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
     ):
         fp32_accuracy = phase2_eval_score_lookup_table[(W16A16, W16A16)]
         baseline_candidate = W16A16
 
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, False, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            False,
+            forward_pass_callback,
+        )
         algo.set_baseline(fp32_accuracy, baseline_candidate)
         algo.min_candidate = W8A16
         algo.quantizer_groups = quantizer_groups
@@ -398,37 +517,58 @@ class TestAutoMixedPrecision:
             (quantizer_groups[1], W8A16, 0.895, 2230272 * (16 * 8 - 8 * 8)),
         ]
 
-        with unittest.mock.patch('aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings'):
-            pareto_front_list = algo._create_pareto_front_list(0.2,
-                                                               accuracy_list,
-                                                               fp32_accuracy,
-                                                               algo.baseline_candidate,
-                                                               algo.min_candidate,
-                                                               brute_force_search,
-                                                               phase2_reverse = False)
+        with unittest.mock.patch(
+            "aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings"
+        ):
+            pareto_front_list = algo._create_pareto_front_list(
+                0.2,
+                accuracy_list,
+                fp32_accuracy,
+                algo.baseline_candidate,
+                algo.min_candidate,
+                brute_force_search,
+                phase2_reverse=False,
+            )
         assert len(pareto_front_list) == 2
 
         # change drop to lower value
-        with unittest.mock.patch('aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings'):
-            pareto_front_list = algo._create_pareto_front_list(0.1,
-                                                               accuracy_list,
-                                                               fp32_accuracy,
-                                                               algo.baseline_candidate,
-                                                               algo.min_candidate,
-                                                               brute_force_search,
-                                                               phase2_reverse = False)
+        with unittest.mock.patch(
+            "aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings"
+        ):
+            pareto_front_list = algo._create_pareto_front_list(
+                0.1,
+                accuracy_list,
+                fp32_accuracy,
+                algo.baseline_candidate,
+                algo.min_candidate,
+                brute_force_search,
+                phase2_reverse=False,
+            )
         assert len(pareto_front_list) == 2
 
     def test_pareto_list_drop_greater_than_before(
-            self, sim, quantizer_groups, quantizer_config_dict, eval_callback_phase1,
-            eval_callback_phase2, forward_pass_callback, results_dir, int_candidates
+        self,
+        sim,
+        quantizer_groups,
+        quantizer_config_dict,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
     ):
         fp32_accuracy = phase2_eval_score_lookup_table[(W16A16, W16A16)]
         baseline_candidate = W16A16
 
-        algo = GreedyMixedPrecisionAlgo(sim, int_candidates,
-                                        eval_callback_phase1, eval_callback_phase2,
-                                        results_dir, False, forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            results_dir,
+            False,
+            forward_pass_callback,
+        )
         algo.set_baseline(fp32_accuracy, baseline_candidate)
         algo.min_candidate = W8A16
         algo.quantizer_groups = quantizer_groups
@@ -439,25 +579,33 @@ class TestAutoMixedPrecision:
             (quantizer_groups[1], W8A16, 0.895, 2230272 * (16 * 8 - 8 * 8)),
         ]
 
-        with unittest.mock.patch('aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings'):
-            pareto_front_list = algo._create_pareto_front_list(0.002,
-                                                               accuracy_list,
-                                                               fp32_accuracy,
-                                                               algo.baseline_candidate,
-                                                               algo.min_candidate,
-                                                               brute_force_search,
-                                                               phase2_reverse = False)
+        with unittest.mock.patch(
+            "aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings"
+        ):
+            pareto_front_list = algo._create_pareto_front_list(
+                0.002,
+                accuracy_list,
+                fp32_accuracy,
+                algo.baseline_candidate,
+                algo.min_candidate,
+                brute_force_search,
+                phase2_reverse=False,
+            )
         assert len(pareto_front_list) == 1
 
         # change drop to lower value
-        with unittest.mock.patch('aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings'):
-            pareto_front_list = algo._create_pareto_front_list(0.1,
-                                                               accuracy_list,
-                                                               fp32_accuracy,
-                                                               algo.baseline_candidate,
-                                                               algo.min_candidate,
-                                                               brute_force_search,
-                                                               phase2_reverse = False)
+        with unittest.mock.patch(
+            "aimet_tensorflow.keras.quantsim.QuantizationSimModel.compute_encodings"
+        ):
+            pareto_front_list = algo._create_pareto_front_list(
+                0.1,
+                accuracy_list,
+                fp32_accuracy,
+                algo.baseline_candidate,
+                algo.min_candidate,
+                brute_force_search,
+                phase2_reverse=False,
+            )
         assert len(pareto_front_list) == 2
 
     def test_compare_sqnr_callback(self, sim, data_loader_wrapper):
@@ -469,7 +617,9 @@ class TestAutoMixedPrecision:
         sim.compute_encodings(forward_pass_callback, None)
 
         # Get the callback function in which reference model is provided
-        sqnr_eval_callback = EvalCallbackFactory(data_loader_wrapper).sqnr(sim._model_without_wrappers)
+        sqnr_eval_callback = EvalCallbackFactory(data_loader_wrapper).sqnr(
+            sim._model_without_wrappers
+        )
         sqnr1 = sqnr_eval_callback.func(sim.model, sqnr_eval_callback.args)
 
         # Get the callback function in which reference model is not provided
@@ -491,40 +641,69 @@ class TestAutoMixedPrecision:
 
         _ = _compute_sqnr(orig_numpy_array, noisy_numpy_array)
 
-
     def test_disable_quantizers(self, sim):
         with disable_all_quantizers(sim.model):
-
             # all the quantizers should be disabled
             for layer in sim.model.layers:
                 if not isinstance(layer, QcQuantizeWrapper):
                     continue
 
-                for quantizer in layer.param_quantizers + \
-                                 layer.input_quantizers + \
-                                 layer.output_quantizers:
+                for quantizer in (
+                    layer.param_quantizers
+                    + layer.input_quantizers
+                    + layer.output_quantizers
+                ):
                     assert not quantizer.is_enabled()
 
+    def test_choose_mixed_precision(
+        self,
+        sim,
+        eval_callback_phase1,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
+    ):
+        choose_mixed_precision(
+            sim,
+            int_candidates,
+            eval_callback_phase1,
+            eval_callback_phase2,
+            0.009,
+            results_dir,
+            False,
+            forward_pass_callback,
+        )
 
-    def test_choose_mixed_precision(self, sim, eval_callback_phase1, eval_callback_phase2,
-                                    forward_pass_callback, results_dir, int_candidates):
-        choose_mixed_precision(sim, int_candidates, eval_callback_phase1, eval_callback_phase2, 0.009, results_dir, False, forward_pass_callback)
-
-    def test_choose_fast_mixed_precision(self, sim, data_loader_wrapper, eval_callback_phase2,
-                                         forward_pass_callback, results_dir, int_candidates):
-
-        pareto_list = choose_fast_mixed_precision(sim, int_candidates, data_loader_wrapper, eval_callback_phase2, 0.06, results_dir, False, forward_pass_callback)
+    def test_choose_fast_mixed_precision(
+        self,
+        sim,
+        data_loader_wrapper,
+        eval_callback_phase2,
+        forward_pass_callback,
+        results_dir,
+        int_candidates,
+    ):
+        pareto_list = choose_fast_mixed_precision(
+            sim,
+            int_candidates,
+            data_loader_wrapper,
+            eval_callback_phase2,
+            0.06,
+            results_dir,
+            False,
+            forward_pass_callback,
+        )
 
         # Length of the pareto list should be 2
         assert len(pareto_list) == 2
-
 
     def test_compute_sqnr(self):
         for noise in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]:
             orig_tensor = tf.random.uniform((10, 10))
             noisy_tensor = orig_tensor + noise
             sqnr = _compute_sqnr(orig_tensor, noisy_tensor)
-            expected_sqnr = tf.reduce_mean(orig_tensor ** 2) / (noise ** 2 + 0.0001)
+            expected_sqnr = tf.reduce_mean(orig_tensor**2) / (noise**2 + 0.0001)
             assert np.isclose(sqnr, expected_sqnr)
 
         orig_tensor = tf.ones((10, 10))

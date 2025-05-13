@@ -36,7 +36,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Classes for bokeh plots"""
+"""Classes for bokeh plots"""
+
 import abc
 from typing import Optional
 
@@ -58,7 +59,7 @@ from bokeh.plotting import figure
 
 
 class BokehDocument(abc.ABC):
-    """ Creates abstract class to add/remove model from a bokeh document """
+    """Creates abstract class to add/remove model from a bokeh document"""
 
     @abc.abstractmethod
     def add(self, model: Model):
@@ -66,8 +67,7 @@ class BokehDocument(abc.ABC):
         Add a model as a root of this Document.
         :param model: The model to add as a root of this document.
         """
-        raise  NotImplementedError()
-
+        raise NotImplementedError()
 
     @abc.abstractmethod
     def remove(self, model: Model):
@@ -75,11 +75,11 @@ class BokehDocument(abc.ABC):
         Remove a model as root model from this Document.
         :param model: The model to remove from root of this document.
         """
-        raise  NotImplementedError()
+        raise NotImplementedError()
 
 
 class BokehServerSession(BokehDocument):
-    """ Creates a unique bokeh session specified by a bokeh session id as input name and a port number"""
+    """Creates a unique bokeh session specified by a bokeh session id as input name and a port number"""
 
     def __init__(self, url: str, session_id: str = None, display: bool = True):
         """
@@ -90,7 +90,9 @@ class BokehServerSession(BokehDocument):
         :param display: a bool variable to indicate if output is to be displayed immediately.
         """
         self.document = Document()
-        self.server_session = push_session(self.document, url=url, session_id=session_id)
+        self.server_session = push_session(
+            self.document, url=url, session_id=session_id
+        )
         if display:
             self.server_session.show()
 
@@ -101,7 +103,6 @@ class BokehServerSession(BokehDocument):
 
         """
         self.document.add_root(model)
-
 
     def remove(self, model: Model):
         """
@@ -117,7 +118,9 @@ class ProgressBar:
     running operation, providing a visual cue that processing is underway.
     """
 
-    def __init__(self, total: int, title: str, color: str, bokeh_document: BokehDocument):
+    def __init__(
+        self, total: int, title: str, color: str, bokeh_document: BokehDocument
+    ):
         """
         Initialize a ProgressBar instance.
         :param total: number of steps the progress bar is divided into. In other words, the number of times update should be called.
@@ -131,10 +134,25 @@ class ProgressBar:
         self.current_source_index = 0
         self.source = self.create_column_data_source()
 
-        plot = Plot(width=1000, height=50, min_border=0, toolbar_location=None, outline_line_color=None)
+        plot = Plot(
+            width=1000,
+            height=50,
+            min_border=0,
+            toolbar_location=None,
+            outline_line_color=None,
+        )
 
-        glyph = Rect(x="x_coordinate", y=0, width=1, height=1, angle=-0.0, fill_color="color", line_color="color",
-                     line_alpha=0.3, fill_alpha=0.3)
+        glyph = Rect(
+            x="x_coordinate",
+            y=0,
+            width=1,
+            height=1,
+            angle=-0.0,
+            fill_color="color",
+            line_color="color",
+            line_alpha=0.3,
+            fill_alpha=0.3,
+        )
 
         plot.add_glyph(self.source, glyph)
 
@@ -153,7 +171,7 @@ class ProgressBar:
         if self.current_source_index == self.total:
             return
         self.source.data["color"][self.current_source_index] = self.color
-        self.source.data["color"] = list(self.source.data['color'])
+        self.source.data["color"] = list(self.source.data["color"])
         self.update_title()
         self.current_source_index += 1
 
@@ -162,7 +180,13 @@ class ProgressBar:
         Updates the title of the progress bar to show a percentage complete.
         :return: None
         """
-        self.title_object.text = "     " + self.title + "   " + str(self.calculate_percentage_complete()) + "%"
+        self.title_object.text = (
+            "     "
+            + self.title
+            + "   "
+            + str(self.calculate_percentage_complete())
+            + "%"
+        )
 
     def calculate_percentage_complete(self):
         """Calculate percentage complete and round it to the hundreths place"""
@@ -192,8 +216,14 @@ class DataTable:
     Datatable object synced with a server session that updates on the bokeh server every time update_table is called.
     """
 
-    def __init__(self, num_rows: int, num_columns: int, column_names: list, bokeh_document: Optional[BokehDocument],
-                 row_index_names: list = None):
+    def __init__(
+        self,
+        num_rows: int,
+        num_columns: int,
+        column_names: list,
+        bokeh_document: Optional[BokehDocument],
+        row_index_names: list = None,
+    ):
         """
         :param num_rows: number of records in the table
         :param num_columns: number of columns to create
@@ -204,16 +234,23 @@ class DataTable:
         self.total = num_rows * num_columns
         self.row_names = row_index_names
         if row_index_names:
-            data_frame = pd.DataFrame(index=np.arange(num_rows), columns=["index"] + column_names)
+            data_frame = pd.DataFrame(
+                index=np.arange(num_rows), columns=["index"] + column_names
+            )
             data_frame["index"] = row_index_names
             self.row_index_to_row_name_map = self.map_row_names()
         else:
             data_frame = pd.DataFrame(index=np.arange(num_rows), columns=column_names)
-        data_frame.fillna('', inplace=True)
+        data_frame.fillna("", inplace=True)
 
         self.source = ColumnDataSource(data=data_frame)
-        columns = [TableColumn(field=column_str, title=column_str) for column_str in data_frame.columns]  # bokeh columns
-        self.data_table = BokehDataTable(source=self.source, columns=columns, width=1500)
+        columns = [
+            TableColumn(field=column_str, title=column_str)
+            for column_str in data_frame.columns
+        ]  # bokeh columns
+        self.data_table = BokehDataTable(
+            source=self.source, columns=columns, width=1500
+        )
 
         if bokeh_document is not None:
             bokeh_document.add(self.data_table)
@@ -249,7 +286,7 @@ class DataTable:
 
 
 class FigurePlot:
-    """ Creates an updating plot with x,y coordinates for each point marked with dots."""
+    """Creates an updating plot with x,y coordinates for each point marked with dots."""
 
     def __init__(self, x_axis_label, y_axis_label, title):
         self.x_axis_label = x_axis_label
@@ -269,7 +306,7 @@ class FigurePlot:
         :return: None
         """
         # has new, identical-length updates for all columns in source
-        new_data = {'x': [float(new_x_coordinate)], 'y': [new_y_coordinate]}
+        new_data = {"x": [float(new_x_coordinate)], "y": [new_y_coordinate]}
         self.source.stream(new_data)
 
     def update_title(self, new_title):
@@ -288,31 +325,40 @@ class FigurePlot:
         :return: Bokeh figure object
         """
         # Title
-        p.title.align = 'center'
-        p.title.text_font_size = '14pt'
-        p.title.text_font = 'serif'
+        p.title.align = "center"
+        p.title.text_font_size = "14pt"
+        p.title.text_font = "serif"
 
         # Axis titles
-        p.xaxis.axis_label_text_font_size = '12pt'
-        p.yaxis.axis_label_text_font_size = '12pt'
+        p.xaxis.axis_label_text_font_size = "12pt"
+        p.yaxis.axis_label_text_font_size = "12pt"
 
         # Tick labels
-        p.xaxis.major_label_text_font_size = '10pt'
-        p.yaxis.major_label_text_font_size = '10pt'
+        p.xaxis.major_label_text_font_size = "10pt"
+        p.yaxis.major_label_text_font_size = "10pt"
 
         return p
 
-class LinePlot(FigurePlot):
-    """ Creates an updating line plot with x,y coordinates for each point marked with dots."""
 
-    def __init__(self, x_axis_label, y_axis_label, title, bokeh_document: BokehDocument):
+class LinePlot(FigurePlot):
+    """Creates an updating line plot with x,y coordinates for each point marked with dots."""
+
+    def __init__(
+        self, x_axis_label, y_axis_label, title, bokeh_document: BokehDocument
+    ):
         super().__init__(x_axis_label, y_axis_label, title)
         self.bokeh_document = bokeh_document
 
-        self.plot = figure(x_axis_label=self.x_axis_label, y_axis_label=self.y_axis_label,
-                           title=self.title,
-                           tools="pan,box_zoom, crosshair,reset, save", width=1500)
-        self.plot.circle(x="x", y="y", size=10, alpha=0.7, color="black", source=self.source)
+        self.plot = figure(
+            x_axis_label=self.x_axis_label,
+            y_axis_label=self.y_axis_label,
+            title=self.title,
+            tools="pan,box_zoom, crosshair,reset, save",
+            width=1500,
+        )
+        self.plot.circle(
+            x="x", y="y", size=10, alpha=0.7, color="black", source=self.source
+        )
         self.plot.line(x="x", y="y", source=self.source)
         self.plot.title = self.title_object
 
@@ -329,16 +375,25 @@ class LinePlot(FigurePlot):
 
 
 class ScatterPlot(FigurePlot):
-    """ Creates an updating scatter with x,y coordinates for each point marked with dots."""
+    """Creates an updating scatter with x,y coordinates for each point marked with dots."""
 
-    def __init__(self, x_axis_label, y_axis_label, title, bokeh_document: BokehDocument):
+    def __init__(
+        self, x_axis_label, y_axis_label, title, bokeh_document: BokehDocument
+    ):
         super().__init__(x_axis_label, y_axis_label, title)
 
         tooltips = [(f"({self.x_axis_label},{self.y_axis_label})", "($x, $y)")]
-        self.plot = figure(x_axis_label=self.x_axis_label, y_axis_label=self.y_axis_label,
-                           title=self.title,
-                           tools="pan,box_zoom, reset, save", tooltips=tooltips, width=1500)
-        self.plot.scatter(x="x", y="y", size=10, alpha=0.7, color="black", source=self.source)
+        self.plot = figure(
+            x_axis_label=self.x_axis_label,
+            y_axis_label=self.y_axis_label,
+            title=self.title,
+            tools="pan,box_zoom, reset, save",
+            tooltips=tooltips,
+            width=1500,
+        )
+        self.plot.scatter(
+            x="x", y="y", size=10, alpha=0.7, color="black", source=self.source
+        )
 
         self.plot.title = self.title_object
 

@@ -34,10 +34,21 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=too-many-lines
-""" Utilities that are used for different AIMET PyTorch features """
+"""Utilities that are used for different AIMET PyTorch features"""
 
 import itertools
-from typing import List, Tuple, Union, Dict, Callable, Any, Iterable, Optional, TextIO, Mapping
+from typing import (
+    List,
+    Tuple,
+    Union,
+    Dict,
+    Callable,
+    Any,
+    Iterable,
+    Optional,
+    TextIO,
+    Mapping,
+)
 import contextlib
 import os
 import pickle
@@ -53,6 +64,7 @@ from torch.nn.modules.module import (
     _global_forward_pre_hooks,
     _global_forward_hooks,
 )
+
 try:
     from torch.nn.modules.module import _global_backward_pre_hooks
 except ImportError:
@@ -66,7 +78,15 @@ from aimet_common.utils import profile as _profile, _red
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
 dtypes_to_ignore_for_quantization = (int, bool, str, tuple, type(None))
-torch_dtypes_to_ignore_for_quantization = [torch.int, torch.int8, torch.int16, torch.int32, torch.int64, torch.bool, torch.uint8]
+torch_dtypes_to_ignore_for_quantization = [
+    torch.int,
+    torch.int8,
+    torch.int16,
+    torch.int32,
+    torch.int64,
+    torch.bool,
+    torch.uint8,
+]
 allowed_output_types = (torch.Tensor, float, *dtypes_to_ignore_for_quantization)
 DROPOUT_TYPES = (torch.nn.Dropout, torch.nn.Dropout2d, torch.nn.Dropout3d)
 
@@ -84,8 +104,13 @@ class ModuleData:
     """
     Collect input and output data to and from module
     """
-    def __init__(self, model: torch.nn.Module, module: torch.nn.Module,
-                 forward_fn: Callable[[torch.nn.Module, Any], Any] = None):
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        module: torch.nn.Module,
+        forward_fn: Callable[[torch.nn.Module, Any], Any] = None,
+    ):
         """
         :param model: Pytorch model
         :param module: Module reference
@@ -96,8 +121,9 @@ class ModuleData:
         self._module = module
         self._forward_fn = forward_fn or self.default_forward_fn
 
-    def collect_inp_out_data(self, args, kwargs: Mapping[str, Any],
-                             collect_input: bool, collect_output: bool) -> Tuple[torch.Tensor, torch.Tensor]:
+    def collect_inp_out_data(
+        self, args, kwargs: Mapping[str, Any], collect_input: bool, collect_output: bool
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Collect input and output data depending on the collect_input and collect_output flag
 
@@ -106,16 +132,24 @@ class ModuleData:
         :param collect_output: Boolean to collect output or not
         :return: Module's input and output data
         """
+
         def adjust_input_dtype(module, inp):
-            if hasattr(module, 'weight') and module.weight is not None:
+            if hasattr(module, "weight") and module.weight is not None:
                 dtype = module.weight.dtype
                 # Cast input to dtype only if it is a floating point tensor (float, half, bfloat16, etc.).
                 # If input is a non-float tensor (e.g. long, bool), leave the input uncasted.
-                return tree_map(lambda x: x.to(dtype) if isinstance(x, torch.Tensor) and x.is_floating_point() else x,
-                                inp)
+                return tree_map(
+                    lambda x: x.to(dtype)
+                    if isinstance(x, torch.Tensor) and x.is_floating_point()
+                    else x,
+                    inp,
+                )
             return inp
 
-        handles = [mod.register_forward_pre_hook(adjust_input_dtype) for mod in self._model.modules()]
+        handles = [
+            mod.register_forward_pre_hook(adjust_input_dtype)
+            for mod in self._model.modules()
+        ]
 
         def _hook_to_collect_inp_out_data(_, inp, out):
             """
@@ -132,7 +166,9 @@ class ModuleData:
         inp_data_list = []
         out_data_list = []
 
-        handles.append(self._module.register_forward_hook(_hook_to_collect_inp_out_data))
+        handles.append(
+            self._module.register_forward_hook(_hook_to_collect_inp_out_data)
+        )
 
         # get the model's device placement information
         device = get_device(self._model)
@@ -163,8 +199,10 @@ class ModuleData:
         return inp_data, out_data
 
     @staticmethod
-    def default_forward_fn(model: torch.nn.Module,
-                           inputs: Union[torch.tensor, List[torch.Tensor], Tuple[torch.Tensor]]):
+    def default_forward_fn(
+        model: torch.nn.Module,
+        inputs: Union[torch.tensor, List[torch.Tensor], Tuple[torch.Tensor]],
+    ):
         """
         Default forward function that performs forward pass given a model and inputs yielded from
         the data loader. Data loader which yields torch.Tensor object that can be directly
@@ -197,8 +235,10 @@ class CachedDataset(Dataset):
         """
         if data_loader:
             if len(data_loader) < num_batches:
-                raise ValueError(f'Can not fetch {num_batches} batches from '
-                                 f'a data loader of length {len(data_loader)}.')
+                raise ValueError(
+                    f"Can not fetch {num_batches} batches from "
+                    f"a data loader of length {len(data_loader)}."
+                )
 
             self._num_batches = num_batches
             self._path = path
@@ -208,16 +248,19 @@ class CachedDataset(Dataset):
             assert len(os.listdir(path)) == num_batches
             self._num_batches = num_batches
             self._path = path
-            logger.info('Found %d batches of data at path location: %s', self._num_batches, self._path)
-
+            logger.info(
+                "Found %d batches of data at path location: %s",
+                self._num_batches,
+                self._path,
+            )
 
     def __len__(self):
         return self._num_batches
 
     def __getitem__(self, index: int):
-        path = os.path.join(self._path, 'model_inputs_' + str(index))
+        path = os.path.join(self._path, "model_inputs_" + str(index))
 
-        with open(path, 'rb') as file:
+        with open(path, "rb") as file:
             batch = pickle.load(file)
 
         return batch
@@ -234,17 +277,26 @@ class CachedDataset(Dataset):
             os.makedirs(self._path)
 
         for i, batch in enumerate(data_loader):
-            path = os.path.join(self._path, f'model_inputs_{i}')
+            path = os.path.join(self._path, f"model_inputs_{i}")
             args = (batch,)
             kwargs = {}
-            with open(path, 'wb') as file:
+            with open(path, "wb") as file:
                 pickle.dump((args, kwargs), file)
 
-        logger.info('Caching %d batches from data loader at path location: %s', self._num_batches, self._path)
+        logger.info(
+            "Caching %d batches from data loader at path location: %s",
+            self._num_batches,
+            self._path,
+        )
 
 
-def run_hook_for_layers(model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]], hook,
-                        module_type_for_attaching_hook=None, leaf_node_only=True):
+def run_hook_for_layers(
+    model: torch.nn.Module,
+    input_shapes: Union[Tuple, List[Tuple]],
+    hook,
+    module_type_for_attaching_hook=None,
+    leaf_node_only=True,
+):
     """
     Register the given hook function for all layers in the model
     :param model: Model
@@ -260,10 +312,18 @@ def run_hook_for_layers(model: torch.nn.Module, input_shapes: Union[Tuple, List[
     # ------------------------
     hooks = []
     # All leaf modules
-    modules = [module for module in model.modules() if not leaf_node_only or is_leaf_module(module)]
+    modules = [
+        module
+        for module in model.modules()
+        if not leaf_node_only or is_leaf_module(module)
+    ]
     if module_type_for_attaching_hook:
         # if needed, filter by module types specified by caller
-        modules = [module for module in modules if isinstance(module, module_type_for_attaching_hook)]
+        modules = [
+            module
+            for module in modules
+            if isinstance(module, module_type_for_attaching_hook)
+        ]
     for module in modules:
         hooks.append(module.register_forward_hook(hook))
 
@@ -282,9 +342,14 @@ def run_hook_for_layers(model: torch.nn.Module, input_shapes: Union[Tuple, List[
         h.remove()
 
 
-def run_hook_for_layers_with_given_input(model: torch.nn.Module,
-                                         input_tensor: Union[torch.Tensor, Tuple],
-                                         hook, module_type_for_attaching_hook=None, leaf_node_only=True, fwd_func=None):
+def run_hook_for_layers_with_given_input(
+    model: torch.nn.Module,
+    input_tensor: Union[torch.Tensor, Tuple],
+    hook,
+    module_type_for_attaching_hook=None,
+    leaf_node_only=True,
+    fwd_func=None,
+):
     """
     Register the given hook function for all layers in the model
     :param model: Model
@@ -324,7 +389,11 @@ def run_hook_for_layers_with_given_input(model: torch.nn.Module,
 
     if module_type_for_attaching_hook:
         # if needed, filter by module types specified by caller
-        modules = [module for module in modules if isinstance(module, module_type_for_attaching_hook)]
+        modules = [
+            module
+            for module in modules
+            if isinstance(module, module_type_for_attaching_hook)
+        ]
 
     try:
         for module in modules:
@@ -366,14 +435,23 @@ def create_fake_data_loader(dataset_size: int, batch_size: int, image_size=(1, 2
     :return:
     """
     transform = transforms.Compose([transforms.ToTensor()])
-    data_loader = torch.utils.data.DataLoader(datasets.FakeData(size=dataset_size, image_size=image_size,
-                                                                num_classes=10, transform=transform,
-                                                                target_transform=None),
-                                              batch_size=batch_size, shuffle=False)
+    data_loader = torch.utils.data.DataLoader(
+        datasets.FakeData(
+            size=dataset_size,
+            image_size=image_size,
+            num_classes=10,
+            transform=transform,
+            target_transform=None,
+        ),
+        batch_size=batch_size,
+        shuffle=False,
+    )
     return data_loader
 
 
-def get_module_to_name_dict(model: torch.nn.Module, prefix: str = '') -> Dict[torch.nn.Module, str]:
+def get_module_to_name_dict(
+    model: torch.nn.Module, prefix: str = ""
+) -> Dict[torch.nn.Module, str]:
     """
     Get a dictionary mapping model modules to names
     :param model: Model to get mapping for
@@ -420,13 +498,13 @@ def get_device(model):
 
 
 def is_leaf_module(module):
-
     """Utility function to determine if the given module is a leaf module - that is, does not have children modules
     :return:
         True if the module is a leaf, False otherwise
     """
     # pylint: disable=import-outside-toplevel
     from aimet_torch._base.nn.modules._spconv import CustomSparseConv3DLayer
+
     try:
         _ = next(module.children())
     except StopIteration:
@@ -435,28 +513,37 @@ def is_leaf_module(module):
         has_child = True
 
     # pylint: disable=unidiomatic-typecheck
-    return not has_child or \
-           type(module) in modules_to_treat_as_leaf or\
-           (CustomSparseConv3DLayer is not None and isinstance(module, CustomSparseConv3DLayer))
+    return (
+        not has_child
+        or type(module) in modules_to_treat_as_leaf
+        or (
+            CustomSparseConv3DLayer is not None
+            and isinstance(module, CustomSparseConv3DLayer)
+        )
+    )
 
 
 def has_hooks(module: torch.nn.Module):
-    """ Returns True if the module uses hooks. """
+    """Returns True if the module uses hooks."""
     # pylint: disable=protected-access
-    return module._backward_hooks or\
-           module._backward_pre_hooks or\
-           module._forward_hooks or\
-           module._forward_pre_hooks or\
-           _global_backward_pre_hooks or\
-           _global_backward_hooks or\
-           _global_forward_hooks or\
-           _global_forward_pre_hooks
+    return (
+        module._backward_hooks
+        or module._backward_pre_hooks
+        or module._forward_hooks
+        or module._forward_pre_hooks
+        or _global_backward_pre_hooks
+        or _global_backward_hooks
+        or _global_forward_hooks
+        or _global_forward_pre_hooks
+    )
 
 
-def get_ordered_list_of_modules(model: torch.nn.Module,
-                                dummy_input: Union[torch.Tensor, List[torch.Tensor], Tuple],
-                                fwd_func=None,
-                                ignore_duplicates=False) -> List:
+def get_ordered_list_of_modules(
+    model: torch.nn.Module,
+    dummy_input: Union[torch.Tensor, List[torch.Tensor], Tuple],
+    fwd_func=None,
+    ignore_duplicates=False,
+) -> List:
     """
     Finds ordered modules in given model.
     :param model: PyTorch model.
@@ -466,6 +553,7 @@ def get_ordered_list_of_modules(model: torch.nn.Module,
     :return: List of module name, module in order.
     """
     seen_modules = set()
+
     def _hook_to_collect_name_of_module(module, _, __):
         """
         hook to find name of module
@@ -481,17 +569,22 @@ def get_ordered_list_of_modules(model: torch.nn.Module,
         module_to_name_dict[module] = name
 
     list_modules = []
-    run_hook_for_layers_with_given_input(model, dummy_input, hook=_hook_to_collect_name_of_module, fwd_func=fwd_func)
+    run_hook_for_layers_with_given_input(
+        model, dummy_input, hook=_hook_to_collect_name_of_module, fwd_func=fwd_func
+    )
 
     return list_modules
 
 
-def replace_modules(model: torch.nn.Module,
-                    condition: Callable[[torch.nn.Module], bool],
-                    factory: Callable[[torch.nn.Module], torch.nn.Module]):
+def replace_modules(
+    model: torch.nn.Module,
+    condition: Callable[[torch.nn.Module], bool],
+    factory: Callable[[torch.nn.Module], torch.nn.Module],
+):
     """
     Replace all modules that satisfy the given condition
     """
+
     def fn(parent):
         for name, child in parent.named_children():
             if condition(child):
@@ -525,7 +618,9 @@ def create_rand_tensors_given_shapes(input_shape, device: torch.device):
     return rand_tensors
 
 
-def get_ordered_lists_of_conv_fc(model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple, List]) -> List:
+def get_ordered_lists_of_conv_fc(
+    model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple, List]
+) -> List:
     """
     Finds order of nodes in graph
     :param model: model
@@ -533,9 +628,20 @@ def get_ordered_lists_of_conv_fc(model: torch.nn.Module, dummy_input: Union[torc
     :return: List of names in graph in order
     """
     module_list = get_ordered_list_of_modules(model, dummy_input)
-    module_list = [[name, module] for name, module in module_list if
-                   isinstance(module, (torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.Linear, torch.nn.ConvTranspose2d,
-                                       torch.nn.Conv3d))]
+    module_list = [
+        [name, module]
+        for name, module in module_list
+        if isinstance(
+            module,
+            (
+                torch.nn.Conv1d,
+                torch.nn.Conv2d,
+                torch.nn.Linear,
+                torch.nn.ConvTranspose2d,
+                torch.nn.Conv3d,
+            ),
+        )
+    ]
     return module_list
 
 
@@ -547,8 +653,9 @@ def change_tensor_device_placement(input_data, device: torch.device):
     :param device: device
     :return: tensor_data with modified device placement
     """
-    return tree_map(lambda x: x.to(device) if isinstance(x, torch.Tensor) else x,
-                    input_data)
+    return tree_map(
+        lambda x: x.to(device) if isinstance(x, torch.Tensor) else x, input_data
+    )
 
 
 def nested_map(data, fn: Callable[[torch.Tensor], torch.Tensor]):
@@ -566,11 +673,12 @@ def nested_map(data, fn: Callable[[torch.Tensor], torch.Tensor]):
         return cls(nested_map(x, fn) for x in data)
 
     if isinstance(data, dict):
-        return {
-            key: nested_map(value, fn) for key, value in data.items()
-        }
+        return {key: nested_map(value, fn) for key, value in data.items()}
 
-    logger.debug('unexpected input type=%s, expecting torch.Tensor, tuple, list, or dict. skipping..', type(data))
+    logger.debug(
+        "unexpected input type=%s, expecting torch.Tensor, tuple, list, or dict. skipping..",
+        type(data),
+    )
     return data
 
 
@@ -596,8 +704,9 @@ def find_num_inout_tensors_per_module(model: torch.nn.Module, input_tensor) -> D
     return num_inout_map
 
 
-def get_reused_modules(model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]) -> \
-        List[Tuple[str, torch.nn.Module]]:
+def get_reused_modules(
+    model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]
+) -> List[Tuple[str, torch.nn.Module]]:
     """
     Identify modules which are used more than once in the model
     :param model: Model to check for modules used more than once
@@ -675,7 +784,10 @@ def is_torch_nn_module(module: torch.nn.Module) -> bool:
     :param module: PyTorch module.
     :return: True if the module from torch.nn class, False otherwise
     """
-    return isinstance(module, torch.nn.Module) and type(module) in torch.nn.__dict__.values()
+    return (
+        isinstance(module, torch.nn.Module)
+        and type(module) in torch.nn.__dict__.values()
+    )
 
 
 def is_torch_nn_leaf_module(module: torch.nn.Module) -> bool:
@@ -690,7 +802,9 @@ def is_torch_nn_leaf_module(module: torch.nn.Module) -> bool:
     return torch_nn_leaf_module
 
 
-def get_torch_tensortype_shape(torch_graph_output: torch._C.TensorType) -> Union[None, List[int]]:
+def get_torch_tensortype_shape(
+    torch_graph_output: torch._C.TensorType,
+) -> Union[None, List[int]]:
     """
     Given an output tensor from a torch graph, return its shape, or return None if the output tensor is not a
     tensortype.
@@ -713,22 +827,26 @@ def get_all_quantizers(model: torch.nn.Module):
     output_quantizers = []
 
     for module in model.modules():
-        _param_qtzrs = getattr(module, 'param_quantizers', {}).values()
-        _input_qtzrs = getattr(module, 'input_quantizers', [])
-        _output_qtzrs = getattr(module, 'output_quantizers', [])
+        _param_qtzrs = getattr(module, "param_quantizers", {}).values()
+        _input_qtzrs = getattr(module, "input_quantizers", [])
+        _output_qtzrs = getattr(module, "output_quantizers", [])
 
         if _param_qtzrs:
             param_quantizers.extend(_param_qtzrs)
 
         if _input_qtzrs:
-            input_quantizers.extend(_input_qtzrs.values()
-                                    if isinstance(_input_qtzrs, dict)
-                                    else _input_qtzrs)
+            input_quantizers.extend(
+                _input_qtzrs.values()
+                if isinstance(_input_qtzrs, dict)
+                else _input_qtzrs
+            )
 
         if _output_qtzrs:
-            output_quantizers.extend(_output_qtzrs.values()
-                                     if isinstance(_output_qtzrs, dict)
-                                     else _output_qtzrs)
+            output_quantizers.extend(
+                _output_qtzrs.values()
+                if isinstance(_output_qtzrs, dict)
+                else _output_qtzrs
+            )
 
     return param_quantizers, input_quantizers, output_quantizers
 
@@ -751,7 +869,9 @@ def disable_all_quantizers(model: torch.nn.Module):
     param_quantizers, input_quantizers, output_quantizers = get_all_quantizers(model)
     all_quantizers = param_quantizers + input_quantizers + output_quantizers
 
-    active_quantizers = set(quantizer for quantizer in all_quantizers if quantizer.enabled)
+    active_quantizers = set(
+        quantizer for quantizer in all_quantizers if quantizer.enabled
+    )
 
     def cleanup():
         for quantizer in active_quantizers:
@@ -775,13 +895,20 @@ def save_to_cache(tensor, dir_path, idx):
     """
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    path = os.path.join(dir_path, f'model_inputs_{idx}')
-    with open(path, 'wb') as cache:
+    path = os.path.join(dir_path, f"model_inputs_{idx}")
+    with open(path, "wb") as cache:
         pickle.dump(tensor, cache)
 
 
 def cache_intermediate_datasets(
-        cached_dataset, cache_on_cpu, model, module_name, forward_fn, path=None, incl_kwargs: bool = False):
+    cached_dataset,
+    cache_on_cpu,
+    model,
+    module_name,
+    forward_fn,
+    path=None,
+    incl_kwargs: bool = False,
+):
     """
     Cache the input tensor of the target module and save to CPU or disk for latter usage
     :param cached_dataset: Cached dataset
@@ -805,7 +932,9 @@ def cache_intermediate_datasets(
                 kwargs = {}
 
             if cache_on_cpu:
-                cached_data.append(change_tensor_device_placement((args, kwargs), torch.device('cpu')))
+                cached_data.append(
+                    change_tensor_device_placement((args, kwargs), torch.device("cpu"))
+                )
             else:
                 save_to_cache((args, kwargs), path, idx)
 
@@ -830,37 +959,50 @@ def cache_intermediate_datasets(
         setattr(parent, child_name, orig_child)
 
 
-def _deleted_module_import_error(name: str, since: str, v1_legacy_api: str = None) -> ImportError:
+def _deleted_module_import_error(
+    name: str, since: str, v1_legacy_api: str = None
+) -> ImportError:
     msg = f"{name} module is deleted since aimet_torch=={since}."
 
     if v1_legacy_api:
-        msg += f" If you must keep using the v1 legacy API for backwards-compatibility,"\
-               f" please import \"{v1_legacy_api}\" instead."
+        msg += (
+            f" If you must keep using the v1 legacy API for backwards-compatibility,"
+            f' please import "{v1_legacy_api}" instead.'
+        )
 
     return ImportError(msg)
 
 
 def _warn_deprecated_in_v2(name: str, v1_legacy_api: str = None):
-    msg = f"\"{name}\" will be deprecated soon in the later versions."
+    msg = f'"{name}" will be deprecated soon in the later versions.'
 
     if v1_legacy_api:
-        msg += f" If you must keep using the v1 legacy API for backwards-compatibility,"\
-               f" please import \"{v1_legacy_api}\" instead."
+        msg += (
+            f" If you must keep using the v1 legacy API for backwards-compatibility,"
+            f' please import "{v1_legacy_api}" instead.'
+        )
 
     warnings.warn(_red(msg), DeprecationWarning, stacklevel=3)
 
 
 def _warn_replaced_in_v2(name: str, v2_new_api: str, v1_legacy_api: str = None):
-    msg = f"\"{name}\" will be replaced with \"{v2_new_api}\" soon in the later versions."
+    msg = f'"{name}" will be replaced with "{v2_new_api}" soon in the later versions.'
 
     if v1_legacy_api:
-        msg += f" If you must keep using the v1 legacy API for backwards-compatibility,"\
-               f" please import \"{v1_legacy_api}\" instead."
+        msg += (
+            f" If you must keep using the v1 legacy API for backwards-compatibility,"
+            f' please import "{v1_legacy_api}" instead.'
+        )
 
     warnings.warn(_red(msg), DeprecationWarning, stacklevel=3)
 
 
-def profile(label: str, file: Union[str, os.PathLike, TextIO] = None, new_file: bool = False, logger: Optional[logging.Logger] = None): # pylint: disable=redefined-outer-name
+def profile(
+    label: str,
+    file: Union[str, os.PathLike, TextIO] = None,
+    new_file: bool = False,
+    logger: Optional[logging.Logger] = None,
+):  # pylint: disable=redefined-outer-name
     """
     Profile a block of code and save profiling information into a file.
 
@@ -870,15 +1012,23 @@ def profile(label: str, file: Union[str, os.PathLike, TextIO] = None, new_file: 
         appended to. This flag is only valid when ``file`` is a path, not a file-like object.
     :param logger: If logger is provided, profiling string will also be printed with INFO logging level
     """
-    from aimet_torch.v2.utils import _ContextManager # pylint: disable=import-outside-toplevel
+    from aimet_torch.v2.utils import _ContextManager  # pylint: disable=import-outside-toplevel
+
     if not torch.cuda.is_available():
         return profile_async(label, file, new_file, logger)
 
     ctx = _profile(label, file, new_file, logger, cleanup=torch.cuda.synchronize)
-    return _ContextManager(action=ctx.__enter__, cleanup=lambda: ctx.__exit__(None, None, None)) # pylint: disable=no-member
+    return _ContextManager(
+        action=ctx.__enter__, cleanup=lambda: ctx.__exit__(None, None, None)
+    )  # pylint: disable=no-member
 
 
-def profile_async(label: str, file: Union[str, os.PathLike, TextIO] = None, new_file: bool = False, logger: Optional[logging.Logger] = None): # pylint: disable=redefined-outer-name
+def profile_async(
+    label: str,
+    file: Union[str, os.PathLike, TextIO] = None,
+    new_file: bool = False,
+    logger: Optional[logging.Logger] = None,
+):  # pylint: disable=redefined-outer-name
     """
     Profile a block of code and save profiling information into a file.
 
@@ -888,9 +1038,12 @@ def profile_async(label: str, file: Union[str, os.PathLike, TextIO] = None, new_
         appended to. This flag is only valid when ``file`` is a path, not a file-like object.
     :param logger: If logger is provided, profiling string will also be printed with INFO logging level
     """
-    from aimet_torch.v2.utils import _ContextManager # pylint: disable=import-outside-toplevel
+    from aimet_torch.v2.utils import _ContextManager  # pylint: disable=import-outside-toplevel
+
     ctx = _profile(label, file, new_file, logger, cleanup=None)
-    return _ContextManager(action=ctx.__enter__, cleanup=lambda: ctx.__exit__(None, None, None)) # pylint: disable=no-member
+    return _ContextManager(
+        action=ctx.__enter__, cleanup=lambda: ctx.__exit__(None, None, None)
+    )  # pylint: disable=no-member
 
 
 def is_vector_encoding(encoding: Optional[List[Dict]]) -> bool:
@@ -942,14 +1095,14 @@ def place_model(model: torch.nn.Module, device: torch.device):
 
 
 __migrated__ = {
-    'compute_encoding_for_given_bitwidth',
-    'compute_partial_encoding',
-    'create_encoding_dict',
-    'create_encoding_from_dict',
-    'get_per_channel_quantizer_from_per_tensor',
-    'get_per_tensor_quantizer_from_per_channel',
-    '_validate_is_symmetric_flag',
-    'validate_is_symmetric_flag',
+    "compute_encoding_for_given_bitwidth",
+    "compute_partial_encoding",
+    "create_encoding_dict",
+    "create_encoding_from_dict",
+    "get_per_channel_quantizer_from_per_tensor",
+    "get_per_tensor_quantizer_from_per_channel",
+    "_validate_is_symmetric_flag",
+    "validate_is_symmetric_flag",
 }
 
 
@@ -973,8 +1126,9 @@ def get_param_channel_axis(module: torch.nn.Module, param_name: str):
     :param param_name: str representing the name of the parameter
     """
     channel_axis = 0
-    if isinstance(module, (torch.nn.ConvTranspose1d,
-                           torch.nn.ConvTranspose2d,
-                           torch.nn.ConvTranspose3d)):
-        channel_axis = 1 if param_name == 'weight' else 0
+    if isinstance(
+        module,
+        (torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d),
+    ):
+        channel_axis = 1 if param_name == "weight" else 0
     return channel_axis

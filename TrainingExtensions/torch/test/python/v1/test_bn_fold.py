@@ -56,27 +56,24 @@ from ..test_bn_fold import MyModel, _initialize_bn_params
 torch.manual_seed(1228)
 
 
-
-symmetric_quantsim_config ={
+symmetric_quantsim_config = {
     "defaults": {
-        "ops": { "is_output_quantized": "True" },
-        "params": { "is_quantized": "True", "is_symmetric": "True"},
+        "ops": {"is_output_quantized": "True"},
+        "params": {"is_quantized": "True", "is_symmetric": "True"},
         "strict_symmetric": "False",
         "unsigned_symmetric": "True",
-        "per_channel_quantization": "True"
+        "per_channel_quantization": "True",
     },
-    "params": {
-        "bias": { "is_quantized": "False" }
-    },
+    "params": {"bias": {"is_quantized": "False"}},
     "op_type": {},
     "supergroups": [
-        { "op_list": ["Conv", "Relu"] },
-        { "op_list": ["Conv", "Clip"] },
-        { "op_list": ["Add", "Relu"] },
-        { "op_list": ["Gemm", "Relu"] },
+        {"op_list": ["Conv", "Relu"]},
+        {"op_list": ["Conv", "Clip"]},
+        {"op_list": ["Add", "Relu"]},
+        {"op_list": ["Gemm", "Relu"]},
     ],
-    "model_input": { "is_input_quantized": "True" },
-    "model_output": {}
+    "model_input": {"is_input_quantized": "True"},
+    "model_output": {},
 }
 
 asymmetric_quantsim_config = copy.deepcopy(symmetric_quantsim_config)
@@ -91,18 +88,21 @@ quantsim_config_map = {
     # "strict_symmetric": strict_symmetric_quantsim_config,
 }
 
+
 def quantsim(model, dummy_input, quantsim_config=None):
     with tempfile.TemporaryDirectory() as tmp_dir:
         config_file_path = Path(tmp_dir, "quantsim_config.json")
 
         quantsim_config = quantsim_config or symmetric_quantsim_config
-        with open(config_file_path, 'w') as f:
+        with open(config_file_path, "w") as f:
             json.dump(quantsim_config, f)
 
-        sim = QuantizationSimModel(model,
-                                dummy_input.clone(),
-                                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                config_file=config_file_path)
+        sim = QuantizationSimModel(
+            model,
+            dummy_input.clone(),
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            config_file=config_file_path,
+        )
 
         def forward_pass_callback(model, _):
             model(dummy_input.clone())
@@ -139,6 +139,7 @@ class TestTrainingExtensionBnFoldToScale:
         assert layer2_0.relu.output_quantizers[0].enabled
 
         buffer = None
+
         def collect_output(module, inp, output):
             # Forward hook for collecting
             nonlocal buffer
@@ -147,8 +148,8 @@ class TestTrainingExtensionBnFoldToScale:
         def int8_repr(x, quantizer):
             # Return fake-quantized output in INT8 representation
             encoding = quantizer.encoding
-            delta = float((encoding.max - encoding.min)/255)
-            offset = float(round(-encoding.min/255))
+            delta = float((encoding.max - encoding.min) / 255)
+            offset = float(round(-encoding.min / 255))
             return x / delta + offset
 
         ### Outputs before batchnorm folding
@@ -156,7 +157,9 @@ class TestTrainingExtensionBnFoldToScale:
             fakequant_output = sim.model(random_input.clone()).clone().detach()
             int8_output = int8_repr(fakequant_output, sim.model.fc.output_quantizers[0])
             fakequant_relu_output = buffer
-            int8_relu_output = int8_repr(fakequant_relu_output, layer2_0.relu.output_quantizers[0])
+            int8_relu_output = int8_repr(
+                fakequant_relu_output, layer2_0.relu.output_quantizers[0]
+            )
 
         ### Apply batchnorm folding
         layer_list = [(layer2_0.conv1, layer2_0.bn1)]
@@ -164,10 +167,16 @@ class TestTrainingExtensionBnFoldToScale:
 
         ### Outputs after batchnorm folding
         with layer2_0.relu.register_forward_hook(collect_output):
-            fakequant_output_after_folding = sim.model(random_input.clone()).clone().detach()
-            int8_output_after_folding = int8_repr(fakequant_output_after_folding, sim.model.fc.output_quantizers[0])
+            fakequant_output_after_folding = (
+                sim.model(random_input.clone()).clone().detach()
+            )
+            int8_output_after_folding = int8_repr(
+                fakequant_output_after_folding, sim.model.fc.output_quantizers[0]
+            )
             fakequant_relu_output_after_folding = buffer
-            int8_relu_output_after_folding = int8_repr(fakequant_relu_output_after_folding, layer2_0.relu.output_quantizers[0])
+            int8_relu_output_after_folding = int8_repr(
+                fakequant_relu_output_after_folding, layer2_0.relu.output_quantizers[0]
+            )
 
         # Check batchnorm is replaced with identity
         assert isinstance(layer2_0.bn1._module_to_wrap, torch.nn.Identity)
@@ -181,26 +190,41 @@ class TestTrainingExtensionBnFoldToScale:
 
         # test 1: All final outputs should be contained within 3-tick difference
         last_output_encoding = sim.model.fc.output_quantizers[0].encoding
-        delta = float((last_output_encoding.max - last_output_encoding.min)/255)
-        assert torch.allclose(fakequant_output, fakequant_output_after_folding, atol=3*delta) # Allow 3-tick difference
-        assert torch.allclose(int8_output, int8_output_after_folding, atol=3) # Allow 3-tick difference
+        delta = float((last_output_encoding.max - last_output_encoding.min) / 255)
+        assert torch.allclose(
+            fakequant_output, fakequant_output_after_folding, atol=3 * delta
+        )  # Allow 3-tick difference
+        assert torch.allclose(
+            int8_output, int8_output_after_folding, atol=3
+        )  # Allow 3-tick difference
 
         # test 2: At least 99% of the final outputs should be contained within 1-tick difference
-        assert torch.isclose(fakequant_output, fakequant_output_after_folding, atol=1*delta).sum() >= math.floor(fakequant_output.numel() * 0.99)
-        assert torch.isclose(int8_output, int8_output_after_folding, atol=1).sum() >= math.floor(int8_output.numel() * 0.99)
+        assert torch.isclose(
+            fakequant_output, fakequant_output_after_folding, atol=1 * delta
+        ).sum() >= math.floor(fakequant_output.numel() * 0.99)
+        assert torch.isclose(
+            int8_output, int8_output_after_folding, atol=1
+        ).sum() >= math.floor(int8_output.numel() * 0.99)
 
         # test 3: All ReLU outputs should be contained within 1-tick difference
         relu_output_encoding = layer2_0.relu.output_quantizers[0].encoding
-        delta = float((relu_output_encoding.max - relu_output_encoding.min)/255)
-        assert torch.allclose(fakequant_relu_output, fakequant_relu_output_after_folding, atol=1*delta) # Allow 1-tick difference
-        assert torch.allclose(int8_relu_output, int8_relu_output_after_folding, atol=1) # Allow 1-tick difference
+        delta = float((relu_output_encoding.max - relu_output_encoding.min) / 255)
+        assert torch.allclose(
+            fakequant_relu_output, fakequant_relu_output_after_folding, atol=1 * delta
+        )  # Allow 1-tick difference
+        assert torch.allclose(
+            int8_relu_output, int8_relu_output_after_folding, atol=1
+        )  # Allow 1-tick difference
 
         # test 4: At least 99% of the ReLU outputs should be almost exactly equal
-        assert torch.isclose(fakequant_relu_output, fakequant_relu_output_after_folding).sum() >= math.floor(fakequant_relu_output.numel() * 0.99)
-        assert torch.isclose(int8_relu_output, int8_relu_output_after_folding).sum() >= math.floor(int8_relu_output.numel() * 0.99)
+        assert torch.isclose(
+            fakequant_relu_output, fakequant_relu_output_after_folding
+        ).sum() >= math.floor(fakequant_relu_output.numel() * 0.99)
+        assert torch.isclose(
+            int8_relu_output, int8_relu_output_after_folding
+        ).sum() >= math.floor(int8_relu_output.numel() * 0.99)
 
     def test_fold_bn_before_conv_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
@@ -233,10 +257,8 @@ class TestTrainingExtensionBnFoldToScale:
             fold_given_batch_norms(model, layer_list)
 
     def test_fold_bn_before_conv_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3)
                 self.relu1 = torch.nn.ReLU()
@@ -268,10 +290,8 @@ class TestTrainingExtensionBnFoldToScale:
             fold_given_batch_norms(model, layer_list)
 
     def test_fold_bn_after_conv_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3, bias=False)
                 self.bn1 = torch.nn.BatchNorm2d(20)
@@ -318,8 +338,10 @@ class TestTrainingExtensionBnFoldToScale:
         assert model.relu1.output_quantizers[0].enabled
 
         relu_output_encoding = model.relu1.output_quantizers[0].encoding
-        delta = float((relu_output_encoding.max - relu_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((relu_output_encoding.max - relu_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
         conv1 = model.conv1._module_to_wrap
         assert conv1.weight.requires_grad == conv1.bias.requires_grad
@@ -327,10 +349,8 @@ class TestTrainingExtensionBnFoldToScale:
         assert conv1.weight.dtype == conv1.bias.dtype
 
     def test_fold_bn_after_conv_depthwise(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 10, 3, groups=10)
                 self.bn1 = torch.nn.BatchNorm2d(10)
@@ -375,14 +395,14 @@ class TestTrainingExtensionBnFoldToScale:
         assert model.relu1.output_quantizers[0].enabled
 
         relu_output_encoding = model.relu1.output_quantizers[0].encoding
-        delta = float((relu_output_encoding.max - relu_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((relu_output_encoding.max - relu_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
     def test_fold_bn_after_transposed_conv_depthwise(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3, groups=10)
                 self.bn1 = torch.nn.BatchNorm2d(10)
@@ -425,10 +445,8 @@ class TestTrainingExtensionBnFoldToScale:
         assert model.relu1.output_quantizers[0].enabled
 
     def test_fold_bn_after_conv_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3)
                 self.bn1 = torch.nn.BatchNorm2d(20)
@@ -475,14 +493,14 @@ class TestTrainingExtensionBnFoldToScale:
         assert model.relu1.output_quantizers[0].enabled
 
         relu_output_encoding = sim.model.relu1.output_quantizers[0].encoding
-        delta = float((relu_output_encoding.max - relu_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((relu_output_encoding.max - relu_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
     def test_fold_bn_before_linear_layer_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.fc1 = torch.nn.Linear(10, 20, bias=False)
@@ -512,10 +530,8 @@ class TestTrainingExtensionBnFoldToScale:
             fold_given_batch_norms(model, layer_list)
 
     def test_fold_bn_before_linear_layer_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.fc1 = torch.nn.Linear(10, 20)
@@ -545,10 +561,8 @@ class TestTrainingExtensionBnFoldToScale:
             fold_given_batch_norms(model, layer_list)
 
     def test_fold_bn_after_linear_layer_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.fc1 = torch.nn.Linear(10, 20, bias=False)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -592,15 +606,19 @@ class TestTrainingExtensionBnFoldToScale:
         # Check batchnorm's output encoding is copied to conv's output encoding
         fc_output_encoding = model.fc1.output_quantizers[0].encoding
         bn_output_encoding = model.bn1.output_quantizers[0]._compute_updated_encoding()
-        assert fc_output_encoding.max == bn_output_encoding.max and\
-                fc_output_encoding.min == bn_output_encoding.min and\
-                fc_output_encoding.delta == bn_output_encoding.delta and\
-                fc_output_encoding.offset == bn_output_encoding.offset and\
-                fc_output_encoding.bw == bn_output_encoding.bw
+        assert (
+            fc_output_encoding.max == bn_output_encoding.max
+            and fc_output_encoding.min == bn_output_encoding.min
+            and fc_output_encoding.delta == bn_output_encoding.delta
+            and fc_output_encoding.offset == bn_output_encoding.offset
+            and fc_output_encoding.bw == bn_output_encoding.bw
+        )
 
         fc_output_encoding = model.fc1.output_quantizers[0].encoding
-        delta = float((fc_output_encoding.max - fc_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((fc_output_encoding.max - fc_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
         fc1 = model.fc1._module_to_wrap
         assert fc1.weight.requires_grad == fc1.bias.requires_grad
@@ -608,10 +626,8 @@ class TestTrainingExtensionBnFoldToScale:
         assert fc1.weight.dtype == fc1.bias.dtype
 
     def test_fold_bn_after_linear_layer_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.fc1 = torch.nn.Linear(10, 20)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -655,15 +671,19 @@ class TestTrainingExtensionBnFoldToScale:
         # Check batchnorm's output encoding is copied to conv's output encoding
         fc_output_encoding = model.fc1.output_quantizers[0].encoding
         bn_output_encoding = model.bn1.output_quantizers[0]._compute_updated_encoding()
-        assert fc_output_encoding.max == bn_output_encoding.max and\
-                fc_output_encoding.min == bn_output_encoding.min and\
-                fc_output_encoding.delta == bn_output_encoding.delta and\
-                fc_output_encoding.offset == bn_output_encoding.offset and\
-                fc_output_encoding.bw == bn_output_encoding.bw
+        assert (
+            fc_output_encoding.max == bn_output_encoding.max
+            and fc_output_encoding.min == bn_output_encoding.min
+            and fc_output_encoding.delta == bn_output_encoding.delta
+            and fc_output_encoding.offset == bn_output_encoding.offset
+            and fc_output_encoding.bw == bn_output_encoding.bw
+        )
 
         fc_output_encoding = model.fc1.output_quantizers[0].encoding
-        delta = float((fc_output_encoding.max - fc_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((fc_output_encoding.max - fc_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
     def test_bn_fold_auto_mode_transposed_conv2d(self):
         torch.manual_seed(10)
@@ -682,7 +702,9 @@ class TestTrainingExtensionBnFoldToScale:
 
         conv2_output_encoding = model.conv2.output_quantizers[0].encoding
         delta = float((conv2_output_encoding.max - conv2_output_encoding.min) / 255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
         assert len(folded_pairs) == 2
 
     def test_bn_fold_auto_mode(self):
@@ -699,7 +721,6 @@ class TestTrainingExtensionBnFoldToScale:
     def test_fold_auto_mode_with_bn_after_Conv1d_layer(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -740,15 +761,19 @@ class TestTrainingExtensionBnFoldToScale:
         # Check batchnorm's output encoding is copied to conv's output encoding
         conv_output_encoding = model.conv1d.output_quantizers[0].encoding
         bn_output_encoding = model.bn1.output_quantizers[0]._compute_updated_encoding()
-        assert conv_output_encoding.max == bn_output_encoding.max and\
-                conv_output_encoding.min == bn_output_encoding.min and\
-                conv_output_encoding.delta == bn_output_encoding.delta and\
-                conv_output_encoding.offset == bn_output_encoding.offset and\
-                conv_output_encoding.bw == bn_output_encoding.bw
+        assert (
+            conv_output_encoding.max == bn_output_encoding.max
+            and conv_output_encoding.min == bn_output_encoding.min
+            and conv_output_encoding.delta == bn_output_encoding.delta
+            and conv_output_encoding.offset == bn_output_encoding.offset
+            and conv_output_encoding.bw == bn_output_encoding.bw
+        )
 
         conv_output_encoding = model.conv1d.output_quantizers[0].encoding
-        delta = float((conv_output_encoding.max - conv_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((conv_output_encoding.max - conv_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
         assert 1 == len(bn_pairs)
         assert (model.conv1d, orig_bn) in bn_pairs
@@ -756,7 +781,6 @@ class TestTrainingExtensionBnFoldToScale:
     def test_fold_manual_with_bn_after_Conv1d_layer_no_bias(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2, bias=False)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -797,15 +821,19 @@ class TestTrainingExtensionBnFoldToScale:
         # Check batchnorm's output encoding is copied to conv's output encoding
         conv_output_encoding = model.conv1d.output_quantizers[0].encoding
         bn_output_encoding = model.bn1.output_quantizers[0]._compute_updated_encoding()
-        assert conv_output_encoding.max == bn_output_encoding.max and\
-                conv_output_encoding.min == bn_output_encoding.min and\
-                conv_output_encoding.delta == bn_output_encoding.delta and\
-                conv_output_encoding.offset == bn_output_encoding.offset and\
-                conv_output_encoding.bw == bn_output_encoding.bw
+        assert (
+            conv_output_encoding.max == bn_output_encoding.max
+            and conv_output_encoding.min == bn_output_encoding.min
+            and conv_output_encoding.delta == bn_output_encoding.delta
+            and conv_output_encoding.offset == bn_output_encoding.offset
+            and conv_output_encoding.bw == bn_output_encoding.bw
+        )
 
         conv_output_encoding = model.conv1d.output_quantizers[0].encoding
-        delta = float((conv_output_encoding.max - conv_output_encoding.min)/255)
-        assert torch.allclose(baseline_output, output_after_fold, atol=delta) # Allow 1-tick difference
+        delta = float((conv_output_encoding.max - conv_output_encoding.min) / 255)
+        assert torch.allclose(
+            baseline_output, output_after_fold, atol=delta
+        )  # Allow 1-tick difference
 
         conv1d = model.conv1d._module_to_wrap
         assert conv1d.weight.requires_grad == conv1d.bias.requires_grad
@@ -813,10 +841,8 @@ class TestTrainingExtensionBnFoldToScale:
         assert conv1d.weight.dtype == conv1d.bias.dtype
 
     def test_fold_bn_before_Conv1d_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2)
@@ -844,10 +870,8 @@ class TestTrainingExtensionBnFoldToScale:
             fold_all_batch_norms_to_scale(sim)
 
     def test_fold_bn_before_Conv1d_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(4)
                 self.conv1d = torch.nn.Conv1d(4, 4, kernel_size=2, bias=False)

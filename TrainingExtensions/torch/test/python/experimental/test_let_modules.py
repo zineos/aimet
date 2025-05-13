@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Test Let modules"""
+
 import pytest
 import torch
 import copy
@@ -63,20 +64,21 @@ def fold_test(sim: QuantizationSimModel):
     for _, module in enumerate(sim.model):
         let_params = module.get_let_params()
         orig_wt = module.weight.cpu().detach().clone()
-        module.fold_let_params() # Fold the scale into the weights
+        module.fold_let_params()  # Fold the scale into the weights
         scale_folded_wts = module.weight.cpu().detach()
         if isinstance(module, LETQuantizedGemmaNorm):
-            prev_scale = let_params['prev_scale']
-            orig_wt = (orig_wt/prev_scale) + (1/prev_scale) - 1
+            prev_scale = let_params["prev_scale"]
+            orig_wt = (orig_wt / prev_scale) + (1 / prev_scale) - 1
 
             assert torch.equal(orig_wt, scale_folded_wts)
         else:
-            if let_params['prev_scale'] is None:
-                factor = 1 / let_params['foll_scale']
+            if let_params["prev_scale"] is None:
+                factor = 1 / let_params["foll_scale"]
             else:
-                factor = let_params['prev_scale']
+                factor = let_params["prev_scale"]
 
             assert torch.equal(orig_wt, scale_folded_wts * factor)
+
 
 def get_conv_conv(bias):
     """
@@ -88,17 +90,34 @@ def get_conv_conv(bias):
         hidden_dim = 20
         output_dim = 5
         model = nn.Sequential(
-            torch.nn.Conv2d(in_channels=input_dim, out_channels=hidden_dim, kernel_size=3, stride=1, padding=1, bias=bias),
-            torch.nn.Conv2d(in_channels=hidden_dim, out_channels=output_dim, kernel_size=3, stride=1, padding=1, bias=bias)
-            ).eval()
+            torch.nn.Conv2d(
+                in_channels=input_dim,
+                out_channels=hidden_dim,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=bias,
+            ),
+            torch.nn.Conv2d(
+                in_channels=hidden_dim,
+                out_channels=output_dim,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=bias,
+            ),
+        ).eval()
         inp = torch.rand(1, input_dim, 32, 32)
         return model, inp
+
     return conv_conv
+
 
 def get_lin_lin(bias):
     """
     2 layer sequential model for linear linear pair test
     """
+
     def lin_lin():
         input_dim = 10
         hidden_dim = 20
@@ -106,71 +125,93 @@ def get_lin_lin(bias):
         model = nn.Sequential(
             torch.nn.Linear(input_dim, hidden_dim, bias=bias),
             torch.nn.Linear(hidden_dim, output_dim, bias=bias),
-            ).eval()
+        ).eval()
         inp = torch.rand(1, input_dim)
         return model, inp
+
     return lin_lin
+
 
 def get_norm_lin(NormLayer):
     """
     2 layer sequential model for Norm and Linear pair test
     """
+
     def norm_lin():
         input_dim = 3
         output_dim = 2
         model = nn.Sequential(
             NormLayer(input_dim),
             nn.Linear(input_dim, output_dim),
-            ).eval()
+        ).eval()
 
         inp = torch.rand(1, input_dim)
-        return model,inp
+        return model, inp
+
     return norm_lin
+
 
 def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
     """
-    :param sim: QuantizationSimModel 
+    :param sim: QuantizationSimModel
     :param prev_scale: prev_scale set to the QuantizationSimModel model with let_quantized modules
     :param foll_scale: foll_scale set to the QuantizationSimModel model with let_quantized modules
     This sim let-quantized model has prev and foll scale set to None
-    
+
     Apply prev_scale and foll_scale to sim manually
     Clamp the scale multiplied weight to the param_quantizers max already recorded by compute encodings
     Copy the scale multiplied wts and bias to sim model
 
     compute_encodings is not computed for weight update during the LET blockwise training,
-    So the min, max stays the same during the training. 
+    So the min, max stays the same during the training.
     Clamping the scale multiplied weight to the recorded max will reflect a similiar behaviour that is expected in omniquant
     """
-    assert len(sim.model) == 2, "Only 2 layer sequential model is supported for LETModule unit test"
+    assert len(sim.model) == 2, (
+        "Only 2 layer sequential model is supported for LETModule unit test"
+    )
 
     for idx, module in enumerate(sim.model):
         wt = module.weight
-        wt_s = wt * ((1/prev_scale) if idx == 0 else foll_scale)
-        wt_s = torch.clamp(wt_s, max =module.param_quantizers['weight'].max)
+        wt_s = wt * ((1 / prev_scale) if idx == 0 else foll_scale)
+        wt_s = torch.clamp(wt_s, max=module.param_quantizers["weight"].max)
         with torch.no_grad():
             sim.model[idx].weight.copy_(wt_s)
 
-        if isinstance(module, (LETQuantizedLlamaRMSNorm, LETQuantizedGemmaNorm)) or module.bias is None:
+        if (
+            isinstance(module, (LETQuantizedLlamaRMSNorm, LETQuantizedGemmaNorm))
+            or module.bias is None
+        ):
             continue
 
         bias_s = module.bias
         if idx == 0:
-            bias_s = bias_s*(1/prev_scale)
+            bias_s = bias_s * (1 / prev_scale)
 
         with torch.no_grad():
-            if isinstance(module, LETQuantizedGemmaNorm): # Gemma's bias is an integer, not a tensor
+            if isinstance(
+                module, LETQuantizedGemmaNorm
+            ):  # Gemma's bias is an integer, not a tensor
                 module.bias = bias_s
             else:
                 module.bias.copy_(bias_s)
 
-@pytest.mark.parametrize("inp_fn", [get_conv_conv(True), get_conv_conv(False), get_lin_lin(True), get_lin_lin(False), \
-                                    get_norm_lin(nn.LayerNorm), get_norm_lin(LlamaRMSNorm)])
+
+@pytest.mark.parametrize(
+    "inp_fn",
+    [
+        get_conv_conv(True),
+        get_conv_conv(False),
+        get_lin_lin(True),
+        get_lin_lin(False),
+        get_norm_lin(nn.LayerNorm),
+        get_norm_lin(LlamaRMSNorm),
+    ],
+)
 def test_pair(inp_fn):
     """
     Test the LET modules and LET pairs:
         1. Let modules are getting replaced as expected in QuantizationSimModel
-        2. Scales are applied correctly LET modules 
+        2. Scales are applied correctly LET modules
         3. Scales are folded back to LET modules
     """
     model, inp = inp_fn()
@@ -180,18 +221,18 @@ def test_pair(inp_fn):
     sim = QuantizationSimModel(model, inp, config_file="htp_v81")
 
     # Disable activation quantizers
-    #pylint: disable=protected-access
+    # pylint: disable=protected-access
     for _, module in sim.model.named_modules():
         if isinstance(module, QuantizationMixin):
             module._remove_activation_quantizers()
 
     sim.compute_encodings(lambda model, _: model(inp), None)
-    sim_out = sim.model(inp) #Quantized toy model
+    sim_out = sim.model(inp)  # Quantized toy model
 
     # Replace the quantized modules with let_quantized modules
     _convert_sim_to_letsim(sim)
 
-    #forward pass through toy model with let_quantized module
+    # forward pass through toy model with let_quantized module
     sim_out_with_no_scale = sim.model(inp)
 
     # sim_out_with_no_scale  and sim_out is expected to be similar.
@@ -204,10 +245,10 @@ def test_pair(inp_fn):
     ref_let_sim_model = copy.deepcopy(sim)
 
     # Setting different prev and foll scale to test if all params/quantizers are getting updated
-    prev_scale = torch.nn.Parameter(torch.tensor([2], dtype = torch.float32))
-    foll_scale = torch.nn.Parameter(torch.tensor([20], dtype = torch.float32))
-    sim.model[0].register_let_params(prev_scale = prev_scale)
-    sim.model[1].register_let_params(foll_scale = foll_scale)
+    prev_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
+    foll_scale = torch.nn.Parameter(torch.tensor([20], dtype=torch.float32))
+    sim.model[0].register_let_params(prev_scale=prev_scale)
+    sim.model[1].register_let_params(foll_scale=foll_scale)
 
     sim.compute_encodings(lambda model, _: model(inp), None)
     out_with_radn_scale = sim.model(inp)
@@ -217,10 +258,10 @@ def test_pair(inp_fn):
     assert not torch.allclose(sim_out, out_with_radn_scale, atol=0.01)
 
     # Set scale to 2
-    prev_scale = torch.nn.Parameter(torch.tensor([2], dtype = torch.float32))
-    foll_scale = torch.nn.Parameter(torch.tensor([2], dtype = torch.float32))
-    sim.model[0].register_let_params(prev_scale = prev_scale)
-    sim.model[1].register_let_params(foll_scale = foll_scale)
+    prev_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
+    foll_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
+    sim.model[0].register_let_params(prev_scale=prev_scale)
+    sim.model[1].register_let_params(foll_scale=foll_scale)
     sim.compute_encodings(lambda model, _: model(inp), None)
     out_with_scale_2 = sim.model(inp)
 
@@ -231,8 +272,8 @@ def test_pair(inp_fn):
     # Output of out_with_scale_2 and ref_out should match
     assert torch.allclose(out_with_scale_2, ref_out, atol=1e-05)
 
-    #pylint: disable=protected-access
-    #remove all qunatizers
+    # pylint: disable=protected-access
+    # remove all qunatizers
     for _, module in sim.model.named_modules():
         if isinstance(module, QuantizationMixin):
             module._remove_all_quantizers()

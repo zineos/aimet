@@ -50,6 +50,7 @@ try:
 except ImportError:
     transformers = None
 
+
 @contextlib.contextmanager
 def compute_encodings(model: torch.nn.Module):
     """
@@ -59,10 +60,12 @@ def compute_encodings(model: torch.nn.Module):
         Encodings of the quantizers loaded with :ref:`QuantizationSimModel.load_encodings`
         with ``allow_overwrite=False`` will be kept unchanged.
     """
-    with _register_zero3_forward_hooks(model, use_dummy_params=False),\
-            contextlib.ExitStack() as stack:
+    with (
+        _register_zero3_forward_hooks(model, use_dummy_params=False),
+        contextlib.ExitStack() as stack,
+    ):
         for module in model.modules():
-            if isinstance(module, BaseQuantizationMixin): # pylint: disable=undefined-variable
+            if isinstance(module, BaseQuantizationMixin):  # pylint: disable=undefined-variable
                 ctx = module.compute_encodings()
                 stack.enter_context(ctx)
 
@@ -78,5 +81,5 @@ def compute_param_encodings(model: torch.nn.Module):
         with ``allow_overwrite=False`` will be kept unchanged.
     """
     for module in model.modules():
-        if isinstance(module, BaseQuantizationMixin): # pylint: disable=undefined-variable
+        if isinstance(module, BaseQuantizationMixin):  # pylint: disable=undefined-variable
             module.compute_param_encodings()

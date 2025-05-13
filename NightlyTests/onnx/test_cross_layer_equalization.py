@@ -43,10 +43,13 @@ import test_models
 
 
 class TestCLEAcceptance:
-    """ Acceptance test for AIMET ONNX """
+    """Acceptance test for AIMET ONNX"""
+
     @pytest.mark.skip(reason="Find better test criteria.")
-    @pytest.mark.parametrize('model', [test_models.mobilenetv2(), test_models.mobilenetv3_large_model()])
+    @pytest.mark.parametrize(
+        "model", [test_models.mobilenetv2(), test_models.mobilenetv3_large_model()]
+    )
     def test_cle_mv2(self, model):
-        """ Test for E2E quantization """
+        """Test for E2E quantization"""
         np.random.seed(0)
         equalize_model(model)

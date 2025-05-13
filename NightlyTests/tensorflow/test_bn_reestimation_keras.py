@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Keras bn_reestimation Nightly Tests """
+"""Keras bn_reestimation Nightly Tests"""
+
 import json
 import tempfile
 from pathlib import Path
@@ -42,78 +43,37 @@ import tensorflow as tf
 import numpy as np
 from aimet_common.defs import QuantScheme
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
-from aimet_tensorflow.keras.bn_reestimation import reestimate_bn_stats, _get_bn_submodules
+from aimet_tensorflow.keras.bn_reestimation import (
+    reestimate_bn_stats,
+    _get_bn_submodules,
+)
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms_to_scale
 
 
 def _qsim_setup_for_fold_scale(model, dummy_inputs):
     default_config_per_channel = {
-        "defaults":
-            {
-                "ops":
-                    {
-                        "is_output_quantized": "True"
-                    },
-                "params":
-                    {
-                        "is_quantized": "True",
-                        "is_symmetric": "True"
-                    },
-                "strict_symmetric": "False",
-                "unsigned_symmetric": "True",
-                "per_channel_quantization": "True"
-            },
-
-        "params":
-            {
-                "bias":
-                    {
-                        "is_quantized": "False"
-                    }
-            },
-
-        "op_type":
-            {
-                "Squeeze":
-                    {
-                        "is_output_quantized": "False"
-                    },
-                "Pad":
-                    {
-                        "is_output_quantized": "False"
-                    },
-                "Mean":
-                    {
-                        "is_output_quantized": "False"
-                    }
-            },
-
-        "supergroups":
-            [
-                {
-                    "op_list": ["Conv", "Relu"]
-                },
-                {
-                    "op_list": ["Conv", "Clip"]
-                },
-                {
-                    "op_list": ["Conv", "BatchNormalization", "Relu"]
-                },
-                {
-                    "op_list": ["Add", "Relu"]
-                },
-                {
-                    "op_list": ["Gemm", "Relu"]
-                }
-            ],
-
-        "model_input":
-            {
-                "is_input_quantized": "True"
-            },
-
-        "model_output":
-            {}
+        "defaults": {
+            "ops": {"is_output_quantized": "True"},
+            "params": {"is_quantized": "True", "is_symmetric": "True"},
+            "strict_symmetric": "False",
+            "unsigned_symmetric": "True",
+            "per_channel_quantization": "True",
+        },
+        "params": {"bias": {"is_quantized": "False"}},
+        "op_type": {
+            "Squeeze": {"is_output_quantized": "False"},
+            "Pad": {"is_output_quantized": "False"},
+            "Mean": {"is_output_quantized": "False"},
+        },
+        "supergroups": [
+            {"op_list": ["Conv", "Relu"]},
+            {"op_list": ["Conv", "Clip"]},
+            {"op_list": ["Conv", "BatchNormalization", "Relu"]},
+            {"op_list": ["Add", "Relu"]},
+            {"op_list": ["Gemm", "Relu"]},
+        ],
+        "model_input": {"is_input_quantized": "True"},
+        "model_output": {},
     }
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -121,10 +81,11 @@ def _qsim_setup_for_fold_scale(model, dummy_inputs):
         with open(config_filename, "w") as f:
             json.dump(default_config_per_channel, f)
 
-        qsim = QuantizationSimModel(model,
-                                    quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                    config_file=config_filename)
-
+        qsim = QuantizationSimModel(
+            model,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+            config_file=config_filename,
+        )
 
     qsim.compute_encodings(lambda m, _: m.predict(dummy_inputs), None)
 
@@ -144,8 +105,12 @@ def _reestimate_and_compare_results(model, dataset):
         bn_mean_est = {layer.name: layer.moving_mean.numpy() for layer in bn_layers}
         bn_var_est = {layer.name: layer.moving_variance.numpy() for layer in bn_layers}
         bn_momentum_est = {layer.name: layer.momentum for layer in bn_layers}
-        assert not all(np.allclose(bn_mean_ori[key], bn_mean_est[key]) for key in bn_mean_est)
-        assert not all(np.allclose(bn_var_ori[key], bn_var_est[key]) for key in bn_var_est)
+        assert not all(
+            np.allclose(bn_mean_ori[key], bn_mean_est[key]) for key in bn_mean_est
+        )
+        assert not all(
+            np.allclose(bn_var_ori[key], bn_var_est[key]) for key in bn_var_est
+        )
         assert not (bn_momentum_ori == bn_momentum_est)
         output_est = model(dummy_inputs, training=False)
         assert not np.allclose(output_est, output_ori)
@@ -155,9 +120,11 @@ def _reestimate_and_compare_results(model, dataset):
     bn_var_restored = {layer.name: layer.moving_variance.numpy() for layer in bn_layers}
     bn_momentum_restored = {layer.name: layer.momentum for layer in bn_layers}
 
-    assert all(np.allclose(bn_mean_ori[key], bn_mean_restored[key]) for key in bn_mean_ori)
+    assert all(
+        np.allclose(bn_mean_ori[key], bn_mean_restored[key]) for key in bn_mean_ori
+    )
     assert all(np.allclose(bn_var_ori[key], bn_var_restored[key]) for key in bn_var_ori)
-    assert (bn_momentum_ori == bn_momentum_restored)
+    assert bn_momentum_ori == bn_momentum_restored
 
     output_restored = model(dummy_inputs, training=False)
     assert np.allclose(output_restored, output_ori)
@@ -167,7 +134,12 @@ def _fold_all_batch_norms_to_scale_and_compare_results(qsim, dummy_inputs, toler
     output_before_batchnorm_folding = qsim.model(dummy_inputs)
     fold_all_batch_norms_to_scale(qsim)
     output_after_batchnorm_folding = qsim.model(dummy_inputs)
-    assert np.allclose(output_before_batchnorm_folding, output_after_batchnorm_folding, atol = tolerance, equal_nan=True)
+    assert np.allclose(
+        output_before_batchnorm_folding,
+        output_after_batchnorm_folding,
+        atol=tolerance,
+        equal_nan=True,
+    )
 
 
 def test_bn_reestimation():
@@ -176,17 +148,22 @@ def test_bn_reestimation():
     """
     tf.keras.backend.clear_session()
     np.random.seed(0)
-    input_data = np.random.randn(1024, 32,32,3).astype(np.float32)
+    input_data = np.random.randn(1024, 32, 32, 3).astype(np.float32)
     batch_size = 4
     dataset = tf.data.Dataset.from_tensor_slices(input_data)
     dataset = dataset.batch(batch_size=batch_size)
-    dummy_inputs = np.random.randn(2, 32,32,3).astype(np.float32)
-    model = tf.keras.applications.mobilenet_v2.MobileNetV2(weights=None, input_shape=(32, 32, 3))
+    dummy_inputs = np.random.randn(2, 32, 32, 3).astype(np.float32)
+    model = tf.keras.applications.mobilenet_v2.MobileNetV2(
+        weights=None, input_shape=(32, 32, 3)
+    )
     sub_model = tf.keras.Sequential()
     for layer in model.layers[0:12]:
         sub_model.add(layer)
     sub_model.build((32, 32, 3))
     qsim = _qsim_setup_for_fold_scale(sub_model, dummy_inputs)
-    qsim.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss=tf.keras.losses.MeanSquaredError())
+    qsim.model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss=tf.keras.losses.MeanSquaredError(),
+    )
     _reestimate_and_compare_results(qsim.model, dataset)
     _fold_all_batch_norms_to_scale_and_compare_results(qsim, dummy_inputs, 5e-3)

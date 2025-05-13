@@ -86,11 +86,11 @@ float withoutOffsetWrapHandler(float offset, float requantScale)
  * -find
  *      q_output = [(input_scale * weight_scale)/output_scale] * {[(q_input + input_offset) * q_weight] +
  *                 [bias_in/(input_scale * weight_scale)] - [output_offset * output_scale/(input_scale * weight_scale)]}
- * 
+ *
  * q_input: unsigned fixed-point input, q_weight: signed fixed-point weight, bias_in: floating-point biases,
  * q_output: unsigned fixed-point output
  * *_scale, *_offset: variables with relative scale and zero_offset(negative)
- * 
+ *
  * @return requant scale: (input_scale * weight_scale)/output_scale,
  *         bias: [bias_in/(input_scale * weight_scale)] - [output_offset * output_scale/(input_scale * weight_scale)]
 */

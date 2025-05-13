@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=too-many-lines
-""" QuantizationSimModel interface """
+"""QuantizationSimModel interface"""
+
 from abc import ABC, abstractmethod
 from itertools import chain
 import os
@@ -66,10 +67,27 @@ import onnx
 from packaging import version
 from safetensors.numpy import save_file as save_safetensor_file
 
-from aimet_common.utils import AimetLogger, save_json_yaml, log_with_error_and_assert_if_false, Handle
-from aimet_common.defs import QuantScheme, QuantizationDataType, SupportedKernelsAction, QuantDtypeBwInfo
-from aimet_common.quantsim import validate_quantsim_inputs, extract_global_quantizer_args, VALID_ENCODING_VERSIONS
-from aimet_common.quantsim_config.quantsim_config import _get_config_file, _config_file_aliases
+from aimet_common.utils import (
+    AimetLogger,
+    save_json_yaml,
+    log_with_error_and_assert_if_false,
+    Handle,
+)
+from aimet_common.defs import (
+    QuantScheme,
+    QuantizationDataType,
+    SupportedKernelsAction,
+    QuantDtypeBwInfo,
+)
+from aimet_common.quantsim import (
+    validate_quantsim_inputs,
+    extract_global_quantizer_args,
+    VALID_ENCODING_VERSIONS,
+)
+from aimet_common.quantsim_config.quantsim_config import (
+    _get_config_file,
+    _config_file_aliases,
+)
 from aimet_common.quant_utils import get_conv_accum_bounds
 from aimet_common.utils import deprecated, _red
 from aimet_common import quantsim
@@ -79,11 +97,7 @@ from aimet_torch.meta.connectedgraph import ConnectedGraph, Op
 from aimet_torch._base.nn.modules.custom import Outer
 from aimet_torch.quantsim_config.quantsim_config import QuantSimConfigurator
 from aimet_torch._base.nn.modules.custom import MatMul, Cast
-from aimet_torch.onnx_utils import (
-    OnnxSaver,
-    OnnxExportApiArgs,
-    CustomMarker
-)
+from aimet_torch.onnx_utils import OnnxSaver, OnnxExportApiArgs, CustomMarker
 from aimet_torch.experimental.v2.quantsim.export_utils import _export_to_1_0_0
 
 if TYPE_CHECKING:
@@ -97,9 +111,7 @@ SKIP_TORCH_ENCODINGS_EXPORT = False
 
 SUPPORTED_KERNELS_ACTION = SupportedKernelsAction.warn_on_error
 
-unquantizable_modules = (
-    torch.nn.Identity,
-)
+unquantizable_modules = (torch.nn.Identity,)
 
 
 class QuantParams:
@@ -107,12 +119,14 @@ class QuantParams:
     Data type to hold quantization related params.
     """
 
-    def __init__(self,
-                 weight_bw: int = 8,
-                 act_bw: int = 8,
-                 round_mode: str = 'nearest',
-                 quant_scheme: Union[QuantScheme, str] = QuantScheme.post_training_tf_enhanced,
-                 config_file: str = None):
+    def __init__(
+        self,
+        weight_bw: int = 8,
+        act_bw: int = 8,
+        round_mode: str = "nearest",
+        quant_scheme: Union[QuantScheme, str] = QuantScheme.post_training_tf_enhanced,
+        config_file: str = None,
+    ):
         """
         Constructor
 
@@ -149,6 +163,7 @@ class _QuantizedModuleProtocol(Protocol):
     """
     Defines the minimum interface requirements for exporting encodings from a module.
     """
+
     input_quantizers: List[_QuantizerProtocol]
     output_quantizers: List[_QuantizerProtocol]
     param_quantizers: Dict[str, _QuantizerProtocol]
@@ -168,12 +183,14 @@ class _QuantizedModuleProtocol(Protocol):
         Returns a dict of {param name: param encodings}, with each encoding represented as a List of Dicts
         """
 
-    def import_input_encodings(self,
-                               encodings: Mapping[str, Mapping],
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_input_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import input encodings represented in below format:
         {
@@ -183,12 +200,14 @@ class _QuantizedModuleProtocol(Protocol):
         }
         """
 
-    def import_output_encodings(self,
-                                encodings: Mapping[str, Mapping],
-                                strict: bool,
-                                partial: bool,
-                                requires_grad: Optional[bool],
-                                allow_overwrite: bool):
+    def import_output_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import output encodings represented in below format:
         {
@@ -198,12 +217,14 @@ class _QuantizedModuleProtocol(Protocol):
         }
         """
 
-    def import_param_encodings(self,
-                               encodings: Mapping[str, Mapping],
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_param_encodings(
+        self,
+        encodings: Mapping[str, Mapping],
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Import parameter encodings represented in below format:
         {
@@ -226,25 +247,23 @@ class _QuantizationSimModelInterface(ABC):
     model: torch.nn.Module
 
     @abstractmethod
-    def compute_encodings(self, *args, **kwargs): # pylint: disable=missing-function-docstring
+    def compute_encodings(self, *args, **kwargs):  # pylint: disable=missing-function-docstring
         ...
 
     @abstractmethod
-    def export(self, *args, **kwargs): # pylint: disable=missing-function-docstring
+    def export(self, *args, **kwargs):  # pylint: disable=missing-function-docstring
         ...
 
     @abstractmethod
-    def load_encodings(self, *args, **kwargs): # pylint: disable=missing-function-docstring
+    def load_encodings(self, *args, **kwargs):  # pylint: disable=missing-function-docstring
         ...
 
     @abstractmethod
     def named_qmodules(self) -> Iterable[Tuple[str, torch.nn.Module]]:
-        """Generator that yields all quantized modules in the model and their names
-        """
+        """Generator that yields all quantized modules in the model and their names"""
 
     def qmodules(self) -> Iterable[torch.nn.Module]:
-        """Generator that yields all quantized modules in the model
-        """
+        """Generator that yields all quantized modules in the model"""
         yield from (module for _, module in self.named_qmodules())
 
 
@@ -266,27 +285,39 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
     :param in_place: If True, then the given 'model' is modified in-place to add quant-sim nodes.
             Only suggested use of this option is when the user wants to avoid creating a copy of the model
     :param config_file: File path or alias of the configuration file.
-                        Alias can be one of {{ {', '.join(_config_file_aliases.keys())} }} (Default: `"default"`)
+                        Alias can be one of {{ {", ".join(_config_file_aliases.keys())} }} (Default: `"default"`)
     :param default_data_type: Default data type to use for quantizing all inputs, outputs and parameters.
                              unless otherwise specified in the config file.
                              Possible options are QuantizationDataType.int and QuantizationDataType.float.
                              Note that the mode default_data_type=QuantizationDataType.float is only supported with
                              default_output_bw=16 or 32 and default_param_bw=16 or 32.
     """
-    def __init__(self, model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple],
-                 quant_scheme: Union[str, QuantScheme] = QuantScheme.post_training_tf_enhanced,
-                 rounding_mode: str = 'nearest', default_output_bw: int = 8, default_param_bw: int = 8,
-                 in_place: bool = False, config_file: str = None,
-                 default_data_type: QuantizationDataType = QuantizationDataType.int):
 
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        quant_scheme: Union[str, QuantScheme] = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        default_output_bw: int = 8,
+        default_param_bw: int = 8,
+        in_place: bool = False,
+        config_file: str = None,
+        default_data_type: QuantizationDataType = QuantizationDataType.int,
+    ):
         config_file = _get_config_file(config_file)
 
         if not isinstance(dummy_input, (tuple, list)):
             dummy_input = (dummy_input,)
 
         # Perform sanity checks on inputs
-        validate_quantsim_inputs(quant_scheme, rounding_mode, default_output_bw, default_param_bw,
-                                 default_data_type)
+        validate_quantsim_inputs(
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+        )
 
         # Assert dummy input is traceable by torch.jit.trace
         _assert_jit_traceable(model, dummy_input)
@@ -312,7 +343,7 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         self._config_file = config_file
         self._is_conditional = False
         self._module_marker_map = {}
-        self._percentile_value = 100 # default percentile value
+        self._percentile_value = 100  # default percentile value
         self._excluded_layer_names = []
 
         inout_tensor_shapes = {}
@@ -320,8 +351,12 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         inout_tensors_dtypes_for_cast_ops = {}
 
         def record_metadata(module, inputs, outputs):
-            input_shapes = tree_map(lambda x: x.shape if isinstance(x, torch.Tensor) else None, inputs)
-            output_shapes = tree_map(lambda x: x.shape if isinstance(x, torch.Tensor) else None, outputs)
+            input_shapes = tree_map(
+                lambda x: x.shape if isinstance(x, torch.Tensor) else None, inputs
+            )
+            output_shapes = tree_map(
+                lambda x: x.shape if isinstance(x, torch.Tensor) else None, outputs
+            )
 
             if output_shapes is None or isinstance(output_shapes, torch.Size):
                 output_shapes = (output_shapes,)
@@ -330,8 +365,8 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             num_inout_tensors[module] = (len(input_shapes), len(output_shapes))
 
             if isinstance(module, Cast):
-                inp, = inputs
-                out, = outputs
+                (inp,) = inputs
+                (out,) = outputs
                 inout_tensors_dtypes_for_cast_ops[module] = (inp.dtype, out.dtype)
 
         handles = []
@@ -345,17 +380,24 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 handle.remove()
 
         # Add quantization layers
-        self._add_quantization_wrappers(self.model, num_inout_tensors, default_data_type)
+        self._add_quantization_wrappers(
+            self.model, num_inout_tensors, default_data_type
+        )
 
         # Disable bias quantization
         self.exclude_param_from_quantization("bias")
 
-        quantsim_configurator = self.configure_quantization_ops(config_file, default_output_bw, default_param_bw,
-                                                                default_data_type)
+        quantsim_configurator = self.configure_quantization_ops(
+            config_file, default_output_bw, default_param_bw, default_data_type
+        )
 
-        self.quant_args = extract_global_quantizer_args(quant_scheme, quantsim_configurator)
+        self.quant_args = extract_global_quantizer_args(
+            quant_scheme, quantsim_configurator
+        )
 
-        self._enable_output_quantizers_for_specific_cast_ops(inout_tensors_dtypes_for_cast_ops)
+        self._enable_output_quantizers_for_specific_cast_ops(
+            inout_tensors_dtypes_for_cast_ops
+        )
 
         # pylint: disable=protected-access
         self._hw_version = quantsim_configurator._get_hw_version()
@@ -384,8 +426,9 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         """
 
     @abstractmethod
-    def _add_quantization_wrappers(self, module, num_inout_tensors, default_data_type: QuantizationDataType):
-        ...
+    def _add_quantization_wrappers(
+        self, module, num_inout_tensors, default_data_type: QuantizationDataType
+    ): ...
 
     def exclude_param_from_quantization(self, param_name_to_exclude: str):
         """
@@ -402,8 +445,13 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             if qtzr:
                 qmodule.param_quantizers[param_name_to_exclude].enabled = False
 
-    def configure_quantization_ops(self, config_file: str, default_output_bw: int, default_param_bw: int,
-                                   default_data_type: QuantizationDataType) -> QuantSimConfigurator:
+    def configure_quantization_ops(
+        self,
+        config_file: str,
+        default_output_bw: int,
+        default_param_bw: int,
+        default_data_type: QuantizationDataType,
+    ) -> QuantSimConfigurator:
         """
         Configure inserted quantize ops using config file and fill in all the supported kernels
         :param config_file: Configuration file to use
@@ -413,44 +461,74 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :return: QuantSimConfigurator object
         """
         if self.connected_graph is None:
-            error_msg = ('A connected graph failed to be built.\n'
-                         'Unable to proceed with automatically configuring quantization ops using the config file.\n'
-                         'Please configure quantization ops manually by redefining '
-                         'QuantizationSimModel.configure_quantization_ops()')
+            error_msg = (
+                "A connected graph failed to be built.\n"
+                "Unable to proceed with automatically configuring quantization ops using the config file.\n"
+                "Please configure quantization ops manually by redefining "
+                "QuantizationSimModel.configure_quantization_ops()"
+            )
             logger.error(error_msg)
             raise AssertionError(error_msg)
-        return QuantSimConfigurator(self.model, self.connected_graph, config_file, default_output_bw,
-                                    default_param_bw, default_data_type)
+        return QuantSimConfigurator(
+            self.model,
+            self.connected_graph,
+            config_file,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+        )
 
-    def _enable_output_quantizers_for_specific_cast_ops(self, inout_tensors_dtypes: Dict[torch.nn.Module, Tuple[torch.dtype, torch.dtype]]):
+    def _enable_output_quantizers_for_specific_cast_ops(
+        self,
+        inout_tensors_dtypes: Dict[torch.nn.Module, Tuple[torch.dtype, torch.dtype]],
+    ):
         """
         Enable output quantizer for Cast Ops where datatype of input tensor is int/bool
         and data type of output tensor is float.
         """
         # pylint: disable=protected-access
-        model_prefix = self.connected_graph._model_name + '.'
-        torch_int_dtypes = {torch.int8, torch.int16, torch.int32, torch.int64, torch.bool, torch.uint8}
+        model_prefix = self.connected_graph._model_name + "."
+        torch_int_dtypes = {
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+            torch.bool,
+            torch.uint8,
+        }
         torch_float_dtypes = {torch.float16, torch.float32, torch.float64}
 
         for module, inout_dtypes in inout_tensors_dtypes.items():
             input_tensor_dtype = inout_dtypes[0]
             output_tensor_dtype = inout_dtypes[1]
             # pylint: disable=protected-access
-            module_name = self.connected_graph._module_to_name[module].split(model_prefix)[-1]
+            module_name = self.connected_graph._module_to_name[module].split(
+                model_prefix
+            )[-1]
 
-            if input_tensor_dtype != output_tensor_dtype and input_tensor_dtype in torch_int_dtypes and output_tensor_dtype in torch_float_dtypes:
+            if (
+                input_tensor_dtype != output_tensor_dtype
+                and input_tensor_dtype in torch_int_dtypes
+                and output_tensor_dtype in torch_float_dtypes
+            ):
                 logger.info("Enabling output quantizer for module %s", module_name)
                 wrapped_module = getattr(self.model, module_name)
                 for output_quantizer in wrapped_module.output_quantizers:
-                    setattr(output_quantizer, 'enabled', True)
+                    setattr(output_quantizer, "enabled", True)
 
-    def _validate_supported_kernels_for_quantizers(self, action: SupportedKernelsAction):
+    def _validate_supported_kernels_for_quantizers(
+        self, action: SupportedKernelsAction
+    ):
         """
         Validate supported kernels for all the Quantizers in the QuantSimModel
         :param action: The action to be performed when incorrect candidate is set in a quantizer
         """
 
-        def apply_act_param_rules(curr_candidate: QuantDtypeBwInfo, allowed_supported_kernels: List[QuantDtypeBwInfo], module_name):
+        def apply_act_param_rules(
+            curr_candidate: QuantDtypeBwInfo,
+            allowed_supported_kernels: List[QuantDtypeBwInfo],
+            module_name,
+        ):
             """
             helper function to validate both activation and param against the supported_kernels passed
             :param curr_candidate: candidate of interest
@@ -463,14 +541,21 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                         return
 
                 if action == SupportedKernelsAction.warn_on_error:
-                    logger.warning("candidate:%s is not under the supported_kernels for the module %s", curr_candidate,
-                                   module_name)
+                    logger.warning(
+                        "candidate:%s is not under the supported_kernels for the module %s",
+                        curr_candidate,
+                        module_name,
+                    )
 
                 if action == SupportedKernelsAction.assert_on_error:
-                    error_msg = f'candidate: {curr_candidate} is not under the supported_kernels for the module {module_name}'
+                    error_msg = f"candidate: {curr_candidate} is not under the supported_kernels for the module {module_name}"
                     raise RuntimeError(error_msg)
 
-        def apply_act_rules(act: Tuple[int, QuantizationDataType], allowed_supported_kernels: List[QuantDtypeBwInfo], module_name):
+        def apply_act_rules(
+            act: Tuple[int, QuantizationDataType],
+            allowed_supported_kernels: List[QuantDtypeBwInfo],
+            module_name,
+        ):
             """
             helper function to validate both activation only against the supported_kernels passed
             :param act: act of the candidate to be validated
@@ -483,44 +568,63 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                         return
 
                 if action == SupportedKernelsAction.warn_on_error:
-                    logger.warning("activation:%s is not under the supported_kernels for the module %s", act, module_name)
+                    logger.warning(
+                        "activation:%s is not under the supported_kernels for the module %s",
+                        act,
+                        module_name,
+                    )
 
                 if action == SupportedKernelsAction.assert_on_error:
-                    error_msg = f'activation: {act} is not under the supported_kernels for the module {module_name}'
+                    error_msg = f"activation: {act} is not under the supported_kernels for the module {module_name}"
                     raise RuntimeError(error_msg)
 
         # retrieve all the act and param quantizer candidates, and validate them against supported_kernels
         for name, module in self.named_qmodules():
-            if getattr(module, 'supported_kernels', False):
+            if getattr(module, "supported_kernels", False):
                 supported_kernels = []
                 for supported_kernel in module.supported_kernels:
                     # ((activation bitwidth, activation data type), (param bitwidth, param data type))
                     # TODO modify this once reformat_supported_kernels generates of type QuantDtypeBwInfo
                     if isinstance(supported_kernel[1], tuple):
                         supported_kernels.append(
-                            QuantDtypeBwInfo(supported_kernel[0][1], supported_kernel[0][0],
-                                             supported_kernel[1][1], supported_kernel[1][0]))
+                            QuantDtypeBwInfo(
+                                supported_kernel[0][1],
+                                supported_kernel[0][0],
+                                supported_kernel[1][1],
+                                supported_kernel[1][0],
+                            )
+                        )
                     else:
                         supported_kernels.append(
-                            QuantDtypeBwInfo(supported_kernel[1], supported_kernel[0]))
+                            QuantDtypeBwInfo(supported_kernel[1], supported_kernel[0])
+                        )
                 act_candidates = []
                 param_candidate = ()
                 for quantizer in module.input_quantizers + module.output_quantizers:
                     act_candidates.append((quantizer.bitwidth, quantizer.data_type))
 
-                if 'weight' in module.param_quantizers:
-                    param_candidate = (module.param_quantizers['weight'].bitwidth,
-                                       module.param_quantizers['weight'].data_type)
+                if "weight" in module.param_quantizers:
+                    param_candidate = (
+                        module.param_quantizers["weight"].bitwidth,
+                        module.param_quantizers["weight"].data_type,
+                    )
 
                 if param_candidate:
                     # we need to check weights against all the activations
                     for act_candidate in set(act_candidates):
-                        apply_act_param_rules(QuantDtypeBwInfo(act_candidate[1], act_candidate[0], param_candidate[1],
-                                                               param_candidate[0]), supported_kernels, name)
+                        apply_act_param_rules(
+                            QuantDtypeBwInfo(
+                                act_candidate[1],
+                                act_candidate[0],
+                                param_candidate[1],
+                                param_candidate[0],
+                            ),
+                            supported_kernels,
+                            name,
+                        )
                 else:
                     for candidate in set(act_candidates):
                         apply_act_rules(candidate, supported_kernels, name)
-
 
     # pylint: disable=protected-access, too-many-branches, too-many-locals, import-outside-toplevel
     def _apply_exception_rules(self):
@@ -537,22 +641,34 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             original_module = wrapper.get_original_module()
 
             if isinstance(original_module, torch.nn.Embedding):
-                if self._hw_version is None or self._hw_version in {'V66', 'V68', 'V69'}:
+                if self._hw_version is None or self._hw_version in {
+                    "V66",
+                    "V68",
+                    "V69",
+                }:
                     continue
-                weight_quantizer = wrapper.param_quantizers['weight']
+                weight_quantizer = wrapper.param_quantizers["weight"]
                 output_quantizer = wrapper.output_quantizers[0]
 
                 weight_quantizer.bitwidth = output_quantizer.bitwidth
-                weight_quantizer.use_symmetric_encodings = output_quantizer.use_symmetric_encodings
+                weight_quantizer.use_symmetric_encodings = (
+                    output_quantizer.use_symmetric_encodings
+                )
 
             elif isinstance(original_module, torch.nn.GroupNorm):
-                if self._hw_version is None or self._hw_version in {'V66', 'V68', 'V69'}:
+                if self._hw_version is None or self._hw_version in {
+                    "V66",
+                    "V68",
+                    "V69",
+                }:
                     continue
-                if 'weight' in wrapper.param_quantizers:
+                if "weight" in wrapper.param_quantizers:
                     output_quantizer = wrapper.output_quantizers[0]
                     for _, param_quantizer in wrapper.param_quantizers.items():
                         param_quantizer.bitwidth = output_quantizer.bitwidth
-                        param_quantizer.use_symmetric_encodings = output_quantizer.use_symmetric_encodings
+                        param_quantizer.use_symmetric_encodings = (
+                            output_quantizer.use_symmetric_encodings
+                        )
 
             elif isinstance(original_module, (MatMul, Outer)):
                 # Skip unused modules
@@ -562,18 +678,32 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 first_input_quantizer, second_input_quantizer = wrapper.input_quantizers
 
                 op = self.connected_graph._module_to_op_dict[original_module]
-                first_input_op = op.inputs[0].producer if (not first_input_quantizer.enabled) else None
-                second_input_op = op.inputs[1].producer if (not second_input_quantizer.enabled) else None
+                first_input_op = (
+                    op.inputs[0].producer
+                    if (not first_input_quantizer.enabled)
+                    else None
+                )
+                second_input_op = (
+                    op.inputs[1].producer
+                    if (not second_input_quantizer.enabled)
+                    else None
+                )
 
-                target_quantizer_for_first_input = self._get_target_quantizer(first_input_quantizer, first_input_op)
-                target_quantizer_for_second_input = self._get_target_quantizer(second_input_quantizer, second_input_op)
+                target_quantizer_for_first_input = self._get_target_quantizer(
+                    first_input_quantizer, first_input_op
+                )
+                target_quantizer_for_second_input = self._get_target_quantizer(
+                    second_input_quantizer, second_input_op
+                )
 
                 # We don't need to apply exception rule when both first and second inputs are FP quantization
                 if (
                     target_quantizer_for_first_input
-                    and target_quantizer_for_first_input.data_type == QuantizationDataType.float
+                    and target_quantizer_for_first_input.data_type
+                    == QuantizationDataType.float
                     and target_quantizer_for_second_input
-                    and target_quantizer_for_second_input.data_type == QuantizationDataType.float
+                    and target_quantizer_for_second_input.data_type
+                    == QuantizationDataType.float
                 ):
                     continue
 
@@ -587,22 +717,33 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 # If version is lesser than V73: {input0->8, input1->8 symmetric} {input0->16, input1->8 symmetric}
                 if self._hw_version is None:
                     continue
-                if self._hw_version in {'V66', 'V68', 'V69'}:
+                if self._hw_version in {"V66", "V68", "V69"}:
                     if target_quantizer_for_second_input is None:
-                        logger.warning("The target quantizer for second input could not be found. MatMul exception rule does not apply for layer: %s. "
-                                       "If you haven't used model preparer, consider using it.", str(original_module))
+                        logger.warning(
+                            "The target quantizer for second input could not be found. MatMul exception rule does not apply for layer: %s. "
+                            "If you haven't used model preparer, consider using it.",
+                            str(original_module),
+                        )
                     else:
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_second_input.bitwidth = 8
                 else:
-                    if target_quantizer_for_first_input is None or target_quantizer_for_second_input is None:
-                        logger.warning("The target quantizers could not be found. MatMul exception rule does not apply for layer: %s. "
-                                       "If you haven't used model preparer, consider using it.", str(original_module))
+                    if (
+                        target_quantizer_for_first_input is None
+                        or target_quantizer_for_second_input is None
+                    ):
+                        logger.warning(
+                            "The target quantizers could not be found. MatMul exception rule does not apply for layer: %s. "
+                            "If you haven't used model preparer, consider using it.",
+                            str(original_module),
+                        )
                     elif target_quantizer_for_second_input.bitwidth == 16:
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_first_input.bitwidth = 16
 
-    def _get_target_quantizer(self, input_quantizer: _QuantizerProtocol, input_op: Op) -> _QuantizerProtocol:
+    def _get_target_quantizer(
+        self, input_quantizer: _QuantizerProtocol, input_op: Op
+    ) -> _QuantizerProtocol:
         """
         Returns input quantizer if enabled otherwise returns closest enabled parent output quantizer.
 
@@ -616,15 +757,21 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         elif input_op:
             closest_producer_wrapper = self._get_closest_producer_wrapper(input_op)
             if closest_producer_wrapper:
-                target_quantizer = closest_producer_wrapper.output_quantizers[0] \
-                        if closest_producer_wrapper.output_quantizers[0] else closest_producer_wrapper.input_quantizers[0]
+                target_quantizer = (
+                    closest_producer_wrapper.output_quantizers[0]
+                    if closest_producer_wrapper.output_quantizers[0]
+                    else closest_producer_wrapper.input_quantizers[0]
+                )
             else:
-                logger.warning("The closest wrapper could not be found. MatMul exception rule does not apply. "
-                               "If you haven't used model preparer, consider using it.")
+                logger.warning(
+                    "The closest wrapper could not be found. MatMul exception rule does not apply. "
+                    "If you haven't used model preparer, consider using it."
+                )
         return target_quantizer
 
-
-    def _get_closest_producer_wrapper(self, op: Op) -> Optional[_QuantizedModuleProtocol]:
+    def _get_closest_producer_wrapper(
+        self, op: Op
+    ) -> Optional[_QuantizedModuleProtocol]:
         """
         Find the closest producer QcQuantizeWrapper and return it
 
@@ -633,23 +780,33 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         """
         wrapper = self._get_qmodule(op)
         if wrapper:
-            if wrapper.output_quantizers[0].enabled or wrapper.input_quantizers[0].enabled:
+            if (
+                wrapper.output_quantizers[0].enabled
+                or wrapper.input_quantizers[0].enabled
+            ):
                 return wrapper
 
             if len(op.input_ops) == 1:
                 return self._get_closest_producer_wrapper(op.input_ops[0])
 
-            logger.warning("A wrapper of %s with output quantization disabled has no input or more than one input "
-                           "exists. It's ambiguous to find the nearest producer in this case", str(op.get_module()))
+            logger.warning(
+                "A wrapper of %s with output quantization disabled has no input or more than one input "
+                "exists. It's ambiguous to find the nearest producer in this case",
+                str(op.get_module()),
+            )
             return None
 
         if not op.input_ops:
-            logger.warning("No input exists for navigation for traversal, it's not possible to find the closest producer")
+            logger.warning(
+                "No input exists for navigation for traversal, it's not possible to find the closest producer"
+            )
             return None
 
         if len(op.input_ops) > 1:
-            logger.warning("Multiple input ops exist, traversal to find closest producer is performed based on the "
-                           "first input")
+            logger.warning(
+                "Multiple input ops exist, traversal to find closest producer is performed based on the "
+                "first input"
+            )
 
         return self._get_closest_producer_wrapper(op.input_ops[0])
 
@@ -658,20 +815,29 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         if not orig_module:
             return None
 
-        full_name = self.connected_graph._module_to_name[orig_module] # pylint: disable=protected-access
-        _, *module_names = full_name.split('.')
+        full_name = self.connected_graph._module_to_name[orig_module]  # pylint: disable=protected-access
+        _, *module_names = full_name.split(".")
 
         if not module_names:
             return None
 
-        module_name = '.'.join(module_names)
+        module_name = ".".join(module_names)
         return self.model.get_submodule(module_name)
 
+    # pylint: disable=arguments-differ
     @torch.no_grad()
-    def export(self, path: str, filename_prefix: str, dummy_input: Union[torch.Tensor, Tuple], # pylint: disable=arguments-differ
-               onnx_export_args: Optional[Union[OnnxExportApiArgs, Dict]] = None, propagate_encodings: bool = False,
-               export_to_torchscript: bool = False, use_embedded_encodings: bool = False, export_model: bool = True,
-               filename_prefix_encodings: str = None):
+    def export(
+        self,
+        path: str,
+        filename_prefix: str,
+        dummy_input: Union[torch.Tensor, Tuple],
+        onnx_export_args: Optional[Union[OnnxExportApiArgs, Dict]] = None,
+        propagate_encodings: bool = False,
+        export_to_torchscript: bool = False,
+        use_embedded_encodings: bool = False,
+        export_model: bool = True,
+        filename_prefix_encodings: str = None,
+    ):
         """
         This method exports out the quant-sim model so it is ready to be run on-target.
 
@@ -702,27 +868,32 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param filename_prefix_encodings: File name prefix to be used when saving encodings.
                                           If None, then user defaults to filename_prefix value
         """
-        if propagate_encodings and quantsim.encoding_version != '0.6.1':
-            raise RuntimeError(f'Encoding version {quantsim.encoding_version} is not supported when propagate_encodings is True. To continue using '
-                               'propagate_encodings, fall back to encoding_version 0.6.1 by running the following:\n'
-                               'from aimet_common import quantsim\n'
-                               'quantsim.encoding_version = "0.6.1"'
-                               )
+        if propagate_encodings and quantsim.encoding_version != "0.6.1":
+            raise RuntimeError(
+                f"Encoding version {quantsim.encoding_version} is not supported when propagate_encodings is True. To continue using "
+                "propagate_encodings, fall back to encoding_version 0.6.1 by running the following:\n"
+                "from aimet_common import quantsim\n"
+                'quantsim.encoding_version = "0.6.1"'
+            )
 
-        if quantsim.encoding_version == '0.6.1' and not propagate_encodings:
-            msg = _red("Encoding version 0.6.1 was deprecated in favor of 1.0.0 since aimet-torch==2.1. "
-                       "If your code depends on parsing the exported encodings file, ensure that it is "
-                       "updated to be able to parse 1.0.0 format")
+        if quantsim.encoding_version == "0.6.1" and not propagate_encodings:
+            msg = _red(
+                "Encoding version 0.6.1 was deprecated in favor of 1.0.0 since aimet-torch==2.1. "
+                "If your code depends on parsing the exported encodings file, ensure that it is "
+                "updated to be able to parse 1.0.0 format"
+            )
             warnings.warn(msg, DeprecationWarning, stacklevel=2)
 
         if not filename_prefix_encodings:
             filename_prefix_encodings = filename_prefix
 
         if quantsim.encoding_version not in VALID_ENCODING_VERSIONS:
-            raise NotImplementedError(f'Encoding version {quantsim.encoding_version} not in set of valid encoding '
-                                      f'versions {VALID_ENCODING_VERSIONS}.')
+            raise NotImplementedError(
+                f"Encoding version {quantsim.encoding_version} not in set of valid encoding "
+                f"versions {VALID_ENCODING_VERSIONS}."
+            )
         # save the quantized model and encodings
-        model_filename = filename_prefix + '.pth'
+        model_filename = filename_prefix + ".pth"
         model_path = os.path.join(path, model_filename)
 
         # Create a version of the model without any quantization ops
@@ -731,47 +902,84 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         torch.save(model_to_export, model_path)
 
         if onnx_export_args is None:
-            onnx_export_args = {'opset_version': None,
-                                'input_names': None,
-                                'output_names': None}
-            if version.parse(torch.__version__) < version.parse("1.10.0") and isinstance(onnx_export_args, dict):
-                onnx_export_args['enable_onnx_checker'] = False
-        log_with_error_and_assert_if_false(isinstance(onnx_export_args, (OnnxExportApiArgs, dict)),
-                                           logger,
-                                           f'unsupported opt_args type={type(onnx_export_args)}')
+            onnx_export_args = {
+                "opset_version": None,
+                "input_names": None,
+                "output_names": None,
+            }
+            if version.parse(torch.__version__) < version.parse(
+                "1.10.0"
+            ) and isinstance(onnx_export_args, dict):
+                onnx_export_args["enable_onnx_checker"] = False
+        log_with_error_and_assert_if_false(
+            isinstance(onnx_export_args, (OnnxExportApiArgs, dict)),
+            logger,
+            f"unsupported opt_args type={type(onnx_export_args)}",
+        )
 
         if use_embedded_encodings:
-            self.save_model_with_embedded_quantization_nodes(self.model, path, filename_prefix, dummy_input,
-                                                             onnx_export_args, export_to_torchscript, self._is_conditional)
+            self.save_model_with_embedded_quantization_nodes(
+                self.model,
+                path,
+                filename_prefix,
+                dummy_input,
+                onnx_export_args,
+                export_to_torchscript,
+                self._is_conditional,
+            )
         else:
             if export_to_torchscript:
-                self.export_torch_script_model_and_encodings(path, filename_prefix, filename_prefix_encodings,
-                                                             model_to_export, self.model,
-                                                             dummy_input,
-                                                             self._excluded_layer_names)
+                self.export_torch_script_model_and_encodings(
+                    path,
+                    filename_prefix,
+                    filename_prefix_encodings,
+                    model_to_export,
+                    self.model,
+                    dummy_input,
+                    self._excluded_layer_names,
+                )
             else:
-                self.export_onnx_model_and_encodings(path, filename_prefix, model_to_export, self.model,
-                                                     dummy_input, onnx_export_args, propagate_encodings,
-                                                     self._module_marker_map, self._is_conditional,
-                                                     self._excluded_layer_names, quantizer_args=self.quant_args,
-                                                     export_model=export_model,
-                                                     filename_prefix_encodings=filename_prefix_encodings)
+                self.export_onnx_model_and_encodings(
+                    path,
+                    filename_prefix,
+                    model_to_export,
+                    self.model,
+                    dummy_input,
+                    onnx_export_args,
+                    propagate_encodings,
+                    self._module_marker_map,
+                    self._is_conditional,
+                    self._excluded_layer_names,
+                    quantizer_args=self.quant_args,
+                    export_model=export_model,
+                    filename_prefix_encodings=filename_prefix_encodings,
+                )
 
     # pylint: disable=missing-function-docstring
     @classmethod
     @abstractmethod
-    def save_model_with_embedded_quantization_nodes(cls, sim_model, path: str, filename_prefix: str, dummy_input: Union[torch.Tensor, Tuple],
-                                                    onnx_export_args: Optional[Union[OnnxExportApiArgs, Dict]] = None,
-                                                    export_to_torchscript: bool = False, is_conditional: bool = False):
-        ...
+    def save_model_with_embedded_quantization_nodes(
+        cls,
+        sim_model,
+        path: str,
+        filename_prefix: str,
+        dummy_input: Union[torch.Tensor, Tuple],
+        onnx_export_args: Optional[Union[OnnxExportApiArgs, Dict]] = None,
+        export_to_torchscript: bool = False,
+        is_conditional: bool = False,
+    ): ...
 
     @classmethod
-    def export_torch_script_model_and_encodings(cls, path: str, filename_prefix: str,
-                                                filename_prefix_encodings: str,
-                                                original_model: torch.nn.Module,
-                                                sim_model: torch.nn.Module,
-                                                dummy_input: Union[torch.Tensor, Tuple],
-                                                excluded_layer_names: List = None):
+    def export_torch_script_model_and_encodings(
+        cls,
+        path: str,
+        filename_prefix: str,
+        filename_prefix_encodings: str,
+        original_model: torch.nn.Module,
+        sim_model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        excluded_layer_names: List = None,
+    ):
         """
         This method exports a torchscript mode and the corresponding encodings
 
@@ -785,27 +993,47 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :return: None
         """
         # Create torchscript model and obtain node to i/o tensor name map
-        ts_path = os.path.join(path, filename_prefix + '.torchscript.pth')
+        ts_path = os.path.join(path, filename_prefix + ".torchscript.pth")
         with utils.in_eval_mode(original_model), torch.no_grad():
-            torchscript_utils.create_torch_script_model(ts_path, original_model, dummy_input)
+            torchscript_utils.create_torch_script_model(
+                ts_path, original_model, dummy_input
+            )
 
             trace = torch.jit.load(ts_path)
-            torch_script_node_io_tensor_map, valid_param_set = \
-                torchscript_utils.get_node_to_io_tensor_names_map(original_model, trace, dummy_input)
+            torch_script_node_io_tensor_map, valid_param_set = (
+                torchscript_utils.get_node_to_io_tensor_names_map(
+                    original_model, trace, dummy_input
+                )
+            )
 
         # Export encodings
-        cls._export_encodings_to_files(sim_model, path, filename_prefix_encodings,
-                                       torch_script_node_io_tensor_map, valid_param_set,
-                                       excluded_layer_names, propagate_encodings=False)
+        cls._export_encodings_to_files(
+            sim_model,
+            path,
+            filename_prefix_encodings,
+            torch_script_node_io_tensor_map,
+            valid_param_set,
+            excluded_layer_names,
+            propagate_encodings=False,
+        )
 
     @classmethod
-    def export_onnx_model_and_encodings(cls, path: str, filename_prefix: str, original_model: torch.nn.Module,
-                                        sim_model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple],
-                                        onnx_export_args: Union[OnnxExportApiArgs, dict], propagate_encodings: bool,
-                                        module_marker_map: Dict[torch.nn.Module, torch.Tensor] = None,
-                                        is_conditional: bool = False, excluded_layer_names: List = None,
-                                        quantizer_args: Dict = None, export_model: bool = True,
-                                        filename_prefix_encodings: str = None):
+    def export_onnx_model_and_encodings(
+        cls,
+        path: str,
+        filename_prefix: str,
+        original_model: torch.nn.Module,
+        sim_model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        onnx_export_args: Union[OnnxExportApiArgs, dict],
+        propagate_encodings: bool,
+        module_marker_map: Dict[torch.nn.Module, torch.Tensor] = None,
+        is_conditional: bool = False,
+        excluded_layer_names: List = None,
+        quantizer_args: Dict = None,
+        export_model: bool = True,
+        filename_prefix_encodings: str = None,
+    ):
         """
         This method exports a onnx model and the corresponding encodings
 
@@ -832,21 +1060,37 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         # pylint: disable=too-many-locals
         if not filename_prefix_encodings:
             filename_prefix_encodings = filename_prefix
-        onnx_path = os.path.join(path, filename_prefix + '.onnx')
+        onnx_path = os.path.join(path, filename_prefix + ".onnx")
         if export_model:
-            OnnxSaver.create_onnx_model_with_pytorch_layer_names(onnx_path, original_model, dummy_input, is_conditional,
-                                                                 module_marker_map, onnx_export_args)
+            OnnxSaver.create_onnx_model_with_pytorch_layer_names(
+                onnx_path,
+                original_model,
+                dummy_input,
+                is_conditional,
+                module_marker_map,
+                onnx_export_args,
+            )
 
-        assert os.path.exists(onnx_path), 'The onnx model does not exist in the location specified. Please re-run export' \
-                                          'with export_model flag as True or check path/file_name'
+        assert os.path.exists(onnx_path), (
+            "The onnx model does not exist in the location specified. Please re-run export"
+            "with export_model flag as True or check path/file_name"
+        )
         onnx_model = onnx.load(onnx_path)
-        onnx_node_to_io_tensor_map, valid_param_set = OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+        onnx_node_to_io_tensor_map, valid_param_set = (
+            OnnxSaver.get_onnx_node_to_io_tensor_names_map(onnx_model)
+        )
 
         # Export encodings
-        cls._export_encodings_to_files(sim_model, path, filename_prefix_encodings,
-                                       onnx_node_to_io_tensor_map, valid_param_set,
-                                       excluded_layer_names, propagate_encodings,
-                                       quantizer_args=quantizer_args)
+        cls._export_encodings_to_files(
+            sim_model,
+            path,
+            filename_prefix_encodings,
+            onnx_node_to_io_tensor_map,
+            valid_param_set,
+            excluded_layer_names,
+            propagate_encodings,
+            quantizer_args=quantizer_args,
+        )
 
     def export_weights_to_safetensors(self, path: str, filename_prefix: str):
         """
@@ -859,9 +1103,9 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         unwrapped_model = self.get_original_model(self.model)
         data = unwrapped_model.state_dict()
         data = {k: v.detach().cpu().numpy() for k, v in data.items()}
-        metadata = self.model.mpp_meta if hasattr(self.model, 'mpp_meta') else {}
+        metadata = self.model.mpp_meta if hasattr(self.model, "mpp_meta") else {}
 
-        file_path = os.path.join(path, filename_prefix + '.safetensors')
+        file_path = os.path.join(path, filename_prefix + ".safetensors")
         save_safetensor_file(data, file_path, metadata)
 
     def save_encodings_to_json(self, path: str, filename_prefix: str):
@@ -872,8 +1116,11 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param filename_prefix: Filename to use for saved file
         """
         activation_encodings, param_encodings = self.get_activation_param_encodings()
-        encodings_dict = {'activation_encodings': activation_encodings, 'param_encodings': param_encodings}
-        with open(os.path.join(path, filename_prefix + '.json'), 'w') as encoding_json:
+        encodings_dict = {
+            "activation_encodings": activation_encodings,
+            "param_encodings": param_encodings,
+        }
+        with open(os.path.join(path, filename_prefix + ".json"), "w") as encoding_json:
             json.dump(encodings_dict, encoding_json, sort_keys=True, indent=4)
 
     def get_activation_param_encodings(self):
@@ -891,32 +1138,40 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
 
             activation_encodings[module_name] = defaultdict(OrderedDict)
 
-            for i, encoding in enumerate(module.export_input_encodings(encoding_version='0.6.1')):
+            for i, encoding in enumerate(
+                module.export_input_encodings(encoding_version="0.6.1")
+            ):
                 if not encoding:
                     continue
                 if len(encoding) == 1:
                     encoding = encoding[0]
-                activation_encodings[module_name]['input'][i] = encoding
+                activation_encodings[module_name]["input"][i] = encoding
 
-            for i, encoding in enumerate(module.export_output_encodings(encoding_version='0.6.1')):
+            for i, encoding in enumerate(
+                module.export_output_encodings(encoding_version="0.6.1")
+            ):
                 if not encoding:
                     continue
                 if len(encoding) == 1:
                     encoding = encoding[0]
-                activation_encodings[module_name]['output'][i] = encoding
+                activation_encodings[module_name]["output"][i] = encoding
 
             if not activation_encodings[module_name]:
                 del activation_encodings[module_name]
 
-            for param_name, encoding in module.export_param_encodings(encoding_version='0.6.1').items():
+            for param_name, encoding in module.export_param_encodings(
+                encoding_version="0.6.1"
+            ).items():
                 if not encoding:
                     continue
-                param_encodings[f'{module_name}.{param_name}'] = encoding
+                param_encodings[f"{module_name}.{param_name}"] = encoding
 
         return activation_encodings, param_encodings
 
     @classmethod
-    def get_original_model(cls, model: torch.nn.Module, qdq_weights: bool = False) -> torch.nn.Module:
+    def get_original_model(
+        cls, model: torch.nn.Module, qdq_weights: bool = False
+    ) -> torch.nn.Module:
         """
         This function returns the model with all quantization wrappers removed.
 
@@ -934,17 +1189,19 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
 
     @classmethod
     @abstractmethod
-    def _remove_quantization_wrappers(cls, starting_module, list_of_modules_to_exclude):
-        ...
+    def _remove_quantization_wrappers(
+        cls, starting_module, list_of_modules_to_exclude
+    ): ...
 
     @classmethod
     @abstractmethod
-    def _apply_qdq_to_model_parameters(cls, model: torch.nn.Module):
-        ...
+    def _apply_qdq_to_model_parameters(cls, model: torch.nn.Module): ...
 
     _quantized_modules: Tuple[Type, ...]
 
-    def exclude_layers_from_quantization(self, layers_to_exclude: List[torch.nn.Module]):
+    def exclude_layers_from_quantization(
+        self, layers_to_exclude: List[torch.nn.Module]
+    ):
         """
         Excludes certain layers from being quantized-dequantized by the simulator
         :param layers_to_exclude: List of torch layers to exclude
@@ -964,10 +1221,13 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         self._remove_quantization_wrappers(self.model, quant_layers_to_exclude)
 
     @staticmethod
-    def _get_torch_encodings_for_missing_layers(layer: _QuantizedModuleProtocol, layer_name: str,# pylint: disable=too-many-branches
-                                                missing_activation_encodings_torch: Dict,
-                                                missing_param_encodings: Dict,
-                                                valid_param_set: set):
+    def _get_torch_encodings_for_missing_layers(
+        layer: _QuantizedModuleProtocol,
+        layer_name: str,  # pylint: disable=too-many-branches
+        missing_activation_encodings_torch: Dict,
+        missing_param_encodings: Dict,
+        valid_param_set: set,
+    ):
         """
         Add given layer param and activation encodings to respective dictionaries to be used for exporting torch encodings
         :param layer: layer as torch.nn.Module
@@ -980,7 +1240,7 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             # --------------------------------------
             # Update encodings for Input activations
             # --------------------------------------
-            input_encodings = layer.export_input_encodings(encoding_version='0.6.1')
+            input_encodings = layer.export_input_encodings(encoding_version="0.6.1")
             # skip layer if it has no input encodings.
             if all(encoding is None for encoding in input_encodings):
                 return
@@ -989,41 +1249,57 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 if encoding is not None:
                     if layer_name not in missing_activation_encodings_torch:
                         missing_activation_encodings_torch[layer_name] = {}
-                    if 'input' not in missing_activation_encodings_torch[layer_name]:
-                        missing_activation_encodings_torch[layer_name]['input'] = {}
+                    if "input" not in missing_activation_encodings_torch[layer_name]:
+                        missing_activation_encodings_torch[layer_name]["input"] = {}
                     # Store encodings for a particular index so that they can be used to check if a quantizer was
                     # enabled or not
-                    missing_activation_encodings_torch[layer_name]['input'][index] = encoding[0]
+                    missing_activation_encodings_torch[layer_name]["input"][index] = (
+                        encoding[0]
+                    )
 
             # ---------------------------------------
             # Update encodings for output activations
             # ---------------------------------------
-            output_encodings = layer.export_output_encodings(encoding_version='0.6.1')
+            output_encodings = layer.export_output_encodings(encoding_version="0.6.1")
             for index, encoding in enumerate(output_encodings):
                 if encoding is not None:
                     if layer_name not in missing_activation_encodings_torch:
                         missing_activation_encodings_torch[layer_name] = {}
-                    if 'output' not in missing_activation_encodings_torch[layer_name]:
-                        missing_activation_encodings_torch[layer_name]['output'] = {}
-                    missing_activation_encodings_torch[layer_name]['output'][index] = encoding[0]
+                    if "output" not in missing_activation_encodings_torch[layer_name]:
+                        missing_activation_encodings_torch[layer_name]["output"] = {}
+                    missing_activation_encodings_torch[layer_name]["output"][index] = (
+                        encoding[0]
+                    )
 
             # ---------------------------
             # Update encodings for Params
             # ---------------------------
-            for orig_param_name, param_encoding in layer.export_param_encodings(encoding_version='0.6.1').items():
-                param_name = layer_name + '.' + orig_param_name
+            for orig_param_name, param_encoding in layer.export_param_encodings(
+                encoding_version="0.6.1"
+            ).items():
+                param_name = layer_name + "." + orig_param_name
                 if param_encoding is None:
                     continue
                 if param_name not in valid_param_set:
-                    logger.error('Param tensor {%s} not found in valid param set', param_name)
+                    logger.error(
+                        "Param tensor {%s} not found in valid param set", param_name
+                    )
                     continue
                 missing_param_encodings[param_name] = param_encoding
 
     # pylint: disable=too-many-branches
     @classmethod
-    def _export_encodings_to_files(cls, sim_model: torch.nn.Module, path: str, filename_prefix: str,
-                                   op_to_io_tensor_map: Dict, valid_param_set: set, excluded_layer_names,
-                                   propagate_encodings: bool, quantizer_args: Dict = None):
+    def _export_encodings_to_files(
+        cls,
+        sim_model: torch.nn.Module,
+        path: str,
+        filename_prefix: str,
+        op_to_io_tensor_map: Dict,
+        valid_param_set: set,
+        excluded_layer_names,
+        propagate_encodings: bool,
+        quantizer_args: Dict = None,
+    ):
         """
         Save the quantized model weight encodings
 
@@ -1047,8 +1323,12 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         missing_activation_encodings_torch = {}
         param_encodings = {}
         missing_param_encodings = {}
-        layers_to_onnx_op_names = onnx_utils.get_layers_in_io_tensor_map(op_to_io_tensor_map)
-        tensor_to_consumer_map = onnx_utils.get_tensor_to_consumer_map(op_to_io_tensor_map)
+        layers_to_onnx_op_names = onnx_utils.get_layers_in_io_tensor_map(
+            op_to_io_tensor_map
+        )
+        tensor_to_consumer_map = onnx_utils.get_tensor_to_consumer_map(
+            op_to_io_tensor_map
+        )
         layer_names_not_found = []
         tensor_to_quantizer_map = {}
 
@@ -1058,7 +1338,9 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             # TODO: specifically call out dropout layers here since they are specifically switched out during export.
             # These ops should eventually be reworked as part of math invariant ops to ignore quantization altogether.
             # pylint: disable=protected-access
-            if isinstance(layer, _QuantizedModuleProtocol) and isinstance(layer.get_original_module(), utils.DROPOUT_TYPES):
+            if isinstance(layer, _QuantizedModuleProtocol) and isinstance(
+                layer.get_original_module(), utils.DROPOUT_TYPES
+            ):
                 continue
 
             if layer_name not in layers_to_onnx_op_names:
@@ -1067,53 +1349,79 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 # An error will be thrown if the exported encodings(without missing layers's encoding) are loaded back
                 # to the sim model because the layers will be present in the sim model whereas the
                 # corresponding encodings will not be present in the encoding file.
-                cls._get_torch_encodings_for_missing_layers(layer, layer_name,
-                                                            missing_activation_encodings_torch,
-                                                            missing_param_encodings,valid_param_set)
+                cls._get_torch_encodings_for_missing_layers(
+                    layer,
+                    layer_name,
+                    missing_activation_encodings_torch,
+                    missing_param_encodings,
+                    valid_param_set,
+                )
             else:
-                cls._update_encoding_dicts_for_layer(layer, layer_name, activation_encodings_onnx,
-                                                     activation_encodings_torch,
-                                                     param_encodings, op_to_io_tensor_map,
-                                                     valid_param_set, propagate_encodings,
-                                                     tensor_to_consumer_map, layers_to_onnx_op_names,
-                                                     tensor_to_quantizer_map)
+                cls._update_encoding_dicts_for_layer(
+                    layer,
+                    layer_name,
+                    activation_encodings_onnx,
+                    activation_encodings_torch,
+                    param_encodings,
+                    op_to_io_tensor_map,
+                    valid_param_set,
+                    propagate_encodings,
+                    tensor_to_consumer_map,
+                    layers_to_onnx_op_names,
+                    tensor_to_quantizer_map,
+                )
 
         if layer_names_not_found:
-            logger.warning("The following layers were not found in the exported onnx model. Encodings for these layers"
-                           " will not appear in the exported encodings file, however it will continue to"
-                           " exist in torch encoding file:\n"
-                           "%s\n"
-                           "This can be due to several reasons:\n"
-                           "\t- The layer is set to quantize with float datatype, but was not exercised in compute "
-                           "encodings. Not an issue if the layer is not meant to be run.\n"
-                           "\t- The layer has valid encodings but was not seen while exporting to onnx using the dummy "
-                           "input provided in sim.export(). Ensure that the dummy input covers all layers.",
-                           layer_names_not_found)
+            logger.warning(
+                "The following layers were not found in the exported onnx model. Encodings for these layers"
+                " will not appear in the exported encodings file, however it will continue to"
+                " exist in torch encoding file:\n"
+                "%s\n"
+                "This can be due to several reasons:\n"
+                "\t- The layer is set to quantize with float datatype, but was not exercised in compute "
+                "encodings. Not an issue if the layer is not meant to be run.\n"
+                "\t- The layer has valid encodings but was not seen while exporting to onnx using the dummy "
+                "input provided in sim.export(). Ensure that the dummy input covers all layers.",
+                layer_names_not_found,
+            )
 
-        if quantsim.encoding_version == '0.6.1':
-            encodings_dict_onnx = {'version': quantsim.encoding_version,
-                                   'activation_encodings': activation_encodings_onnx,
-                                   'param_encodings': param_encodings,
-                                   'excluded_layers': excluded_layer_names}
+        if quantsim.encoding_version == "0.6.1":
+            encodings_dict_onnx = {
+                "version": quantsim.encoding_version,
+                "activation_encodings": activation_encodings_onnx,
+                "param_encodings": param_encodings,
+                "excluded_layers": excluded_layer_names,
+            }
 
             if quantizer_args:
-                encodings_dict_onnx.update({'quantizer_args': quantizer_args})
+                encodings_dict_onnx.update({"quantizer_args": quantizer_args})
 
             logger.info("Layers excluded from quantization: %s", excluded_layer_names)
 
             # export weight encodings to output json file
-            encoding_file_path = os.path.join(path, filename_prefix + '.encodings')
+            encoding_file_path = os.path.join(path, filename_prefix + ".encodings")
             save_json_yaml(encoding_file_path, encodings_dict_onnx)
         else:
-            _export_to_1_0_0(path, filename_prefix, activation_encodings_onnx, param_encodings, tensor_to_quantizer_map,
-                             excluded_layer_names, quantizer_args)
+            _export_to_1_0_0(
+                path,
+                filename_prefix,
+                activation_encodings_onnx,
+                param_encodings,
+                tensor_to_quantizer_map,
+                excluded_layer_names,
+                quantizer_args,
+            )
 
-        logger.warning(_red("Quantsim export will stop exporting encodings for saving and loading in a future AIMET "
-                       "release.\nTo export encodings for saving and loading, use QuantizationSimModel's "
-                       "save_encodings_to_json() utility instead."))
+        logger.warning(
+            _red(
+                "Quantsim export will stop exporting encodings for saving and loading in a future AIMET "
+                "release.\nTo export encodings for saving and loading, use QuantizationSimModel's "
+                "save_encodings_to_json() utility instead."
+            )
+        )
         if not SKIP_TORCH_ENCODINGS_EXPORT:
             # Export torch.encodings used for saving/loading common to 0.6.1 and 1.0.0 versions (uses 0.6.1 version).
-            if quantsim.encoding_version == '0.6.1':
+            if quantsim.encoding_version == "0.6.1":
                 param_encodings.update(missing_param_encodings)
                 param_encodings_torch = param_encodings
             else:
@@ -1121,26 +1429,37 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 for module_name, module in sim_model.named_modules():
                     if not isinstance(module, _QuantizedModuleProtocol):
                         continue
-                    for param_name, encoding in module.export_param_encodings(encoding_version='0.6.1').items():
+                    for param_name, encoding in module.export_param_encodings(
+                        encoding_version="0.6.1"
+                    ).items():
                         if not encoding:
                             continue
-                        param_encodings_torch[f'{module_name}.{param_name}'] = encoding
+                        param_encodings_torch[f"{module_name}.{param_name}"] = encoding
 
             activation_encodings_torch.update(missing_activation_encodings_torch)
-            encodings_dict_pytorch = {'version': quantsim.encoding_version,
-                                      'activation_encodings': activation_encodings_torch,
-                                      'param_encodings': param_encodings_torch,
-                                      'excluded_layers': excluded_layer_names}
+            encodings_dict_pytorch = {
+                "version": quantsim.encoding_version,
+                "activation_encodings": activation_encodings_torch,
+                "param_encodings": param_encodings_torch,
+                "excluded_layers": excluded_layer_names,
+            }
 
             if quantizer_args:
-                encodings_dict_pytorch.update({'quantizer_args': quantizer_args})
+                encodings_dict_pytorch.update({"quantizer_args": quantizer_args})
 
-            encoding_file_path_pytorch = os.path.join(path, filename_prefix + '_torch' + '.encodings')
+            encoding_file_path_pytorch = os.path.join(
+                path, filename_prefix + "_torch" + ".encodings"
+            )
             save_json_yaml(encoding_file_path_pytorch, encodings_dict_pytorch)
 
     @staticmethod
-    def _update_param_encodings_dict_for_layer(layer: _QuantizedModuleProtocol, layer_name: str, param_encodings: Dict,
-                                               valid_param_set: set, tensor_to_quantizer_map: Dict):
+    def _update_param_encodings_dict_for_layer(
+        layer: _QuantizedModuleProtocol,
+        layer_name: str,
+        param_encodings: Dict,
+        valid_param_set: set,
+        tensor_to_quantizer_map: Dict,
+    ):
         """
         :param layer: layer as torch.nn.Module
         :param layer_name : Name of the layer
@@ -1148,23 +1467,37 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param valid_param_set: a set of valid param input names in model
         """
 
-        for orig_param_name, param_encoding in layer.export_param_encodings(quantsim.encoding_version).items():
-            param_name = layer_name + '.' + orig_param_name
+        for orig_param_name, param_encoding in layer.export_param_encodings(
+            quantsim.encoding_version
+        ).items():
+            param_name = layer_name + "." + orig_param_name
             if param_encoding is None:
                 continue
             if param_name not in valid_param_set:
-                logger.error('Param tensor {%s} not found in valid param set', param_name)
+                logger.error(
+                    "Param tensor {%s} not found in valid param set", param_name
+                )
                 continue
             param_encodings[param_name] = param_encoding
-            tensor_to_quantizer_map[param_name] = layer.param_quantizers[orig_param_name]
+            tensor_to_quantizer_map[param_name] = layer.param_quantizers[
+                orig_param_name
+            ]
 
     @classmethod
-    def _update_encoding_dicts_for_layer(cls, layer: _QuantizedModuleProtocol, layer_name: str, activation_encodings_onnx: Dict,
-                                         activation_encodings_torch: Dict, param_encodings: Dict,
-                                         op_to_io_tensor_map: Dict, valid_param_set: set, propagate_encodings: bool,
-                                         tensor_to_consumer_map: Dict[str, str],
-                                         layers_to_onnx_op_names: Dict[str, str],
-                                         tensor_to_quantizer_map: Dict):
+    def _update_encoding_dicts_for_layer(
+        cls,
+        layer: _QuantizedModuleProtocol,
+        layer_name: str,
+        activation_encodings_onnx: Dict,
+        activation_encodings_torch: Dict,
+        param_encodings: Dict,
+        op_to_io_tensor_map: Dict,
+        valid_param_set: set,
+        propagate_encodings: bool,
+        tensor_to_consumer_map: Dict[str, str],
+        layers_to_onnx_op_names: Dict[str, str],
+        tensor_to_quantizer_map: Dict,
+    ):
         """
         Add given layer param and activation encodings to respective dictionaries to be used for exporting encodings
         :param layer: layer as torch.nn.Module
@@ -1182,37 +1515,50 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         """
 
         if isinstance(layer, _QuantizedModuleProtocol):
-
             # --------------------------------------
             # Update encodings for Input activations
             # --------------------------------------
-            cls._update_encoding_dict_for_input_activations(layer, layer_name, op_to_io_tensor_map,
-                                                            activation_encodings_onnx,
-                                                            activation_encodings_torch,
-                                                            layers_to_onnx_op_names,
-                                                            tensor_to_quantizer_map)
+            cls._update_encoding_dict_for_input_activations(
+                layer,
+                layer_name,
+                op_to_io_tensor_map,
+                activation_encodings_onnx,
+                activation_encodings_torch,
+                layers_to_onnx_op_names,
+                tensor_to_quantizer_map,
+            )
             # ---------------------------------------
             # Update encodings for output activations
             # ---------------------------------------
-            cls._update_encoding_dict_for_output_activations(layer, layer_name,
-                                                             op_to_io_tensor_map,
-                                                             activation_encodings_onnx,
-                                                             activation_encodings_torch,
-                                                             propagate_encodings,
-                                                             tensor_to_consumer_map,
-                                                             layers_to_onnx_op_names,
-                                                             tensor_to_quantizer_map)
+            cls._update_encoding_dict_for_output_activations(
+                layer,
+                layer_name,
+                op_to_io_tensor_map,
+                activation_encodings_onnx,
+                activation_encodings_torch,
+                propagate_encodings,
+                tensor_to_consumer_map,
+                layers_to_onnx_op_names,
+                tensor_to_quantizer_map,
+            )
             # ---------------------------
             # Update encodings for Params
             # ---------------------------
-            cls._update_param_encodings_dict_for_layer(layer, layer_name, param_encodings,
-                                                       valid_param_set, tensor_to_quantizer_map)
-
+            cls._update_param_encodings_dict_for_layer(
+                layer,
+                layer_name,
+                param_encodings,
+                valid_param_set,
+                tensor_to_quantizer_map,
+            )
 
     @staticmethod
-    def find_op_names_for_layer(layer_name: str, op_to_io_tensor_map: Dict,
-                                tensor_to_consumer_map: Optional[Dict[str, str]],
-                                layers_to_onnx_op_names: Optional[Dict[str, str]]) -> Tuple[List[str], List[str]]:
+    def find_op_names_for_layer(
+        layer_name: str,
+        op_to_io_tensor_map: Dict,
+        tensor_to_consumer_map: Optional[Dict[str, str]],
+        layers_to_onnx_op_names: Optional[Dict[str, str]],
+    ) -> Tuple[List[str], List[str]]:
         """
         This function returns the last ONNX op and the list of ONNX Ops that were mapped from a PyTorch Op.
 
@@ -1222,13 +1568,20 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param layers_to_onnx_op_names: Dictionary mapping PyTorch layer names to names of corresponding ONNX ops
         :return: tuple(end op names, all op names)
         """
-        if version.parse(torch.__version__) < version.parse("1.13.0") or not onnx_utils.EXPORT_TO_ONNX_DIRECT:
-            op_names = [key for key in op_to_io_tensor_map if (key.startswith(layer_name) and layer_name+'#' in key)
-                        or key == layer_name]
+        if (
+            version.parse(torch.__version__) < version.parse("1.13.0")
+            or not onnx_utils.EXPORT_TO_ONNX_DIRECT
+        ):
+            op_names = [
+                key
+                for key in op_to_io_tensor_map
+                if (key.startswith(layer_name) and layer_name + "#" in key)
+                or key == layer_name
+            ]
             if len(op_names) == 1:
                 return op_names, op_names
 
-            end_op_names = [op_name for op_name in op_names if op_name.endswith('.end')]
+            end_op_names = [op_name for op_name in op_names if op_name.endswith(".end")]
             return end_op_names, op_names
 
         assert tensor_to_consumer_map is not None
@@ -1251,102 +1604,155 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                         end_op_names_set.add(op_name)
                 else:
                     for consumer in tensor_to_consumer_map[output]:
-                        if consumer not in op_name_set and op_name not in end_op_names_set:
+                        if (
+                            consumer not in op_name_set
+                            and op_name not in end_op_names_set
+                        ):
                             end_op_names.append(op_name)
                             end_op_names_set.add(op_name)
 
         return end_op_names, op_names
 
     @classmethod
-    def _update_encoding_dict_for_output_activations(cls, layer: _QuantizedModuleProtocol, layer_name: str, op_to_io_tensor_map: Dict,
-                                                     activation_encodings_onnx: Dict, activation_encodings_torch: Dict,
-                                                     propagate_encodings: bool, tensor_to_consumer_map: Dict[str, str],
-                                                     layers_to_onnx_op_names: Dict[str, str],
-                                                     tensor_to_quantizer_map: Dict):
+    def _update_encoding_dict_for_output_activations(
+        cls,
+        layer: _QuantizedModuleProtocol,
+        layer_name: str,
+        op_to_io_tensor_map: Dict,
+        activation_encodings_onnx: Dict,
+        activation_encodings_torch: Dict,
+        propagate_encodings: bool,
+        tensor_to_consumer_map: Dict[str, str],
+        layers_to_onnx_op_names: Dict[str, str],
+        tensor_to_quantizer_map: Dict,
+    ):
         # pylint: disable=too-many-locals
-        output_tensors, propagate_tensors = cls._get_layer_activation_tensors(layer_name,
-                                                                              op_to_io_tensor_map,
-                                                                              tensor_to_consumer_map,
-                                                                              layers_to_onnx_op_names)
+        output_tensors, propagate_tensors = cls._get_layer_activation_tensors(
+            layer_name,
+            op_to_io_tensor_map,
+            tensor_to_consumer_map,
+            layers_to_onnx_op_names,
+        )
         output_encodings = layer.export_output_encodings(quantsim.encoding_version)
 
         if len(output_tensors) != len(output_encodings):
-            logger.warning("number of output quantizers: %d available for layer: %s "
-                           "doesn't match with number of output tensors: %d", len(output_encodings), layer_name,
-                           len(output_tensors))
+            logger.warning(
+                "number of output quantizers: %d available for layer: %s "
+                "doesn't match with number of output tensors: %d",
+                len(output_encodings),
+                layer_name,
+                len(output_tensors),
+            )
 
         legacy_output_encodings = None
         if not SKIP_TORCH_ENCODINGS_EXPORT:
-            if quantsim.encoding_version == '0.6.1':
+            if quantsim.encoding_version == "0.6.1":
                 legacy_output_encodings = output_encodings
             else:
-                legacy_output_encodings = layer.export_output_encodings(encoding_version='0.6.1')
-        for index, (output_tensor, encoding) in enumerate(zip(output_tensors, output_encodings)):
+                legacy_output_encodings = layer.export_output_encodings(
+                    encoding_version="0.6.1"
+                )
+        for index, (output_tensor, encoding) in enumerate(
+            zip(output_tensors, output_encodings)
+        ):
             if encoding is not None:
                 activation_encodings_onnx[output_tensor] = encoding
                 tensor_to_quantizer_map[output_tensor] = layer.output_quantizers[index]
-                if not SKIP_TORCH_ENCODINGS_EXPORT and legacy_output_encodings[index] is not None:
+                if (
+                    not SKIP_TORCH_ENCODINGS_EXPORT
+                    and legacy_output_encodings[index] is not None
+                ):
                     legacy_encoding = legacy_output_encodings[index]
                     if layer_name not in activation_encodings_torch:
                         activation_encodings_torch[layer_name] = {}
-                    if 'output' not in activation_encodings_torch[layer_name]:
-                        activation_encodings_torch[layer_name]['output'] = {}
-                    activation_encodings_torch[layer_name]['output'][index] = legacy_encoding[0]
+                    if "output" not in activation_encodings_torch[layer_name]:
+                        activation_encodings_torch[layer_name]["output"] = {}
+                    activation_encodings_torch[layer_name]["output"][index] = (
+                        legacy_encoding[0]
+                    )
 
         if propagate_encodings:
             valid_encodings = [enc for enc in output_encodings if enc is not None]
             if valid_encodings:
                 encoding = valid_encodings[0]
                 for activation_tensor in propagate_tensors:
-                    activation_encodings_onnx[activation_tensor] = [{
-                        "bitwidth": encoding[0]["bitwidth"],
-                        "dtype":    encoding[0]["dtype"]
-                    }]
-
+                    activation_encodings_onnx[activation_tensor] = [
+                        {
+                            "bitwidth": encoding[0]["bitwidth"],
+                            "dtype": encoding[0]["dtype"],
+                        }
+                    ]
 
     @classmethod
-    def _update_encoding_dict_for_input_activations(cls, layer: _QuantizedModuleProtocol, layer_name: str, op_to_io_tensor_map: Dict,
-                                                    activation_encodings_onnx: Dict, activation_encodings_torch: Dict,
-                                                    layers_to_onnx_op_names: Dict[str, str],
-                                                    tensor_to_quantizer_map: Dict):
+    def _update_encoding_dict_for_input_activations(
+        cls,
+        layer: _QuantizedModuleProtocol,
+        layer_name: str,
+        op_to_io_tensor_map: Dict,
+        activation_encodings_onnx: Dict,
+        activation_encodings_torch: Dict,
+        layers_to_onnx_op_names: Dict[str, str],
+        tensor_to_quantizer_map: Dict,
+    ):
         input_encodings = layer.export_input_encodings(quantsim.encoding_version)
         # skip layer if it has no input encodings.
         if all(encoding is None for encoding in input_encodings):
             return
 
-        input_tensors = cls._get_layer_input_tensors(layer, layer_name, op_to_io_tensor_map,
-                                                     layers_to_onnx_op_names)
+        input_tensors = cls._get_layer_input_tensors(
+            layer, layer_name, op_to_io_tensor_map, layers_to_onnx_op_names
+        )
 
         if len(input_tensors) != len(input_encodings):
-            logger.warning("number of input quantizers: %d available for layer: %s "
-                           "doesn't match with number of input tensors: %d", len(input_encodings), layer_name,
-                           len(input_tensors))
+            logger.warning(
+                "number of input quantizers: %d available for layer: %s "
+                "doesn't match with number of input tensors: %d",
+                len(input_encodings),
+                layer_name,
+                len(input_tensors),
+            )
 
         legacy_input_encodings = None
         if not SKIP_TORCH_ENCODINGS_EXPORT:
-            if quantsim.encoding_version == '0.6.1':
+            if quantsim.encoding_version == "0.6.1":
                 legacy_input_encodings = input_encodings
             else:
-                legacy_input_encodings = layer.export_input_encodings(encoding_version='0.6.1')
-        for index, (input_tensor, encoding) in enumerate(zip(input_tensors, input_encodings)):
+                legacy_input_encodings = layer.export_input_encodings(
+                    encoding_version="0.6.1"
+                )
+        for index, (input_tensor, encoding) in enumerate(
+            zip(input_tensors, input_encodings)
+        ):
             if encoding is not None:
                 activation_encodings_onnx[input_tensor] = encoding
                 # TODO: Modify this so quantsim does not make assumptions about the length of input_quantizers
-                tensor_to_quantizer_map[input_tensor] = layer.input_quantizers[min(index, len(layer.input_quantizers) - 1)]
-                if not SKIP_TORCH_ENCODINGS_EXPORT and legacy_input_encodings[index] is not None:
+                tensor_to_quantizer_map[input_tensor] = layer.input_quantizers[
+                    min(index, len(layer.input_quantizers) - 1)
+                ]
+                if (
+                    not SKIP_TORCH_ENCODINGS_EXPORT
+                    and legacy_input_encodings[index] is not None
+                ):
                     legacy_encoding = legacy_input_encodings[index]
                     # Check if layer exists in the pytorch encoding dictionary
                     if layer_name not in activation_encodings_torch:
                         activation_encodings_torch[layer_name] = {}
-                    if 'input' not in activation_encodings_torch[layer_name]:
-                        activation_encodings_torch[layer_name]['input'] = {}
+                    if "input" not in activation_encodings_torch[layer_name]:
+                        activation_encodings_torch[layer_name]["input"] = {}
                     # Store encodings for a particular index so that they can be used to check if a quantizer was
                     # enabled or not
-                    activation_encodings_torch[layer_name]['input'][index] = legacy_encoding[0]
+                    activation_encodings_torch[layer_name]["input"][index] = (
+                        legacy_encoding[0]
+                    )
 
     @classmethod
-    def _get_layer_input_tensors(cls, layer: torch.nn.Module, layer_name: str, op_to_io_tensor_map: Dict,
-                                 layers_to_onnx_op_names: Dict[str, str] = None) -> List[str]:
+    def _get_layer_input_tensors(
+        cls,
+        layer: torch.nn.Module,
+        layer_name: str,
+        op_to_io_tensor_map: Dict,
+        layers_to_onnx_op_names: Dict[str, str] = None,
+    ) -> List[str]:
         """
         This function returns the list of input tensor names mapped from a PyTorch Op.
 
@@ -1357,12 +1763,20 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :return: list of input tensor names.
         """
 
-        param_inputs = [layer_name + '.' + param_name for param_name, _ in layer.named_parameters()]
+        param_inputs = [
+            layer_name + "." + param_name for param_name, _ in layer.named_parameters()
+        ]
         for idx, param_input in enumerate(param_inputs):
-            param_inputs[idx] = ''.join(param_input.split('._module_to_wrap'))
-        if version.parse(torch.__version__) < version.parse("1.13.0") or not onnx_utils.EXPORT_TO_ONNX_DIRECT:
-            start_op_names = [key for key in op_to_io_tensor_map
-                              if (key.startswith(layer_name) and '#0' in key) or key == layer_name]
+            param_inputs[idx] = "".join(param_input.split("._module_to_wrap"))
+        if (
+            version.parse(torch.__version__) < version.parse("1.13.0")
+            or not onnx_utils.EXPORT_TO_ONNX_DIRECT
+        ):
+            start_op_names = [
+                key
+                for key in op_to_io_tensor_map
+                if (key.startswith(layer_name) and "#0" in key) or key == layer_name
+            ]
         else:
             assert layers_to_onnx_op_names is not None
             op_names = layers_to_onnx_op_names.get(layer_name, [])
@@ -1383,16 +1797,23 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         input_tensors_set = set()
         for name in start_op_names:
             for input_tensor in op_to_io_tensor_map[name].inputs:
-                if input_tensor not in param_inputs and input_tensor not in input_tensors_set:
+                if (
+                    input_tensor not in param_inputs
+                    and input_tensor not in input_tensors_set
+                ):
                     input_tensors.append(input_tensor)
                     input_tensors_set.add(input_tensor)
 
         return input_tensors
 
     @classmethod
-    def _get_layer_activation_tensors(cls, layer_name: str, op_to_io_tensor_map: Dict,
-                                      tensor_to_consumer_map: Dict[str, str] = None,
-                                      layers_to_onnx_op_names: Dict[str, str] = None) -> Tuple[List[str], List[str]]:
+    def _get_layer_activation_tensors(
+        cls,
+        layer_name: str,
+        op_to_io_tensor_map: Dict,
+        tensor_to_consumer_map: Dict[str, str] = None,
+        layers_to_onnx_op_names: Dict[str, str] = None,
+    ) -> Tuple[List[str], List[str]]:
         """
         This function returns the list of output tensor and intermediate tensor names mapped from a PyTorch Op.
 
@@ -1402,12 +1823,22 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param layers_to_onnx_op_names: Dictionary mapping PyTorch layer names to names of corresponding ONNX ops
         :return: tuple containing list of output tensor names and list of intermediate tensors
         """
-        end_op_names, op_names = cls.find_op_names_for_layer(layer_name, op_to_io_tensor_map, tensor_to_consumer_map,
-                                                             layers_to_onnx_op_names)
+        end_op_names, op_names = cls.find_op_names_for_layer(
+            layer_name,
+            op_to_io_tensor_map,
+            tensor_to_consumer_map,
+            layers_to_onnx_op_names,
+        )
 
         if len(end_op_names) > 1:
-            output_op_map_str = cls._get_output_map_str(end_op_names, layer_name, op_to_io_tensor_map)
-            logger.info("layer_name: %s, has multiple output onnx ops: %s", layer_name, output_op_map_str)
+            output_op_map_str = cls._get_output_map_str(
+                end_op_names, layer_name, op_to_io_tensor_map
+            )
+            logger.info(
+                "layer_name: %s, has multiple output onnx ops: %s",
+                layer_name,
+                output_op_map_str,
+            )
 
         output_tensors = []
         intermediate_tensors = []
@@ -1430,11 +1861,15 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :return: formatted string with output ops and their corresponding output count.
         """
         num_output_ops = len(end_op_names)
-        op_map_str = ','.join([f'{name.replace(layer_name, "")}:{len(op_to_io_tensor_map[name].outputs)}'
-                               for name in end_op_names[:5]])
+        op_map_str = ",".join(
+            [
+                f"{name.replace(layer_name, '')}:{len(op_to_io_tensor_map[name].outputs)}"
+                for name in end_op_names[:5]
+            ]
+        )
         if num_output_ops > 5:
-            op_map_str += ', ..'
-        return f'{num_output_ops},[{op_map_str}]'
+            op_map_str += ", .."
+        return f"{num_output_ops},[{op_map_str}]"
 
     @staticmethod
     def _update_parameters_by_attr(module: torch.nn.Module):
@@ -1450,8 +1885,10 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             if param_name in module.__dict__ and param_name in module._parameters:
                 module._parameters[param_name] = module.__dict__[param_name]
                 param = module.__dict__.pop(param_name)
+
                 def cleanup(module=module, param_name=param_name, param=param):
                     module.__dict__[param_name] = param
+
                 stack.enter_context(Handle(cleanup))
 
         return stack
@@ -1461,12 +1898,16 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         Returns a mapping from leaf modules to module name, where any _QuantizedModuleProtocol is considered a leaf module,
         and is therefore not further recursed (since we do not want to retrieve all internal quantizers/modules).
         """
+
         def recursively_populate_map(starting_module, module_map, start_str):
             for name, module in starting_module.named_children():
-                if isinstance(module, _QuantizedModuleProtocol) or utils.is_leaf_module(module):
+                if isinstance(module, _QuantizedModuleProtocol) or utils.is_leaf_module(
+                    module
+                ):
                     module_map[module] = start_str + name
                 else:
                     recursively_populate_map(module, module_map, start_str + name + ".")
+
         module_to_name_map = {}
         recursively_populate_map(self.model, module_to_name_map, "")
         return module_to_name_map
@@ -1482,8 +1923,9 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             module_name = module_to_name_map[module_ref]
             if isinstance(module_ref, _QuantizedModuleProtocol):
                 module_ref = module_ref.get_original_module()
-            marker_layer = torch.jit.trace(CustomMarker(module_ref, module_name, 'True'),
-                                           inputs)
+            marker_layer = torch.jit.trace(
+                CustomMarker(module_ref, module_name, "True"), inputs
+            )
             self._module_marker_map[module_name] = marker_layer
 
         for name, module in self.model.named_modules():
@@ -1502,23 +1944,35 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
                 missing_inputs_entries.append(leaf_module)
 
         if missing_inputs_entries:
-            logger.info('In order to export a conditional model, all leaf modules need to be run with some input so '
-                        'torch trace can be done.')
-            logger.info('The following modules were not run during compute encodings:')
+            logger.info(
+                "In order to export a conditional model, all leaf modules need to be run with some input so "
+                "torch trace can be done."
+            )
+            logger.info("The following modules were not run during compute encodings:")
             logger.info(missing_inputs_entries)
-            logger.info('Please use the sim.run_modules_for_traced_custom_marker(<module list>, dummy_input) api to '
-                        'pass dummy inputs to these modules.')
-            logger.info('Modules which can take the same dummy input can be '
-                        'grouped as a list. For groups of modules with different input shapes, please call '
-                        'sim.run_modules_for_traced_custom_markers() for each group.')
-            logger.info('Exiting quantsim export early.')
+            logger.info(
+                "Please use the sim.run_modules_for_traced_custom_marker(<module list>, dummy_input) api to "
+                "pass dummy inputs to these modules."
+            )
+            logger.info(
+                "Modules which can take the same dummy input can be "
+                "grouped as a list. For groups of modules with different input shapes, please call "
+                "sim.run_modules_for_traced_custom_markers() for each group."
+            )
+            logger.info("Exiting quantsim export early.")
             return False
         return True
 
-    def _export_conditional(self, path: str, filename_prefix: str, dummy_input: Union[torch.Tensor, Tuple],
-                            forward_pass_callback: Callable, forward_pass_callback_args,
-                            onnx_export_args: Union[OnnxExportApiArgs, None] = OnnxExportApiArgs(),
-                            propagate_encodings: bool = False):
+    def _export_conditional(
+        self,
+        path: str,
+        filename_prefix: str,
+        dummy_input: Union[torch.Tensor, Tuple],
+        forward_pass_callback: Callable,
+        forward_pass_callback_args,
+        onnx_export_args: Union[OnnxExportApiArgs, None] = OnnxExportApiArgs(),
+        propagate_encodings: bool = False,
+    ):
         """
         Export function for conditional models. Performs another round of forward passes to create and store traced
         CustomMarker info for each leaf module to be later used when scripting the model for export.
@@ -1561,13 +2015,19 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         # Check that all paths were exercised
         if not self._validate_module_marker_map():
             return
-        self.export(path, filename_prefix, dummy_input, onnx_export_args, propagate_encodings)
+        self.export(
+            path, filename_prefix, dummy_input, onnx_export_args, propagate_encodings
+        )
 
-    def load_encodings(self, encodings: Union[Mapping, str, os.PathLike], # pylint: disable=arguments-differ
-                       strict: bool = True,
-                       partial: bool = True,
-                       requires_grad: Optional[bool] = None,
-                       allow_overwrite: bool = True):
+    # pylint: disable=arguments-differ
+    def load_encodings(
+        self,
+        encodings: Union[Mapping, str, os.PathLike],
+        strict: bool = True,
+        partial: bool = True,
+        requires_grad: Optional[bool] = None,
+        allow_overwrite: bool = True,
+    ):
         """
         :param encodings: Encoding dictionary or path to the encoding dictionary json file.
         :param bool strict: If True, an error will be thrown if the model doesn't
@@ -1583,50 +2043,66 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
             If None, whether the quantizer is overwrieable will be kept unchanged.
         """
         if isinstance(encodings, (str, os.PathLike)):
-            with open(encodings, mode='r') as f:
+            with open(encodings, mode="r") as f:
                 encodings = json.load(f)
 
-        self._load_encodings_impl(encodings, strict, partial, requires_grad, allow_overwrite)
+        self._load_encodings_impl(
+            encodings, strict, partial, requires_grad, allow_overwrite
+        )
 
-    def _load_encodings_impl(self, encodings: Mapping,
-                             strict: bool,
-                             partial: bool,
-                             requires_grad: Optional[bool],
-                             allow_overwrite: bool):
-        if 'param_encodings' not in encodings:
+    def _load_encodings_impl(
+        self,
+        encodings: Mapping,
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
+        if "param_encodings" not in encodings:
             param_encodings = encodings
             activation_encodings = {}
-            logger.warning("An older AdaRound exported encoding file type has been detected! "
-                           "Please regenerate it using the AdaRound export function from the latest "
-                           "AIMET (version 1.32 or higher) if necessary. "
-                           "Support for this encoding file will be deprecated in AIMET version 1.33.0.")
+            logger.warning(
+                "An older AdaRound exported encoding file type has been detected! "
+                "Please regenerate it using the AdaRound export function from the latest "
+                "AIMET (version 1.32 or higher) if necessary. "
+                "Support for this encoding file will be deprecated in AIMET version 1.33.0."
+            )
         else:
-            param_encodings = encodings.get('param_encodings', {})
-            activation_encodings = encodings.get('activation_encodings', {})
+            param_encodings = encodings.get("param_encodings", {})
+            activation_encodings = encodings.get("activation_encodings", {})
 
         if not param_encodings and not activation_encodings:
             raise RuntimeError
 
         if strict is True:
             encoding_keys = param_encodings.keys() | activation_encodings.keys()
-            model_keys = set(name.replace("._module_to_wrap", "") for name, _
-                             in chain(self.model.named_modules(), utils.get_all_named_parameters(self.model)))
+            model_keys = set(
+                name.replace("._module_to_wrap", "")
+                for name, _ in chain(
+                    self.model.named_modules(),
+                    utils.get_all_named_parameters(self.model),
+                )
+            )
             keys_not_found = encoding_keys - model_keys
             if keys_not_found:
-                keys_not_found = ', '.join(sorted(keys_not_found))
+                keys_not_found = ", ".join(sorted(keys_not_found))
                 msg = f"Encoding dictionary contains modules/parameters that doesn't exist in the model: {keys_not_found}"
                 raise RuntimeError(msg)
 
         if param_encodings is not None:
-            self._set_param_encodings(param_encodings,
-                                      strict, partial, requires_grad, allow_overwrite)
+            self._set_param_encodings(
+                param_encodings, strict, partial, requires_grad, allow_overwrite
+            )
 
         if activation_encodings is not None:
-            self._set_activation_encodings(activation_encodings,
-                                           strict, partial, requires_grad, allow_overwrite)
+            self._set_activation_encodings(
+                activation_encodings, strict, partial, requires_grad, allow_overwrite
+            )
 
     @deprecated("Use QuantizationSimModel.load_encodings instead.")
-    def load_and_freeze_encodings(self, encoding_path: str, ignore_when_quantizer_disabled: bool = False):
+    def load_and_freeze_encodings(
+        self, encoding_path: str, ignore_when_quantizer_disabled: bool = False
+    ):
         """
         Functionality to set encodings (both activation and parameter) as per the given encodings JSON file and
         freeze them.
@@ -1637,73 +2113,77 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         :param ignore_when_quantizer_disabled: ignore raising RuntimeError while setting encodings,
             when quantizers are disabled.
         """
-        self.load_encodings(encoding_path,
-                            strict=not ignore_when_quantizer_disabled,
-                            partial=True,
-                            requires_grad=False,
-                            allow_overwrite=False)
+        self.load_encodings(
+            encoding_path,
+            strict=not ignore_when_quantizer_disabled,
+            partial=True,
+            requires_grad=False,
+            allow_overwrite=False,
+        )
 
-    def _set_param_encodings(self,
-                             encoding_dict: Mapping,
-                             strict: bool,
-                             partial: bool,
-                             requires_grad: Optional[bool],
-                             allow_overwrite: bool):
+    def _set_param_encodings(
+        self,
+        encoding_dict: Mapping,
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         for name, quant_module in self.model.named_modules():
             if isinstance(quant_module, _QuantizedModuleProtocol):
                 param_encoding = {
-                    param_name: encoding_dict[f'{name}.{param_name}']
+                    param_name: encoding_dict[f"{name}.{param_name}"]
                     for param_name, _ in quant_module.param_quantizers.items()
-                    if f'{name}.{param_name}' in encoding_dict
+                    if f"{name}.{param_name}" in encoding_dict
                 }
                 try:
-                    quant_module.import_param_encodings(param_encoding,
-                                                        strict,
-                                                        partial,
-                                                        requires_grad,
-                                                        allow_overwrite)
+                    quant_module.import_param_encodings(
+                        param_encoding, strict, partial, requires_grad, allow_overwrite
+                    )
                 except RuntimeError as e:
-                    raise RuntimeError(f"Encoding import failed for module: {name}.\n{str(e)}") from e
+                    raise RuntimeError(
+                        f"Encoding import failed for module: {name}.\n{str(e)}"
+                    ) from e
 
-
-    def _set_activation_encodings(self,
-                                  activation_encoding_dict: Mapping,
-                                  strict: bool,
-                                  partial: bool,
-                                  requires_grad: Optional[bool],
-                                  allow_overwrite: bool):
+    def _set_activation_encodings(
+        self,
+        activation_encoding_dict: Mapping,
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         for module_name, module in self.model.named_modules():
             if not isinstance(module, _QuantizedModuleProtocol):
                 continue
 
             try:
-                input_encoding = activation_encoding_dict[module_name]['input']
+                input_encoding = activation_encoding_dict[module_name]["input"]
             except KeyError:
                 input_encoding = {}
 
             try:
-                module.import_input_encodings(input_encoding,
-                                              strict,
-                                              partial,
-                                              requires_grad,
-                                              allow_overwrite)
+                module.import_input_encodings(
+                    input_encoding, strict, partial, requires_grad, allow_overwrite
+                )
             except RuntimeError as e:
-                raise RuntimeError(f"Encoding import failed for module: {module_name}.\n{str(e)}") from e
+                raise RuntimeError(
+                    f"Encoding import failed for module: {module_name}.\n{str(e)}"
+                ) from e
 
             try:
-                output_encoding = activation_encoding_dict[module_name]['output']
+                output_encoding = activation_encoding_dict[module_name]["output"]
             except KeyError:
                 output_encoding = {}
 
             try:
-                module.import_output_encodings(output_encoding,
-                                               strict,
-                                               partial,
-                                               requires_grad,
-                                               allow_overwrite)
+                module.import_output_encodings(
+                    output_encoding, strict, partial, requires_grad, allow_overwrite
+                )
             except RuntimeError as e:
-                raise RuntimeError(f"Encoding import failed for module: {module_name}.\n{str(e)}") from e
-
+                raise RuntimeError(
+                    f"Encoding import failed for module: {module_name}.\n{str(e)}"
+                ) from e
 
     @deprecated("Use QuantizationSimModel.load_encodings instead.")
     def set_and_freeze_param_encodings(self, encoding_path: str):
@@ -1712,19 +2192,23 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
 
         :param encoding_path: path from where to load parameter encodings file
         """
-        with open(encoding_path, mode='r') as f:
+        with open(encoding_path, mode="r") as f:
             encodings = json.load(f)
 
-        if 'activation_encodings' in encodings:
-            del encodings['activation_encodings']
+        if "activation_encodings" in encodings:
+            del encodings["activation_encodings"]
 
-        self.load_encodings(encodings,
-                            strict=True,
-                            partial=True,
-                            requires_grad=False,
-                            allow_overwrite=False)
+        self.load_encodings(
+            encodings,
+            strict=True,
+            partial=True,
+            requires_grad=False,
+            allow_overwrite=False,
+        )
 
-    def run_modules_for_traced_custom_marker(self, module_list: List[torch.nn.Module], dummy_input):
+    def run_modules_for_traced_custom_marker(
+        self, module_list: List[torch.nn.Module], dummy_input
+    ):
         """
         Given a list of modules to run and dummy input for the module, create a traced CustomMarker for each module
         and store it in the module_marker map. The same dummy input will be used for all modules.
@@ -1737,14 +2221,21 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
 
         for module in module_list:
             # Only perform init and trace if the given module is a leaf module, and we have not recorded it before
-            if module in module_to_name_map and module_to_name_map[module] not in self._module_marker_map:
+            if (
+                module in module_to_name_map
+                and module_to_name_map[module] not in self._module_marker_map
+            ):
                 name = module_to_name_map[module]
-                module = module.get_original_module() if isinstance(module, _QuantizedModuleProtocol) else module
+                module = (
+                    module.get_original_module()
+                    if isinstance(module, _QuantizedModuleProtocol)
+                    else module
+                )
                 with utils.in_eval_mode(module), torch.no_grad():
-                    marker_layer = torch.jit.trace(CustomMarker(module, name, True), dummy_input)
+                    marker_layer = torch.jit.trace(
+                        CustomMarker(module, name, True), dummy_input
+                    )
                     self._module_marker_map[name] = marker_layer
-
-
 
 
 @deprecated("Use pickle.dump instead")
@@ -1758,7 +2249,7 @@ def save_checkpoint(quant_sim_model: _QuantizationSimModelInterface, file_path: 
     :param file_path: Path to the file where you want to save the checkpoint
     :return: None
     """
-    with open(file_path, 'wb') as file:
+    with open(file_path, "wb") as file:
         pickle.dump(quant_sim_model, file)
 
 
@@ -1770,7 +2261,7 @@ def load_checkpoint(file_path: str) -> _QuantizationSimModelInterface:
     :param file_path: Path to the file where you want to save the checkpoint
     :return: A new instance of the QuantizationSimModel created after loading the checkpoint
     """
-    with open(file_path, 'rb') as file:
+    with open(file_path, "rb") as file:
         sim = pickle.load(file)
         return sim
 
@@ -1789,48 +2280,56 @@ def check_accumulator_overflow(model: torch.nn.Module, quant_bw: int, accum_bw: 
     most_accum_range_used_layer = None
 
     for layer_name, layer in model.named_modules():
-
         if isinstance(layer, torch.nn.Conv2d):
-            was_accum_range_exceeded, accum_range_used = get_conv_accum_bounds(layer.weight.detach().numpy(),
-                                                                               quant_bw, accum_bw)
+            was_accum_range_exceeded, accum_range_used = get_conv_accum_bounds(
+                layer.weight.detach().numpy(), quant_bw, accum_bw
+            )
             if accum_range_used > most_accum_range_used:
                 most_accum_range_used = accum_range_used
                 most_accum_range_used_layer = layer_name
 
             if was_accum_range_exceeded:
-                logger.info('Possible accumulator overflow for layer: %s', layer_name)
+                logger.info("Possible accumulator overflow for layer: %s", layer_name)
 
     if most_accum_range_used < 1:
-        logger.info('No overflow detected. Layer %s had the most accumulator range used: %f%%',
-                    most_accum_range_used_layer, most_accum_range_used * 100)
+        logger.info(
+            "No overflow detected. Layer %s had the most accumulator range used: %f%%",
+            most_accum_range_used_layer,
+            most_accum_range_used * 100,
+        )
     else:
-        logger.info('Overflow detected. Layer %s had the most accumulator range used: %f%%',
-                    most_accum_range_used_layer, most_accum_range_used * 100)
+        logger.info(
+            "Overflow detected. Layer %s had the most accumulator range used: %f%%",
+            most_accum_range_used_layer,
+            most_accum_range_used * 100,
+        )
 
     return most_accum_range_used_layer, most_accum_range_used
 
 
 def _assert_jit_traceable(model, dummy_input):
     try:
-        from transformers import ( # pylint: disable=import-outside-toplevel
+        from transformers import (  # pylint: disable=import-outside-toplevel
             PreTrainedModel,
             Cache,
             DynamicCache,
-            EncoderDecoderCache
+            EncoderDecoderCache,
         )
     except ImportError:
         # Dummy definition in case transformers package doesn't exist
-        PreTrainedModel = type('PreTrainedModel', (), {})
-        Cache = type('Cache', (), {})
-        DynamicCache = type('DynamicCache', (), {})
-        EncoderDecoderCache = type('EncoderDecoderCache', (), {})
+        PreTrainedModel = type("PreTrainedModel", (), {})
+        Cache = type("Cache", (), {})
+        DynamicCache = type("DynamicCache", (), {})
+        EncoderDecoderCache = type("EncoderDecoderCache", (), {})
 
     if isinstance(model, PreTrainedModel) and model.config.use_return_dict:
-        msg = ' '.join([
-            "QuantizationSimModel only supports models that return a tensor or tuple, list, or dict of tensors",
-            "If the model is from HuggingFace transformers,",
-            "it is required to set ``model.config.return_dict=False``",
-        ])
+        msg = " ".join(
+            [
+                "QuantizationSimModel only supports models that return a tensor or tuple, list, or dict of tensors",
+                "If the model is from HuggingFace transformers,",
+                "it is required to set ``model.config.return_dict=False``",
+            ]
+        )
         raise RuntimeError(msg)
 
     try:
@@ -1840,8 +2339,10 @@ def _assert_jit_traceable(model, dummy_input):
     except StopIteration:
         return
 
-    msg = "QuantizationSimModel can only take a tensor or tuple, list, or dict of tensors as input; "\
-         f"Got {type(untraceable_obj)}."
+    msg = (
+        "QuantizationSimModel can only take a tensor or tuple, list, or dict of tensors as input; "
+        f"Got {type(untraceable_obj)}."
+    )
 
     if not isinstance(untraceable_obj, Cache):
         raise RuntimeError(msg)
@@ -1850,34 +2351,39 @@ def _assert_jit_traceable(model, dummy_input):
     parent_clsname = type(model).__name__
     new_clsname = f"My{parent_clsname}"
 
-    msg += '\n'.join([
-         " If the model is from HuggingFace transformers that takes Cache object as input, "\
-        "consider defining a subclass that only takes tensors instead of Cache.\n",
-
-         "For example:\n\n",
-    ])
+    msg += "\n".join(
+        [
+            " If the model is from HuggingFace transformers that takes Cache object as input, "
+            "consider defining a subclass that only takes tensors instead of Cache.\n",
+            "For example:\n\n",
+        ]
+    )
 
     if cache_cls in (DynamicCache, EncoderDecoderCache):
-        msg += '\n'.join([
-            f"class {new_clsname}({parent_clsname}):",
-             "    def forward(self, ..., past_key_values: List[Tuple[Tensor, Tensor]] = None, ...):",
-            f"        # Create {cache_cls.__name__} object from nested tuple of tensors `past_key_values`",
-            f"        past_key_values = {cache_cls.__name__}.from_legacy_cache(past_key_values)",
-             "        ..., new_past_key_values, ... =  super().forward(..., past_key_values, ...)",
-             "        return (..., new_past_key_values.to_legacy_cache(), ...)",
-         ])
+        msg += "\n".join(
+            [
+                f"class {new_clsname}({parent_clsname}):",
+                "    def forward(self, ..., past_key_values: List[Tuple[Tensor, Tensor]] = None, ...):",
+                f"        # Create {cache_cls.__name__} object from nested tuple of tensors `past_key_values`",
+                f"        past_key_values = {cache_cls.__name__}.from_legacy_cache(past_key_values)",
+                "        ..., new_past_key_values, ... =  super().forward(..., past_key_values, ...)",
+                "        return (..., new_past_key_values.to_legacy_cache(), ...)",
+            ]
+        )
     else:
-        msg += '\n'.join([
-            f"class {new_clsname}({parent_clsname}):",
-             "    def forward(self, ..., past_key_values: List[Tuple[Tensor, Tensor]] = None, ...):",
-            f"        # TODO: Create {cache_cls.__name__} object from nested tuple of tensors `past_key_values`",
-            f"        past_key_values: {cache_cls.__name__} = ...",
-             "",
-             "        ..., new_past_key_values, ... =  super().forward(..., past_key_values, ...)",
-             "",
-            f"        # TODO: Create nested tuple of tensors from a {cache_cls.__name__} object `new_past_key_values`",
-             "        new_past_key_values: List[Tuple[Tensor, Tensor]] = ...",
-             "        return (..., new_past_key_values.to_legacy_cache(), ...)",
-         ])
+        msg += "\n".join(
+            [
+                f"class {new_clsname}({parent_clsname}):",
+                "    def forward(self, ..., past_key_values: List[Tuple[Tensor, Tensor]] = None, ...):",
+                f"        # TODO: Create {cache_cls.__name__} object from nested tuple of tensors `past_key_values`",
+                f"        past_key_values: {cache_cls.__name__} = ...",
+                "",
+                "        ..., new_past_key_values, ... =  super().forward(..., past_key_values, ...)",
+                "",
+                f"        # TODO: Create nested tuple of tensors from a {cache_cls.__name__} object `new_past_key_values`",
+                "        new_past_key_values: List[Tuple[Tensor, Tensor]] = ...",
+                "        return (..., new_past_key_values.to_legacy_cache(), ...)",
+            ]
+        )
 
     raise RuntimeError(msg)

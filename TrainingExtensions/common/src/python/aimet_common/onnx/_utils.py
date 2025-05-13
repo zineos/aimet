@@ -47,12 +47,14 @@ from onnx.numpy_helper import from_array, to_array
 from aimet_common.onnx import opset10, opset13, opset21
 
 
-def _add_onnx_qdq_node(model: ModelProto,
-                       input_name: str,
-                       output_name: str,
-                       node_name_prefix: str,
-                       encodings: dict,
-                       onnx_opset: int):
+def _add_onnx_qdq_node(
+    model: ModelProto,
+    input_name: str,
+    output_name: str,
+    node_name_prefix: str,
+    encodings: dict,
+    onnx_opset: int,
+):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
 
@@ -67,15 +69,19 @@ def _add_onnx_qdq_node(model: ModelProto,
     (bias_int)                           (bias_qdq)
 
     """
-    _add_onnx_qdq_nodes(model, [input_name], [output_name], [node_name_prefix], [encodings], onnx_opset)
+    _add_onnx_qdq_nodes(
+        model, [input_name], [output_name], [node_name_prefix], [encodings], onnx_opset
+    )
 
 
-def _add_onnx_qdq_nodes(model: ModelProto,
-                        input_names: Iterable[str],
-                        output_names: Iterable[str],
-                        node_name_prefixes: Iterable[str],
-                        encodings: Iterable[dict],
-                        onnx_opset: int):
+def _add_onnx_qdq_nodes(
+    model: ModelProto,
+    input_names: Iterable[str],
+    output_names: Iterable[str],
+    node_name_prefixes: Iterable[str],
+    encodings: Iterable[dict],
+    onnx_opset: int,
+):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
 
@@ -91,8 +97,10 @@ def _add_onnx_qdq_nodes(model: ModelProto,
 
     """
     if onnx_opset < 10:
-        raise RuntimeError('ONNX opset {} cannot represent QuantizeLinear and DequantizeLinear nodes.'
-                           'So not able to export model as ONNX QDQ graph')
+        raise RuntimeError(
+            "ONNX opset {} cannot represent QuantizeLinear and DequantizeLinear nodes."
+            "So not able to export model as ONNX QDQ graph"
+        )
 
     if onnx_opset < 13:
         opset = opset10
@@ -106,9 +114,9 @@ def _add_onnx_qdq_nodes(model: ModelProto,
     tensors_to_remove = {}
     inputs_to_rename = {}
 
-    for input_name, output_name, node_name_prefix, encoding in zip(input_names, output_names, node_name_prefixes,
-                                                                   encodings):
-
+    for input_name, output_name, node_name_prefix, encoding in zip(
+        input_names, output_names, node_name_prefixes, encodings
+    ):
         inputs_to_rename[input_name] = output_name
         output_dtype = encoding["output_dtype"]
         axis = encoding.get("axis", None)
@@ -121,12 +129,14 @@ def _add_onnx_qdq_nodes(model: ModelProto,
         else:
             y_zero_point = np.zeros(y_scale.shape, dtype=np.int64)
 
-        tensors_to_add.extend([
-            from_array(y_scale, name=f"{input_name}_scale"),
-            opset.DequantizeLinear.make_zero_point(y_zero_point,
-                                                   dtype=output_dtype,
-                                                   name=f"{input_name}_zero_point")
-        ])
+        tensors_to_add.extend(
+            [
+                from_array(y_scale, name=f"{input_name}_scale"),
+                opset.DequantizeLinear.make_zero_point(
+                    y_zero_point, dtype=output_dtype, name=f"{input_name}_zero_point"
+                ),
+            ]
+        )
 
         if output_dtype in ("int32", "uint32"):
             nodes_to_add.append(
@@ -144,75 +154,94 @@ def _add_onnx_qdq_nodes(model: ModelProto,
                 )
             )
 
-            _replace_bias_with_quantized_bias(model, input_name, y_scale, output_dtype, tensors_to_add, tensors_to_remove)
+            _replace_bias_with_quantized_bias(
+                model,
+                input_name,
+                y_scale,
+                output_dtype,
+                tensors_to_add,
+                tensors_to_remove,
+            )
 
         else:
-            nodes_to_add.extend([
-                opset.QuantizeLinear.make_node(
-                    name=f"{node_name_prefix}_q",
-                    inputs=[
-                        input_name,
-                        f"{input_name}_scale",
-                        f"{input_name}_zero_point",
-                    ],
-                    output=f"{input_name}_int",
-                    dtype=output_dtype,
-                    axis=axis,
-                    block_size=block_size,
-                ),
-                opset.DequantizeLinear.make_node(
-                    name=f"{node_name_prefix}_dq",
-                    inputs=[
-                        f"{input_name}_int",
-                        f"{input_name}_scale",
-                        f"{input_name}_zero_point",
-                    ],
-                    output=output_name,
-                    dtype=output_dtype,
-                    axis=axis,
-                    block_size=block_size,
-                ),
-            ])
+            nodes_to_add.extend(
+                [
+                    opset.QuantizeLinear.make_node(
+                        name=f"{node_name_prefix}_q",
+                        inputs=[
+                            input_name,
+                            f"{input_name}_scale",
+                            f"{input_name}_zero_point",
+                        ],
+                        output=f"{input_name}_int",
+                        dtype=output_dtype,
+                        axis=axis,
+                        block_size=block_size,
+                    ),
+                    opset.DequantizeLinear.make_node(
+                        name=f"{node_name_prefix}_dq",
+                        inputs=[
+                            f"{input_name}_int",
+                            f"{input_name}_scale",
+                            f"{input_name}_zero_point",
+                        ],
+                        output=output_name,
+                        dtype=output_dtype,
+                        axis=axis,
+                        block_size=block_size,
+                    ),
+                ]
+            )
 
-    _finalize_graph_changes(model, nodes_to_add, inputs_to_rename, tensors_to_add, tensors_to_remove)
+    _finalize_graph_changes(
+        model, nodes_to_add, inputs_to_rename, tensors_to_add, tensors_to_remove
+    )
 
 
-
-def _replace_bias_with_quantized_bias(model: ModelProto,
-                                      bias_name: str,
-                                      y_scale: np.ndarray,
-                                      output_dtype: str,
-                                      tensors_to_add: List[TensorProto],
-                                      tensors_to_remove: Dict):
-
+def _replace_bias_with_quantized_bias(
+    model: ModelProto,
+    bias_name: str,
+    y_scale: np.ndarray,
+    output_dtype: str,
+    tensors_to_add: List[TensorProto],
+    tensors_to_remove: Dict,
+):
     bias = _ParamUtils.get_param_by_name(model, bias_name)
     tensors_to_remove[bias_name] = True
 
     bias_int32 = (to_array(bias) / y_scale).round()
     if output_dtype == "int32":
-        bias_int32 = bias_int32.clip(-2 ** 31, 2 ** 31 - 1)
+        bias_int32 = bias_int32.clip(-(2**31), 2**31 - 1)
     else:
-        bias_int32 = bias_int32.clip(0, 2 ** 32 - 1)
+        bias_int32 = bias_int32.clip(0, 2**32 - 1)
 
-    tensors_to_add.append(from_array(bias_int32.astype(output_dtype), name=f"{bias_name}_int"))
+    tensors_to_add.append(
+        from_array(bias_int32.astype(output_dtype), name=f"{bias_name}_int")
+    )
 
 
-def _finalize_graph_changes(model: ModelProto,
-                            nodes_to_add: Iterable,
-                            inputs_to_rename: Dict,
-                            tensors_to_add: List[TensorProto],
-                            tensors_to_remove: Dict):
+def _finalize_graph_changes(
+    model: ModelProto,
+    nodes_to_add: Iterable,
+    inputs_to_rename: Dict,
+    tensors_to_add: List[TensorProto],
+    tensors_to_remove: Dict,
+):
     # Remove dangling tensors/nodes
     initializers = [
-        init for init in model.graph.initializer
+        init
+        for init in model.graph.initializer
         if not tensors_to_remove.pop(init.name, None)
     ]
     model.graph.ClearField("initializer")
     model.graph.initializer.extend(initializers)
 
     nodes = [
-        node for node in model.graph.node
-        if not (node.op_type == "Constant" and tensors_to_remove.pop(node.output[0], None))
+        node
+        for node in model.graph.node
+        if not (
+            node.op_type == "Constant" and tensors_to_remove.pop(node.output[0], None)
+        )
     ]
     model.graph.ClearField("node")
     model.graph.node.extend(nodes)
@@ -234,21 +263,19 @@ def _finalize_graph_changes(model: ModelProto,
 
     # Insert new nodes in a topologically order
     original_nodes = deque(list(model.graph.node))
-    new_nodes = {
-        node.input[0]: node for node in nodes_to_add
-    }
+    new_nodes = {node.input[0]: node for node in nodes_to_add}
     queue = deque([])
 
-    queue.extend([
-        new_nodes.pop(inp.name)
-        for inp in model.graph.input
-        if inp.name in new_nodes
-    ])
-    queue.extend([
-        new_nodes.pop(init.name)
-        for init in model.graph.initializer
-        if init.name in new_nodes
-    ])
+    queue.extend(
+        [new_nodes.pop(inp.name) for inp in model.graph.input if inp.name in new_nodes]
+    )
+    queue.extend(
+        [
+            new_nodes.pop(init.name)
+            for init in model.graph.initializer
+            if init.name in new_nodes
+        ]
+    )
 
     if not queue and original_nodes:
         queue.append(original_nodes.popleft())
@@ -260,7 +287,8 @@ def _finalize_graph_changes(model: ModelProto,
         model.graph.node.append(node)
 
         qdq_nodes = [
-            new_nodes.pop(output_name) for output_name in node.output
+            new_nodes.pop(output_name)
+            for output_name in node.output
             if output_name in new_nodes
         ]
         if qdq_nodes:
@@ -273,10 +301,12 @@ def _finalize_graph_changes(model: ModelProto,
 
 
 class _ParamUtils:
-    """ Param utilities """
+    """Param utilities"""
 
     @staticmethod
-    def get_shape(model: ModelProto, node: NodeProto, param_index: int) -> Optional[Sequence[int]]:
+    def get_shape(
+        model: ModelProto, node: NodeProto, param_index: int
+    ) -> Optional[Sequence[int]]:
         """
         Returns a list of shape for the param specifies
         :param model: ONNX model
@@ -289,7 +319,9 @@ class _ParamUtils:
         return None
 
     @staticmethod
-    def get_param(model: ModelProto, node: NodeProto, param_index: int) -> Optional[TensorProto]:
+    def get_param(
+        model: ModelProto, node: NodeProto, param_index: int
+    ) -> Optional[TensorProto]:
         """
         Returns the param tensor
         :param model: ONNX model
@@ -318,13 +350,13 @@ class _ParamUtils:
 
         def find_param_in_model_constants(param_name: str, model: ModelProto):
             for node in model.graph.node:
-                if node.op_type == 'Constant' and param_name in node.output:
+                if node.op_type == "Constant" and param_name in node.output:
                     for attribute in node.attribute:
-                        if attribute.name == 'value':
+                        if attribute.name == "value":
                             param = attribute.t
                             param.name = param_name
                             return param
-                if node.op_type == 'Identity' and param_name == node.output[0]:
+                if node.op_type == "Identity" and param_name == node.output[0]:
                     return _ParamUtils.get_param(model, node, 0)
             return None
 

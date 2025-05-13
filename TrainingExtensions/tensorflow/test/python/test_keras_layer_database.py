@@ -47,13 +47,12 @@ from aimet_tensorflow.examples import mnist_tf_model
 
 
 class TestTensorFlowLayerDatabase(unittest.TestCase):
-
     def test_layer_database_with_mnist(self):
         if version.parse(tf.version.VERSION) >= version.parse("2.00"):
             tf.keras.backend.clear_session()
-            
+
             # Get the basic mnist model
-            model = mnist_tf_model.create_model(data_format='channels_last')
+            model = mnist_tf_model.create_model(data_format="channels_last")
 
             layer_db = LayerDatabase(model=model)
 
@@ -79,13 +78,11 @@ class TestTensorFlowLayerDatabase(unittest.TestCase):
             self.assertEqual(layers[3].module.get_weights()[0].shape, (1024, 10))
 
     def test_layer_database_deepcopy(self):
-    
         if version.parse(tf.version.VERSION) >= version.parse("2.00"):
             tf.keras.backend.clear_session()
 
-
             # Get the basic mnist model
-            model = mnist_tf_model.create_model(data_format='channels_last')
+            model = mnist_tf_model.create_model(data_format="channels_last")
 
             layer_db = LayerDatabase(model=model)
             layers = list(layer_db._compressible_layers.values())
@@ -139,22 +136,36 @@ class TestTensorFlowLayerDatabase(unittest.TestCase):
             self.assertEqual(layers_copy[3].weight_shape, (10, 1024, 1, 1))
 
             # check the weight elements are equal in both data bases
-            self.assertTrue(np.array_equal(layers[0].module.get_weights()[0].shape,
-                                           layers_copy[0].module.get_weights()[0].shape))
-            self.assertTrue(np.array_equal(layers[1].module.get_weights()[0].shape,
-                                           layers_copy[1].module.get_weights()[0].shape))
-            self.assertTrue(np.array_equal(layers[2].module.get_weights()[0].shape,
-                                           layers_copy[2].module.get_weights()[0].shape))
-            self.assertTrue(np.array_equal(layers[3].module.get_weights()[0].shape,
-                                           layers_copy[3].module.get_weights()[0].shape))
-
+            self.assertTrue(
+                np.array_equal(
+                    layers[0].module.get_weights()[0].shape,
+                    layers_copy[0].module.get_weights()[0].shape,
+                )
+            )
+            self.assertTrue(
+                np.array_equal(
+                    layers[1].module.get_weights()[0].shape,
+                    layers_copy[1].module.get_weights()[0].shape,
+                )
+            )
+            self.assertTrue(
+                np.array_equal(
+                    layers[2].module.get_weights()[0].shape,
+                    layers_copy[2].module.get_weights()[0].shape,
+                )
+            )
+            self.assertTrue(
+                np.array_equal(
+                    layers[3].module.get_weights()[0].shape,
+                    layers_copy[3].module.get_weights()[0].shape,
+                )
+            )
 
     def test_layer_database_destroy(self):
-    
         if version.parse(tf.version.VERSION) >= version.parse("2.00"):
             tf.keras.backend.clear_session()
 
-            model = mnist_tf_model.create_model(data_format='channels_last')
+            model = mnist_tf_model.create_model(data_format="channels_last")
 
             layer_db = LayerDatabase(model=model)
 
@@ -163,41 +174,54 @@ class TestTensorFlowLayerDatabase(unittest.TestCase):
             self.assertEqual(layer_db.model, None)
             self.assertEqual(len(layer_db._compressible_layers.values()), 0)
 
-
     def test_replace_layer_with_sequential_of_two_layers(self):
         if version.parse(tf.version.VERSION) >= version.parse("2.00"):
             tf.keras.backend.clear_session()
-            
+
             # Load the basic mnist model
-            model = mnist_tf_model.create_model(data_format='channels_last')
+            model = mnist_tf_model.create_model(data_format="channels_last")
 
             layer_db = LayerDatabase(model)
 
-
             # Get the second conv layer to split and replcae
             layer_to_replace = list(layer_db._compressible_layers.values())[1]
-            
+
             # Create a new layers split which will replcae the original second conv layer
 
-            split_a = tf.keras.layers.Conv2D(filters=32, kernel_size=(5, 1),
-                                             data_format='channels_last',
-                                             activation=None, padding='same',
-                                             name=layer_to_replace.module.name + '_a', use_bias=False)
+            split_a = tf.keras.layers.Conv2D(
+                filters=32,
+                kernel_size=(5, 1),
+                data_format="channels_last",
+                activation=None,
+                padding="same",
+                name=layer_to_replace.module.name + "_a",
+                use_bias=False,
+            )
 
-            split_b = tf.keras.layers.Conv2D(filters=64, kernel_size=(1, 5),
-                                             data_format='channels_last',
-                                             activation='relu', padding='same',
-                                             name=layer_to_replace.module.name + '_b', use_bias=True)
+            split_b = tf.keras.layers.Conv2D(
+                filters=64,
+                kernel_size=(1, 5),
+                data_format="channels_last",
+                activation="relu",
+                padding="same",
+                name=layer_to_replace.module.name + "_b",
+                use_bias=True,
+            )
 
             split_a_op = split_a(model.layers[2].output)
             _ = split_b(split_a_op)
-            
-            
-            # Create Layer for new conv layers and replace them with original layer
-            layer_a = Layer(layer=split_a,name=split_a.name, output_shape=split_a.output_shape)
-            layer_b = Layer(layer=split_b,name=split_b.name, output_shape=split_b.output_shape)
 
-            layer_db.replace_layer_with_sequential_of_two_layers(layer_to_replace, layer_a, layer_b)
+            # Create Layer for new conv layers and replace them with original layer
+            layer_a = Layer(
+                layer=split_a, name=split_a.name, output_shape=split_a.output_shape
+            )
+            layer_b = Layer(
+                layer=split_b, name=split_b.name, output_shape=split_b.output_shape
+            )
+
+            layer_db.replace_layer_with_sequential_of_two_layers(
+                layer_to_replace, layer_a, layer_b
+            )
 
             layers = list(layer_db._compressible_layers.values())
 

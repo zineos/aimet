@@ -42,6 +42,7 @@ from aimet_torch.v2.nn import QuantizationMixin
 
 class CustomOp(torch.nn.Module):
     """Dummy custom module"""
+
     def forward(self, input):
         return input * 2 + 1
 
@@ -53,6 +54,7 @@ class TestQuantizedCustomOp:
 
     def test_custom_op_from_module_registered(self):
         try:
+
             @QuantizationMixin.implements(CustomOp)
             class QuantizedCustomOp(QuantizationMixin, CustomOp):
                 def quantized_forward(self, x):
@@ -71,6 +73,7 @@ class TestQuantizedCustomOp:
 
     def test_custom_op_wrap_registered(self):
         try:
+
             @QuantizationMixin.implements(CustomOp)
             class QuantizedCustomOp(QuantizationMixin, CustomOp):
                 def quantized_forward(self, x):

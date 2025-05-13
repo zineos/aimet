@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Adascale tests"""
+
 from unittest.mock import patch
 
 import torch
@@ -42,12 +43,19 @@ from torch.utils.data import Dataset, DataLoader
 
 
 from aimet_torch import QuantizationSimModel
-from aimet_torch.experimental.adascale.adascale_optimizer import AdaScale, model_to_block_mapping, apply_adascale
-from aimet_torch.experimental.adascale.adascale_quantizer import AdaScaleQuantizeDequantize
+from aimet_torch.experimental.adascale.adascale_optimizer import (
+    AdaScale,
+    model_to_block_mapping,
+    apply_adascale,
+)
+from aimet_torch.experimental.adascale.adascale_quantizer import (
+    AdaScaleQuantizeDequantize,
+)
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
 from aimet_torch.v2.utils import remove_all_quantizers, remove_activation_quantizers
 
 from .models_ import test_models
+
 
 def test_adascale_compute_encodings():
     """
@@ -85,7 +93,6 @@ def test_adascale_compute_encodings():
     for p in adascale_params:
         p.requires_grad = True
 
-
     prev_loss = None
     for epoch in range(5):
         optimizer = torch.optim.Adam(adascale_params)
@@ -99,7 +106,9 @@ def test_adascale_compute_encodings():
 
     modified_q = adascale_qdq.get_qdq()
     adascale_out = adascale_qdq(input_tensor)
-    input_with_s2_s3_folded = input_tensor / (torch.exp(adascale_qdq.s2) * torch.exp(adascale_qdq.s3))
+    input_with_s2_s3_folded = input_tensor / (
+        torch.exp(adascale_qdq.s2) * torch.exp(adascale_qdq.s3)
+    )
     modified_out = modified_q(input_with_s2_s3_folded)
 
     assert torch.equal(adascale_qdq.get_max(), modified_q.get_max())
@@ -137,14 +146,19 @@ class TestAdascale:
 
         sim = QuantizationSimModel(model, dummy_input)
 
-        with patch.dict(model_to_block_mapping,
-                        {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
+        with patch.dict(
+            model_to_block_mapping,
+            {
+                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
+                    test_models.ModelWithLinears()
+                )
+            },
+        ):
             apply_adascale(sim, data_loader, None, num_epochs)
 
         for block in sim.model.linear_blocks:
-            assert type(block.fc1.param_quantizers['weight']) == QuantizeDequantize
-            assert type(block.fc2.param_quantizers['weight']) == QuantizeDequantize
-
+            assert type(block.fc1.param_quantizers["weight"]) == QuantizeDequantize
+            assert type(block.fc2.param_quantizers["weight"]) == QuantizeDequantize
 
     def test_adascale_2(self):
         """validate QDQ is replaced correctly with AdascaleQDQ"""
@@ -153,30 +167,46 @@ class TestAdascale:
 
         sim = QuantizationSimModel(model, dummy_input)
         sim.model.requires_grad_(False)
-        with patch.dict(model_to_block_mapping, {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
+        with patch.dict(
+            model_to_block_mapping,
+            {
+                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
+                    test_models.ModelWithLinears()
+                )
+            },
+        ):
             blocks = AdaScale._get_blocks(sim)
             assert len(blocks) == 5
 
             AdaScale._replace_with_adascale_weight_quantizers(blocks)
 
             for block in blocks:
-                assert type(block.fc1.param_quantizers['weight']) == AdaScaleQuantizeDequantize
+                assert (
+                    type(block.fc1.param_quantizers["weight"])
+                    == AdaScaleQuantizeDequantize
+                )
 
                 trainable_params = AdaScale._get_adascale_trainable_params(block)
                 AdaScale._set_requires_grad(trainable_params, True)
 
                 for name, param in block.named_parameters():
-                    if name in ['fc1.param_quantizers.weight.beta',
-                                'fc1.param_quantizers.weight.gamma',
-                                'fc1.param_quantizers.weight.s2',
-                                'fc1.param_quantizers.weight.s3',
-                                'fc2.param_quantizers.weight.beta',
-                                'fc2.param_quantizers.weight.gamma',
-                                'fc2.param_quantizers.weight.s2',
-                                'fc2.param_quantizers.weight.s3']:
-                        assert param.requires_grad, "Trainable param is not set to train mode"
+                    if name in [
+                        "fc1.param_quantizers.weight.beta",
+                        "fc1.param_quantizers.weight.gamma",
+                        "fc1.param_quantizers.weight.s2",
+                        "fc1.param_quantizers.weight.s3",
+                        "fc2.param_quantizers.weight.beta",
+                        "fc2.param_quantizers.weight.gamma",
+                        "fc2.param_quantizers.weight.s2",
+                        "fc2.param_quantizers.weight.s3",
+                    ]:
+                        assert param.requires_grad, (
+                            "Trainable param is not set to train mode"
+                        )
                     else:
-                        assert param.requires_grad is False, "Only adascale params are trainable"
+                        assert param.requires_grad is False, (
+                            "Only adascale params are trainable"
+                        )
 
     def test_adascale_3(self):
         """test removing quantizers"""
@@ -185,33 +215,45 @@ class TestAdascale:
 
         sim = QuantizationSimModel(model, dummy_input)
         sim.model.requires_grad_(False)
-        with patch.dict(model_to_block_mapping,
-                        {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
+        with patch.dict(
+            model_to_block_mapping,
+            {
+                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
+                    test_models.ModelWithLinears()
+                )
+            },
+        ):
             blocks = AdaScale._get_blocks(sim)
             AdaScale._replace_with_adascale_weight_quantizers(blocks)
 
             for block in blocks:
                 with remove_all_quantizers(block):
                     for name, param in block.named_parameters():
-                        assert name in ['fc1.weight', 'fc1.bias', 'fc2.weight', 'fc2.bias']
+                        assert name in [
+                            "fc1.weight",
+                            "fc1.bias",
+                            "fc2.weight",
+                            "fc2.bias",
+                        ]
 
                 trainable_params = AdaScale._get_adascale_trainable_params(block)
                 AdaScale._set_requires_grad(trainable_params, True)
                 with remove_activation_quantizers(block):
                     for name, param in block.named_parameters():
-                        if name in ['fc1.weight',
-                                    'fc1.bias',
-                                    'fc2.weight',
-                                    'fc2.bias',
-                                    'fc1.param_quantizers.weight.min',
-                                    'fc1.param_quantizers.weight.max',
-                                    'fc2.param_quantizers.weight.min',
-                                    'fc2.param_quantizers.weight.max']:
+                        if name in [
+                            "fc1.weight",
+                            "fc1.bias",
+                            "fc2.weight",
+                            "fc2.bias",
+                            "fc1.param_quantizers.weight.min",
+                            "fc1.param_quantizers.weight.max",
+                            "fc2.param_quantizers.weight.min",
+                            "fc2.param_quantizers.weight.max",
+                        ]:
                             assert param.requires_grad == False
                         else:
                             assert param.requires_grad == True
             AdaScale._fold_weights_and_replace_with_qdq(blocks)
-
 
     def test_adascale_4(self):
         """test training of adascale weights"""
@@ -233,8 +275,14 @@ class TestAdascale:
         quantized_output = sim.model(dummy_input)
         loss_before_opt = torch.nn.functional.mse_loss(fp_output, quantized_output)
 
-        with patch.dict(model_to_block_mapping,
-                        {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
+        with patch.dict(
+            model_to_block_mapping,
+            {
+                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
+                    test_models.ModelWithLinears()
+                )
+            },
+        ):
             apply_adascale(sim, data_loader, None, num_epochs)
 
         adascale_output = sim.model(dummy_input)
@@ -242,18 +290,25 @@ class TestAdascale:
         assert (loss_before_opt - loss_after_opt) > 0
 
     def test_adascale_5(self):
-
         dummy_input = torch.rand(1, 3, 32, 64)
         model = test_models.ModelWithConsecutiveLinearBlocks()
         sim = QuantizationSimModel(model, dummy_input)
         trainable_params = AdaScale._get_adascale_trainable_params(sim.model)
         assert not trainable_params
 
-        with patch.dict(model_to_block_mapping,
-                        {type(test_models.ModelWithConsecutiveLinearBlocks()): type(test_models.ModelWithLinears())}):
+        with patch.dict(
+            model_to_block_mapping,
+            {
+                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
+                    test_models.ModelWithLinears()
+                )
+            },
+        ):
             adascale_blocks = AdaScale._get_blocks(sim)
 
             AdaScale._replace_with_adascale_weight_quantizers(adascale_blocks)
             for block in adascale_blocks:
                 trainable_params = AdaScale._get_adascale_trainable_params(block)
-                assert len(trainable_params) == 8 # two linear layers X [gamma, beta, s2, s3]
+                assert (
+                    len(trainable_params) == 8
+                )  # two linear layers X [gamma, beta, s2, s3]

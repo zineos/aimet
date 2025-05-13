@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Creates a compressed model by calling modules to split layers """
+"""Creates a compressed model by calling modules to split layers"""
+
 from decimal import Decimal
 import abc
 from typing import List
@@ -51,8 +52,13 @@ class Pruner(abc.ABC):
     Models a ML Model Pruner
     """
 
-    def prune_model(self, layer_db: LayerDatabase, layer_comp_ratio_list: List[LayerCompRatioPair],
-                    cost_metric: CostMetric, trainer) -> LayerDatabase:
+    def prune_model(
+        self,
+        layer_db: LayerDatabase,
+        layer_comp_ratio_list: List[LayerCompRatioPair],
+        cost_metric: CostMetric,
+        trainer,
+    ) -> LayerDatabase:
         """
         Prune a model given a list of layer-comp_ratio pairs
 
@@ -66,12 +72,13 @@ class Pruner(abc.ABC):
         # Copy the db
         comp_layer_db = copy.deepcopy(layer_db)
         for layer_comp_ratio in layer_comp_ratio_list:
-
             layer = comp_layer_db.find_layer_by_name(layer_comp_ratio.layer.name)
             comp_ratio = layer_comp_ratio.comp_ratio
 
             if comp_ratio is not None and comp_ratio < 1.0:
-                self._prune_layer(layer_db, comp_layer_db, layer, comp_ratio, cost_metric)
+                self._prune_layer(
+                    layer_db, comp_layer_db, layer, comp_ratio, cost_metric
+                )
 
             # fine-tuning the layer while creating the final model
             if trainer is not None:
@@ -80,8 +87,14 @@ class Pruner(abc.ABC):
         return comp_layer_db
 
     @abc.abstractmethod
-    def _prune_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase, layer: Layer,
-                     comp_ratio: Decimal, cost_metric: CostMetric):
+    def _prune_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: Decimal,
+        cost_metric: CostMetric,
+    ):
         """
         Replaces a given layer within the layer_db with a pruned version of the layer
         In this case, the replaced layer will be a sequential of two spatial-svd-decomposed layers

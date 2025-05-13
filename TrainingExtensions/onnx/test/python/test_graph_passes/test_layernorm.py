@@ -51,9 +51,15 @@ def test_layer_norm(elementwise_affine, bias):
     model = layernorm_model(dim=dim, elementwise_affine=elementwise_affine, bias=bias)
     graph = ConnectedGraph(model)
 
-    input_data = { "x" : np.random.rand(1, 3, dim, dim).astype(np.float32) }
-    sim = QuantizationSimModel(model, input_data, quant_scheme=QuantScheme.post_training_tf, default_param_bw=8,
-                            default_activation_bw=8, config_file="htp_v81")
+    input_data = {"x": np.random.rand(1, 3, dim, dim).astype(np.float32)}
+    sim = QuantizationSimModel(
+        model,
+        input_data,
+        quant_scheme=QuantScheme.post_training_tf,
+        default_param_bw=8,
+        default_activation_bw=8,
+        config_file="htp_v81",
+    )
 
     all_ops = graph.ordered_ops
     # Check if quantization is disabled for LayerNormalization intermediate op outputs
@@ -65,18 +71,27 @@ def test_layer_norm(elementwise_affine, bias):
     if elementwise_affine:
         layernorm_weight = all_ops[-2 if bias else -1]
         all_ops.remove(layernorm_weight)
-        assert_on_const_quantizers([layernorm_weight], sim.qc_quantize_op_dict, enabled=True)
+        assert_on_const_quantizers(
+            [layernorm_weight], sim.qc_quantize_op_dict, enabled=True
+        )
 
     assert_on_const_quantizers(all_ops, sim.qc_quantize_op_dict)
+
 
 def test_layer_norm_intermediate():
     dim = 32
     model = layernorm_model(dim=dim, include_add_ops=True)
     graph = ConnectedGraph(model)
 
-    input_data = { "x" : np.random.rand(1, 3, dim, dim).astype(np.float32) }
-    sim = QuantizationSimModel(model, input_data, quant_scheme=QuantScheme.post_training_tf, default_param_bw=8,
-                            default_activation_bw=8, config_file="htp_v81")
+    input_data = {"x": np.random.rand(1, 3, dim, dim).astype(np.float32)}
+    sim = QuantizationSimModel(
+        model,
+        input_data,
+        quant_scheme=QuantScheme.post_training_tf,
+        default_param_bw=8,
+        default_activation_bw=8,
+        config_file="htp_v81",
+    )
 
     all_ops = graph.ordered_ops
     # Check if quantization is disabled for LayerNormalization intermediate op outputs
@@ -87,4 +102,6 @@ def test_layer_norm_intermediate():
     layernorm_weight = all_ops[-3]
     all_ops.remove(layernorm_weight)
     assert_on_const_quantizers(all_ops, sim.qc_quantize_op_dict)
-    assert_on_const_quantizers([layernorm_weight], sim.qc_quantize_op_dict, enabled=True)
+    assert_on_const_quantizers(
+        [layernorm_weight], sim.qc_quantize_op_dict, enabled=True
+    )

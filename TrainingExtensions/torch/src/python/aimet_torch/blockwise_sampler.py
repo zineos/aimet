@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Blockwise sampling utilty"""
+
 import itertools
 import pickle
 import os
@@ -55,8 +56,9 @@ from aimet_torch import QuantizationSimModel, utils
 
 logger = utils.AimetLogger.get_area_logger(utils.AimetLogger.LogAreas.Utils)
 
+
 def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=None):
-    """ This function moves all tensors and huggingface Cache objects to the provided device"""
+    """This function moves all tensors and huggingface Cache objects to the provided device"""
 
     # Move all tensors to the provided device
     moved_inputs = change_tensor_device_placement(inputs, device)
@@ -64,14 +66,18 @@ def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=N
 
     # Helper function to find Cache objects in the provided inputs
     def find_cache(inputs):
-        if 'transformers' not in sys.modules:
+        if "transformers" not in sys.modules:
             # If the transformers module has not been imported, then there cannot be any Cache objects present
             # Since the base class is provided in transformers
             return None
-        if isinstance(inputs, sys.modules['transformers'].cache_utils.Cache):
+        if isinstance(inputs, sys.modules["transformers"].cache_utils.Cache):
             return inputs
         if isinstance(inputs, (tuple, list, dict)):
-            recursive_results = (find_cache(inp) for inp in inputs.values()) if isinstance(inputs, dict) else (find_cache(inp) for inp in inputs)
+            recursive_results = (
+                (find_cache(inp) for inp in inputs.values())
+                if isinstance(inputs, dict)
+                else (find_cache(inp) for inp in inputs)
+            )
             try:
                 return next(item for item in recursive_results if item is not None)
             except StopIteration:
@@ -87,11 +93,17 @@ def change_tensor_and_cache_device_placement(inputs, device, cache_movement_fn=N
                 # Generally, this strategy should work in most cases. However, there is no guarantee from the base
                 # Cache class on this. So, if this fails we will ask users to provide a custom function for moving
                 # the contents of their Cache object between devices
-                cache_obj.key_cache = change_tensor_device_placement(cache_obj.key_cache, device)
-                cache_obj.value_cache = change_tensor_device_placement(cache_obj.value_cache, device)
+                cache_obj.key_cache = change_tensor_device_placement(
+                    cache_obj.key_cache, device
+                )
+                cache_obj.value_cache = change_tensor_device_placement(
+                    cache_obj.value_cache, device
+                )
             except Exception as e:
-                logger.error("Please provide a cache_movement_fn to move contents of the Cache object used by the model"
-                               " between devices. Or, please modify your model to use a DynamicCache object.")
+                logger.error(
+                    "Please provide a cache_movement_fn to move contents of the Cache object used by the model"
+                    " between devices. Or, please modify your model to use a DynamicCache object."
+                )
                 raise e
 
     return moved_inputs
@@ -104,6 +116,7 @@ class CachedBlockInput:
     allows the blockwise sampler to be used with a much higher number of samples, although there is a slight slowdown
     due to the disk I/O incurred by disk operations.
     """
+
     def __init__(self, args, kwargs, place_on_disk: bool = False):
         self._args = args
         self._kwargs = kwargs
@@ -118,7 +131,7 @@ class CachedBlockInput:
             self.enable_disk_caching()
 
     def enable_disk_caching(self):
-        """ Function to enable disk caching """
+        """Function to enable disk caching"""
         fd, self.args_path = tempfile.mkstemp(suffix=".pkl", text=True)
         os.close(fd)  # If fd is not closed then it remains open
         self.args_changed = True
@@ -131,9 +144,9 @@ class CachedBlockInput:
         self._cache_on_disk()
 
     def disable_disk_caching(self):
-        """ Function to disable disk caching """
+        """Function to disable disk caching"""
         if not self.place_on_disk:
-            return # Disk caching already disabled
+            return  # Disk caching already disabled
 
         self.place_on_disk = False
         os.remove(self.args_path)
@@ -141,7 +154,7 @@ class CachedBlockInput:
 
     @contextlib.contextmanager
     def load(self):
-        """ Context manager that ensures CachedBlockInput is loaded from disk, and returned to the correct location. """
+        """Context manager that ensures CachedBlockInput is loaded from disk, and returned to the correct location."""
         if self.place_on_disk:
             self._load_from_disk()
 
@@ -152,34 +165,38 @@ class CachedBlockInput:
 
     @property
     def args(self):
-        """ Getter function for captured args """
+        """Getter function for captured args"""
         return self._args
 
     @args.setter
     def args(self, args):
-        """ Setter function for captured args """
+        """Setter function for captured args"""
         if self._args is None:
-            raise RuntimeError("Attempting to modify args without loading from disk. Please place this line inside"
-                               " a .load() context manager.")
+            raise RuntimeError(
+                "Attempting to modify args without loading from disk. Please place this line inside"
+                " a .load() context manager."
+            )
         self.args_changed = True
         self._args = args
 
     @property
     def kwargs(self):
-        """ Getter function for captured kwargs """
+        """Getter function for captured kwargs"""
         return self._kwargs
 
     @kwargs.setter
     def kwargs(self, kwargs):
-        """ Setter function for captured kwargs """
+        """Setter function for captured kwargs"""
         if self._kwargs is None:
-            raise RuntimeError("Attempting to modify kwargs without loading from disk. Please place this line inside"
-                               " a .load() context manager.")
+            raise RuntimeError(
+                "Attempting to modify kwargs without loading from disk. Please place this line inside"
+                " a .load() context manager."
+            )
         self.kwargs_changed = True
         self._kwargs = kwargs
 
     def _cache_on_disk(self):
-        """ Helper function to cache on disk. """
+        """Helper function to cache on disk."""
         assert self.place_on_disk
 
         if self.args_changed:
@@ -194,7 +211,7 @@ class CachedBlockInput:
         self._kwargs = None
 
     def _load_from_disk(self):
-        """ Helper function to load from disk. """
+        """Helper function to load from disk."""
         assert self.place_on_disk
 
         with open(self.args_path, "rb") as args_file:
@@ -206,7 +223,7 @@ class CachedBlockInput:
         self.kwargs_changed = False
 
     def to(self, device):
-        """ Helper function to move loaded args and kwargs between devices."""
+        """Helper function to move loaded args and kwargs between devices."""
         if self.args is not None:
             self._args = change_tensor_and_cache_device_placement(self.args, device)
         if self.kwargs is not None:
@@ -215,16 +232,23 @@ class CachedBlockInput:
         return self
 
     def __del__(self):
-        """ Destructor to make sure that temp files are cleaned up. """
+        """Destructor to make sure that temp files are cleaned up."""
         self.disable_disk_caching()
 
     def __deepcopy__(self, memo):
-        """ Custom deepcopy implementation to make sure that tensor computational graphs are not copied. """
-        with self.load(), patch_attr(torch.Tensor, '__deepcopy__', lambda self, memo: self.detach().clone()):
-            return CachedBlockInput(deepcopy(self.args), deepcopy(self.kwargs), deepcopy(self.place_on_disk))
+        """Custom deepcopy implementation to make sure that tensor computational graphs are not copied."""
+        with (
+            self.load(),
+            patch_attr(
+                torch.Tensor, "__deepcopy__", lambda self, memo: self.detach().clone()
+            ),
+        ):
+            return CachedBlockInput(
+                deepcopy(self.args), deepcopy(self.kwargs), deepcopy(self.place_on_disk)
+            )
 
     def __iter__(self):
-        """ Allows tuple unpacking on objects of this class. """
+        """Allows tuple unpacking on objects of this class."""
         return iter((self.args, self.kwargs))
 
 
@@ -238,14 +262,15 @@ class BlockwiseSampler:
     use of any user adjustments to quantization parameters for a particular block made in the sampling loop.
     NOTE: users CAN NOT modify model weights during the sample() loop
     """
+
     def __init__(
-            self,
-            sim: QuantizationSimModel,
-            blocks: List[torch.nn.Module],
-            dataloader: DataLoader,
-            forward_fn: Callable = default_forward_fn,
-            keep_unused_blocks_on_cpu: bool = True,
-            cache_activations_on_disk: bool = True
+        self,
+        sim: QuantizationSimModel,
+        blocks: List[torch.nn.Module],
+        dataloader: DataLoader,
+        forward_fn: Callable = default_forward_fn,
+        keep_unused_blocks_on_cpu: bool = True,
+        cache_activations_on_disk: bool = True,
     ):
         self.sim = sim
         self.blocks = blocks
@@ -263,11 +288,14 @@ class BlockwiseSampler:
 
         class StopForwardExceptionWithInput(utils.StopForwardException):
             """Exception raised in order to stop forward execution through the model. Holds module input data."""
+
             def __init__(self, captured_input):
                 self.captured_input = captured_input
 
         def hook_fn(_, args, kwargs):
-            raise StopForwardExceptionWithInput(deepcopy(CachedBlockInput(args, kwargs)))
+            raise StopForwardExceptionWithInput(
+                deepcopy(CachedBlockInput(args, kwargs))
+            )
 
         hook = self.blocks[0].register_forward_pre_hook(hook_fn, with_kwargs=True)
         try:
@@ -286,7 +314,9 @@ class BlockwiseSampler:
         for block in self.blocks[:-1]:
             with next_block_input.load():
                 next_block_input.to(utils.get_device(block))
-                next_block_input.args = block(*next_block_input.args, **next_block_input.kwargs)
+                next_block_input.args = block(
+                    *next_block_input.args, **next_block_input.kwargs
+                )
                 next_block_input.to("cpu")
 
                 if not isinstance(next_block_input.args, tuple):
@@ -294,8 +324,17 @@ class BlockwiseSampler:
 
             yield next_block_input
 
-
-    def sample(self, device=None, desc:str="Blocks processed") -> Generator[Tuple[Union[torch.nn.Module, torch.nn.ModuleList], List[CachedBlockInput], List[CachedBlockInput]], None, None]:
+    def sample(
+        self, device=None, desc: str = "Blocks processed"
+    ) -> Generator[
+        Tuple[
+            Union[torch.nn.Module, torch.nn.ModuleList],
+            List[CachedBlockInput],
+            List[CachedBlockInput],
+        ],
+        None,
+        None,
+    ]:
         """
         Main generator function for blockwise sampler. Each loop of this generator yields a tuple of
         (block, [list of FP inputs to block], [list of QT inputs to block]) based on the list of blocks provided during
@@ -324,11 +363,15 @@ class BlockwiseSampler:
                         prev_block.to(device)
 
                     # Quantizers must be ENABLED when calculating quantized block inputs
-                    qt_block_inputs = [next(block_input) for block_input in qt_inferences]
+                    qt_block_inputs = [
+                        next(block_input) for block_input in qt_inferences
+                    ]
 
                     # Quantizers must be DISABLED when calculating FP block inputs
                     with utils.disable_all_quantizers(self.sim.model):
-                        fp_block_inputs = [next(block_input) for block_input in fp_inferences]
+                        fp_block_inputs = [
+                            next(block_input) for block_input in fp_inferences
+                        ]
 
                     if self.keep_unused_blocks_on_cpu:
                         prev_block.to("cpu")

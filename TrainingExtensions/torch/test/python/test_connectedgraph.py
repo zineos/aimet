@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" This file contains unit tests for testing ConnectedGraph module for PyTorch. """
+"""This file contains unit tests for testing ConnectedGraph module for PyTorch."""
+
 import copy
 
 import pytest
@@ -44,8 +45,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import aimet_torch.utils
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_output_ops,\
-    get_all_ops_with_constant_inputs, CG_SPLIT
+from aimet_common.connected_graph.connectedgraph_utils import (
+    get_all_input_ops,
+    get_all_output_ops,
+    get_all_ops_with_constant_inputs,
+    CG_SPLIT,
+)
 from .models import test_models
 from aimet_common.connected_graph.product import Product
 from aimet_torch.meta.connectedgraph import ConnectedGraph
@@ -56,10 +61,10 @@ import aimet_torch._base.nn.modules.custom as aimet_modules
 
 
 class TestConnectedGraph(unittest.TestCase):
-    """ Unit tests for testing ConnectedGraph module"""
+    """Unit tests for testing ConnectedGraph module"""
 
     def test_single_residual(self):
-        """ Test building ConnectedGraph on single residual model """
+        """Test building ConnectedGraph on single residual model"""
         model = test_models.SingleResidual()
         model.eval()
         inp_shape = (1, 3, 32, 32)
@@ -78,23 +83,25 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(model.fc, output_ops[0].get_module())
 
     def test_multi_input(self):
-        """ Test building ConnectedGraph on a model with multiple inputs """
+        """Test building ConnectedGraph on a model with multiple inputs"""
         model = test_models.MultiInput()
         model.eval()
         inp_shape_1 = (1, 3, 32, 32)
         inp_shape_2 = (1, 3, 20, 20)
-        inp_tensor_list = create_rand_tensors_given_shapes([inp_shape_1, inp_shape_2], get_device(model))
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [inp_shape_1, inp_shape_2], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, inp_tensor_list)
         self.assertEqual(11, len(conn_graph.ordered_ops))
         # Split count of 1 due to reshape having a split
         self.assertEqual(1, conn_graph._split_count)
-        conv1 = conn_graph.get_op_from_module_name('MultiInput.conv1')
+        conv1 = conn_graph.get_op_from_module_name("MultiInput.conv1")
         self.assertEqual(model.conv1, conv1.get_module())
         self.assertEqual(2, len(conv1.inputs))
-        conv2 = conn_graph.get_op_from_module_name('MultiInput.conv2')
+        conv2 = conn_graph.get_op_from_module_name("MultiInput.conv2")
         self.assertEqual(model.conv2, conv2.get_module())
         self.assertEqual(3, len(conv2.inputs))
-        conv3 = conn_graph.get_op_from_module_name('MultiInput.conv3')
+        conv3 = conn_graph.get_op_from_module_name("MultiInput.conv3")
         self.assertEqual(model.conv3, conv3.get_module())
         self.assertEqual(3, len(conv3.inputs))
 
@@ -108,34 +115,56 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(model.fc, output_ops[0].get_module())
 
     def test_module_list(self):
-        """ Test building ConnectedGraph on a model with module list """
+        """Test building ConnectedGraph on a model with module list"""
         model = test_models.ModuleListModel()
         model.eval()
         inp_data_1 = torch.rand(1, 3, 8, 8)
         conn_graph = ConnectedGraph(model, (inp_data_1,))
         self.assertEqual(10, len(conn_graph.ordered_ops))
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.mod_list.4'), conn_graph.ordered_ops[0])
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.seq_list.2'), conn_graph.ordered_ops[1])
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.mod_list.1'), conn_graph.ordered_ops[2])
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.mod_list.0'), conn_graph.ordered_ops[3])
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.mod_list.2'), conn_graph.ordered_ops[4])
-        self.assertEqual(conn_graph.get_op_from_module_name('ModuleListModel.seq_list.0'), conn_graph.ordered_ops[5])
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.mod_list.4"),
+            conn_graph.ordered_ops[0],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.seq_list.2"),
+            conn_graph.ordered_ops[1],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.mod_list.1"),
+            conn_graph.ordered_ops[2],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.mod_list.0"),
+            conn_graph.ordered_ops[3],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.mod_list.2"),
+            conn_graph.ordered_ops[4],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("ModuleListModel.seq_list.0"),
+            conn_graph.ordered_ops[5],
+        )
 
     def test_concat(self):
-        """ Test building ConnectedGraph on a model with concat """
+        """Test building ConnectedGraph on a model with concat"""
         model = test_models.ConcatModel()
         model.eval()
         inp_shape_1 = (1, 3, 8, 8)
         inp_shape_2 = (1, 3, 8, 8)
         inp_shape_3 = (1, 3, 8, 8)
-        inp_tensor_list = create_rand_tensors_given_shapes([inp_shape_1, inp_shape_2, inp_shape_3], get_device(model))
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [inp_shape_1, inp_shape_2, inp_shape_3], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, inp_tensor_list)
-        concat_op = [op for op in conn_graph.get_all_ops().values() if op.type == 'Concat'][0]
+        concat_op = [
+            op for op in conn_graph.get_all_ops().values() if op.type == "Concat"
+        ][0]
         self.assertEqual(4, len(concat_op.inputs))
         self.assertEqual(14, concat_op.output_shape[1])
 
     def test_dropouts(self):
-        """ Test building ConnectedGraph on a model with dropouts """
+        """Test building ConnectedGraph on a model with dropouts"""
         model = test_models.ModelWithDropouts()
         model.eval()
         inp_shape = (1, 3, 32, 32)
@@ -146,13 +175,13 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(1, conn_graph._split_count)
         # All ops will include 2 inserted split ops
         self.assertEqual(10, len(conn_graph.get_all_ops().keys()))
-        dropout_1_op = conn_graph.get_all_ops()['Dropout_3']
-        dropout_2_op = conn_graph.get_all_ops()['Dropout_4']
+        dropout_1_op = conn_graph.get_all_ops()["Dropout_3"]
+        dropout_2_op = conn_graph.get_all_ops()["Dropout_4"]
         self.assertEqual(model.dropout1, dropout_1_op.get_module())
         self.assertEqual(model.dropout2, dropout_2_op.get_module())
 
     def test_sequential(self):
-        """ Test building ConnectedGraph on a model constructed with nn.Sequential Module """
+        """Test building ConnectedGraph on a model constructed with nn.Sequential Module"""
         model = test_models.SequentialModel()
         model.eval()
         inp_data_1 = torch.rand(1, 3, 8, 8)
@@ -162,41 +191,71 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(1, conn_graph._split_count)
 
     def test_hierarchical_model(self):
-        """ Test building ConnectedGraph on model which multi-level aggregation of nn.Modules  """
+        """Test building ConnectedGraph on model which multi-level aggregation of nn.Modules"""
         model = test_models.HierarchicalModel()
         model.eval()
         conv_shape = (1, 64, 32, 32)
         inp_shape = (1, 3, 32, 32)
         seq_shape = (1, 3, 8, 8)
         device = get_device(model)
-        inp_tensor_list = create_rand_tensors_given_shapes([conv_shape, inp_shape, conv_shape, inp_shape, seq_shape], device)
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [conv_shape, inp_shape, conv_shape, inp_shape, seq_shape], device
+        )
         conn_graph = ConnectedGraph(model, inp_tensor_list)
         self.assertEqual(95, len(conn_graph.ordered_ops))
         self.assertEqual(5, conn_graph._split_count)
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.conv1.conv'), conn_graph.ordered_ops[0])
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.conv1.conv"),
+            conn_graph.ordered_ops[0],
+        )
         self.assertEqual(conn_graph.ordered_ops[0].residing_module, model.conv1)
-        self.assertEqual(conn_graph.ordered_ops[4].type, 'narrow')
+        self.assertEqual(conn_graph.ordered_ops[4].type, "narrow")
         self.assertEqual(conn_graph.ordered_ops[4].get_module(), None)
         self.assertEqual(conn_graph.ordered_ops[4].residing_module, model)
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.nm1.tm1.conv1'), conn_graph.ordered_ops[5])
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.nm1.tm1.conv1"),
+            conn_graph.ordered_ops[5],
+        )
         self.assertEqual(conn_graph.ordered_ops[5].residing_module, model.nm1.tm1)
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.nm1.tm2.conv1'), conn_graph.ordered_ops[20])
-        self.assertEqual(conn_graph.ordered_ops[35].type, 'Concat')
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.nm1.tm2.conv1"),
+            conn_graph.ordered_ops[20],
+        )
+        self.assertEqual(conn_graph.ordered_ops[35].type, "Concat")
         self.assertEqual(conn_graph.ordered_ops[35].get_module(), None)
         self.assertEqual(conn_graph.ordered_ops[35].residing_module, model.nm1)
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.conv2.conv'), conn_graph.ordered_ops[36])
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.multi_conv.seq_list.0.conv'), conn_graph.ordered_ops[40])
-        self.assertEqual(conn_graph.ordered_ops[40].residing_module, model.multi_conv.seq_list[0])
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.nm2.tm1.conv1'), conn_graph.ordered_ops[53])
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.nm2.tm2.conv1'), conn_graph.ordered_ops[68])
-        self.assertEqual(conn_graph.get_op_from_module_name('HierarchicalModel.sq.seq_list.0'), conn_graph.ordered_ops[84])
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.conv2.conv"),
+            conn_graph.ordered_ops[36],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name(
+                "HierarchicalModel.multi_conv.seq_list.0.conv"
+            ),
+            conn_graph.ordered_ops[40],
+        )
+        self.assertEqual(
+            conn_graph.ordered_ops[40].residing_module, model.multi_conv.seq_list[0]
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.nm2.tm1.conv1"),
+            conn_graph.ordered_ops[53],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.nm2.tm2.conv1"),
+            conn_graph.ordered_ops[68],
+        )
+        self.assertEqual(
+            conn_graph.get_op_from_module_name("HierarchicalModel.sq.seq_list.0"),
+            conn_graph.ordered_ops[84],
+        )
         self.assertEqual(conn_graph.ordered_ops[84].residing_module, model.sq.seq_list)
-        self.assertEqual(conn_graph.ordered_ops[92].type, 'view')
+        self.assertEqual(conn_graph.ordered_ops[92].type, "view")
         self.assertEqual(conn_graph.ordered_ops[92].get_module(), None)
         self.assertEqual(conn_graph.ordered_ops[92].residing_module, model.sq)
 
     def test_passthrough_op_last_module(self):
-        """ Test building a connected graph on a model where a torch.nn.Identity is the last module in the graph. """
+        """Test building a connected graph on a model where a torch.nn.Identity is the last module in the graph."""
         model = test_models.PassThroughOpLastLayerModel()
         model.eval()
         inp_shape = (1, 3, 32, 32)
@@ -205,23 +264,37 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(1, len(conn_graph.ordered_ops))
 
     def test_multi_output_model(self):
-        """ Test multi-output model with Tuple Tensor as intermediate  output. """
+        """Test multi-output model with Tuple Tensor as intermediate  output."""
         model = test_models.MultiOutputModel()
         inp_data = torch.rand(1, 3, 8, 8)
         conn_graph = ConnectedGraph(model, (inp_data,))
         self.assertEqual(7, len(conn_graph.ordered_ops))
-        self.assertEqual(6, len([op for op in conn_graph.get_all_ops().keys() if 'Conv' in op]))
-        self.assertEqual(0, len([op for op in conn_graph.get_all_ops().keys() if 'Tuple' in op]))
-        self.assertEqual(0, len([product for product in conn_graph.get_all_products().keys() if 'Tuple' in product]))
-        self.assertEqual('Concat', conn_graph.ordered_ops[-1].type)
+        self.assertEqual(
+            6, len([op for op in conn_graph.get_all_ops().keys() if "Conv" in op])
+        )
+        self.assertEqual(
+            0, len([op for op in conn_graph.get_all_ops().keys() if "Tuple" in op])
+        )
+        self.assertEqual(
+            0,
+            len(
+                [
+                    product
+                    for product in conn_graph.get_all_products().keys()
+                    if "Tuple" in product
+                ]
+            ),
+        )
+        self.assertEqual("Concat", conn_graph.ordered_ops[-1].type)
 
     def test_multi_output_with_unuse_model(self):
-        """ Test multi-output model with Tuple Tensor as intermediate output and with one of tuple tensor not used """
+        """Test multi-output model with Tuple Tensor as intermediate output and with one of tuple tensor not used"""
 
         class MultiOutputWithUnuseModel(torch.nn.Module):
             """
             Model with Tuple of Tensors as output with one output tensor unused
             """
+
             def __init__(self):
                 super(MultiOutputWithUnuseModel, self).__init__()
                 self.layer = test_models.TupleOutputModel()
@@ -238,24 +311,32 @@ class TestConnectedGraph(unittest.TestCase):
         model = MultiOutputWithUnuseModel()
         conn_graph = ConnectedGraph(model, (inp_data,))
         self.assertEqual(6, len(conn_graph.ordered_ops))
-        self.assertEqual(5, len([op for op in conn_graph.get_all_ops().keys() if 'Conv' in op]))
-        self.assertEqual(0, len([op for op in conn_graph.get_all_ops().keys() if 'Tuple' in op]))
-        self.assertEqual('Concat', conn_graph.ordered_ops[-1].type)
+        self.assertEqual(
+            5, len([op for op in conn_graph.get_all_ops().keys() if "Conv" in op])
+        )
+        self.assertEqual(
+            0, len([op for op in conn_graph.get_all_ops().keys() if "Tuple" in op])
+        )
+        self.assertEqual("Concat", conn_graph.ordered_ops[-1].type)
 
-        conv0 = conn_graph.get_op_from_module_name('MultiOutputWithUnuseModel.layer.conv1')
-        conv2 = conn_graph.get_op_from_module_name('MultiOutputWithUnuseModel.layer.conv3')
-        conv3 = conn_graph.get_op_from_module_name('MultiOutputWithUnuseModel.conv1')
-        conv4 = conn_graph.get_op_from_module_name('MultiOutputWithUnuseModel.conv2')
+        conv0 = conn_graph.get_op_from_module_name(
+            "MultiOutputWithUnuseModel.layer.conv1"
+        )
+        conv2 = conn_graph.get_op_from_module_name(
+            "MultiOutputWithUnuseModel.layer.conv3"
+        )
+        conv3 = conn_graph.get_op_from_module_name("MultiOutputWithUnuseModel.conv1")
+        conv4 = conn_graph.get_op_from_module_name("MultiOutputWithUnuseModel.conv2")
         concat = conn_graph.ordered_ops[-1]
 
         expected_products = [
             # layer #1 to conv1,conv2
             (conv0, conv3),
             (conv2, conv4),
-
             # conv1,conv2 to cat
             (conv3, concat),
-            (conv4, concat)]
+            (conv4, concat),
+        ]
 
         products = conn_graph.get_all_products().values()
         for product in products:
@@ -265,16 +346,24 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(0, len(expected_products))
 
     def test_multi_output_with_matched_layers(self):
-        """ Test a multiple layer multi-output model with intermediate Tuple Tensors in order """
+        """Test a multiple layer multi-output model with intermediate Tuple Tensors in order"""
+
         class MultiOutputLayersModel(torch.nn.Module):
             """
             Model with Tuple of Tensors as output in order between layers
             """
+
             def __init__(self):
                 super(MultiOutputLayersModel, self).__init__()
-                self.layer1 = test_models.ConfigurableTupleOutputModel(channels=(1, 2, 3))
-                self.layer2 = test_models.ConfigurableTupleOutputModel(channels=(1, 2, 3))
-                self.layer3 = test_models.ConfigurableTupleOutputModel(channels=(1, 2, 3))
+                self.layer1 = test_models.ConfigurableTupleOutputModel(
+                    channels=(1, 2, 3)
+                )
+                self.layer2 = test_models.ConfigurableTupleOutputModel(
+                    channels=(1, 2, 3)
+                )
+                self.layer3 = test_models.ConfigurableTupleOutputModel(
+                    channels=(1, 2, 3)
+                )
 
             def forward(self, *inputs):
                 x1, x2, x3 = self.layer1(inputs[0], inputs[1], inputs[2])
@@ -283,24 +372,50 @@ class TestConnectedGraph(unittest.TestCase):
                 return torch.cat([z1, z2, z3], 1)
 
         model = MultiOutputLayersModel()
-        inp_tensor_list = create_rand_tensors_given_shapes([(1, 1, 8, 8), (1, 2, 8, 8), (1, 3, 8, 8)], get_device(model))
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [(1, 1, 8, 8), (1, 2, 8, 8), (1, 3, 8, 8)], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, inp_tensor_list)
         self.assertEqual(10, len(conn_graph.ordered_ops))
-        self.assertEqual(9, len([op for op in conn_graph.get_all_ops().keys() if 'Conv' in op]))
-        self.assertEqual(0, len([op for op in conn_graph.get_all_ops().keys() if 'Tuple' in op]))
-        self.assertEqual('Concat', conn_graph.ordered_ops[-1].type)
+        self.assertEqual(
+            9, len([op for op in conn_graph.get_all_ops().keys() if "Conv" in op])
+        )
+        self.assertEqual(
+            0, len([op for op in conn_graph.get_all_ops().keys() if "Tuple" in op])
+        )
+        self.assertEqual("Concat", conn_graph.ordered_ops[-1].type)
 
         product_names = conn_graph.get_all_products().keys()
-        self.assertEqual(0, len([product for product in product_names if 'Tuple' in product]))
-        conv0 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer1.conv1')
-        conv1 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer1.conv2')
-        conv2 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer1.conv3')
-        conv3 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer2.conv1')
-        conv4 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer2.conv2')
-        conv5 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer2.conv3')
-        conv6 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer3.conv1')
-        conv7 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer3.conv2')
-        conv8 = conn_graph.get_op_from_module_name('MultiOutputLayersModel.layer3.conv3')
+        self.assertEqual(
+            0, len([product for product in product_names if "Tuple" in product])
+        )
+        conv0 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer1.conv1"
+        )
+        conv1 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer1.conv2"
+        )
+        conv2 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer1.conv3"
+        )
+        conv3 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer2.conv1"
+        )
+        conv4 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer2.conv2"
+        )
+        conv5 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer2.conv3"
+        )
+        conv6 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer3.conv1"
+        )
+        conv7 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer3.conv2"
+        )
+        conv8 = conn_graph.get_op_from_module_name(
+            "MultiOutputLayersModel.layer3.conv3"
+        )
         concat = conn_graph.ordered_ops[-1]
 
         expected_products = [
@@ -308,16 +423,15 @@ class TestConnectedGraph(unittest.TestCase):
             (conv0, conv3),
             (conv1, conv4),
             (conv2, conv5),
-
             # layer #2 to layer #3
             (conv3, conv6),
             (conv4, conv7),
             (conv5, conv8),
-
             # layer #3 to cat
             (conv6, concat),
             (conv7, concat),
-            (conv8, concat)]
+            (conv8, concat),
+        ]
 
         products = conn_graph.get_all_products().values()
         for product in products:
@@ -327,16 +441,24 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(0, len(expected_products))
 
     def test_multi_output_with_shuffled_layers(self):
-        """ Test a multiple layer multi-output model with intermediate Tuple Tensors shuffled """
+        """Test a multiple layer multi-output model with intermediate Tuple Tensors shuffled"""
+
         class MultiOutputShuffledModel(torch.nn.Module):
             """
             Model with Tuple of Tensors as output shuffled between layers
             """
+
             def __init__(self):
                 super(MultiOutputShuffledModel, self).__init__()
-                self.layer1 = test_models.ConfigurableTupleOutputModel(channels=(1, 2, 3))
-                self.layer2 = test_models.ConfigurableTupleOutputModel(channels=(2, 3, 1))
-                self.layer3 = test_models.ConfigurableTupleOutputModel(channels=(3, 1, 2))
+                self.layer1 = test_models.ConfigurableTupleOutputModel(
+                    channels=(1, 2, 3)
+                )
+                self.layer2 = test_models.ConfigurableTupleOutputModel(
+                    channels=(2, 3, 1)
+                )
+                self.layer3 = test_models.ConfigurableTupleOutputModel(
+                    channels=(3, 1, 2)
+                )
 
             def forward(self, *inputs):
                 x1, x2, x3 = self.layer1(inputs[0], inputs[1], inputs[2])
@@ -345,40 +467,65 @@ class TestConnectedGraph(unittest.TestCase):
                 return torch.cat([z1, z2, z3, x1], 1)
 
         model = MultiOutputShuffledModel()
-        inp_tensor_list = create_rand_tensors_given_shapes([(1, 1, 8, 8), (1, 2, 8, 8), (1, 3, 8, 8)], get_device(model))
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [(1, 1, 8, 8), (1, 2, 8, 8), (1, 3, 8, 8)], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, inp_tensor_list)
         self.assertEqual(10, len(conn_graph.ordered_ops))
-        self.assertEqual(9, len([op for op in conn_graph.get_all_ops().keys() if 'Conv' in op]))
-        self.assertEqual(0, len([op for op in conn_graph.get_all_ops().keys() if 'Tuple' in op]))
-        self.assertEqual('Concat', conn_graph.ordered_ops[-1].type)
+        self.assertEqual(
+            9, len([op for op in conn_graph.get_all_ops().keys() if "Conv" in op])
+        )
+        self.assertEqual(
+            0, len([op for op in conn_graph.get_all_ops().keys() if "Tuple" in op])
+        )
+        self.assertEqual("Concat", conn_graph.ordered_ops[-1].type)
 
-        conv0 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer1.conv1')
-        conv1 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer1.conv2')
-        conv2 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer1.conv3')
-        conv3 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer2.conv1')
-        conv4 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer2.conv2')
-        conv5 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer2.conv3')
-        conv6 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer3.conv1')
-        conv7 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer3.conv2')
-        conv8 = conn_graph.get_op_from_module_name('MultiOutputShuffledModel.layer3.conv3')
+        conv0 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer1.conv1"
+        )
+        conv1 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer1.conv2"
+        )
+        conv2 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer1.conv3"
+        )
+        conv3 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer2.conv1"
+        )
+        conv4 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer2.conv2"
+        )
+        conv5 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer2.conv3"
+        )
+        conv6 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer3.conv1"
+        )
+        conv7 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer3.conv2"
+        )
+        conv8 = conn_graph.get_op_from_module_name(
+            "MultiOutputShuffledModel.layer3.conv3"
+        )
         concat = conn_graph.ordered_ops[-1]
-        split = [op for op in conn_graph.get_all_ops().values() if op.type == CG_SPLIT][0]
+        split = [op for op in conn_graph.get_all_ops().values() if op.type == CG_SPLIT][
+            0
+        ]
 
         expected_products = [
             # layer #1 to layer #2
             (conv0, split),
             (conv1, conv3),
             (conv2, conv4),
-
             # layer #2 to layer #3
             (conv3, conv8),
             (conv4, conv6),
             (conv5, conv7),
-
             # layer #3 to cat
             (conv6, concat),
             (conv7, concat),
-            (conv8, concat)]
+            (conv8, concat),
+        ]
 
         products = conn_graph.get_all_products().values()
         for product in products:
@@ -386,33 +533,37 @@ class TestConnectedGraph(unittest.TestCase):
                 self.assertEqual(product.shape, product.producer.output_shape)
                 expected_products.remove((product.producer, product.consumers[0]))
         self.assertEqual(0, len(expected_products))
-        split_product = conn_graph.get_all_products()['CG_Split_0__to__multiple_ops']
+        split_product = conn_graph.get_all_products()["CG_Split_0__to__multiple_ops"]
         self.assertTrue(conv5 in split_product.consumers)
         self.assertTrue(concat in split_product.consumers)
 
     def test_submodules_with_sequence_and_module_list(self):
-        """ Test building ConnectedGraph on a model with sequence and module list """
+        """Test building ConnectedGraph on a model with sequence and module list"""
 
         class ModuleListAndSequentialModel(torch.nn.Module):
             def __init__(self):
                 super(ModuleListAndSequentialModel, self).__init__()
-                self.mod_list = torch.nn.ModuleList([
-                    torch.nn.Sequential(
-                        test_models.BasicConv2d(kernel_size=3),
-                        test_models.BasicConv2d(kernel_size=3)
-                    ),
-                    torch.nn.Sequential(
+                self.mod_list = torch.nn.ModuleList(
+                    [
                         torch.nn.Sequential(
                             test_models.BasicConv2d(kernel_size=3),
-                            test_models.BasicConv2d(kernel_size=3)
+                            test_models.BasicConv2d(kernel_size=3),
                         ),
-                    ),
-                    torch.nn.ModuleList([
-                        torch.nn.ModuleList([
-                       test_models.BasicConv2d(kernel_size=3)
-                        ])
-                    ]),
-                    test_models.ModuleListModel()]
+                        torch.nn.Sequential(
+                            torch.nn.Sequential(
+                                test_models.BasicConv2d(kernel_size=3),
+                                test_models.BasicConv2d(kernel_size=3),
+                            ),
+                        ),
+                        torch.nn.ModuleList(
+                            [
+                                torch.nn.ModuleList(
+                                    [test_models.BasicConv2d(kernel_size=3)]
+                                )
+                            ]
+                        ),
+                        test_models.ModuleListModel(),
+                    ]
                 )
 
             def forward(self, *inputs):
@@ -420,17 +571,22 @@ class TestConnectedGraph(unittest.TestCase):
                 s2 = self.mod_list[1](inputs[0])
                 m1 = self.mod_list[2][0][0](inputs[0])
                 m2 = self.mod_list[3](inputs[1])
-                return s1, s2, m1,m2
+                return s1, s2, m1, m2
+
         inp_data_1 = torch.rand(1, 64, 8, 8)
         inp_data_2 = torch.rand(1, 3, 8, 8)
-        conn_graph = ConnectedGraph(ModuleListAndSequentialModel(), (inp_data_1, inp_data_2))
+        conn_graph = ConnectedGraph(
+            ModuleListAndSequentialModel(), (inp_data_1, inp_data_2)
+        )
         self.assertEqual(30, len(conn_graph.ordered_ops))
-        self.assertEqual(0, len([op for op in conn_graph.get_all_ops().keys() if 'Tuple' in op]))
+        self.assertEqual(
+            0, len([op for op in conn_graph.get_all_ops().keys() if "Tuple" in op])
+        )
 
     def test_module_reuse_model(self):
         class ReuseReluLeafModel(torch.nn.Module):
-            """ A model with Relu instance used multiple times
-            Expected one input of size (1, 64, 8, 8) """
+            """A model with Relu instance used multiple times
+            Expected one input of size (1, 64, 8, 8)"""
 
             def __init__(self):
                 super(ReuseReluLeafModel, self).__init__()
@@ -448,9 +604,16 @@ class TestConnectedGraph(unittest.TestCase):
         model = ReuseReluLeafModel()
         conn_graph = ConnectedGraph(model, (inp_data,))
         self.assertEqual(4, len(conn_graph.ordered_ops))
-        self.assertEqual(2, len([op for name, op in conn_graph.get_all_ops().items()
-                                 if 'Relu' in name and
-                                 op.get_module() == model.relu]))
+        self.assertEqual(
+            2,
+            len(
+                [
+                    op
+                    for name, op in conn_graph.get_all_ops().items()
+                    if "Relu" in name and op.get_module() == model.relu
+                ]
+            ),
+        )
 
         class ReluModel(torch.nn.Module):
             def __init__(self):
@@ -458,11 +621,11 @@ class TestConnectedGraph(unittest.TestCase):
                 self.relu = torch.nn.ReLU(inplace=True)
 
             def forward(self, *inputs):
-                return self.relu( inputs[0])
+                return self.relu(inputs[0])
 
         class ReuseReluLayerModel(torch.nn.Module):
-            """ A model with Relu Layer instance used multiple times
-            Expected one input of size (1, 64, 8, 8) """
+            """A model with Relu Layer instance used multiple times
+            Expected one input of size (1, 64, 8, 8)"""
 
             def __init__(self):
                 super(ReuseReluLayerModel, self).__init__()
@@ -477,30 +640,39 @@ class TestConnectedGraph(unittest.TestCase):
         layer_model = ReuseReluLayerModel()
         conn_graph = ConnectedGraph(layer_model, (inp_data,))
         self.assertEqual(3, len(conn_graph.ordered_ops))
-        self.assertEqual(2, len([op for name, op in conn_graph.get_all_ops().items()
-                                 if 'Relu' in name and
-                                 op.get_module() == layer_model.layer.relu]))
+        self.assertEqual(
+            2,
+            len(
+                [
+                    op
+                    for name, op in conn_graph.get_all_ops().items()
+                    if "Relu" in name and op.get_module() == layer_model.layer.relu
+                ]
+            ),
+        )
 
     def test_dict_input(self):
-        """ Test building ConnectedGraph on a model with multiple inputs """
+        """Test building ConnectedGraph on a model with multiple inputs"""
         model = test_models.DictInputModel()
         model.eval()
         inp_shape_1 = (1, 3, 32, 32)
         inp_shape_2 = (1, 3, 20, 20)
-        inp_tensor_list = create_rand_tensors_given_shapes([inp_shape_1, inp_shape_2], get_device(model))
-        dict_input = {'inp_1': inp_tensor_list[0], 'inp_2': inp_tensor_list[1]}
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            [inp_shape_1, inp_shape_2], get_device(model)
+        )
+        dict_input = {"inp_1": inp_tensor_list[0], "inp_2": inp_tensor_list[1]}
         conn_graph = ConnectedGraph(model, dict_input)
         self.assertEqual(13, len(conn_graph.ordered_ops))
 
         # Split count of 1 due to reshape having a split
         self.assertEqual(1, conn_graph._split_count)
-        conv1 = conn_graph.get_op_from_module_name('DictInputModel.conv1')
+        conv1 = conn_graph.get_op_from_module_name("DictInputModel.conv1")
         self.assertEqual(model.conv1, conv1.get_module())
         self.assertEqual(2, len(conv1.inputs))
-        conv2 = conn_graph.get_op_from_module_name('DictInputModel.conv2')
+        conv2 = conn_graph.get_op_from_module_name("DictInputModel.conv2")
         self.assertEqual(model.conv2, conv2.get_module())
         self.assertEqual(3, len(conv2.inputs))
-        conv3 = conn_graph.get_op_from_module_name('DictInputModel.conv3')
+        conv3 = conn_graph.get_op_from_module_name("DictInputModel.conv3")
         self.assertEqual(model.conv3, conv3.get_module())
         self.assertEqual(3, len(conv3.inputs))
 
@@ -514,7 +686,7 @@ class TestConnectedGraph(unittest.TestCase):
         self.assertEqual(model.fc, output_ops[0].get_module())
 
     def test_nested_sequential(self):
-        """ Test building ConnectedGraph on a model constructed with nested nn.Sequential Module """
+        """Test building ConnectedGraph on a model constructed with nested nn.Sequential Module"""
         model = test_models.NestedSequentialModel()
         model.eval()
         inp_data_1 = torch.rand(1, 3, 8, 8)
@@ -596,7 +768,9 @@ class TestConnectedGraph(unittest.TestCase):
             def forward(self, x1, x23):
                 x2, x3 = x23
 
-                x1 = self.relu1_a(self.maxpool1_a(self.conv1_a_i(x1) + self.conv1_a_ii(x1)))
+                x1 = self.relu1_a(
+                    self.maxpool1_a(self.conv1_a_i(x1) + self.conv1_a_ii(x1))
+                )
                 x2 = self.relu1_b(self.maxpool1_b(self.conv1_b(x2)))
                 x3 = self.relu1_c(self.maxpool1_c(self.conv1_c(x3)))
                 y1 = x1 + x2
@@ -614,18 +788,38 @@ class TestConnectedGraph(unittest.TestCase):
         model = ModelWithMultiInputMultiOutput()
 
         input_shape = (1, 1, 28, 28)
-        input_tensor = create_rand_tensors_given_shapes([input_shape, [input_shape, input_shape]], get_device(model))
+        input_tensor = create_rand_tensors_given_shapes(
+            [input_shape, [input_shape, input_shape]], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, input_tensor)
 
-        self.assertEqual(model.conv1_a_i, conn_graph.input_structure[0][0].op.get_module())
-        self.assertEqual(model.conv1_a_ii, conn_graph.input_structure[0][1].op.get_module())
-        self.assertEqual(model.conv1_b, conn_graph.input_structure[1][0][0].op.get_module())
-        self.assertEqual(model.conv1_c, conn_graph.input_structure[1][1][0].op.get_module())
-        self.assertEqual(model.relu1_a, conn_graph.output_structure[2][0].op.get_module())
-        self.assertEqual(model.relu1_b, conn_graph.output_structure[2][1].op.get_module())
-        self.assertEqual(model.relu1_c, conn_graph.output_structure[2][2].op.get_module())
-        self.assertEqual(model.softmax_1, conn_graph.output_structure[0].op.get_module())
-        self.assertEqual(model.softmax_2, conn_graph.output_structure[1].op.get_module())
+        self.assertEqual(
+            model.conv1_a_i, conn_graph.input_structure[0][0].op.get_module()
+        )
+        self.assertEqual(
+            model.conv1_a_ii, conn_graph.input_structure[0][1].op.get_module()
+        )
+        self.assertEqual(
+            model.conv1_b, conn_graph.input_structure[1][0][0].op.get_module()
+        )
+        self.assertEqual(
+            model.conv1_c, conn_graph.input_structure[1][1][0].op.get_module()
+        )
+        self.assertEqual(
+            model.relu1_a, conn_graph.output_structure[2][0].op.get_module()
+        )
+        self.assertEqual(
+            model.relu1_b, conn_graph.output_structure[2][1].op.get_module()
+        )
+        self.assertEqual(
+            model.relu1_c, conn_graph.output_structure[2][2].op.get_module()
+        )
+        self.assertEqual(
+            model.softmax_1, conn_graph.output_structure[0].op.get_module()
+        )
+        self.assertEqual(
+            model.softmax_2, conn_graph.output_structure[1].op.get_module()
+        )
         return
 
     def test_graph_input_output_with_passthrough(self):
@@ -640,7 +834,9 @@ class TestConnectedGraph(unittest.TestCase):
 
         model = ModelWithPassthroughOutput()
         input_shape = (1, 3, 3, 3)
-        input_tensor_list = create_rand_tensors_given_shapes([input_shape, input_shape], get_device(model))
+        input_tensor_list = create_rand_tensors_given_shapes(
+            [input_shape, input_shape], get_device(model)
+        )
         conn_graph = ConnectedGraph(model, input_tensor_list)
 
         self.assertEqual(model.conv, conn_graph.input_structure[0][0].op.get_module())
@@ -729,15 +925,17 @@ class ModelWithMultipleActivations(nn.Module):
 
 
 class TestConnectedGraphUtils(unittest.TestCase):
-    """ Unit tests for testing connectedgraph_utils module"""
+    """Unit tests for testing connectedgraph_utils module"""
 
     def test_get_module_act_func_pair_with_modules(self):
-        """ Test get module activation function pair - activations are nn.Modules """
+        """Test get module activation function pair - activations are nn.Modules"""
 
         model = test_models.TinyModel().eval()
         inp_tensor_list = [torch.randn(1, 3, 32, 32)]
 
-        module_act_func_pair = connectedgraph_utils.get_module_act_func_pair(model, inp_tensor_list)
+        module_act_func_pair = connectedgraph_utils.get_module_act_func_pair(
+            model, inp_tensor_list
+        )
 
         # 12 modules
         self.assertEqual(len(module_act_func_pair), 12)
@@ -758,33 +956,43 @@ class TestConnectedGraphUtils(unittest.TestCase):
         model = ModelWithMultipleActivations().eval()
         inp_tensor_list = [torch.randn(1, 3, 32, 32)]
 
-        module_act_func_pair = connectedgraph_utils.get_module_act_func_pair(model, inp_tensor_list)
+        module_act_func_pair = connectedgraph_utils.get_module_act_func_pair(
+            model, inp_tensor_list
+        )
 
         # followed by activation case
-        self.assertTrue(isinstance(module_act_func_pair[model.bn1], torch.nn.Hardshrink))
+        self.assertTrue(
+            isinstance(module_act_func_pair[model.bn1], torch.nn.Hardshrink)
+        )
         self.assertTrue(isinstance(module_act_func_pair[model.bn2], torch.nn.GELU))
-        self.assertTrue(isinstance(module_act_func_pair[model.conv3], torch.nn.Tanhshrink))
+        self.assertTrue(
+            isinstance(module_act_func_pair[model.conv3], torch.nn.Tanhshrink)
+        )
         self.assertTrue(isinstance(module_act_func_pair[model.conv4], torch.nn.Mish))
-        self.assertTrue(isinstance(module_act_func_pair[model.conv5], torch.nn.Softmax2d))
+        self.assertTrue(
+            isinstance(module_act_func_pair[model.conv5], torch.nn.Softmax2d)
+        )
 
         # followed by non-activation case
         self.assertEqual(module_act_func_pair[model.conv1], None)
         self.assertEqual(module_act_func_pair[model.hardshrink], None)
 
     def test_get_ops_with_missing_modules(self):
-        """ Check that get ops with missing modules reports ops with missing modules correctly """
+        """Check that get ops with missing modules reports ops with missing modules correctly"""
 
         model = test_models.ModelWithFunctionalOps()
         rand_inp = torch.randn(1, 3, 32, 32)
-        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(model, rand_inp)
+        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(
+            model, rand_inp
+        )
         self.assertEqual(2, len(ops_with_missing_modules))
 
     def test_find_nodes_in_forward_pass_for_elementwise_ops(self):
-        """ Check _find_nodes_in_forward_pass() method for elementwise_ops """
+        """Check _find_nodes_in_forward_pass() method for elementwise_ops"""
         # 1) aimet_modules.Add()
         dummy_input = (torch.randn(1, 3, 4, 4), torch.randn(1, 3, 4, 4))
         trace = torch.jit.trace(aimet_modules.Add(), dummy_input)
-        nodes =  list(ConnectedGraph._find_aten_nodes_in_forward_pass(trace))
+        nodes = list(ConnectedGraph._find_aten_nodes_in_forward_pass(trace))
         assert len(nodes) == 1
 
         # 2) aimet_modules.Subtract()
@@ -819,7 +1027,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
 
     @pytest.mark.cuda
     def test_find_nodes_in_forward_pass_for_custom_module(self):
-        """ Check _find_nodes_in_forward_pass() method for custom module """
+        """Check _find_nodes_in_forward_pass() method for custom module"""
 
         class CustomModule(torch.nn.Module):
             @staticmethod
@@ -835,7 +1043,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
         assert len(nodes) == 3
 
     def test_find_nodes_in_forward_pass_for_custom_conv2d_module(self):
-        """ Check _find_nodes_in_forward_pass() method for custom module """
+        """Check _find_nodes_in_forward_pass() method for custom module"""
 
         class CustomModule(torch.nn.Module):
             @staticmethod
@@ -851,7 +1059,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
         assert len(nodes) == 1
 
     def test_find_nodes_in_forward_pass_for_torch_nn_module(self):
-        """ Check _find_nodes_in_forward_pass() method for torch.nn modules """
+        """Check _find_nodes_in_forward_pass() method for torch.nn modules"""
 
         # 1) Conv2d
         dummy_input = torch.randn(1, 3, 4, 4)
@@ -876,12 +1084,13 @@ class TestConnectedGraphUtils(unittest.TestCase):
         assert len(nodes) == 1
 
     def test_find_nodes_in_forward_pass_for_unused_module(self):
-        """ test _find_nodes_in_forward_pass() for unused module """
+        """test _find_nodes_in_forward_pass() for unused module"""
 
         class MultiOutputWithUnuseModel(torch.nn.Module):
             """
             Model with Tuple of Tensors as output with one output tensor unused
             """
+
             def __init__(self):
                 super(MultiOutputWithUnuseModel, self).__init__()
                 self.layer = test_models.TupleOutputModel()
@@ -911,7 +1120,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
         assert len(nodes) == 1
 
     def test_find_nodes_in_forward_pass_for_undefined_graph(self):
-        """ test _find_nodes_in_forward_pass() for undefined trace graph """
+        """test _find_nodes_in_forward_pass() for undefined trace graph"""
 
         dummy_input = torch.rand(1, 3, 8, 8)
         model = test_models.NestedSequentialModel().eval()
@@ -927,7 +1136,8 @@ class TestConnectedGraphUtils(unittest.TestCase):
             _ = bn_trace.graph
 
     def test_constant_elementwise_inputs(self):
-        """ Test that constant inputs to elementwise ops are identified correctly """
+        """Test that constant inputs to elementwise ops are identified correctly"""
+
         class ConstantElementwiseInputModel(torch.nn.Module):
             def __init__(self):
                 super(ConstantElementwiseInputModel, self).__init__()
@@ -955,7 +1165,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
                 self.relu2 = torch.nn.ReLU()
                 self.add = aimet_modules.Add()
                 self.add2 = aimet_modules.Add()
-                self.register_buffer('constant_1', torch.tensor([3.0, 4.0]))
+                self.register_buffer("constant_1", torch.tensor([3.0, 4.0]))
 
             def forward(self, inp):
                 x = self.relu(torch.tensor([-1.0, 1.0]))
@@ -980,10 +1190,13 @@ class TestConnectedGraphUtils(unittest.TestCase):
         Where [C1 -> L1] is non leaf module wrapped under ConvLinearModel
         ConvLinearModel is made to be considered a leaf
         """
+
         class ConvLinearModel(torch.nn.Module):
             def __init__(self):
                 super(ConvLinearModel, self).__init__()
-                self.conv1 = nn.Conv2d(3, 12, kernel_size=(1, 1), stride=(1, 1), padding=0, bias=False)
+                self.conv1 = nn.Conv2d(
+                    3, 12, kernel_size=(1, 1), stride=(1, 1), padding=0, bias=False
+                )
                 self.linear1 = nn.Linear(32, 32, bias=False)
 
             def forward(self, inp):
@@ -1013,14 +1226,16 @@ class TestConnectedGraphUtils(unittest.TestCase):
         assert len(cg_1.ordered_ops) == 2
 
         assert len(cg_1.ordered_ops[0].inputs) == 3
-        assert cg_1.ordered_ops[0].inputs[0].name == 'input_0_to_ConvLinearModel_0'
+        assert cg_1.ordered_ops[0].inputs[0].name == "input_0_to_ConvLinearModel_0"
         assert cg_1.ordered_ops[0].inputs[0].is_model_input == True
 
-        assert cg_1.ordered_ops[0].inputs[1].name == 'TopLevelModel.layer1.conv1.weight'
+        assert cg_1.ordered_ops[0].inputs[1].name == "TopLevelModel.layer1.conv1.weight"
         assert cg_1.ordered_ops[0].inputs[1].is_model_input == False
         assert cg_1.ordered_ops[0].inputs[1].is_parm == True
 
-        assert cg_1.ordered_ops[0].inputs[2].name == 'TopLevelModel.layer1.linear1.weight'
+        assert (
+            cg_1.ordered_ops[0].inputs[2].name == "TopLevelModel.layer1.linear1.weight"
+        )
         assert cg_1.ordered_ops[0].inputs[2].is_model_input == False
         assert cg_1.ordered_ops[0].inputs[2].is_parm == True
 
@@ -1030,10 +1245,13 @@ class TestConnectedGraphUtils(unittest.TestCase):
         Where [C1 -> L2] is non leaf module wrapped under ConvLinearModel
         ConvLinearModel is made to be considered a leaf
         """
+
         class ConvLinearModel(torch.nn.Module):
             def __init__(self):
                 super(ConvLinearModel, self).__init__()
-                self.conv1 = nn.Conv2d(3, 12, kernel_size=(1, 1), stride=(1, 1), padding=0, bias=False)
+                self.conv1 = nn.Conv2d(
+                    3, 12, kernel_size=(1, 1), stride=(1, 1), padding=0, bias=False
+                )
                 self.linear1 = nn.Linear(3, 3, bias=False)
 
             def forward(self, inp):
@@ -1059,7 +1277,7 @@ class TestConnectedGraphUtils(unittest.TestCase):
 
         dummy_input = torch.randn(1, 3, 3, 3)
 
-        #out = model(dummy_input)
+        # out = model(dummy_input)
         aimet_torch.utils.modules_to_treat_as_leaf = [ConvLinearModel]
 
         cg_1 = ConnectedGraph(model, model_input=dummy_input)
@@ -1069,17 +1287,17 @@ class TestConnectedGraphUtils(unittest.TestCase):
 
         assert len(cg_1.ordered_ops[1].inputs) == 3
 
-        assert cg_1.ordered_ops[0].inputs[0].name == 'input_0_to_Gemm_0'
+        assert cg_1.ordered_ops[0].inputs[0].name == "input_0_to_Gemm_0"
         assert cg_1.ordered_ops[0].inputs[0].is_model_input == True
-        assert cg_1.ordered_ops[0].inputs[1].name == 'TopLevelModel.linear1.weight'
+        assert cg_1.ordered_ops[0].inputs[1].name == "TopLevelModel.linear1.weight"
         assert cg_1.ordered_ops[0].inputs[1].is_parm == True
 
-        assert cg_1.ordered_ops[1].inputs[0].name == 'Gemm_0_to_ConvLinearModel_1'
+        assert cg_1.ordered_ops[1].inputs[0].name == "Gemm_0_to_ConvLinearModel_1"
         assert cg_1.ordered_ops[1].inputs[0].is_model_input == False
         assert cg_1.ordered_ops[1].inputs[1].is_parm == True
         assert cg_1.ordered_ops[1].inputs[2].is_parm == True
 
-        assert cg_1.ordered_ops[2].inputs[0].name == 'ConvLinearModel_1_to_Gemm_2'
+        assert cg_1.ordered_ops[2].inputs[0].name == "ConvLinearModel_1_to_Gemm_2"
         assert cg_1.ordered_ops[2].inputs[0].is_model_input == False
         assert cg_1.ordered_ops[2].inputs[1].is_parm == True
 
@@ -1089,12 +1307,9 @@ class TestConnectedGraphUtils(unittest.TestCase):
                 super(ModelWithConvBNMangleNodes, self).__init__()
                 self.inner_seq = nn.Sequential(
                     nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False),
-                    nn.BatchNorm2d(16)
+                    nn.BatchNorm2d(16),
                 )
-                self.seq_list = nn.Sequential(
-                    self.inner_seq,
-                    nn.ReLU(inplace=True)
-                )
+                self.seq_list = nn.Sequential(self.inner_seq, nn.ReLU(inplace=True))
 
             def forward(self, inp):
                 return self.inner_seq(inp)
@@ -1119,19 +1334,19 @@ class TestConnectedGraphUtils(unittest.TestCase):
 
         mcg = MockConnectedGraph()
 
-        conv_1 = Op('conv_1', 'conv_1', None, False, 'Conv', None)
-        p1 = Product('p1', None)
-        p2 = Product('p2', None)
+        conv_1 = Op("conv_1", "conv_1", None, False, "Conv", None)
+        p1 = Product("p1", None)
+        p2 = Product("p2", None)
         conv_1.add_input(p1)
         conv_1.add_input(p2)
         mcg._ops[conv_1.name] = conv_1
         mcg._products[p1.name] = p1
         mcg._products[p2.name] = p2
 
-        add_1 = Op('add_1', 'add_1', None, False, 'Add', None)
-        p3 = Product('p3', None)
-        p4 = Product('p4', None)
-        p5 = Product('p5', None)
+        add_1 = Op("add_1", "add_1", None, False, "Add", None)
+        p3 = Product("p3", None)
+        p4 = Product("p4", None)
+        p5 = Product("p5", None)
         add_1.add_input(p3)
         add_1.add_input(p4)
         add_1.add_input(p5)

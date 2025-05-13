@@ -39,11 +39,12 @@ import torch
 import torch.nn as nn
 from aimet_torch.v1.quantsim import QuantizationSimModel
 
+
 class TestPercentileSchemeStaticGrid:
-    """ Test Percentile quantization scheme """ 
+    """Test Percentile quantization scheme"""
 
     def test_model_with_percentile_scheme(self):
-        """ Test pecentile scheme by setting different percentile values """
+        """Test pecentile scheme by setting different percentile values"""
 
         class Model(nn.Module):
             def __init__(self):
@@ -79,8 +80,14 @@ class TestPercentileSchemeStaticGrid:
         sim.model.conv2.output_quantizers[0].update_encoding_stats(tensor)
         sim.model.conv2.set_percentile_value(99.999)
         sim.model.conv2.output_quantizers[0].compute_encoding()
-        assert sim.model.conv1.output_quantizers[0].encoding.max == sim.model.conv2.output_quantizers[0].encoding.max
-        assert sim.model.conv1.output_quantizers[0].encoding.delta == sim.model.conv2.output_quantizers[0].encoding.delta
+        assert (
+            sim.model.conv1.output_quantizers[0].encoding.max
+            == sim.model.conv2.output_quantizers[0].encoding.max
+        )
+        assert (
+            sim.model.conv1.output_quantizers[0].encoding.delta
+            == sim.model.conv2.output_quantizers[0].encoding.delta
+        )
 
         # Set different percentile values for each layer and verify that the encoding are not same
         sim.model.conv1.output_quantizers[0].reset_encoding_stats()
@@ -92,5 +99,11 @@ class TestPercentileSchemeStaticGrid:
         sim.model.conv2.output_quantizers[0].update_encoding_stats(tensor)
         sim.model.conv2.set_percentile_value(99.999)
         sim.model.conv2.output_quantizers[0].compute_encoding()
-        assert sim.model.conv1.output_quantizers[0].encoding.max != sim.model.conv2.output_quantizers[0].encoding.max
-        assert sim.model.conv1.output_quantizers[0].encoding.delta != sim.model.conv2.output_quantizers[0].encoding.delta 
+        assert (
+            sim.model.conv1.output_quantizers[0].encoding.max
+            != sim.model.conv2.output_quantizers[0].encoding.max
+        )
+        assert (
+            sim.model.conv1.output_quantizers[0].encoding.delta
+            != sim.model.conv2.output_quantizers[0].encoding.delta
+        )

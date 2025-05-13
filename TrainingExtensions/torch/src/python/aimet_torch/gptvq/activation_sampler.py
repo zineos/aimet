@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Sample input to a passed module (for our case, it is the quantized wrapper module)"""
+"""Sample input to a passed module (for our case, it is the quantized wrapper module)"""
+
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -56,6 +57,7 @@ class BlockModuleData:
     """
     Collect input tensor from block-level modules
     """
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -77,6 +79,7 @@ class BlockModuleData:
         :param model_input: Input to model, Can be a single tensor or a list/tuple of tensors
         :return: Dictionary of module to input tensors
         """
+
         def _hook_to_collect_inp_data(module, inp, _):
             """
             hook to collect input and output data
@@ -120,10 +123,13 @@ class ActivationSampler:
     For a module in the original model and the corresponding module in the weight quantized QuantSim model,
     collect the module's output and input activation data respectively
     """
-    def __init__(self,
-                 model: torch.nn.Module,
-                 forward_fn: Callable[[torch.nn.Module, Any], Any],
-                 module_names: List[str]):
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        forward_fn: Callable[[torch.nn.Module, Any], Any],
+        module_names: List[str],
+    ):
         """
         :param model:  model to run forward pass
         :param forward_fn: Adapter function that performs forward pass given a model and inputs
@@ -133,7 +139,9 @@ class ActivationSampler:
         self._model = model
         self._module_collector = BlockModuleData(model, forward_fn, module_names)
 
-    def sample_activation_tensors(self, model_inputs: Union[torch.tensor, List, Tuple]) -> Dict[str, torch.Tensor]:
+    def sample_activation_tensors(
+        self, model_inputs: Union[torch.tensor, List, Tuple]
+    ) -> Dict[str, torch.Tensor]:
         """
         For given model_inputs, collect input activations data to quant module
 

@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" FP8 quantization and supporting range setting functions """
+"""FP8 quantization and supporting range setting functions"""
 
 import torch
 import numpy as np
@@ -81,7 +81,10 @@ def init_mse(tensor, tensor_quantizer, per_channel):
     """
     channel = tensor_quantizer.channel_axis
     if per_channel:
-        mxs = [torch.max(torch.abs(xc.min()), torch.abs(xc.max())) for xc in tensor.split(1, dim=channel)]
+        mxs = [
+            torch.max(torch.abs(xc.min()), torch.abs(xc.max()))
+            for xc in tensor.split(1, dim=channel)
+        ]
         lsp = [torch.linspace(0.1 * mx.item(), 1.2 * mx.item(), 111) for mx in mxs]
         # 111 x n_channels (or 1 in case not --per-channel)
         linspaces = torch.stack(lsp).to(tensor.device).transpose(0, 1)
@@ -105,7 +108,9 @@ def init_mse(tensor, tensor_quantizer, per_channel):
         mses[i, :] = mse
 
     best_mse = mses.argmin(0)
-    maxval = torch.tensor([linspaces[best_mse[i], i] for i in range(linspaces.shape[-1])]).to(tensor.device)
+    maxval = torch.tensor(
+        [linspaces[best_mse[i], i] for i in range(linspaces.shape[-1])]
+    ).to(tensor.device)
 
     return maxval
 
@@ -118,9 +123,9 @@ def init_percentile(*_):
 
 
 INIT_MAP = {
-    QuantScheme.post_training_tf: init_minmax, # minmax
-    QuantScheme.post_training_tf_enhanced: init_mse, # MSE
-    QuantScheme.post_training_percentile: init_percentile
+    QuantScheme.post_training_tf: init_minmax,  # minmax
+    QuantScheme.post_training_tf_enhanced: init_mse,  # MSE
+    QuantScheme.post_training_percentile: init_percentile,
 }
 
 
@@ -130,18 +135,26 @@ def fp8_quantizer(tensor, tensor_quantizer, _):
     """
     mantissa_bits_to_device(tensor)
 
-    if not hasattr(tensor_quantizer, 'fp8_maxval') or tensor_quantizer.fp8_maxval is None:
-        raise ValueError('tensor_quantizer.fp8_maxval not present or not initialized!')
+    if (
+        not hasattr(tensor_quantizer, "fp8_maxval")
+        or tensor_quantizer.fp8_maxval is None
+    ):
+        raise ValueError("tensor_quantizer.fp8_maxval not present or not initialized!")
 
     return quantize_to_fp8(
-        tensor, tensor_quantizer.fp8_maxval, NUM_MANTISSA_BITS, tensor_quantizer.channel_axis)
+        tensor,
+        tensor_quantizer.fp8_maxval,
+        NUM_MANTISSA_BITS,
+        tensor_quantizer.channel_axis,
+    )
 
 
-def quantize_to_fp8(x_float: torch.Tensor,
-                    maxval: torch.Tensor,
-                    mantissa_bits: torch.Tensor,
-                    per_channel_axis: int = 0,
-                    ) -> torch.Tensor:
+def quantize_to_fp8(
+    x_float: torch.Tensor,
+    maxval: torch.Tensor,
+    mantissa_bits: torch.Tensor,
+    per_channel_axis: int = 0,
+) -> torch.Tensor:
     """
     FP8 quantizer that exploits the fact that FP quantization is just INT quantization with
     scales that depend on the input.
@@ -161,7 +174,11 @@ def quantize_to_fp8(x_float: torch.Tensor,
     # and all other channels have size 1. E.g. for a conv tensor with C output channels,
     # maxval will have shape [C, 1, 1, 1]. This allows broadcasting maxval over the
     # input tensor in steps below.
-    if maxval.shape and maxval.shape[0] != 1 and len(maxval.shape) != len(x_float.shape):
+    if (
+        maxval.shape
+        and maxval.shape[0] != 1
+        and len(maxval.shape) != len(x_float.shape)
+    ):
         new_shape = [1] * len(x_float.shape)
         new_shape[per_channel_axis] = -1
         maxval = maxval.view(new_shape)
@@ -179,14 +196,16 @@ def fake_cast_to_ieee_float(x_float, maxval, exponent_bits, mantissa_bits):
     This function derives the bias from exponent bits, mantissa bits, and
     maximum representable value based on the above equation.
     """
+
     def log2(x):
         if isinstance(x, torch.Tensor):
             return torch.log2(x)
         return np.log2(x)
+
     # Math explanation of what happens here:
     # Bias is computed from maxval: $B=2^E - \log_2(M) + \log_2(2 - 2^{-M}) - 1$
     # This follows from maxval $M=(2 - 2^{-M}) \cdot 2^{2^E-1-B}$.
-    bias = 2 ** exponent_bits - log2(maxval) + log2(2 - 2 ** (-mantissa_bits)) - 1
+    bias = 2**exponent_bits - log2(maxval) + log2(2 - 2 ** (-mantissa_bits)) - 1
 
     # Ensure no values are greater than the maximum value represented by an 8 bit float system
     # with M mantissa and E exponent bits. torch.min/torch.max are used to allow gradients to
@@ -200,10 +219,10 @@ def fake_cast_to_ieee_float(x_float, maxval, exponent_bits, mantissa_bits):
     log_scales = torch.floor(log2(torch.abs(x_clipped)) + bias).detach()
 
     # This ensures scales are never smaller than the subnormal scale
-    log_scales = torch.clamp(log_scales, 1.)
+    log_scales = torch.clamp(log_scales, 1.0)
 
     # Second step of computing scale $s$
-    scales = 2. ** (log_scales - mantissa_bits - bias)
+    scales = 2.0 ** (log_scales - mantissa_bits - bias)
 
     # Using the per-element scale we can quantize the clipped input tensor to the FP grid
     return torch.round(x_clipped / scales) * scales

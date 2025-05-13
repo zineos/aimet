@@ -41,7 +41,10 @@ from aimet_torch.v1.qc_quantize_op import StaticGridQuantWrapper
 import pytest
 import aimet_torch.v1.quantsim as v1
 import aimet_torch.v2.quantsim as v2
-from aimet_torch.v1.tensor_quantizer import StaticGridTensorQuantizer, LearnedGridTensorQuantizer
+from aimet_torch.v1.tensor_quantizer import (
+    StaticGridTensorQuantizer,
+    LearnedGridTensorQuantizer,
+)
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_common.defs import QuantScheme
 from aimet_torch.bn_reestimation import reestimate_bn_stats, _get_active_bn_modules
@@ -51,6 +54,7 @@ from torch.utils.data import DataLoader, Dataset
 
 
 torch.manual_seed(1350)
+
 
 class Model(torch.nn.Module):
     """
@@ -98,19 +102,28 @@ def data_loader(dummy_input):
 
 
 def test_reestimation_with_fp32_model(fp32_model, data_loader):
-    expected_mean = [torch.mean(data, dim=(0,2,3)) for data in data_loader]
+    expected_mean = [torch.mean(data, dim=(0, 2, 3)) for data in data_loader]
     expected_mean = sum(expected_mean) / len(data_loader)
-    expected_var = [torch.var(data, dim=(0,2,3)) for data in data_loader]
+    expected_var = [torch.var(data, dim=(0, 2, 3)) for data in data_loader]
     expected_var = sum(expected_var) / len(data_loader)
     _test_reestimation(fp32_model, data_loader, expected_mean, expected_var)
 
 
-@pytest.mark.parametrize("quant_scheme", [QuantScheme.post_training_tf,
-                                          QuantScheme.post_training_tf_enhanced,
-                                          QuantScheme.training_range_learning_with_tf_init,
-                                          QuantScheme.training_range_learning_with_tf_enhanced_init])
-@pytest.mark.parametrize('QuantizationSimModel', [v1.QuantizationSimModel, v2.QuantizationSimModel])
-def test_reestimation_with_quantsim_model(QuantizationSimModel, fp32_model, dummy_input, quant_scheme, data_loader):
+@pytest.mark.parametrize(
+    "quant_scheme",
+    [
+        QuantScheme.post_training_tf,
+        QuantScheme.post_training_tf_enhanced,
+        QuantScheme.training_range_learning_with_tf_init,
+        QuantScheme.training_range_learning_with_tf_enhanced_init,
+    ],
+)
+@pytest.mark.parametrize(
+    "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+)
+def test_reestimation_with_quantsim_model(
+    QuantizationSimModel, fp32_model, dummy_input, quant_scheme, data_loader
+):
     sim = QuantizationSimModel(fp32_model, dummy_input, quant_scheme=quant_scheme)
     sim.compute_encodings(lambda model, _: model(dummy_input), None)
     model = sim.model
@@ -132,14 +145,20 @@ def test_reestimation_with_quantsim_model(QuantizationSimModel, fp32_model, dumm
         assert input_quantizer is None
         return data
 
-    expected_mean = [torch.mean(quantize_input(data), dim=(0,2,3)) for data in data_loader]
+    expected_mean = [
+        torch.mean(quantize_input(data), dim=(0, 2, 3)) for data in data_loader
+    ]
     expected_mean = sum(expected_mean) / len(data_loader)
-    expected_var = [torch.var(quantize_input(data), dim=(0,2,3)) for data in data_loader]
+    expected_var = [
+        torch.var(quantize_input(data), dim=(0, 2, 3)) for data in data_loader
+    ]
     expected_var = sum(expected_var) / len(data_loader)
 
     def update_encoding_stats(*args, **kwargs):
-        raise AssertionError("Expected `update_encoding_stats` not to be called "
-                             "during batchnorm re-esimtation.")
+        raise AssertionError(
+            "Expected `update_encoding_stats` not to be called "
+            "during batchnorm re-esimtation."
+        )
 
     # `update_encoding_stats` should not be called except for batchnorm quant wrappers
     for module in model.modules():
@@ -148,7 +167,9 @@ def test_reestimation_with_quantsim_model(QuantizationSimModel, fp32_model, dumm
         if isinstance(module._module_to_wrap, _BatchNorm):
             continue
         for quantizer in module.param_quantizers.values():
-            patch.object(quantizer, "update_encoding_stats", wraps=update_encoding_stats).__enter__()
+            patch.object(
+                quantizer, "update_encoding_stats", wraps=update_encoding_stats
+            ).__enter__()
 
     _test_reestimation(model, data_loader, expected_mean, expected_var)
 
@@ -157,7 +178,7 @@ def _test_reestimation(model, data_loader, expected_mean, expected_var):
     old_params = copy.deepcopy(list(model.parameters()))
 
     mean_orig, var_orig = [
-        ( bn.running_mean.clone().detach(), bn.running_var.clone().detach() )
+        (bn.running_mean.clone().detach(), bn.running_var.clone().detach())
         for bn in _get_active_bn_modules(model)
     ][0]
 
@@ -166,7 +187,7 @@ def _test_reestimation(model, data_loader, expected_mean, expected_var):
             assert bn.momentum != 1.0
 
         mean_reestimated, var_reestimated = [
-            ( bn.running_mean.clone().detach(), bn.running_var.clone().detach() )
+            (bn.running_mean.clone().detach(), bn.running_var.clone().detach())
             for bn in _get_active_bn_modules(model)
         ][0]
 
@@ -180,7 +201,7 @@ def _test_reestimation(model, data_loader, expected_mean, expected_var):
         assert torch.equal(old, new)
 
     mean_restored, var_restored = [
-        ( bn.running_mean.clone().detach(), bn.running_var.clone().detach() )
+        (bn.running_mean.clone().detach(), bn.running_var.clone().detach())
         for bn in _get_active_bn_modules(model)
     ][0]
 

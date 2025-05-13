@@ -35,7 +35,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" contains unit tests to validate transformer quantization support """
+"""contains unit tests to validate transformer quantization support"""
+
 import copy
 import os
 import json
@@ -50,11 +51,18 @@ import torch.nn as nn
 
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_torch.meta.connectedgraph import ConnectedGraph
-from aimet_torch.transformers.activation import create_quantizable_transformer_encoder_layer, \
-    create_quantizable_transformer_decoder_layer, create_quantizable_multihead_attention, QuantizableMultiheadAttention
+from aimet_torch.transformers.activation import (
+    create_quantizable_transformer_encoder_layer,
+    create_quantizable_transformer_decoder_layer,
+    create_quantizable_multihead_attention,
+    QuantizableMultiheadAttention,
+)
 from aimet_torch.utils import create_rand_tensors_given_shapes
 from aimet_torch.meta import connectedgraph_utils
-from aimet_torch.v1.qc_quantize_op import StaticGridQuantWrapper, StaticGridPerTensorQuantizer
+from aimet_torch.v1.qc_quantize_op import (
+    StaticGridQuantWrapper,
+    StaticGridPerTensorQuantizer,
+)
 from aimet_torch.v1.quantsim import QuantizationSimModel
 from aimet_torch import utils
 from aimet_common import libpymo
@@ -72,54 +80,36 @@ def generate_custom_quantsim_config(file_path: str):
 
     custom_quantsim_config = {
         "defaults": {
-            "ops": {
-                "is_output_quantized": "True"
-            },
-            "params": {
-                "is_quantized": "True"
-            }
+            "ops": {"is_output_quantized": "True"},
+            "params": {"is_quantized": "True"},
         },
         "params": {},
         "op_type": {
             "LayerNormalization": {
                 "is_output_quantized": "True",
-                "supported_kernels":
-                    [
-                        {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            },
-                            "param": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            }
-                        }
-                    ]
+                "supported_kernels": [
+                    {
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
+                    }
+                ],
             },
             "Gelu": {
                 "is_output_quantized": "True",
-                "supported_kernels":
-                    [
-                        {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            },
-                            "param": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            }
-                        }
-                    ]
-            }
+                "supported_kernels": [
+                    {
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
+                    }
+                ],
+            },
         },
         "supergroups": [],
         "model_input": {},
-        "model_output": {}
+        "model_output": {},
     }
 
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         json.dump(custom_quantsim_config, f)
 
 
@@ -143,7 +133,7 @@ class BertLayerNorm(nn.Module):
 
 
 class ModelWithBertCustomLayerNorm(nn.Module):
-    """ Model with PyTorch LayerNorm """
+    """Model with PyTorch LayerNorm"""
 
     def __init__(self):
         super(ModelWithBertCustomLayerNorm, self).__init__()
@@ -162,7 +152,7 @@ class ModelWithBertCustomLayerNorm(nn.Module):
 
 
 class ConvGeLUNet(nn.Module):
-    """ A block of Conv2d and GELU """
+    """A block of Conv2d and GELU"""
 
     def __init__(self):
         super(ConvGeLUNet, self).__init__()
@@ -174,7 +164,7 @@ class ConvGeLUNet(nn.Module):
 
 
 class ModelWithPtLayerNorm(nn.Module):
-    """ Model with PyTorch LayerNorm """
+    """Model with PyTorch LayerNorm"""
 
     def __init__(self):
         super(ModelWithPtLayerNorm, self).__init__()
@@ -193,24 +183,28 @@ class ModelWithPtLayerNorm(nn.Module):
 
 
 # From https://github.com/quic/aimet/blob/8ed479b24010834bfea09885cf6879b9bd916e8a/TrainingExtensions/torch/test/python/test_quantsim_transformers.py#L196
-@pytest.mark.skip('initial commit')
+@pytest.mark.skip("initial commit")
 class TestQuantizationSimTransformers(unittest.TestCase):
-
     def test_gelu_static_quantization(self):
-        """ Build a model with GELU activation and quantize """
+        """Build a model with GELU activation and quantize"""
 
         model = ConvGeLUNet()
         model.eval()
         input_shapes = (1, 3, 32, 32)
-        inp_tensor_list = create_rand_tensors_given_shapes(input_shapes, utils.get_device(model))
+        inp_tensor_list = create_rand_tensors_given_shapes(
+            input_shapes, utils.get_device(model)
+        )
 
         def forward_pass(model, args):
             model.eval()
             with torch.no_grad():
                 model(*inp_tensor_list)
 
-        sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                   dummy_input=inp_tensor_list)
+        sim = QuantizationSimModel(
+            model,
+            quant_scheme=QuantScheme.post_training_tf,
+            dummy_input=inp_tensor_list,
+        )
 
         #  check quantizer added to gelu
         self.assertTrue(isinstance(sim.model.gelu, StaticGridQuantWrapper))
@@ -245,7 +239,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         bert_m = BertLayerNorm(4, eps=1e-05)
         pt_m = nn.LayerNorm(4, eps=1e-05)
         bert_m.eval()
-        pt_m .eval()
+        pt_m.eval()
 
         # get output of layer and compare the two
         hugginface_bert_ln_output = bert_m(random_input).detach().numpy()
@@ -269,31 +263,46 @@ class TestQuantizationSimTransformers(unittest.TestCase):
             with torch.no_grad():
                 model(*random_input)
 
-        sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                   dummy_input=random_input)
+        sim = QuantizationSimModel(
+            model, quant_scheme=QuantScheme.post_training_tf, dummy_input=random_input
+        )
 
         # Quantize
         sim.compute_encodings(forward_pass, None)
 
         #  check quantizer added to parameters of LayerNorm
-        self.assertTrue(isinstance(sim.model.ln1.param_quantizers['weight'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.ln1.param_quantizers['bias'], StaticGridPerTensorQuantizer))
-        self.assertTrue(isinstance(sim.model.ln1.input_quantizers[0], StaticGridPerTensorQuantizer))
+        self.assertTrue(
+            isinstance(
+                sim.model.ln1.param_quantizers["weight"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(
+                sim.model.ln1.param_quantizers["bias"], StaticGridPerTensorQuantizer
+            )
+        )
+        self.assertTrue(
+            isinstance(sim.model.ln1.input_quantizers[0], StaticGridPerTensorQuantizer)
+        )
 
         # input / output quantizers for layernorm
-        self.assertTrue(isinstance(sim.model.ln1.output_quantizers[0], StaticGridPerTensorQuantizer))
+        self.assertTrue(
+            isinstance(sim.model.ln1.output_quantizers[0], StaticGridPerTensorQuantizer)
+        )
         self.assertTrue(isinstance(sim.model.ln1, StaticGridQuantWrapper))
 
         # validate config after compute encodings
         sim.compute_encodings(forward_pass, None)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            sim.export(tmp_dir, 'two_input_model2', random_input)
+            sim.export(tmp_dir, "two_input_model2", random_input)
 
             # LayerNorm output quantization is enabled by default
             self.assertTrue(sim.model.ln1.output_quantizers[0].encoding)
             out_quantizer = sim.model.ln1.output_quantizers[0]
             self.assertTrue(out_quantizer.enabled)
-            self.assertEqual(out_quantizer.round_mode, libpymo.RoundingMode.ROUND_NEAREST)
+            self.assertEqual(
+                out_quantizer.round_mode, libpymo.RoundingMode.ROUND_NEAREST
+            )
             self.assertEqual(out_quantizer.quant_scheme, QuantScheme.post_training_tf)
             self.assertEqual(out_quantizer.bitwidth, 8)
 
@@ -302,16 +311,20 @@ class TestQuantizationSimTransformers(unittest.TestCase):
             self.assertFalse(sim.model.ln1.input_quantizers[0].encoding)
 
             #  gamma (weight) quantizer of LayerNorm is enabled by default
-            self.assertTrue(sim.model.ln1.param_quantizers['weight'].encoding)
-            weight_quantizer = sim.model.ln1.param_quantizers['weight']
+            self.assertTrue(sim.model.ln1.param_quantizers["weight"].encoding)
+            weight_quantizer = sim.model.ln1.param_quantizers["weight"]
             self.assertTrue(weight_quantizer.enabled)
-            self.assertEqual(weight_quantizer.round_mode, libpymo.RoundingMode.ROUND_NEAREST)
-            self.assertEqual(weight_quantizer.quant_scheme, QuantScheme.post_training_tf)
+            self.assertEqual(
+                weight_quantizer.round_mode, libpymo.RoundingMode.ROUND_NEAREST
+            )
+            self.assertEqual(
+                weight_quantizer.quant_scheme, QuantScheme.post_training_tf
+            )
             self.assertEqual(weight_quantizer.bitwidth, 8)
 
             # beta (bias) quantizer of LayerNorm is disabled by default
             # override with custom config file
-            self.assertFalse(sim.model.ln1.param_quantizers['bias'].encoding)
+            self.assertFalse(sim.model.ln1.param_quantizers["bias"].encoding)
             forward_pass(sim.model, None)
 
     def test_custom_bert_layernorm_quantization_custom_hw_config(self):
@@ -335,9 +348,12 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = True
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                       dummy_input=random_input,
-                                       config_file=os.path.join(tmp_dir, "quantsim_config.json"))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf,
+                dummy_input=random_input,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+            )
 
             # validate config after compute encodings
             sim.compute_encodings(forward_pass, None)
@@ -349,12 +365,32 @@ class TestQuantizationSimTransformers(unittest.TestCase):
             # 2) (default) int 8, but only int 4 kernel is available is available for a given op type --> override not supported
 
             #  check quantizer added to parameters of LayerNorm
-            self.assertTrue(isinstance(sim.model.customln1.param_quantizers['weight'], StaticGridPerTensorQuantizer))
-            self.assertTrue(isinstance(sim.model.customln1.param_quantizers['bias'], StaticGridPerTensorQuantizer))
-            self.assertTrue(isinstance(sim.model.customln1.input_quantizers[0], StaticGridPerTensorQuantizer))
+            self.assertTrue(
+                isinstance(
+                    sim.model.customln1.param_quantizers["weight"],
+                    StaticGridPerTensorQuantizer,
+                )
+            )
+            self.assertTrue(
+                isinstance(
+                    sim.model.customln1.param_quantizers["bias"],
+                    StaticGridPerTensorQuantizer,
+                )
+            )
+            self.assertTrue(
+                isinstance(
+                    sim.model.customln1.input_quantizers[0],
+                    StaticGridPerTensorQuantizer,
+                )
+            )
 
             # input / output quantizers for layernorm
-            self.assertTrue(isinstance(sim.model.customln1.output_quantizers[0], StaticGridPerTensorQuantizer))
+            self.assertTrue(
+                isinstance(
+                    sim.model.customln1.output_quantizers[0],
+                    StaticGridPerTensorQuantizer,
+                )
+            )
             self.assertTrue(isinstance(sim.model.customln1, StaticGridQuantWrapper))
 
             # validate config after compute encodings
@@ -363,32 +399,49 @@ class TestQuantizationSimTransformers(unittest.TestCase):
             # check output quantizer for linear
             self.assertTrue(sim.model.linear1.output_quantizers[0].encoding)
             self.assertTrue(sim.model.linear1.output_quantizers[0].bitwidth == 8)
-            self.assertTrue(sim.model.linear1.output_quantizers[0].data_type == QuantizationDataType.int)
+            self.assertTrue(
+                sim.model.linear1.output_quantizers[0].data_type
+                == QuantizationDataType.int
+            )
 
             # LayerNorm output quantization is enabled by default
             # override this with custom config (matches aic100_config.json)
             self.assertIsNone(sim.model.customln1.output_quantizers[0].encoding)
             self.assertTrue(sim.model.customln1.output_quantizers[0].bitwidth == 16)
-            self.assertTrue(sim.model.customln1.output_quantizers[0].data_type == QuantizationDataType.float)
+            self.assertTrue(
+                sim.model.customln1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
 
             #  gamma (weight) quantizer of LayerNorm is enabled by default
             # override this with custom config (matches aic100_config.json)
-            self.assertTrue(sim.model.customln1.param_quantizers['weight'].bitwidth == 16)
-            self.assertTrue(sim.model.customln1.param_quantizers['weight'].data_type == QuantizationDataType.float)
-            self.assertTrue(sim.model.customln1.param_quantizers['bias'].bitwidth == 16)
-            self.assertTrue(sim.model.customln1.param_quantizers['bias'].data_type == QuantizationDataType.float)
+            self.assertTrue(
+                sim.model.customln1.param_quantizers["weight"].bitwidth == 16
+            )
+            self.assertTrue(
+                sim.model.customln1.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
+            self.assertTrue(sim.model.customln1.param_quantizers["bias"].bitwidth == 16)
+            self.assertTrue(
+                sim.model.customln1.param_quantizers["bias"].data_type
+                == QuantizationDataType.float
+            )
 
-            self.assertIsNone(sim.model.customln1.param_quantizers['weight'].encoding)
-            self.assertIsNone(sim.model.customln1.param_quantizers['bias'].encoding)
+            self.assertIsNone(sim.model.customln1.param_quantizers["weight"].encoding)
+            self.assertIsNone(sim.model.customln1.param_quantizers["bias"].encoding)
 
             self.assertTrue(sim.model.gelu.output_quantizers[0].bitwidth == 16)
-            self.assertTrue(sim.model.gelu.output_quantizers[0].data_type == QuantizationDataType.float)
+            self.assertTrue(
+                sim.model.gelu.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
             self.assertIsNone(sim.model.gelu.output_quantizers[0].encoding)
 
             # clear data dir that was used in this test
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
             if os.path.exists(file_path):
-               os.remove(file_path)
+                os.remove(file_path)
 
     def test_custom_quantizable_multi_head_attn_unit(self):
         """
@@ -400,7 +453,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         seed = 10
         np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -424,20 +477,25 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         # 0. Simple calculation
         def SimpleMHA():
-            _q = torch.matmul(query, weights_q.T).transpose(0, 1) # (b, s, d)
+            _q = torch.matmul(query, weights_q.T).transpose(0, 1)  # (b, s, d)
             _k = torch.matmul(key, weights_k.T).transpose(0, 1)
             _v = torch.matmul(value, weights_v.T).transpose(0, 1)
+
             # split heads
             def split_heads(v):
-                return v.reshape(batch_size, seq_size*num_heads, embed_dim//num_heads)
+                return v.reshape(
+                    batch_size, seq_size * num_heads, embed_dim // num_heads
+                )
+
             def merge_heads(v):
                 return v.reshape(batch_size, seq_size, embed_dim)
+
             _q = split_heads(_q)
             _k = split_heads(_k)
             _v = split_heads(_v)
             mm1 = torch.matmul(_q, _k.transpose(-1, -2)) / (_v.size(-1) ** 0.5)
-            w = nn.functional.softmax(mm1, dim=-1) #
-            mm2 = torch.matmul(w, _v) # (b, seq_size*num_head)
+            w = nn.functional.softmax(mm1, dim=-1)  #
+            mm2 = torch.matmul(w, _v)  # (b, seq_size*num_head)
             mm2 = merge_heads(mm2)
             out = torch.matmul(mm2, weights_o.T)
             return out, w
@@ -459,6 +517,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         # 2. AIMET custom MHA
         from aimet_torch.transformers.activation import QuantizableMultiheadAttention
+
         nncq_mha = QuantizableMultiheadAttention(embed_dim, num_heads, bias=False)
         with torch.no_grad():
             nncq_mha.linear_Q.weight.copy_(weights_q)
@@ -471,8 +530,9 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         for outputs in zip(nn_outputs, nncq_outputs):
             # only checking outputs (without attention_weights)
             for i in range(1, len(outputs)):
-                self.assertTrue(np.allclose(outputs[0].detach().numpy(), outputs[i].detach()))
-
+                self.assertTrue(
+                    np.allclose(outputs[0].detach().numpy(), outputs[i].detach())
+                )
 
     def test_pt_ops_with_modules(self):
         """
@@ -482,7 +542,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         seed = 10
         np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -493,26 +553,50 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         num_encoder_layers = 12
         default_decoder_layers = 6
-        transformer_model = nn.Transformer(nhead=16, num_encoder_layers=num_encoder_layers)
+        transformer_model = nn.Transformer(
+            nhead=16, num_encoder_layers=num_encoder_layers
+        )
         transformer_model.eval()
 
         for i in range(num_encoder_layers):
-            self.assertTrue(isinstance(transformer_model.encoder.layers[i].self_attn, torch.nn.MultiheadAttention))
+            self.assertTrue(
+                isinstance(
+                    transformer_model.encoder.layers[i].self_attn,
+                    torch.nn.MultiheadAttention,
+                )
+            )
 
         for i in range(default_decoder_layers):
-            self.assertTrue(isinstance(transformer_model.decoder.layers[i].self_attn, torch.nn.MultiheadAttention))
+            self.assertTrue(
+                isinstance(
+                    transformer_model.decoder.layers[i].self_attn,
+                    torch.nn.MultiheadAttention,
+                )
+            )
 
         # auto replace PyTorch MHA in given transformer layer with quantizable MHA
-        utils.replace_modules(transformer_model,
-                              lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                              create_quantizable_multihead_attention)
+        utils.replace_modules(
+            transformer_model,
+            lambda module: isinstance(module, torch.nn.MultiheadAttention),
+            create_quantizable_multihead_attention,
+        )
 
         # validate replacement is done for both encoder and decoder
         for i in range(num_encoder_layers):
-            self.assertTrue(isinstance(transformer_model.encoder.layers[i].self_attn, QuantizableMultiheadAttention))
+            self.assertTrue(
+                isinstance(
+                    transformer_model.encoder.layers[i].self_attn,
+                    QuantizableMultiheadAttention,
+                )
+            )
 
         for i in range(default_decoder_layers):
-            self.assertTrue(isinstance(transformer_model.decoder.layers[i].self_attn, QuantizableMultiheadAttention))
+            self.assertTrue(
+                isinstance(
+                    transformer_model.decoder.layers[i].self_attn,
+                    QuantizableMultiheadAttention,
+                )
+            )
 
         # check if forward pass after replacement works fine
         _ = transformer_model(src=src, tgt=src)
@@ -525,7 +609,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         """
         seed = 10
         np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -544,7 +628,9 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         default_num_decoder_layers = 6
 
         # start with a vanilla PyTorch transformer layer
-        transformer_model = nn.Transformer(nhead=16, num_encoder_layers=num_encoder_layers)
+        transformer_model = nn.Transformer(
+            nhead=16, num_encoder_layers=num_encoder_layers
+        )
         transformer_model.eval()
 
         from torch import fx
@@ -562,11 +648,15 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         prepare_pt_transformer_for_quantsim(transformer_model)
 
         # auto replace PyTorch MHA in given transformer layer with quantizable MHA
-        utils.replace_modules(transformer_model,
-                              lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                              create_quantizable_multihead_attention)
+        utils.replace_modules(
+            transformer_model,
+            lambda module: isinstance(module, torch.nn.MultiheadAttention),
+            create_quantizable_multihead_attention,
+        )
 
-        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(transformer_model, (src, src))
+        ops_with_missing_modules = connectedgraph_utils.get_ops_with_missing_modules(
+            transformer_model, (src, src)
+        )
 
         # create quantsim object on updated model
         sim = QuantizationSimModel(transformer_model, dummy_input=(src, src))
@@ -576,28 +666,58 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         # validate MHA layers have quantizers
         for i in range(num_encoder_layers):
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.linear_Q.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.linear_K.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.linear_V.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.matmul_1.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.matmul_2.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.encoder.layers[i].self_attn.softmax.output_quantizers[0].encoding)
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.linear_Q.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.linear_K.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.linear_V.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.matmul_1.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.matmul_2.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.encoder.layers[i]
+                .self_attn.softmax.output_quantizers[0]
+                .encoding
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            sim.export(tmpdir, 'transformer', dummy_input=(src, src))
+            sim.export(tmpdir, "transformer", dummy_input=(src, src))
 
             # verify that MHA layers are named in onnx export.
-            onnx_path= os.path.join(tmpdir, 'transformer.onnx')
+            onnx_path = os.path.join(tmpdir, "transformer.onnx")
             onnx_model = onnx.load(onnx_path)
-            mha_names = { '.'.join(n.name.split('#')[0].split('.')[:-1]) for n in onnx_model.graph.node
-                          if 'self_attn.' in n.name }
+            mha_names = {
+                ".".join(n.name.split("#")[0].split(".")[:-1])
+                for n in onnx_model.graph.node
+                if "self_attn." in n.name
+            }
             assert len(mha_names) == default_num_decoder_layers + num_encoder_layers
 
-    @unittest.skipIf(version.parse(torch.__version__) < version.parse('1.13.1'), reason="torch1.13.1 is required.")
+    @unittest.skipIf(
+        version.parse(torch.__version__) < version.parse("1.13.1"),
+        reason="torch1.13.1 is required.",
+    )
     def test_transformer_transformation(self):
         seed = 10
         np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -614,9 +734,11 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         # current method being followed
         prepare_pt_transformer_for_quantsim(transformer_model_1)
-        utils.replace_modules(transformer_model_1,
-                              lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                              create_quantizable_multihead_attention)
+        utils.replace_modules(
+            transformer_model_1,
+            lambda module: isinstance(module, torch.nn.MultiheadAttention),
+            create_quantizable_multihead_attention,
+        )
         transformer_model_1.eval()
         out_fp_1 = transformer_model_1(src=copy.deepcopy(src), tgt=copy.deepcopy(src))
         diff = out_fp_1 - out_fp
@@ -625,11 +747,18 @@ class TestQuantizationSimTransformers(unittest.TestCase):
 
         # add in quantizable enc/dec
         prepare_pt_transformer_for_quantsim(transformer_model_2)
-        utils.replace_modules(transformer_model_2.encoder,
-                              lambda module: isinstance(module, (nn.TransformerEncoderLayer,
-                                                                 nn.TransformerDecoderLayer,
-                                                                 nn.MultiheadAttention)),
-                              create_quantizable_transformer_encoder_layer)
+        utils.replace_modules(
+            transformer_model_2.encoder,
+            lambda module: isinstance(
+                module,
+                (
+                    nn.TransformerEncoderLayer,
+                    nn.TransformerDecoderLayer,
+                    nn.MultiheadAttention,
+                ),
+            ),
+            create_quantizable_transformer_encoder_layer,
+        )
         transformer_model_2.eval()
         out_fp_2 = transformer_model_2(src=copy.deepcopy(src), tgt=copy.deepcopy(src))
         diff = out_fp_2 - out_fp
@@ -639,7 +768,7 @@ class TestQuantizationSimTransformers(unittest.TestCase):
     def test_mha_as_leaf(self):
         seed = 10
         np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -663,13 +792,20 @@ class TestQuantizationSimTransformers(unittest.TestCase):
                 return m(*copy.deepcopy(dummy_input))
 
         model = MhaModel().eval()
-        aimet_torch.utils.modules_to_treat_as_leaf = [torch.nn.MultiheadAttention, QuantizableMultiheadAttention]
+        aimet_torch.utils.modules_to_treat_as_leaf = [
+            torch.nn.MultiheadAttention,
+            QuantizableMultiheadAttention,
+        ]
 
-        utils.replace_modules(model,
-                              lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                              create_quantizable_multihead_attention)
+        utils.replace_modules(
+            model,
+            lambda module: isinstance(module, torch.nn.MultiheadAttention),
+            create_quantizable_multihead_attention,
+        )
 
-        aimet_sim = QuantizationSimModel(model, dummy_input=copy.deepcopy(dummy_input), quant_scheme='tf')
+        aimet_sim = QuantizationSimModel(
+            model, dummy_input=copy.deepcopy(dummy_input), quant_scheme="tf"
+        )
 
         assert len(aimet_sim.model._modules) == 1
         assert utils.is_leaf_module(aimet_sim.model.nn_mha._module_to_wrap)
@@ -679,28 +815,29 @@ class TestQuantizationSimTransformers(unittest.TestCase):
         _ = forward_pass(aimet_sim.model, None)
         aimet_torch.utils.modules_to_treat_as_leaf = []
 
+
 @pytest.fixture
 def seed_torch_random_variable():
     seed = 10
     np.random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+
 @pytest.mark.parametrize("bias", [False, True])
 @pytest.mark.parametrize("pretrained", [True, False])
 def test_conversion_to_quantizable_mha(bias, pretrained, seed_torch_random_variable):
-    """ verify conversion to custom MHA (quantizable version) """
+    """verify conversion to custom MHA (quantizable version)"""
 
     embed_dim, num_heads, batch_size, seq_size = 128, 8, 32, 27
 
     key = torch.rand(seq_size, batch_size, embed_dim)
     query = torch.rand(seq_size, batch_size, embed_dim)
     value = torch.rand(seq_size, batch_size, embed_dim)
-
 
     class Net(nn.Module):
         def __init__(self):
@@ -716,10 +853,11 @@ def test_conversion_to_quantizable_mha(bias, pretrained, seed_torch_random_varia
         optimizer = torch.optim.SGD(model.parameters(), lr=0.05, momentum=0.5)
         # train to update  and generate non-zero bias tensors
         for i in range(5):
-            attn_outputs, _ = model(torch.rand(seq_size, batch_size, embed_dim), #Q
-                                    torch.rand(seq_size, batch_size, embed_dim), #K
-                                    torch.rand(seq_size, batch_size, embed_dim) #V
-                                    )
+            attn_outputs, _ = model(
+                torch.rand(seq_size, batch_size, embed_dim),  # Q
+                torch.rand(seq_size, batch_size, embed_dim),  # K
+                torch.rand(seq_size, batch_size, embed_dim),  # V
+            )
             loss = attn_outputs.flatten().sum()
             loss.backward()
             optimizer.step()
@@ -732,8 +870,9 @@ def test_conversion_to_quantizable_mha(bias, pretrained, seed_torch_random_varia
     model_q_mha.eval()
     nncq_outputs = model_q_mha(query, key, value)
 
-    for i,(exp, act) in enumerate(zip(nn_outputs, nncq_outputs)):
+    for i, (exp, act) in enumerate(zip(nn_outputs, nncq_outputs)):
         assert torch.allclose(exp, act)
+
 
 @pytest.mark.parametrize("replace_with_q_mha", [True, False])
 def test_mha_as_leaf_module(replace_with_q_mha):
@@ -752,14 +891,18 @@ def test_mha_as_leaf_module(replace_with_q_mha):
     aimet_torch.utils.modules_to_treat_as_leaf = []
 
     if replace_with_q_mha:
-        utils.replace_modules(transformer_model,
-                              lambda module: isinstance(module, torch.nn.MultiheadAttention),
-                              create_quantizable_multihead_attention)
+        utils.replace_modules(
+            transformer_model,
+            lambda module: isinstance(module, torch.nn.MultiheadAttention),
+            create_quantizable_multihead_attention,
+        )
 
     cg_0 = ConnectedGraph(transformer_model, model_input=dummy_input)
 
-    aimet_torch.utils.modules_to_treat_as_leaf = [torch.nn.MultiheadAttention,
-                                                  aimet_torch.transformers.activation.QuantizableMultiheadAttention]
+    aimet_torch.utils.modules_to_treat_as_leaf = [
+        torch.nn.MultiheadAttention,
+        aimet_torch.transformers.activation.QuantizableMultiheadAttention,
+    ]
     cg_1 = ConnectedGraph(transformer_model, model_input=dummy_input)
 
     # create a dictionary of ops which are not part of modules_to_treat_as_leaf
@@ -777,7 +920,7 @@ def test_mha_as_leaf_module(replace_with_q_mha):
     assert len(ops_from_cg_0) == len(ops_from_cg_1)
     for cg_0_op_name, cg_0_op in ops_from_cg_0.items():
         # elementwise add ops can be omitted
-        if cg_0_op.type not in ['Add']:
+        if cg_0_op.type not in ["Add"]:
             assert cg_0_op_name in ops_from_cg_1
             cg_1_op = ops_from_cg_0[cg_0_op_name]
             assert len(cg_0_op.inputs) == len(cg_1_op.inputs)
@@ -785,6 +928,9 @@ def test_mha_as_leaf_module(replace_with_q_mha):
             for idx, input_tensor in enumerate(cg_0_op.inputs):
                 if input_tensor.is_parm:
                     assert input_tensor.is_const == cg_1_op.inputs[idx].is_const
-                    assert input_tensor.is_model_input == cg_1_op.inputs[idx].is_model_input
+                    assert (
+                        input_tensor.is_model_input
+                        == cg_1_op.inputs[idx].is_model_input
+                    )
                     assert input_tensor.numel == cg_1_op.inputs[idx].numel
                     assert input_tensor.shape == cg_1_op.inputs[idx].shape

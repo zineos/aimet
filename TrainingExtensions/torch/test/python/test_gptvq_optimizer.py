@@ -52,7 +52,9 @@ class TestGPTVQOptimizer:
         num_of_centroids = 64
 
         weight_block = torch.zeros(768, 128)
-        original_sliced_weight = weight_block[:, start_index:start_index + vector_dim].clone()
+        original_sliced_weight = weight_block[
+            :, start_index : start_index + vector_dim
+        ].clone()
         codebook = torch.arange(
             start=min_value,
             end=min_value + num_blocks_per_column * num_of_centroids * vector_dim,
@@ -61,7 +63,7 @@ class TestGPTVQOptimizer:
         codebook = codebook.reshape(num_blocks_per_column, num_of_centroids, vector_dim)
 
         updated_weight_block, _ = GPTVQOptimizer._update_weight_block(
-            weight_block[:, start_index:start_index + vector_dim].clone(),
+            weight_block[:, start_index : start_index + vector_dim].clone(),
             codebook,
             vector_dim=vector_dim,
             num_blocks_per_column=num_blocks_per_column,
@@ -70,7 +72,9 @@ class TestGPTVQOptimizer:
         assert updated_weight_block.shape == original_sliced_weight.shape
         assert not torch.allclose(updated_weight_block, original_sliced_weight)
 
-        updated_weight_block = updated_weight_block.reshape(num_blocks_per_column, -1, vector_dim)
+        updated_weight_block = updated_weight_block.reshape(
+            num_blocks_per_column, -1, vector_dim
+        )
         for group_index in range(num_blocks_per_column):
             current_group_weight = updated_weight_block[group_index]
             corresponding_codebook = codebook[group_index]
@@ -103,4 +107,3 @@ class TestGPTVQOptimizer:
             assert torch.equal(
                 manipulated_tensor, torch.ones(tensor.shape[-1], device=tensor.device)
             )
-

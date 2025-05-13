@@ -52,6 +52,7 @@ from .models.test_models import TransposedConvModel, Conv3dModel, Conv3dModel1
 from aimet_torch.utils import create_rand_tensors_given_shapes, get_device
 import aimet_torch._base.batch_norm_fold as batch_norm_fold
 from torch.nn.modules.batchnorm import _BatchNorm
+
 torch.manual_seed(1228)
 
 
@@ -67,7 +68,6 @@ def _initialize_bn_params(model: torch.nn.Module):
 
 class MyModel(torch.nn.Module):
     def __init__(self):
-
         super(MyModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(10, 20, 3)
         self.bn1 = torch.nn.BatchNorm2d(20)
@@ -82,7 +82,6 @@ class MyModel(torch.nn.Module):
         self.fc1 = torch.nn.Linear(5120, 10)
 
     def forward(self, x):
-
         # Regular case - conv followed by bn
         x = self.conv1(x)
         x = self.bn1(x)
@@ -106,7 +105,9 @@ class MyModel(torch.nn.Module):
 class TwoInputs(torch.nn.Module):
     def __init__(self, num_classes=3):
         super(TwoInputs, self).__init__()
-        self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False)
+        self.conv1 = torch.nn.Conv2d(
+            3, 16, kernel_size=2, stride=2, padding=2, bias=False
+        )
         self.bn1 = torch.nn.BatchNorm2d(16)
         self.conv2 = torch.nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=2)
         self.bn2 = torch.nn.BatchNorm2d(8)
@@ -132,9 +133,8 @@ class TwoInputs(torch.nn.Module):
 
 
 class TestTrainingExtensionBnFold:
-
     @pytest.mark.cuda
-    @pytest.mark.parametrize("device", ['cpu', 'cuda'])
+    @pytest.mark.parametrize("device", ["cpu", "cuda"])
     def test_fold_resnet18(self, device):
         torch.manual_seed(10)
         model = models.resnet18().to(device)
@@ -153,10 +153,10 @@ class TestTrainingExtensionBnFold:
 
         assert not torch.equal(params_before, params_after)
         assert not isinstance(model.layer2[0].bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, atol=1.e-3)
+        assert torch.allclose(baseline_output, output_after_fold, atol=1.0e-3)
 
     @pytest.mark.cuda
-    @pytest.mark.parametrize("device", ['cpu', 'cuda'])
+    @pytest.mark.parametrize("device", ["cpu", "cuda"])
     def test_python_impl(self, device):
         torch.manual_seed(10)
         model = models.resnet18().eval().to(device)
@@ -167,12 +167,10 @@ class TestTrainingExtensionBnFold:
 
         # Ensure that the weight parameter is updated correctly after bn fold.
         assert not isinstance(model.layer2[0].bn1, torch.nn.BatchNorm2d)
-   
 
     def test_fold_bn_before_conv_no_bias(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 2, bias=False)
                 self.relu1 = torch.nn.ReLU()
@@ -202,16 +200,14 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.conv2.weight.requires_grad == model.conv2.bias.requires_grad
         assert model.conv2.weight.device == model.conv2.bias.device
         assert model.conv2.weight.dtype == model.conv2.bias.dtype
 
     def test_fold_bn_before_conv_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3)
                 self.relu1 = torch.nn.ReLU()
@@ -241,13 +237,11 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-1)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-1)
 
     def test_fold_bn_before_conv_with_padding(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3, padding=1, bias=False)
                 self.relu1 = torch.nn.ReLU()
@@ -276,13 +270,11 @@ class TestTrainingExtensionBnFold:
 
         assert not conv_bn
         assert isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_before_conv_transpose(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3, padding=1, bias=False)
                 self.relu1 = torch.nn.ReLU()
@@ -311,50 +303,56 @@ class TestTrainingExtensionBnFold:
 
         assert not conv_bn
         assert isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_filter_conv_bn_pair(self):
-        invalid_fold_forward = [torch.nn.Conv2d(10, 20, 3, padding=1),
-                                torch.nn.Conv2d(10, 10, 2, groups=10),
-                                torch.nn.Conv2d(10, 20, 2, groups=2),
-                                torch.nn.Conv1d(10, 20, 3, padding=1),
-                                torch.nn.Conv1d(10, 10, 2, groups=10),
-                                torch.nn.Conv1d(10, 20, 2, groups=2),
-                                torch.nn.ConvTranspose2d(10, 20, 3),
-                                ]
-        is_invalid = [not _is_valid_bn_fold(layer, False) for layer in invalid_fold_forward]
+        invalid_fold_forward = [
+            torch.nn.Conv2d(10, 20, 3, padding=1),
+            torch.nn.Conv2d(10, 10, 2, groups=10),
+            torch.nn.Conv2d(10, 20, 2, groups=2),
+            torch.nn.Conv1d(10, 20, 3, padding=1),
+            torch.nn.Conv1d(10, 10, 2, groups=10),
+            torch.nn.Conv1d(10, 20, 2, groups=2),
+            torch.nn.ConvTranspose2d(10, 20, 3),
+        ]
+        is_invalid = [
+            not _is_valid_bn_fold(layer, False) for layer in invalid_fold_forward
+        ]
         assert all(is_invalid)
 
         invalid_fold_backward = [torch.nn.ConvTranspose2d(10, 20, 2, groups=2)]
-        is_invalid = [not _is_valid_bn_fold(layer, True) for layer in invalid_fold_backward]
+        is_invalid = [
+            not _is_valid_bn_fold(layer, True) for layer in invalid_fold_backward
+        ]
         assert all(is_invalid)
 
-        valid_fold_forward = [torch.nn.Conv2d(10, 20, 3, padding=0),
-                              torch.nn.Linear(10, 10)]
+        valid_fold_forward = [
+            torch.nn.Conv2d(10, 20, 3, padding=0),
+            torch.nn.Linear(10, 10),
+        ]
         is_valid = [_is_valid_bn_fold(layer, False) for layer in valid_fold_forward]
         assert all(is_valid)
 
-        valid_fold_backward = [torch.nn.Conv2d(10, 20, 2, padding=0),
-                               torch.nn.Conv2d(10, 20, 2, padding=1),
-                               torch.nn.Conv2d(10, 20, 2, groups=2),
-                               torch.nn.Conv2d(10, 10, 2, groups=10),
-                               torch.nn.Conv1d(10, 20, 2, padding=0),
-                               torch.nn.Conv1d(10, 20, 2, padding=1),
-                               torch.nn.Conv1d(10, 20, 2, groups=2),
-                               torch.nn.Conv1d(10, 10, 2, groups=10),
-                               torch.nn.ConvTranspose2d(10, 20, 2, padding=0),
-                               torch.nn.ConvTranspose2d(10, 20, 2, padding=1),
-                               torch.nn.ConvTranspose2d(10, 10, 2, groups=10),
-                               torch.nn.Linear(10, 10),
-                               ]
+        valid_fold_backward = [
+            torch.nn.Conv2d(10, 20, 2, padding=0),
+            torch.nn.Conv2d(10, 20, 2, padding=1),
+            torch.nn.Conv2d(10, 20, 2, groups=2),
+            torch.nn.Conv2d(10, 10, 2, groups=10),
+            torch.nn.Conv1d(10, 20, 2, padding=0),
+            torch.nn.Conv1d(10, 20, 2, padding=1),
+            torch.nn.Conv1d(10, 20, 2, groups=2),
+            torch.nn.Conv1d(10, 10, 2, groups=10),
+            torch.nn.ConvTranspose2d(10, 20, 2, padding=0),
+            torch.nn.ConvTranspose2d(10, 20, 2, padding=1),
+            torch.nn.ConvTranspose2d(10, 10, 2, groups=10),
+            torch.nn.Linear(10, 10),
+        ]
         is_valid = [_is_valid_bn_fold(layer, True) for layer in valid_fold_backward]
         assert all(is_valid)
 
     def test_fold_bn_after_conv_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3, bias=False)
                 self.bn1 = torch.nn.BatchNorm2d(20)
@@ -382,16 +380,14 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.conv1.weight.requires_grad == model.conv1.bias.requires_grad
         assert model.conv1.weight.device == model.conv1.bias.device
         assert model.conv1.weight.dtype == model.conv1.bias.dtype
 
     def test_fold_bn_after_conv_depthwise(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 10, 3, groups=10)
                 self.bn1 = torch.nn.BatchNorm2d(10)
@@ -417,13 +413,11 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_after_transposed_conv_depthwise(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3, groups=10)
                 self.bn1 = torch.nn.BatchNorm2d(10)
@@ -449,13 +443,11 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_after_conv_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1 = torch.nn.Conv2d(10, 20, 3)
                 self.bn1 = torch.nn.BatchNorm2d(20)
@@ -483,13 +475,11 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_before_linear_layer_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.fc1 = torch.nn.Linear(10, 20, bias=False)
@@ -515,16 +505,14 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.fc1.weight.requires_grad == model.fc1.bias.requires_grad
         assert model.fc1.weight.device == model.fc1.bias.device
         assert model.fc1.weight.dtype == model.fc1.bias.dtype
 
     def test_fold_bn_before_linear_layer_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.fc1 = torch.nn.Linear(10, 20)
@@ -550,13 +538,11 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_after_linear_layer_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.fc1 = torch.nn.Linear(10, 20, bias=False)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -582,16 +568,14 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.fc1.weight.requires_grad == model.fc1.bias.requires_grad
         assert model.fc1.weight.device == model.fc1.bias.device
         assert model.fc1.weight.dtype == model.fc1.bias.dtype
 
     def test_fold_bn_after_linear_layer_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.fc1 = torch.nn.Linear(10, 20)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -617,17 +601,20 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_find_batch_norms_to_fold(self):
         model = MyModel().eval()
         _initialize_bn_params(model)
 
         input_shape = (2, 10, 24, 24)
-        connected_graph = ConnectedGraph(model,
-                                         create_rand_tensors_given_shapes(input_shape, get_device(model)))
+        connected_graph = ConnectedGraph(
+            model, create_rand_tensors_given_shapes(input_shape, get_device(model))
+        )
 
-        conv_bn_pairs, bn_conv_pairs, bn_picked = _find_all_batch_norms_to_fold(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, bn_picked = _find_all_batch_norms_to_fold(
+            connected_graph
+        )
 
         assert len(conv_bn_pairs) == len(bn_conv_pairs) == 1
         assert (model.conv1, model.bn1) in conv_bn_pairs
@@ -635,7 +622,6 @@ class TestTrainingExtensionBnFold:
         assert len(bn_picked) == 2
 
     def test_bn_fold_auto_mode_transposed_conv2d(self):
-
         torch.manual_seed(10)
         model = TransposedConvModel().eval()
         _initialize_bn_params(model)
@@ -650,7 +636,7 @@ class TestTrainingExtensionBnFold:
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
 
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert len(folded_pairs) == 2
 
     def test_find_batch_norms_to_fold_multi_input(self):
@@ -658,11 +644,11 @@ class TestTrainingExtensionBnFold:
         _initialize_bn_params(model)
         inp_shapes = [(1, 3, 32, 32), (1, 3, 20, 20)]
 
-        connected_graph = ConnectedGraph(model,
-                                         create_rand_tensors_given_shapes(inp_shapes, get_device(model)))
+        connected_graph = ConnectedGraph(
+            model, create_rand_tensors_given_shapes(inp_shapes, get_device(model))
+        )
 
         conv_bn_pairs, bn_conv_pairs, _ = _find_all_batch_norms_to_fold(connected_graph)
-
 
         assert len(conv_bn_pairs) == 2
         assert not bn_conv_pairs
@@ -684,13 +670,12 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm2d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert len(folded_pairs) == 2
 
     def test_fold_auto_mode_with_bn_after_Conv1d_layer(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -713,7 +698,7 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
         assert 1 == len(bn_pairs)
         assert (model.conv1d, orig_bn) in bn_pairs
@@ -721,7 +706,6 @@ class TestTrainingExtensionBnFold:
     def test_bn_conversion(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2)
                 self.relu = torch.nn.ReLU()
@@ -746,7 +730,7 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
         assert 0 == len(bn_pairs)
         assert (model.conv1d, orig_bn) not in bn_pairs
@@ -754,7 +738,6 @@ class TestTrainingExtensionBnFold:
     def test_fold_manual_with_bn_after_Conv1d_layer_no_bias(self):
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2, bias=False)
                 self.bn1 = torch.nn.BatchNorm1d(20)
@@ -774,10 +757,10 @@ class TestTrainingExtensionBnFold:
 
         layer_list = [(model.conv1d, model.bn1)]
         fold_given_batch_norms(model, layer_list)
-        output_after_fold = (model.conv1d(random_input))
+        output_after_fold = model.conv1d(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.conv1d.weight.requires_grad == model.conv1d.bias.requires_grad
         assert model.conv1d.weight.device == model.conv1d.bias.device
         assert model.conv1d.weight.dtype == model.conv1d.bias.dtype
@@ -788,21 +771,19 @@ class TestTrainingExtensionBnFold:
         model = MyModel()
         model.eval()
         model = torch.nn.DataParallel(model)
-        model.to(device='cuda:0')
-        random_input = torch.rand(2, 10, 24, 24).to(device='cuda:0')
+        model.to(device="cuda:0")
+        random_input = torch.rand(2, 10, 24, 24).to(device="cuda:0")
         output_before = model(random_input)
 
         # BN fold
         fold_all_batch_norms(model, (2, 10, 24, 24))
 
         output_after = model(random_input)
-        assert torch.allclose(output_before, output_after, rtol=1.e-2)
+        assert torch.allclose(output_before, output_after, rtol=1.0e-2)
 
     def test_fold_bn_before_Conv1d_with_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(10)
                 self.conv1d = torch.nn.Conv1d(10, 20, kernel_size=2)
@@ -827,13 +808,11 @@ class TestTrainingExtensionBnFold:
 
         assert 1 == len(bn_pairs)
         assert (model.conv1d, orig_bn) in bn_pairs
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
 
     def test_fold_bn_before_Conv1d_no_bias(self):
-
         class MyModel(torch.nn.Module):
             def __init__(self):
-
                 super(MyModel, self).__init__()
                 self.bn1 = torch.nn.BatchNorm1d(4)
                 self.conv1d = torch.nn.Conv1d(4, 4, kernel_size=2, bias=False)
@@ -864,13 +843,12 @@ class TestTrainingExtensionBnFold:
         output_after_fold = model(random_input)
 
         assert not isinstance(model.bn1, torch.nn.BatchNorm1d)
-        assert torch.allclose(baseline_output, output_after_fold, rtol=1.e-2)
+        assert torch.allclose(baseline_output, output_after_fold, rtol=1.0e-2)
         assert model.conv1d.weight.requires_grad == model.conv1d.bias.requires_grad
         assert model.conv1d.weight.device == model.conv1d.bias.device
         assert model.conv1d.weight.dtype == model.conv1d.bias.dtype
 
     def test_bn_fold_conv3d_fold_backward(self):
-
         torch.random.manual_seed(10)
         model = Conv3dModel()
         inp = torch.randn(1, 3, 24, 24, 24)
@@ -880,7 +858,9 @@ class TestTrainingExtensionBnFold:
         # eval
         model = model.eval()
         orig_out = model(inp)
-        _ = fold_all_batch_norms(model, input_shapes=(1, 3, 24, 24, 24), dummy_input=inp)
+        _ = fold_all_batch_norms(
+            model, input_shapes=(1, 3, 24, 24, 24), dummy_input=inp
+        )
         new_out = model(inp)
 
         assert torch.allclose(orig_out, new_out, atol=1e-5)
@@ -888,7 +868,6 @@ class TestTrainingExtensionBnFold:
         assert not bn_modules
 
     def test_bn_fold_conv3d_fold_forward(self):
-
         torch.random.manual_seed(10)
         model = Conv3dModel1()
         inp = torch.randn(1, 3, 24, 24, 24)
@@ -898,7 +877,9 @@ class TestTrainingExtensionBnFold:
         # eval
         model = model.eval()
         orig_out = model(inp)
-        _ = fold_all_batch_norms(model, input_shapes=(1, 3, 24, 24, 24), dummy_input=inp)
+        _ = fold_all_batch_norms(
+            model, input_shapes=(1, 3, 24, 24, 24), dummy_input=inp
+        )
         new_out = model(inp)
 
         assert torch.allclose(orig_out, new_out, atol=1e-5)

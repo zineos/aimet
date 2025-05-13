@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Quant Analyzer base class """
+"""Quant Analyzer base class"""
 
 import os
 import contextlib
@@ -45,8 +45,12 @@ from abc import ABC, abstractmethod
 import torch
 from torch.utils.data import DataLoader
 
-from aimet_common.quant_analyzer import save_json, export_per_layer_sensitivity_analysis_plot,\
-    create_and_export_min_max_ranges_plot, export_per_layer_mse_plot
+from aimet_common.quant_analyzer import (
+    save_json,
+    export_per_layer_sensitivity_analysis_plot,
+    create_and_export_min_max_ranges_plot,
+    export_per_layer_mse_plot,
+)
 from aimet_common.utils import AimetLogger
 from aimet_common.defs import QuantScheme
 from aimet_torch import utils
@@ -67,13 +71,15 @@ class QuantAnalyzerBase(ABC):
      4) per PDF analysis and
      5) per layer MSE analysis
     """
-    def __init__(self,
-                 model: torch.nn.Module,
-                 dummy_input: Union[torch.Tensor, Tuple],
-                 forward_pass_callback: Callable[[torch.nn.Module], Any],
-                 eval_callback: Callable[[torch.nn.Module], float],
-                 modules_to_ignore: List[torch.nn.Module] = None,
-                 ):
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        forward_pass_callback: Callable[[torch.nn.Module], Any],
+        eval_callback: Callable[[torch.nn.Module], float],
+        modules_to_ignore: List[torch.nn.Module] = None,
+    ):
         """
         :param model: FP32 model to analyze for quantization.
         :param dummy_input: Dummy input to model.
@@ -87,9 +93,13 @@ class QuantAnalyzerBase(ABC):
         :param modules_to_ignore: Excludes certain modules from being analyzed.
         """
         if not callable(forward_pass_callback):
-            raise ValueError('forward_pass_callback is expected to be callable; got {type(forward_pass_callback)}')
+            raise ValueError(
+                "forward_pass_callback is expected to be callable; got {type(forward_pass_callback)}"
+            )
         if not callable(eval_callback):
-            raise ValueError('eval_callback is expected to be callable; got {type(eval_callback)}')
+            raise ValueError(
+                "eval_callback is expected to be callable; got {type(eval_callback)}"
+            )
 
         self._model = model
         self._dummy_input = dummy_input
@@ -99,13 +109,14 @@ class QuantAnalyzerBase(ABC):
         self._num_batches = None
         self._modules_to_ignore = modules_to_ignore
 
-    def analyze(self,
-                quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-                default_param_bw: int = 8,
-                default_output_bw: int = 8,
-                config_file: str = None,
-                results_dir: str = "./tmp/",
-                ):
+    def analyze(
+        self,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        default_param_bw: int = 8,
+        default_output_bw: int = 8,
+        config_file: str = None,
+        results_dir: str = "./tmp/",
+    ):
         """
         Analyze model for quantization and point out sensitive parts/hotspots of the model by performing
             1) model sensitivity to quantization,
@@ -121,10 +132,9 @@ class QuantAnalyzerBase(ABC):
         :param config_file: Path to configuration file for model quantizers.
         :param results_dir: Directory to save the results.
         """
-        sim = self._create_quantsim_and_encodings(quant_scheme,
-                                                  default_param_bw,
-                                                  default_output_bw,
-                                                  config_file)
+        sim = self._create_quantsim_and_encodings(
+            quant_scheme, default_param_bw, default_output_bw, config_file
+        )
 
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
@@ -149,7 +159,11 @@ class QuantAnalyzerBase(ABC):
         if self._unlabeled_dataset_iterable:
             self.export_per_layer_mse_loss(sim, results_dir)
 
-    def enable_per_layer_mse_loss(self, unlabeled_dataset_iterable: Union[DataLoader, Collection], num_batches: int):
+    def enable_per_layer_mse_loss(
+        self,
+        unlabeled_dataset_iterable: Union[DataLoader, Collection],
+        num_batches: int,
+    ):
         """
         Enable per layer MSE loss analysis.
 
@@ -161,15 +175,21 @@ class QuantAnalyzerBase(ABC):
         """
         # TODO: Make per layer MSE loss analysis as part of top level API.
         if len(unlabeled_dataset_iterable) < num_batches:
-            raise ValueError(f'Can not fetch {num_batches} batches from '
-                             f'a data loader of length {len(unlabeled_dataset_iterable)}.')
+            raise ValueError(
+                f"Can not fetch {num_batches} batches from "
+                f"a data loader of length {len(unlabeled_dataset_iterable)}."
+            )
 
         self._unlabeled_dataset_iterable = unlabeled_dataset_iterable
         self._num_batches = num_batches
 
-    def _create_quantsim_and_encodings(self, quant_scheme: QuantScheme, default_param_bw: int,
-                                       default_output_bw: int, config_file: str) \
-            -> _QuantizationSimModelInterface:
+    def _create_quantsim_and_encodings(
+        self,
+        quant_scheme: QuantScheme,
+        default_param_bw: int,
+        default_output_bw: int,
+        config_file: str,
+    ) -> _QuantizationSimModelInterface:
         """
         Create Quantsim and compute encodings.
 
@@ -183,7 +203,9 @@ class QuantAnalyzerBase(ABC):
             input_shape = tuple(self._dummy_input.shape)
         else:
             input_shape = [tuple(x.shape) for x in self._dummy_input]
-        _ = self._fold_all_batch_norms(self._model, input_shape, dummy_input=self._dummy_input)
+        _ = self._fold_all_batch_norms(
+            self._model, input_shape, dummy_input=self._dummy_input
+        )
 
         kwargs = {
             "quant_scheme": quant_scheme,
@@ -193,13 +215,19 @@ class QuantAnalyzerBase(ABC):
         }
         sim = self._get_quantsim_cls()(self._model, self._dummy_input, **kwargs)
         if self._modules_to_ignore:
-            self._exclude_modules_from_quantization(self._model, sim, self._modules_to_ignore)
+            self._exclude_modules_from_quantization(
+                self._model, sim, self._modules_to_ignore
+            )
 
         self.patch_quantsim_to_store_histogram(sim)
-        sim.compute_encodings(self._forward_pass_callback.func, self._forward_pass_callback.args)
+        sim.compute_encodings(
+            self._forward_pass_callback.func, self._forward_pass_callback.args
+        )
         return sim
 
-    def _eval_weight_quantized_model(self, sim: _QuantizationSimModelInterface)-> float:
+    def _eval_weight_quantized_model(
+        self, sim: _QuantizationSimModelInterface
+    ) -> float:
         """
         Evaluate weight quantized model performance.
         For weight quantized model performance, disable enabled activation quantizers, measure
@@ -212,7 +240,9 @@ class QuantAnalyzerBase(ABC):
             eval_score = self._eval_model(sim.model)
             return eval_score
 
-    def _eval_activation_quantized_model(self, sim: _QuantizationSimModelInterface)-> float:
+    def _eval_activation_quantized_model(
+        self, sim: _QuantizationSimModelInterface
+    ) -> float:
         """
         Evaluate activation quantized model performance.
         For activation quantized model performance, disable enabled param quantizers, measure
@@ -235,13 +265,16 @@ class QuantAnalyzerBase(ABC):
         with utils.in_eval_mode(model), torch.no_grad():
             return self._eval_callback(model)
 
-    def _sort_quant_wrappers_based_on_occurrence(self, sim: _QuantizationSimModelInterface) -> Dict:
+    def _sort_quant_wrappers_based_on_occurrence(
+        self, sim: _QuantizationSimModelInterface
+    ) -> Dict:
         """
         Sort quant wrappers based on occurrence for given quantsim model.
 
         :param sim: Quantsim model.
         :return: Ordered dictionary which maps wrapped module name to quant wrapper.
         """
+
         def sorting_hook(quant_wrapper: torch.nn.Module, *_):
             """
             Hook-function to sort quant wrappers based on occurrence.
@@ -257,14 +290,17 @@ class QuantAnalyzerBase(ABC):
             module_to_name_dict[module] = name
 
         sorted_quant_wrappers_dict = OrderedDict()
-        utils.run_hook_for_layers_with_given_input(sim.model, self._dummy_input, sorting_hook,
-                                                   module_type_for_attaching_hook=self._get_quant_wrapper_type(),
-                                                   leaf_node_only=False)
+        utils.run_hook_for_layers_with_given_input(
+            sim.model,
+            self._dummy_input,
+            sorting_hook,
+            module_type_for_attaching_hook=self._get_quant_wrapper_type(),
+            leaf_node_only=False,
+        )
         return sorted_quant_wrappers_dict
 
     @classmethod
-    def _get_enabled_quantizers(cls, sorted_quant_wrappers: Dict)\
-            -> Dict:
+    def _get_enabled_quantizers(cls, sorted_quant_wrappers: Dict) -> Dict:
         """
         For given sorted quant wrappers dict, get enabled quantizers.
 
@@ -302,7 +338,9 @@ class QuantAnalyzerBase(ABC):
         return enabled_param_quantizers
 
     @classmethod
-    def _get_enabled_activation_quantizers(cls, sim: _QuantizationSimModelInterface) -> List:
+    def _get_enabled_activation_quantizers(
+        cls, sim: _QuantizationSimModelInterface
+    ) -> List:
         """
         For given quantsim model, get all enabled activation quantizers.
         :param sim: Quantsim model.
@@ -319,12 +357,13 @@ class QuantAnalyzerBase(ABC):
 
         return enabled_activation_quantizers
 
-    def _perform_per_layer_analysis(self,
-                                    sim: _QuantizationSimModelInterface,
-                                    disable_all_quantizers: bool,
-                                    enabled_before: bool,
-                                    enabled_after: bool,
-                                    ) -> Dict:
+    def _perform_per_layer_analysis(
+        self,
+        sim: _QuantizationSimModelInterface,
+        disable_all_quantizers: bool,
+        enabled_before: bool,
+        enabled_after: bool,
+    ) -> Dict:
         """
         Helper function for perform_per_layer_analysis_by_enabling_quant_wrappers() and
         perform_per_layer_analysis_by_disabling_quant_wrappers()
@@ -336,8 +375,10 @@ class QuantAnalyzerBase(ABC):
         :return: layer wise eval score dictionary. dict[layer_name] = eval_score.
         """
         # Validate input arguments
-        assert (disable_all_quantizers, enabled_before, enabled_after) in \
-            ((True, True, False), (False, False, True))
+        assert (disable_all_quantizers, enabled_before, enabled_after) in (
+            (True, True, False),
+            (False, False, True),
+        )
 
         # Sorted quant wrappers based on occurrence.
         # maps wrapped module name to a quant wrapper.
@@ -358,23 +399,28 @@ class QuantAnalyzerBase(ABC):
                     for enabled_quant_wrapper in enabled_quant_wrappers.keys():
                         if enabled_quant_wrapper == quant_wrapper:
                             continue
-                        stack.enter_context(self._disable_quant_wrapper(enabled_quant_wrapper))
+                        stack.enter_context(
+                            self._disable_quant_wrapper(enabled_quant_wrapper)
+                        )
                 else:
                     # Disable only quant_wrapper
                     stack.enter_context(self._disable_quant_wrapper(quant_wrapper))
 
                 # Record eval score.
                 eval_score_dict[name] = self._eval_model(sim.model)
-                _logger.debug("For layer: %s, the eval score is: %f", name, eval_score_dict[name])
+                _logger.debug(
+                    "For layer: %s, the eval score is: %f", name, eval_score_dict[name]
+                )
 
         return eval_score_dict
 
     @abstractmethod
-    def _create_and_export_stats_histogram_plot(self,
-                                                quantizer,
-                                                results_dir: str,
-                                                title: str,
-                                                ):
+    def _create_and_export_stats_histogram_plot(
+        self,
+        quantizer,
+        results_dir: str,
+        title: str,
+    ):
         """
         For given quantizer, create and export histogram (PDF) of statistics in html format.
 
@@ -383,9 +429,10 @@ class QuantAnalyzerBase(ABC):
         :param title: Title of the plot.
         """
 
-    def check_model_sensitivity_to_quantization(self,
-                                                sim: _QuantizationSimModelInterface,
-                                                ) -> Tuple[float, float, float]:
+    def check_model_sensitivity_to_quantization(
+        self,
+        sim: _QuantizationSimModelInterface,
+    ) -> Tuple[float, float, float]:
         """
         Perform the sensitivity analysis to weight and activation quantization
         individually.
@@ -398,19 +445,26 @@ class QuantAnalyzerBase(ABC):
         _logger.info("FP32 eval score (W32A32): %f", fp32_eval_score)
 
         weight_quantized_eval_score = self._eval_weight_quantized_model(sim)
-        _logger.info("Weight-quantized eval score (W%dA32): %f", sim._default_param_bw,
-                     weight_quantized_eval_score)
+        _logger.info(
+            "Weight-quantized eval score (W%dA32): %f",
+            sim._default_param_bw,
+            weight_quantized_eval_score,
+        )
 
         act_quantized_eval_score = self._eval_activation_quantized_model(sim)
-        _logger.info("Activation-quantized eval score (W32A%d): %f", sim._default_output_bw,
-                     act_quantized_eval_score)
+        _logger.info(
+            "Activation-quantized eval score (W32A%d): %f",
+            sim._default_output_bw,
+            act_quantized_eval_score,
+        )
 
         return fp32_eval_score, weight_quantized_eval_score, act_quantized_eval_score
 
-    def perform_per_layer_analysis_by_enabling_quant_wrappers(self,
-                                                              sim: _QuantizationSimModelInterface,
-                                                              results_dir: str,
-                                                              ) -> Dict:
+    def perform_per_layer_analysis_by_enabling_quant_wrappers(
+        self,
+        sim: _QuantizationSimModelInterface,
+        results_dir: str,
+    ) -> Dict:
         """
         NOTE: Option 1
 
@@ -428,25 +482,29 @@ class QuantAnalyzerBase(ABC):
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
 
-        _logger.info("\nOPTION-1:\nAll the quant wrappers are disabled.\n"
-                     "Starting per-layer analysis by enabling quant wrappers as per config file.")
-        layer_wise_eval_score_dict = self._perform_per_layer_analysis(sim,
-                                                                      disable_all_quantizers=True,
-                                                                      enabled_before=True,
-                                                                      enabled_after=False)
-        export_per_layer_sensitivity_analysis_plot(layer_wise_eval_score_dict,
-                                                   results_dir,
-                                                   title="per_layer_quant_enabled")
-        save_json(layer_wise_eval_score_dict,
-                  results_dir,
-                  title="per_layer_quant_enabled.json")
+        _logger.info(
+            "\nOPTION-1:\nAll the quant wrappers are disabled.\n"
+            "Starting per-layer analysis by enabling quant wrappers as per config file."
+        )
+        layer_wise_eval_score_dict = self._perform_per_layer_analysis(
+            sim, disable_all_quantizers=True, enabled_before=True, enabled_after=False
+        )
+        export_per_layer_sensitivity_analysis_plot(
+            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_enabled"
+        )
+        save_json(
+            layer_wise_eval_score_dict,
+            results_dir,
+            title="per_layer_quant_enabled.json",
+        )
         _logger.info("Exported per-layer quant analysis (enabled) plot.")
         return layer_wise_eval_score_dict
 
-    def perform_per_layer_analysis_by_disabling_quant_wrappers(self,
-                                                               sim: _QuantizationSimModelInterface,
-                                                               results_dir: str,
-                                                               ) -> Dict:
+    def perform_per_layer_analysis_by_disabling_quant_wrappers(
+        self,
+        sim: _QuantizationSimModelInterface,
+        results_dir: str,
+    ) -> Dict:
         """
         NOTE: Option 2
 
@@ -464,25 +522,29 @@ class QuantAnalyzerBase(ABC):
         results_dir = os.path.abspath(results_dir)
         os.makedirs(results_dir, exist_ok=True)
 
-        _logger.info("\nOPTION-2:\nAll the quant wrappers are enabled as per config file.\n"
-                     "Starting per-layer analysis by disabling quant wrappers.")
-        layer_wise_eval_score_dict = self._perform_per_layer_analysis(sim,
-                                                                      disable_all_quantizers=False,
-                                                                      enabled_before=False,
-                                                                      enabled_after=True)
-        export_per_layer_sensitivity_analysis_plot(layer_wise_eval_score_dict,
-                                                   results_dir,
-                                                   title="per_layer_quant_disabled")
-        save_json(layer_wise_eval_score_dict,
-                  results_dir,
-                  title="per_layer_quant_disabled.json")
+        _logger.info(
+            "\nOPTION-2:\nAll the quant wrappers are enabled as per config file.\n"
+            "Starting per-layer analysis by disabling quant wrappers."
+        )
+        layer_wise_eval_score_dict = self._perform_per_layer_analysis(
+            sim, disable_all_quantizers=False, enabled_before=False, enabled_after=True
+        )
+        export_per_layer_sensitivity_analysis_plot(
+            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_disabled"
+        )
+        save_json(
+            layer_wise_eval_score_dict,
+            results_dir,
+            title="per_layer_quant_disabled.json",
+        )
         _logger.info("Exported per-layer quant analysis (disabled) plot.")
         return layer_wise_eval_score_dict
 
-    def export_per_layer_encoding_min_max_range(self,
-                                                sim: _QuantizationSimModelInterface,
-                                                results_dir: str,
-                                                ) -> Tuple[Dict, Dict]:
+    def export_per_layer_encoding_min_max_range(
+        self,
+        sim: _QuantizationSimModelInterface,
+        results_dir: str,
+    ) -> Tuple[Dict, Dict]:
         """
         Export encoding min and max range for all weights and activations. results_dir should have
         html files in following format.
@@ -516,39 +578,58 @@ class QuantAnalyzerBase(ABC):
                 if self._is_quantizer_enabled(quantizer):
                     name = f"{wrapped_module_name}_input_{index}"
                     encoding = self._get_quantizer_encodings(quantizer)[0]
-                    min_max_range_for_activations_dict[name] = (encoding.min, encoding.max)
+                    min_max_range_for_activations_dict[name] = (
+                        encoding.min,
+                        encoding.max,
+                    )
             for index, quantizer in enumerate(quant_wrapper.output_quantizers):
                 if self._is_quantizer_enabled(quantizer):
                     name = f"{wrapped_module_name}_output_{index}"
                     encoding = self._get_quantizer_encodings(quantizer)[0]
-                    min_max_range_for_activations_dict[name] = (encoding.min, encoding.max)
+                    min_max_range_for_activations_dict[name] = (
+                        encoding.min,
+                        encoding.max,
+                    )
             for param_name, quantizer in quant_wrapper.param_quantizers.items():
                 if self._is_quantizer_enabled(quantizer):
                     name = f"{wrapped_module_name}_{param_name}"
                     encodings = self._get_quantizer_encodings(quantizer)
-                    if len(encodings) > 1: # per-channel
+                    if len(encodings) > 1:  # per-channel
                         per_channel_encodings = {}
                         for index, encoding in enumerate(encodings):
-                            per_channel_encodings[f"{name}_{index}"] = (encoding.min, encoding.max)
+                            per_channel_encodings[f"{name}_{index}"] = (
+                                encoding.min,
+                                encoding.max,
+                            )
                         min_max_range_for_weights_dict[name] = per_channel_encodings
-                    else: # per-tensor
-                        min_max_range_for_weights_dict[name] = (encodings[0].min, encodings[0].max)
+                    else:  # per-tensor
+                        min_max_range_for_weights_dict[name] = (
+                            encodings[0].min,
+                            encodings[0].max,
+                        )
 
-        create_and_export_min_max_ranges_plot(min_max_range_for_weights_dict,
-                                              min_max_ranges_dir,
-                                              title="weights")
-        create_and_export_min_max_ranges_plot(min_max_range_for_activations_dict,
-                                              min_max_ranges_dir,
-                                              title="activations")
-        save_json(min_max_range_for_weights_dict, min_max_ranges_dir, title="weights.json")
-        save_json(min_max_range_for_activations_dict, min_max_ranges_dir, title="activations.json")
+        create_and_export_min_max_ranges_plot(
+            min_max_range_for_weights_dict, min_max_ranges_dir, title="weights"
+        )
+        create_and_export_min_max_ranges_plot(
+            min_max_range_for_activations_dict, min_max_ranges_dir, title="activations"
+        )
+        save_json(
+            min_max_range_for_weights_dict, min_max_ranges_dir, title="weights.json"
+        )
+        save_json(
+            min_max_range_for_activations_dict,
+            min_max_ranges_dir,
+            title="activations.json",
+        )
         _logger.info("Exported per layer encodings min-max ranges plot(s).")
         return min_max_range_for_weights_dict, min_max_range_for_activations_dict
 
-    def export_per_layer_stats_histogram(self,
-                                         sim: _QuantizationSimModelInterface,
-                                         results_dir: str,
-                                         ):
+    def export_per_layer_stats_histogram(
+        self,
+        sim: _QuantizationSimModelInterface,
+        results_dir: str,
+    ):
         """
         NOTE: Not to invoke when quantization scheme is not TF-Enhanced.
 
@@ -577,25 +658,32 @@ class QuantAnalyzerBase(ABC):
             wrapped_module_name = module_to_name_dict[quant_wrapper]
             for index, quantizer in enumerate(quant_wrapper.input_quantizers):
                 if quantizer is not None and self._get_quantizer_encodings(quantizer):
-                    self._create_and_export_stats_histogram_plot(quantizer,
-                                                                 activations_pdf_dir,
-                                                                 title=f"{wrapped_module_name}_input_q{index}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        activations_pdf_dir,
+                        title=f"{wrapped_module_name}_input_q{index}",
+                    )
             for index, quantizer in enumerate(quant_wrapper.output_quantizers):
                 if quantizer is not None and self._get_quantizer_encodings(quantizer):
-                    self._create_and_export_stats_histogram_plot(quantizer,
-                                                                 activations_pdf_dir,
-                                                                 title=f"{wrapped_module_name}_output_q{index}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        activations_pdf_dir,
+                        title=f"{wrapped_module_name}_output_q{index}",
+                    )
             for param_name, quantizer in quant_wrapper.param_quantizers.items():
                 if quantizer is not None and self._get_quantizer_encodings(quantizer):
-                    self._create_and_export_stats_histogram_plot(quantizer,
-                                                                 os.path.join(weights_pdf_dir, wrapped_module_name),
-                                                                 title=f"{wrapped_module_name}_{param_name}")
+                    self._create_and_export_stats_histogram_plot(
+                        quantizer,
+                        os.path.join(weights_pdf_dir, wrapped_module_name),
+                        title=f"{wrapped_module_name}_{param_name}",
+                    )
         _logger.info("Exported per layer stats histogram plot(s).")
 
-    def export_per_layer_mse_loss(self,
-                                  sim: _QuantizationSimModelInterface,
-                                  results_dir: str,
-                                  ) -> Dict:
+    def export_per_layer_mse_loss(
+        self,
+        sim: _QuantizationSimModelInterface,
+        results_dir: str,
+    ) -> Dict:
         """
         NOTE: Need to pass same model input data through both fp32 and quantsim model to
         tap output activations of each layer.
@@ -619,15 +707,20 @@ class QuantAnalyzerBase(ABC):
             loss = self._compute_mse_loss(module, quant_wrapper, self._model, sim)
             mse_loss_dict[name] = loss
 
-        export_per_layer_mse_plot(mse_loss_dict,
-                                  results_dir,
-                                  title="per_layer_mse_loss")
+        export_per_layer_mse_plot(
+            mse_loss_dict, results_dir, title="per_layer_mse_loss"
+        )
         save_json(mse_loss_dict, results_dir, title="per_layer_mse_loss.json")
         _logger.info("Exported per layer MSE loss plot.")
         return mse_loss_dict
 
-    def _compute_mse_loss(self, module: torch.nn.Module, quant_wrapper: torch.nn.Module,
-                          fp32_model: torch.nn.Module, sim: _QuantizationSimModelInterface) -> float:
+    def _compute_mse_loss(
+        self,
+        module: torch.nn.Module,
+        quant_wrapper: torch.nn.Module,
+        fp32_model: torch.nn.Module,
+        sim: _QuantizationSimModelInterface,
+    ) -> float:
         """
         Compute MSE loss between fp32 and quantized output activations for each batch, add for
         all the batches and return averaged mse loss.
@@ -647,26 +740,35 @@ class QuantAnalyzerBase(ABC):
         batch_index = 0
         for model_inputs in self._unlabeled_dataset_iterable:
             assert isinstance(model_inputs, (torch.Tensor, tuple, list))
-            _, quantized_out_acts = quant_module_collector.collect_inp_out_data(args=(model_inputs,),
-                                                                                kwargs={},
-                                                                                collect_input=False,
-                                                                                collect_output=True)
-            _, fp32_out_acts = orig_module_collector.collect_inp_out_data(args=(model_inputs,),
-                                                                          kwargs={},
-                                                                          collect_input=False,
-                                                                          collect_output=True)
-            loss += torch.nn.functional.mse_loss(fp32_out_acts, quantized_out_acts).item()
+            _, quantized_out_acts = quant_module_collector.collect_inp_out_data(
+                args=(model_inputs,),
+                kwargs={},
+                collect_input=False,
+                collect_output=True,
+            )
+            _, fp32_out_acts = orig_module_collector.collect_inp_out_data(
+                args=(model_inputs,),
+                kwargs={},
+                collect_input=False,
+                collect_output=True,
+            )
+            loss += torch.nn.functional.mse_loss(
+                fp32_out_acts, quantized_out_acts
+            ).item()
             total += fp32_out_acts.size(0)
             batch_index += 1
             if batch_index == self._num_batches:
                 break
 
-        average_loss = loss/total
+        average_loss = loss / total
         return average_loss
 
     @staticmethod
-    def _exclude_modules_from_quantization(model: torch.nn.Module, sim: _QuantizationSimModelInterface,
-                                           modules_to_ignore: List[torch.nn.Module]):
+    def _exclude_modules_from_quantization(
+        model: torch.nn.Module,
+        sim: _QuantizationSimModelInterface,
+        modules_to_ignore: List[torch.nn.Module],
+    ):
         """
         For the modules in the modules_to_ignore, remove the corresponding quant wrappers.
 
@@ -698,23 +800,19 @@ class QuantAnalyzerBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_quantsim_cls() -> Type[_QuantizationSimModelInterface]:
-        ...
+    def _get_quantsim_cls() -> Type[_QuantizationSimModelInterface]: ...
 
     @staticmethod
     @abstractmethod
-    def _get_quant_wrapper_type() -> Tuple[Type]:
-        ...
+    def _get_quant_wrapper_type() -> Tuple[Type]: ...
 
     @staticmethod
     @abstractmethod
-    def _is_quantizer_enabled(quantizer):
-        ...
+    def _is_quantizer_enabled(quantizer): ...
 
     @staticmethod
     @abstractmethod
-    def _get_quantizer_encodings(quantizer):
-        ...
+    def _get_quantizer_encodings(quantizer): ...
 
     @staticmethod
     @abstractmethod
@@ -728,25 +826,20 @@ class QuantAnalyzerBase(ABC):
 
     @classmethod
     @abstractmethod
-    def _disable_param_quantizers(cls, sim: _QuantizationSimModelInterface):
-        ...
+    def _disable_param_quantizers(cls, sim: _QuantizationSimModelInterface): ...
 
     @classmethod
     @abstractmethod
-    def _disable_activation_quantizers(cls, sim: _QuantizationSimModelInterface):
-        ...
+    def _disable_activation_quantizers(cls, sim: _QuantizationSimModelInterface): ...
 
     @staticmethod
     @abstractmethod
-    def _disable_quant_wrapper(module):
-        ...
+    def _disable_quant_wrapper(module): ...
 
     @staticmethod
     @abstractmethod
-    def _get_quantized_modules(sim: _QuantizationSimModelInterface) -> Generator:
-        ...
+    def _get_quantized_modules(sim: _QuantizationSimModelInterface) -> Generator: ...
 
     @staticmethod
     @abstractmethod
-    def _fold_all_batch_norms(*args, **kwargs):
-        ...
+    def _fold_all_batch_norms(*args, **kwargs): ...

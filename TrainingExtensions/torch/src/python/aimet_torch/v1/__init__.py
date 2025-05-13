@@ -61,8 +61,8 @@ def _is_torch_compatible(current: str, required: str):
     if not cuda or not required_cuda:
         return True
 
-    cuda, = cuda
-    required_cuda, = required_cuda
+    (cuda,) = cuda
+    (required_cuda,) = required_cuda
 
     # AIMET is always compatible with libtorch unless
     # both AIMET and PyTorch are compiled with CUDA
@@ -70,7 +70,7 @@ def _is_torch_compatible(current: str, required: str):
         return True
 
     # pylint: disable=unused-variable
-    cuda_major,          cuda_minor          = cuda[:4],          cuda[4:]
+    cuda_major, cuda_minor = cuda[:4], cuda[4:]
     required_cuda_major, required_cuda_minor = required_cuda[:4], required_cuda[4:]
 
     # Only check major CUDA version
@@ -78,7 +78,7 @@ def _is_torch_compatible(current: str, required: str):
 
 
 def _is_glibc_compatible(current: str, required: str):
-    return list(map(int, required.split('.'))) <= list(map(int, current.split('.')))
+    return list(map(int, required.split("."))) <= list(map(int, current.split(".")))
 
 
 def _check_requirements():
@@ -91,16 +91,20 @@ def _check_requirements():
     #   * version = 36 | 37 | 38 | 39 | 310 | ...
     #   * arch = x86_64 | aarch64 | ...
     #   * platform = linux-gnu
-    python_abi = sysconfig.get_config_var('SOABI')
+    python_abi = sysconfig.get_config_var("SOABI")
     if python_abi != _version.python_abi:
-        reasons.append(f"  * Python: {_version.python_abi} (currently you have {python_abi})")
+        reasons.append(
+            f"  * Python: {_version.python_abi} (currently you have {python_abi})"
+        )
 
     # Check PyTorch ABI.
     if not _is_torch_compatible(_torch.__version__, _version.torch):
         major, minor, patch = _version.torch.split(".")
         _, cuda = patch.split("+")
-        reasons.append(f"  * torch=={major}.{minor}.*+{cuda} "
-                       f"(currently you have torch=={_torch.__version__})")
+        reasons.append(
+            f"  * torch=={major}.{minor}.*+{cuda} "
+            f"(currently you have torch=={_torch.__version__})"
+        )
 
     # Check glibc version
     if _version.min_glibc and sys.platform == "linux":
@@ -108,14 +112,18 @@ def _check_requirements():
         if libc != "glibc":
             reasons.append(f"  * libc==glibc (currently you have {libc})")
         elif not _is_glibc_compatible(libc_version, _version.min_glibc):
-            reasons.append(f"  * glibc>={_version.min_glibc} "
-                           f"(currently you have glibc=={libc_version})")
+            reasons.append(
+                f"  * glibc>={_version.min_glibc} "
+                f"(currently you have glibc=={libc_version})"
+            )
 
     if reasons:
-        msg = "\n".join([
-            "aimet_torch.v1 package requires following environment:",
-            *reasons,
-        ])
+        msg = "\n".join(
+            [
+                "aimet_torch.v1 package requires following environment:",
+                *reasons,
+            ]
+        )
         raise ImportError(msg)
 
 

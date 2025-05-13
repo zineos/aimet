@@ -37,7 +37,7 @@
 #
 #  =============================================================================
 
-""" Module reducer abstract class. """
+"""Module reducer abstract class."""
 
 import abc
 from typing import Dict, List
@@ -47,11 +47,13 @@ from aimet_common.winnow.mask import Mask
 
 
 class ModuleReducer(abc.ABC):
-    """ The ModuleReducer class contains functionality to reduce a module's weight parameter and adjust the module's
+    """The ModuleReducer class contains functionality to reduce a module's weight parameter and adjust the module's
     number of input and output channels.
     """
 
-    def __init__(self, using_cuda: bool, reshape: bool, op_to_mask_dict: Dict[Op, Mask]):
+    def __init__(
+        self, using_cuda: bool, reshape: bool, op_to_mask_dict: Dict[Op, Mask]
+    ):
         """
         ModuleReducer initialization.
 

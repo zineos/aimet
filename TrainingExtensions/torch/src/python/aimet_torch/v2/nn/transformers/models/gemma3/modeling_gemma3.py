@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantized Gemma3 modules """
+"""Quantized Gemma3 modules"""
 
 import torch
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
@@ -44,12 +44,16 @@ try:
     from transformers.models.gemma3 import modeling_gemma3
     from transformers.activations import PytorchGELUTanh
 except ImportError as exc:
-    raise ImportError("aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 cannot be imported. Please make "
-                      "sure that you have transformers installed in your environment.") from exc
+    raise ImportError(
+        "aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 cannot be imported. Please make "
+        "sure that you have transformers installed in your environment."
+    ) from exc
+
 
 @QuantizationMixin.implements(modeling_gemma3.Gemma3RMSNorm)
 class QuantizedGemma3RMSNorm(QuantizationMixin, modeling_gemma3.Gemma3RMSNorm):
-    """ Implement Quantized Gemma RMSNorm """
+    """Implement Quantized Gemma RMSNorm"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()
@@ -73,8 +77,11 @@ class QuantizedGemma3RMSNorm(QuantizationMixin, modeling_gemma3.Gemma3RMSNorm):
 
 
 @QuantizationMixin.implements(modeling_gemma3.Gemma3RotaryEmbedding)
-class QuantizedQwen2RotaryEmbedding(QuantizationMixin, modeling_gemma3.Gemma3RotaryEmbedding):
-    """ Implement Quantized Gemma Rotary Embedding """
+class QuantizedQwen2RotaryEmbedding(
+    QuantizationMixin, modeling_gemma3.Gemma3RotaryEmbedding
+):
+    """Implement Quantized Gemma Rotary Embedding"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()
@@ -85,8 +92,11 @@ class QuantizedQwen2RotaryEmbedding(QuantizationMixin, modeling_gemma3.Gemma3Rot
 
 
 @QuantizationMixin.implements(modeling_gemma3.Gemma3TextScaledWordEmbedding)
-class QuantizedGemma3TextScaledWordEmbedding(QuantizationMixin, modeling_gemma3.Gemma3TextScaledWordEmbedding):
-    """ Implement Quantized Gemma Text Scaled Word Embedding """
+class QuantizedGemma3TextScaledWordEmbedding(
+    QuantizationMixin, modeling_gemma3.Gemma3TextScaledWordEmbedding
+):
+    """Implement Quantized Gemma Text Scaled Word Embedding"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()
@@ -98,7 +108,8 @@ class QuantizedGemma3TextScaledWordEmbedding(QuantizationMixin, modeling_gemma3.
 
 @QuantizationMixin.implements(PytorchGELUTanh)
 class QuantizedPytorchGELUTanh(QuantizationMixin, PytorchGELUTanh):
-    """ Implement Quantized Transformers PytorchGELUTanh function """
+    """Implement Quantized Transformers PytorchGELUTanh function"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()

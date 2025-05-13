@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Connected graph abstract class and utilities """
+"""Connected graph abstract class and utilities"""
 
 from abc import ABC, abstractmethod
 from typing import List
@@ -43,7 +43,7 @@ from aimet_common.connected_graph.product import Product
 
 
 class ConnectedGraph(ABC):
-    """ ConnectedGraph abstract class """
+    """ConnectedGraph abstract class"""
 
     def __init__(self):
         self._ops = {}
@@ -51,14 +51,14 @@ class ConnectedGraph(ABC):
 
     @abstractmethod
     def get_op_from_module_name(self, name: str):
-        """ Given the name of a operation/module, return the corresponding op in ops dict """
+        """Given the name of a operation/module, return the corresponding op in ops dict"""
 
     def get_all_ops(self):
-        """ Returns the ops dictionary """
+        """Returns the ops dictionary"""
         return self._ops
 
     def get_all_products(self):
-        """ Returns the products dictionary """
+        """Returns the products dictionary"""
         return self._products
 
     def get_product(self, name: str) -> Product:
@@ -85,7 +85,11 @@ def get_ordered_ops(list_of_starting_ops: List[Op]) -> List[Op]:
 
     while op_stack:
         current_op = op_stack[-1]
-        unvisited_consumers = [consumer for consumer in current_op.output_ops if consumer not in visited_ops_set]
+        unvisited_consumers = [
+            consumer
+            for consumer in current_op.output_ops
+            if consumer not in visited_ops_set
+        ]
         if unvisited_consumers:
             op_stack.extend(reversed(unvisited_consumers))
             continue

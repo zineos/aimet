@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Batchnorm folding base """
+"""Batchnorm folding base"""
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union, Dict, Iterable, Set, Any
@@ -43,7 +43,12 @@ import torch.nn
 from torch.nn.modules.batchnorm import BatchNorm1d, BatchNorm2d
 
 from aimet_common.batch_norm_fold import batch_norm_fold, expand_shape_to_4d
-from aimet_common.bias_correction import ConvBnPatternHandler, CONV_OP_TYPES, LINEAR_OP_TYPES, BN_OP_TYPES
+from aimet_common.bias_correction import (
+    ConvBnPatternHandler,
+    CONV_OP_TYPES,
+    LINEAR_OP_TYPES,
+    BN_OP_TYPES,
+)
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.graph_searcher import GraphSearcher
 from aimet_common.utils import AimetLogger
@@ -52,7 +57,10 @@ from aimet_common.utils import AimetLogger
 from aimet_torch.defs import PassThroughOp
 from aimet_torch import utils
 from aimet_torch.meta.connectedgraph import ConnectedGraph
-from aimet_torch._base.quantsim import _QuantizationSimModelInterface, _QuantizedModuleProtocol
+from aimet_torch._base.quantsim import (
+    _QuantizationSimModelInterface,
+    _QuantizedModuleProtocol,
+)
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.BatchNormFolding)
 
@@ -67,16 +75,21 @@ _supported_layers = LayerType.__args__
 BatchNormType = Union[BatchNorm1d, BatchNorm2d]
 _supported_batchnorms = BatchNormType.__args__
 
+
 class _BatchNormFoldingNotSupported(RuntimeError):
     pass
 
+
 class BatchNormFoldBase(ABC):
     """Handles batch norm folding logic"""
+
     @staticmethod
-    def _call_batch_norm_fold(weight: torch.Tensor,
-                                bias: torch.Tensor,
-                                bn: Union[BatchNorm1d, BatchNorm2d],
-                                fold_backward: bool):
+    def _call_batch_norm_fold(
+        weight: torch.Tensor,
+        bias: torch.Tensor,
+        bn: Union[BatchNorm1d, BatchNorm2d],
+        fold_backward: bool,
+    ):
         """
         BN fold without calling C++ APIs.
 
@@ -95,13 +108,21 @@ class BatchNormFoldBase(ABC):
             _bias = bias.detach().cpu().numpy()
 
             _4d_shape = expand_shape_to_4d(_weight.shape)
-            _weight, _bias = batch_norm_fold(_weight.reshape(_4d_shape), _bias, gamma, beta, mu, sigma, fold_backward)
+            _weight, _bias = batch_norm_fold(
+                _weight.reshape(_4d_shape), _bias, gamma, beta, mu, sigma, fold_backward
+            )
 
-            bias.copy_(torch.from_numpy(_bias).reshape_as(bias)).to(device=bias.device, dtype=bias.dtype)
-            weight.copy_(torch.from_numpy(_weight).reshape_as(weight)).to(device=weight.device, dtype=weight.dtype)
+            bias.copy_(torch.from_numpy(_bias).reshape_as(bias)).to(
+                device=bias.device, dtype=bias.dtype
+            )
+            weight.copy_(torch.from_numpy(_weight).reshape_as(weight)).to(
+                device=weight.device, dtype=weight.dtype
+            )
 
     @classmethod
-    def _fold_to_weight(cls, conv_linear: LayerType, bn: BatchNormType, fold_backward: bool):
+    def _fold_to_weight(
+        cls, conv_linear: LayerType, bn: BatchNormType, fold_backward: bool
+    ):
         """
         Fold BatchNorm into the weight and bias of the given layer.
 
@@ -110,24 +131,35 @@ class BatchNormFoldBase(ABC):
         """
         # Transpose weights to C, N, H, W from N, C, H, W since axis are flipped for transposed conv
         # However depthwise conv layers are always N, 1, H, W whether transposed-conv or not, so no need to transpose
-        if isinstance(conv_linear, torch.nn.ConvTranspose2d) and conv_linear.groups == 1:
+        if (
+            isinstance(conv_linear, torch.nn.ConvTranspose2d)
+            and conv_linear.groups == 1
+        ):
             conv_linear.weight.data = conv_linear.weight.data.permute(1, 0, 2, 3)
 
         if conv_linear.bias is None:
-            out_channels = conv_linear.out_features if isinstance(conv_linear, torch.nn.Linear)\
-                        else conv_linear.out_channels
-            bias = torch.zeros(out_channels,
-                            device=conv_linear.weight.device,
-                            dtype=conv_linear.weight.dtype)
+            out_channels = (
+                conv_linear.out_features
+                if isinstance(conv_linear, torch.nn.Linear)
+                else conv_linear.out_channels
+            )
+            bias = torch.zeros(
+                out_channels,
+                device=conv_linear.weight.device,
+                dtype=conv_linear.weight.dtype,
+            )
             conv_linear.bias = torch.nn.Parameter(bias)
 
-
-        cls._call_batch_norm_fold(conv_linear.weight, conv_linear.bias, bn, fold_backward=fold_backward)
+        cls._call_batch_norm_fold(
+            conv_linear.weight, conv_linear.bias, bn, fold_backward=fold_backward
+        )
 
         # Transpose weight back to N, C, H, W for transposed Conv2D, for non-depthwise layers
-        if isinstance(conv_linear, torch.nn.ConvTranspose2d) and conv_linear.groups == 1:
+        if (
+            isinstance(conv_linear, torch.nn.ConvTranspose2d)
+            and conv_linear.groups == 1
+        ):
             conv_linear.weight.data = conv_linear.weight.data.permute(1, 0, 2, 3)
-
 
     @classmethod
     def fold_given_batch_norms(cls, model, layer_pairs):
@@ -167,10 +199,10 @@ class BatchNormFoldBase(ABC):
 
     @classmethod
     def fold_all_batch_norms_to_weight(
-            cls,
-            model: torch.nn.Module,
-            input_shapes: Union[Tuple, List[Tuple]],
-            dummy_input: Union[torch.Tensor, Tuple] = None
+        cls,
+        model: torch.nn.Module,
+        input_shapes: Union[Tuple, List[Tuple]],
+        dummy_input: Union[torch.Tensor, Tuple] = None,
     ) -> List[Tuple[LayerType, BatchNormType]]:
         """
         Fold all batch_norm layers in a model into the weight of the corresponding conv layers
@@ -181,28 +213,40 @@ class BatchNormFoldBase(ABC):
         :return: A list of pairs of layers [(Conv/Linear, BN layer that got folded)]
         """
         if isinstance(model, torch.nn.DataParallel):
-            return cls.fold_all_batch_norms_to_weight(model.module, input_shapes, dummy_input)
+            return cls.fold_all_batch_norms_to_weight(
+                model.module, input_shapes, dummy_input
+            )
         device = utils.get_device(model)
         if dummy_input is None:
-            inp_tensor_list = utils.create_rand_tensors_given_shapes(input_shapes, device)
+            inp_tensor_list = utils.create_rand_tensors_given_shapes(
+                input_shapes, device
+            )
         else:
             inp_tensor_list = dummy_input
         connected_graph = ConnectedGraph(model, inp_tensor_list)
 
-        conv_bn_pairs, bn_conv_pairs, bn_to_fold = cls._find_all_batch_norms_to_fold(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, bn_to_fold = cls._find_all_batch_norms_to_fold(
+            connected_graph
+        )
 
         cls._fold_given_batch_norms(model, conv_bn_pairs, bn_conv_pairs)
 
         # Convert the standalone BNs which are not folded
-        bn_converted = cls.convert_standalone_batchnorms(model, inp_tensor_list, bn_to_fold)
-        _logger.debug("Total %d standalone BatchNorms' weights got converted", len(bn_converted))
+        bn_converted = cls.convert_standalone_batchnorms(
+            model, inp_tensor_list, bn_to_fold
+        )
+        _logger.debug(
+            "Total %d standalone BatchNorms' weights got converted", len(bn_converted)
+        )
         return conv_bn_pairs + [(conv, bn) for bn, conv in bn_conv_pairs]
 
     @classmethod
-    def convert_standalone_batchnorms(cls,
-                                      model: torch.nn.Module,
-                                      dummy_input: Union[torch.Tensor, Tuple],
-                                      folded_bn: set) -> List[Tuple[Any, BatchNorm2d]]:
+    def convert_standalone_batchnorms(
+        cls,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        folded_bn: set,
+    ) -> List[Tuple[Any, BatchNorm2d]]:
         """
         Convert the weights of all the standalone batchnorms of a model which didn't get folded.
         :param model: torch model for which batch norm folding is being performed
@@ -214,15 +258,19 @@ class BatchNormFoldBase(ABC):
         module_list = utils.get_ordered_list_of_modules(model, dummy_input)
         bn_converted = []
         for name, module in module_list:
-            if isinstance(module, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)) and module not in folded_bn:
+            if (
+                isinstance(module, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d))
+                and module not in folded_bn
+            ):
                 cls.convert_batchnorm_parameters(model, module)
                 _logger.debug("%s weights got converted", name)
                 bn_converted.append((name, module))
         return bn_converted
 
-
     @staticmethod
-    def convert_batchnorm_parameters(model: torch.nn.Module, bn: Union[torch.nn.BatchNorm1d, torch.nn.BatchNorm2d]):
+    def convert_batchnorm_parameters(
+        model: torch.nn.Module, bn: Union[torch.nn.BatchNorm1d, torch.nn.BatchNorm2d]
+    ):
         """
         To convert the weight of a batchnorm such that it becomes in the format y = weights*input + bias
         :param model: torch model for which batch norm folding is being performed
@@ -242,11 +290,21 @@ class BatchNormFoldBase(ABC):
             bn.track_running_stats = False
             bn.weight.copy_(weight.clone().detach())
             bn.bias.copy_(bias.clone().detach())
-            bn.running_mean = torch.zeros(bn.running_mean.shape, device=bn.running_mean.device, dtype=bn.running_mean.dtype)
-            bn.running_var = torch.ones(bn.running_var.shape, device=bn.running_var.device, dtype=bn.running_var.dtype)
+            bn.running_mean = torch.zeros(
+                bn.running_mean.shape,
+                device=bn.running_mean.device,
+                dtype=bn.running_mean.dtype,
+            )
+            bn.running_var = torch.ones(
+                bn.running_var.shape,
+                device=bn.running_var.device,
+                dtype=bn.running_var.dtype,
+            )
 
     @classmethod
-    def find_all_conv_bn_with_activation(cls, model: torch.nn.Module, input_shape: Tuple) -> Dict:
+    def find_all_conv_bn_with_activation(
+        cls, model: torch.nn.Module, input_shape: Tuple
+    ) -> Dict:
         """
         Uses searcher to find preceding and next bn layers for a conv/linear layer
         :param model: PyTorch model
@@ -259,7 +317,9 @@ class BatchNormFoldBase(ABC):
         return cls.find_all_conv_bn_with_activation_in_graph(connected_graph)
 
     @classmethod
-    def find_all_conv_bn_with_activation_in_graph(cls, connected_graph: ConnectedGraph) -> Dict:
+    def find_all_conv_bn_with_activation_in_graph(
+        cls, connected_graph: ConnectedGraph
+    ) -> Dict:
         """
         Uses searcher to find preceding and next bn layers for a conv/linear layer
         :param connected_graph: ConnectedGraph object.
@@ -269,16 +329,26 @@ class BatchNormFoldBase(ABC):
         # initialize all patterns to be matched and associated call back functions
         patterns_with_callbacks = []
         layer_select_handler = ConvBnPatternHandler()
-        conv_types = ['Conv1d', 'Conv', 'ConvTranspose']
-        linear_types = ['Gemm']
+        conv_types = ["Conv1d", "Conv", "ConvTranspose"]
+        linear_types = ["Gemm"]
 
         for op_type in conv_types + linear_types:
-            patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', op_type],
-                                                    action=layer_select_handler))
-            patterns_with_callbacks.append(PatternType(pattern=[op_type, 'BatchNormalization'],
-                                                    action=layer_select_handler))
-        patterns_with_callbacks.append(PatternType(pattern=['Conv3d', 'BatchNorm3d'], action=layer_select_handler))
-        patterns_with_callbacks.append(PatternType(pattern=['BatchNorm3d', 'Conv3d'], action=layer_select_handler))
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=["BatchNormalization", op_type], action=layer_select_handler
+                )
+            )
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=[op_type, "BatchNormalization"], action=layer_select_handler
+                )
+            )
+        patterns_with_callbacks.append(
+            PatternType(pattern=["Conv3d", "BatchNorm3d"], action=layer_select_handler)
+        )
+        patterns_with_callbacks.append(
+            PatternType(pattern=["BatchNorm3d", "Conv3d"], action=layer_select_handler)
+        )
 
         # create graph searcher instance with connected graph and patterns to search
         graph_searcher = GraphSearcher(connected_graph, patterns_with_callbacks)
@@ -290,27 +360,38 @@ class BatchNormFoldBase(ABC):
         return convs_bn_activation_dict
 
     @classmethod
-    def find_standalone_batchnorm_ops(cls, connected_graph: ConnectedGraph)->set:
+    def find_standalone_batchnorm_ops(cls, connected_graph: ConnectedGraph) -> set:
         """
         Find all batchnorms ops can not be folded.
         :param connected_graph: Connected graph associated with the model.
         :return stand_alone_bn_ops: Set of batchnorm ops can not be folded.
         """
-        _, _, bn_picked_for_folding = cls._find_foldable_bn_pair_and_bn_picked_for_folding(connected_graph)
-        bn_ops = {op for op in connected_graph.get_all_ops().values() if op.type in BN_OP_TYPES}
+        _, _, bn_picked_for_folding = (
+            cls._find_foldable_bn_pair_and_bn_picked_for_folding(connected_graph)
+        )
+        bn_ops = {
+            op
+            for op in connected_graph.get_all_ops().values()
+            if op.type in BN_OP_TYPES
+        }
         stand_alone_bn_ops = bn_ops - bn_picked_for_folding
 
         return stand_alone_bn_ops
 
     @staticmethod
-    def _delete_bn_from_model(model: torch.nn.Module, bn_layer_list: Iterable[torch.nn.Module]):
-        utils.replace_modules(model,
-                              lambda module: module in bn_layer_list,
-                              lambda _: torch.nn.Identity())
+    def _delete_bn_from_model(
+        model: torch.nn.Module, bn_layer_list: Iterable[torch.nn.Module]
+    ):
+        utils.replace_modules(
+            model, lambda module: module in bn_layer_list, lambda _: torch.nn.Identity()
+        )
 
     @classmethod
-    def _find_all_batch_norms_to_fold(cls, connected_graph: ConnectedGraph) -> Tuple[
-            List[Tuple[LayerType, BatchNormType]], List[Tuple[BatchNormType, LayerType]]]:
+    def _find_all_batch_norms_to_fold(
+        cls, connected_graph: ConnectedGraph
+    ) -> Tuple[
+        List[Tuple[LayerType, BatchNormType]], List[Tuple[BatchNormType, LayerType]]
+    ]:
         """
         Find all possible batch norm layers that can be folded. And returns a list of pairs such that (bn, layer)
         means bn will be forward-folded into layer and (layer, bn) means bn will be backward-folded into layer
@@ -318,11 +399,15 @@ class BatchNormFoldBase(ABC):
         :return: A list of (layer, bn) pairs and a list of (bn, layer) pairs,
                 where `bn` can be folded into to `layer`.
         """
-        conv_bn_pairs, bn_conv_pairs, bn_to_fold = cls._find_foldable_bn_pair_and_bn_picked_for_folding(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, bn_to_fold = (
+            cls._find_foldable_bn_pair_and_bn_picked_for_folding(connected_graph)
+        )
         return conv_bn_pairs, bn_conv_pairs, bn_to_fold
 
     @classmethod
-    def find_all_batch_norms_to_fold(cls, model, input_shapes, dummy_input: Union[torch.Tensor, Tuple] = None):
+    def find_all_batch_norms_to_fold(
+        cls, model, input_shapes, dummy_input: Union[torch.Tensor, Tuple] = None
+    ):
         """
         Find all possible batch norm layers that can be folded. And returns a list of pairs such that (bn, layer)
         means bn will be forward-folded into layer and (layer, bn) means bn will be backward-folded into layer
@@ -336,12 +421,15 @@ class BatchNormFoldBase(ABC):
             connected_graph = ConnectedGraph(model, dummy_input)
         else:
             device = utils.get_device(model)
-            inp_tensor_list = utils.create_rand_tensors_given_shapes(input_shapes, device)
+            inp_tensor_list = utils.create_rand_tensors_given_shapes(
+                input_shapes, device
+            )
             connected_graph = ConnectedGraph(model, inp_tensor_list)
 
-        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(connected_graph)
+        conv_bn_pairs, bn_conv_pairs, _ = cls._find_all_batch_norms_to_fold(
+            connected_graph
+        )
         return conv_bn_pairs + bn_conv_pairs
-
 
     @staticmethod
     def _is_valid_bn_fold(conv: LayerType, fold_backward: bool) -> bool:
@@ -367,8 +455,13 @@ class BatchNormFoldBase(ABC):
         return valid
 
     @classmethod
-    def _find_foldable_bn_pair_and_bn_picked_for_folding(cls, connected_graph: ConnectedGraph) -> Tuple[
-            List[Tuple[LayerType, BatchNormType]], List[Tuple[BatchNormType, LayerType]], Set]:
+    def _find_foldable_bn_pair_and_bn_picked_for_folding(
+        cls, connected_graph: ConnectedGraph
+    ) -> Tuple[
+        List[Tuple[LayerType, BatchNormType]],
+        List[Tuple[BatchNormType, LayerType]],
+        Set,
+    ]:
         """
         Find all possible batch norm layers that can be folded. And returns a list of pairs such that (bn, layer)
         means bn will be forward-folded into layer and (layer, bn) means bn will be backward-folded into layer
@@ -377,18 +470,26 @@ class BatchNormFoldBase(ABC):
                 where `bn` can be folded into to `layer`.
                 A set of bn ops which can be folded in to immediate convs.
         """
-        conv_linear_bn_activation_info_dict = cls.find_all_conv_bn_with_activation_in_graph(connected_graph)
+        conv_linear_bn_activation_info_dict = (
+            cls.find_all_conv_bn_with_activation_in_graph(connected_graph)
+        )
 
         # To mark BN's already picked for backward folding
         bn_picked_for_folding = set()
 
         _conv_linear_optypes = CONV_OP_TYPES + LINEAR_OP_TYPES
-        ordered_conv_fc_modules = [op.get_module() for op in connected_graph.ordered_ops if op.type in _conv_linear_optypes]
+        ordered_conv_fc_modules = [
+            op.get_module()
+            for op in connected_graph.ordered_ops
+            if op.type in _conv_linear_optypes
+        ]
 
         conv_bn_pairs = []
         # Backward fold is given priority over Forward fold
         for module in ordered_conv_fc_modules:
-            if module in conv_linear_bn_activation_info_dict and cls._is_valid_bn_fold(module, True):
+            if module in conv_linear_bn_activation_info_dict and cls._is_valid_bn_fold(
+                module, True
+            ):
                 bn_info = conv_linear_bn_activation_info_dict[module]
                 # print(bn_info)
                 if bn_info.output_bn and bn_info.output_bn not in bn_picked_for_folding:
@@ -397,7 +498,9 @@ class BatchNormFoldBase(ABC):
 
         bn_conv_pairs = []
         for module in ordered_conv_fc_modules:
-            if module in conv_linear_bn_activation_info_dict and cls._is_valid_bn_fold(module, False):
+            if module in conv_linear_bn_activation_info_dict and cls._is_valid_bn_fold(
+                module, False
+            ):
                 bn_info = conv_linear_bn_activation_info_dict[module]
                 if bn_info.input_bn and bn_info.input_bn not in bn_picked_for_folding:
                     bn_conv_pairs.append((bn_info.input_bn.get_module(), module))
@@ -408,7 +511,8 @@ class BatchNormFoldBase(ABC):
     @classmethod
     @abstractmethod
     def fold_all_batch_norms_to_scale(
-            cls, sim: _QuantizationSimModelInterface,
+        cls,
+        sim: _QuantizationSimModelInterface,
     ) -> List[Tuple[_QuantizedModuleProtocol, _QuantizedModuleProtocol]]:
         """
         Fold all batch_norm layers in a model into the quantization scale parameter
@@ -420,9 +524,12 @@ class BatchNormFoldBase(ABC):
 
     @classmethod
     @abstractmethod
-    def _fold_given_batch_norms(cls, model,
-                                conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
-                                bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]]):
+    def _fold_given_batch_norms(
+        cls,
+        model,
+        conv_bn_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+        bn_conv_pairs: Iterable[Tuple[torch.nn.Module, torch.nn.Module]],
+    ):
         """
         Fold a given set of batch_norm layers into conv layers
 
@@ -434,7 +541,11 @@ class BatchNormFoldBase(ABC):
 
     @classmethod
     @abstractmethod
-    def _fold_to_scale(cls, conv_wrapper: _QuantizedModuleProtocol, bn_wrapper: _QuantizedModuleProtocol):
+    def _fold_to_scale(
+        cls,
+        conv_wrapper: _QuantizedModuleProtocol,
+        bn_wrapper: _QuantizedModuleProtocol,
+    ):
         """
         Fold BatchNorm into the scale and bias of the given layer.
 

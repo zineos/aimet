@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Dummy models for testing"""
+
 import os
 import torch
 import torch.nn as nn
@@ -42,6 +43,7 @@ from onnx import load_model
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from torch.nn import functional as F
 import tempfile
+
 
 class SmallMnist(nn.Module):
     def __init__(self):
@@ -87,15 +89,17 @@ def model_with_split():
     model = ModelWithOneSplit()
 
     # Export the model
-    torch.onnx.export(model,  # model being run
-                      x,  # model input (or a tuple for multiple inputs)
-                      "./model_with_one_split.onnx",  # where to save the model (can be a file or file-like object)
-                      export_params=True,  # store the trained parameter weights inside the model file
-                      opset_version=12,  # the ONNX version to export the model to
-                      do_constant_folding=True,  # whether to execute constant folding for optimization
-                      input_names=['input'],  # the model's input names
-                      output_names=['output'])
-    model = ONNXModel(load_model('./model_with_one_split.onnx'))
+    torch.onnx.export(
+        model,  # model being run
+        x,  # model input (or a tuple for multiple inputs)
+        "./model_with_one_split.onnx",  # where to save the model (can be a file or file-like object)
+        export_params=True,  # store the trained parameter weights inside the model file
+        opset_version=12,  # the ONNX version to export the model to
+        do_constant_folding=True,  # whether to execute constant folding for optimization
+        input_names=["input"],  # the model's input names
+        output_names=["output"],
+    )
+    model = ONNXModel(load_model("./model_with_one_split.onnx"))
     return model
 
 
@@ -104,21 +108,23 @@ def model_small_mnist():
     model = SmallMnist()
 
     # Export the model
-    torch.onnx.export(model,  # model being run
-                      x,  # model input (or a tuple for multiple inputs)
-                      "./model_simple_mnist.onnx",  # where to save the model (can be a file or file-like object)
-                      export_params=True,  # store the trained parameter weights inside the model file
-                      opset_version=12,  # the ONNX version to export the model to
-                      do_constant_folding=True,  # whether to execute constant folding for optimization
-                      input_names=['input'],  # the model's input names
-                      output_names=['output'])
-    model = ONNXModel(load_model('./model_simple_mnist.onnx'))
+    torch.onnx.export(
+        model,  # model being run
+        x,  # model input (or a tuple for multiple inputs)
+        "./model_simple_mnist.onnx",  # where to save the model (can be a file or file-like object)
+        export_params=True,  # store the trained parameter weights inside the model file
+        opset_version=12,  # the ONNX version to export the model to
+        do_constant_folding=True,  # whether to execute constant folding for optimization
+        input_names=["input"],  # the model's input names
+        output_names=["output"],
+    )
+    model = ONNXModel(load_model("./model_simple_mnist.onnx"))
     return model
 
 
 class SingleResidualWithAvgPool(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithAvgPool, self).__init__()
@@ -176,20 +182,22 @@ def single_residual_model():
     model = SingleResidualWithAvgPool()
 
     # Export the model
-    torch.onnx.export(model,  # model being run
-                      x,  # model input (or a tuple for multiple inputs)
-                      "./model_single_residual.onnx",  # where to save the model (can be a file or file-like object)
-                      training=torch.onnx.TrainingMode.EVAL, # whether to execute constant folding for optimization
-                      input_names=['input'],  # the model's input names
-                      output_names=['output'])
-    model = ONNXModel(load_model('./model_single_residual.onnx'))
+    torch.onnx.export(
+        model,  # model being run
+        x,  # model input (or a tuple for multiple inputs)
+        "./model_single_residual.onnx",  # where to save the model (can be a file or file-like object)
+        training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
+        input_names=["input"],  # the model's input names
+        output_names=["output"],
+    )
+    model = ONNXModel(load_model("./model_single_residual.onnx"))
     return model
 
 
 class ConcatModel(nn.Module):
-    """ A model with concat op.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with concat op.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(ConcatModel, self).__init__()
@@ -210,33 +218,39 @@ class ConcatModel(nn.Module):
 
 
 def concat_model():
-    x = (torch.rand(1, 3, 8, 8, requires_grad=True), torch.rand(1, 3, 8, 8, requires_grad=True),
-         torch.rand(1, 3, 8, 8, requires_grad=True))
+    x = (
+        torch.rand(1, 3, 8, 8, requires_grad=True),
+        torch.rand(1, 3, 8, 8, requires_grad=True),
+        torch.rand(1, 3, 8, 8, requires_grad=True),
+    )
     model = ConcatModel()
 
     # Export the model
-    torch.onnx.export(model,  # model being run
-                      x,  # model input (or a tuple for multiple inputs)
-                      "./concat_model.onnx",  # where to save the model (can be a file or file-like object)
-                      export_params=True,  # store the trained parameter weights inside the model file
-                      opset_version=12,  # the ONNX version to export the model to
-                      do_constant_folding=True,  # whether to execute constant folding for optimization
-                      input_names=['input'],  # the model's input names
-                      output_names=['output'])
-    model = ONNXModel(load_model('./concat_model.onnx'))
+    torch.onnx.export(
+        model,  # model being run
+        x,  # model input (or a tuple for multiple inputs)
+        "./concat_model.onnx",  # where to save the model (can be a file or file-like object)
+        export_params=True,  # store the trained parameter weights inside the model file
+        opset_version=12,  # the ONNX version to export the model to
+        do_constant_folding=True,  # whether to execute constant folding for optimization
+        input_names=["input"],  # the model's input names
+        output_names=["output"],
+    )
+    model = ONNXModel(load_model("./concat_model.onnx"))
     return model
+
 
 class MLP(nn.Module):
     """Implementation of a Multi-layer perceptron (also called FFN) with ReLu normalization on the hidden layers"""
 
     def __init__(
-            self,
-            input_dim: int,
-            hidden_dim: int,
-            output_dim: int,
-            num_layers: int,
-            decoder_small_weights_init_last_layer: bool = False,
-            decoder_small_weights_init_last_layer_std: float = 0.001,
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int,
+        decoder_small_weights_init_last_layer: bool = False,
+        decoder_small_weights_init_last_layer_std: float = 0.001,
     ) -> None:
         """Initializes the linear layers
 
@@ -257,18 +271,28 @@ class MLP(nn.Module):
         super().__init__()
         self.num_layers = num_layers
         h = [hidden_dim] * (num_layers - 1)
-        self.layers = nn.ModuleList(nn.Linear(inp, out) for inp, out in zip([input_dim] + h, h + [output_dim]))
-        self.reset_parameters(decoder_small_weights_init_last_layer, decoder_small_weights_init_last_layer_std)
+        self.layers = nn.ModuleList(
+            nn.Linear(inp, out) for inp, out in zip([input_dim] + h, h + [output_dim])
+        )
+        self.reset_parameters(
+            decoder_small_weights_init_last_layer,
+            decoder_small_weights_init_last_layer_std,
+        )
 
-    def reset_parameters(self, decoder_small_weights_init_last_layer: bool,
-                         decoder_small_weights_init_last_layer_std: float) -> None:
+    def reset_parameters(
+        self,
+        decoder_small_weights_init_last_layer: bool,
+        decoder_small_weights_init_last_layer_std: float,
+    ) -> None:
         """Initialize MLP weights with kaiming normalization"""
         for layer in self.layers.children():
             nn.init.zeros_(layer.bias)
             nn.init.kaiming_normal_(layer.weight, nonlinearity="relu")
 
         if decoder_small_weights_init_last_layer:
-            nn.init.normal_(self.layers[-1].weight, std=decoder_small_weights_init_last_layer_std)
+            nn.init.normal_(
+                self.layers[-1].weight, std=decoder_small_weights_init_last_layer_std
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """MLP forward pass
@@ -284,27 +308,32 @@ class MLP(nn.Module):
 
         return x.view(-1)
 
+
 def linear_layer_model():
     model = MLP(input_dim=258, hidden_dim=512, output_dim=90, num_layers=2)
 
     x = torch.randn(512, 258, requires_grad=True)
-    torch.onnx.export(model,  # model being run
-                      x,  # model input (or a tuple for multiple inputs)
-                      "./linear_layer_model.onnx",  # where to save the model (can be a file or file-like object)
-                      training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
-                      input_names=['input'],  # the model's input names
-                      output_names=['output'])
+    torch.onnx.export(
+        model,  # model being run
+        x,  # model input (or a tuple for multiple inputs)
+        "./linear_layer_model.onnx",  # where to save the model (can be a file or file-like object)
+        training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
+        input_names=["input"],  # the model's input names
+        output_names=["output"],
+    )
 
-    model = ONNXModel(load_model('./linear_layer_model.onnx'))
+    model = ONNXModel(load_model("./linear_layer_model.onnx"))
     return model
 
 
-def layernorm_model(dim=32, elementwise_affine=True, bias=True, include_add_ops = False):
+def layernorm_model(dim=32, elementwise_affine=True, bias=True, include_add_ops=False):
     class LayerNormModel(torch.nn.Module):
-        def __init__(self, include_add_ops = False, dim=32):
+        def __init__(self, include_add_ops=False, dim=32):
             super(LayerNormModel, self).__init__()
             self.include_add_ops = include_add_ops
-            self.layer_norm = torch.nn.LayerNorm(dim, elementwise_affine=elementwise_affine, bias=bias)
+            self.layer_norm = torch.nn.LayerNorm(
+                dim, elementwise_affine=elementwise_affine, bias=bias
+            )
 
         def forward(self, x: torch.Tensor):
             if self.include_add_ops:
@@ -316,17 +345,37 @@ def layernorm_model(dim=32, elementwise_affine=True, bias=True, include_add_ops 
 
     torch.manual_seed(10)
     model = LayerNormModel(dim=dim, include_add_ops=include_add_ops).eval()
-    with tempfile.NamedTemporaryFile(prefix="layernorm_", suffix=".onnx") as onnx_model_path:
+    with tempfile.NamedTemporaryFile(
+        prefix="layernorm_", suffix=".onnx"
+    ) as onnx_model_path:
         x = torch.randn((1, 3, dim, dim))
-        torch.onnx.export(model, x, onnx_model_path.name, input_names=['input'], output_names=['output'], opset_version=16)
+        torch.onnx.export(
+            model,
+            x,
+            onnx_model_path.name,
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=16,
+        )
         model = load_model(onnx_model_path.name)
 
     return model
 
 
-def rmsnorm_model(dim: int = 32, elementwise_affine: bool=True, mul_for_pow: bool=False, separate_mul_div: bool=False):
+def rmsnorm_model(
+    dim: int = 32,
+    elementwise_affine: bool = True,
+    mul_for_pow: bool = False,
+    separate_mul_div: bool = False,
+):
     class RMSNorm(nn.Module):
-        def __init__(self, dim, elementwise_affine=True, mul_for_pow=False, separate_mul_div=False):
+        def __init__(
+            self,
+            dim,
+            elementwise_affine=True,
+            mul_for_pow=False,
+            separate_mul_div=False,
+        ):
             super().__init__()
             self.weight = torch.randn(dim) if elementwise_affine else None
             self.variance_epsilon = 0.003
@@ -349,10 +398,24 @@ def rmsnorm_model(dim: int = 32, elementwise_affine: bool=True, mul_for_pow: boo
             return x
 
     torch.manual_seed(10)
-    model = RMSNorm(dim=dim, elementwise_affine=elementwise_affine, mul_for_pow=mul_for_pow, separate_mul_div=separate_mul_div)
-    with tempfile.NamedTemporaryFile(prefix="rmsnorm_", suffix=".onnx") as onnx_model_path:
+    model = RMSNorm(
+        dim=dim,
+        elementwise_affine=elementwise_affine,
+        mul_for_pow=mul_for_pow,
+        separate_mul_div=separate_mul_div,
+    )
+    with tempfile.NamedTemporaryFile(
+        prefix="rmsnorm_", suffix=".onnx"
+    ) as onnx_model_path:
         x = torch.randn((1, 3, dim, dim))
-        torch.onnx.export(model, x, onnx_model_path.name, input_names=['input'], output_names=['output'], opset_version=16)
+        torch.onnx.export(
+            model,
+            x,
+            onnx_model_path.name,
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=16,
+        )
         model = load_model(onnx_model_path.name)
         return model
 
@@ -361,7 +424,9 @@ def conv_relu_model():
     class ConvReluModel(torch.nn.Module):
         def __init__(self):
             super(ConvReluModel, self).__init__()
-            self._conv_0 = torch.nn.Conv2d(in_channels=3, out_channels=3, kernel_size=(3, 3), padding=1)
+            self._conv_0 = torch.nn.Conv2d(
+                in_channels=3, out_channels=3, kernel_size=(3, 3), padding=1
+            )
             self._relu = torch.nn.ReLU()
 
         def forward(self, x: torch.Tensor):
@@ -372,26 +437,27 @@ def conv_relu_model():
     x = torch.randn((1, 3, 8, 8))
     with tempfile.TemporaryDirectory() as tempdir:
         save_path = os.path.join(tempdir, "./conv_relu.onnx")
-        torch.onnx.export(model,  # model being run
-                          x,  # model input (or a tuple for multiple inputs)
-                          save_path, # where to save the model (can be a file or file-like object),
-                          training=torch.onnx.TrainingMode.EVAL,
-                          export_params=True,  # store the trained parameter weights inside the model file
-                          opset_version=12,  # the ONNX version to export the model to
-                          do_constant_folding=False,  # whether to execute constant folding for optimization
-                          input_names=['input'],  # the model's input names
-                          output_names=['output'],
-                          dynamic_axes={
-                              'input': {0: 'batch_size'},
-                              'output': {0: 'batch_size'},
-                          })
+        torch.onnx.export(
+            model,  # model being run
+            x,  # model input (or a tuple for multiple inputs)
+            save_path,  # where to save the model (can be a file or file-like object),
+            training=torch.onnx.TrainingMode.EVAL,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=12,  # the ONNX version to export the model to
+            do_constant_folding=False,  # whether to execute constant folding for optimization
+            input_names=["input"],  # the model's input names
+            output_names=["output"],
+            dynamic_axes={
+                "input": {0: "batch_size"},
+                "output": {0: "batch_size"},
+            },
+        )
 
         model = load_model(save_path)
     return model
 
 
 class SingleLinearLayerModel(nn.Module):
-
     def __init__(self, input_dim, output_dim):
         super(SingleLinearLayerModel, self).__init__()
         self.fc = nn.Linear(input_dim, output_dim)
@@ -402,22 +468,24 @@ class SingleLinearLayerModel(nn.Module):
 
 
 def single_linear_layer_model():
-    model = SingleLinearLayerModel(100,100)
+    model = SingleLinearLayerModel(100, 100)
     x = torch.randn(1, 100, 100, requires_grad=True)
     with tempfile.TemporaryDirectory() as tempdir:
         save_path = os.path.join(tempdir, "./single_linear_layer_model.onnx")
-        torch.onnx.export(model,  # model being run
-                          x,  # model input (or a tuple for multiple inputs)
-                          save_path,  # where to save the model (can be a file or file-like object)
-                          training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
-                          input_names=['input'],  # the model's input names
-                          output_names=['output'])
+        torch.onnx.export(
+            model,  # model being run
+            x,  # model input (or a tuple for multiple inputs)
+            save_path,  # where to save the model (can be a file or file-like object)
+            training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
+            input_names=["input"],  # the model's input names
+            output_names=["output"],
+        )
 
         model = ONNXModel(load_model(save_path))
     return model
 
-class SingleConvLayerModel(nn.Module):
 
+class SingleConvLayerModel(nn.Module):
     def __init__(self, input_channel, output_channel):
         super(SingleConvLayerModel, self).__init__()
         self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=5)
@@ -428,25 +496,32 @@ class SingleConvLayerModel(nn.Module):
 
 
 def single_conv_layer_model():
-    model = SingleConvLayerModel(5,10)
+    model = SingleConvLayerModel(5, 10)
     x = torch.randn(1, 5, 5, 5, requires_grad=True)
     with tempfile.TemporaryDirectory() as tempdir:
         save_path = os.path.join(tempdir, "./single_conv_layer_model.onnx")
-        torch.onnx.export(model,  # model being run
-                          x,  # model input (or a tuple for multiple inputs)
-                          save_path,  # where to save the model (can be a file or file-like object)
-                          training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
-                          input_names=['input'],  # the model's input names
-                          output_names=['output'])
+        torch.onnx.export(
+            model,  # model being run
+            x,  # model input (or a tuple for multiple inputs)
+            save_path,  # where to save the model (can be a file or file-like object)
+            training=torch.onnx.TrainingMode.EVAL,  # whether to execute constant folding for optimization
+            input_names=["input"],  # the model's input names
+            output_names=["output"],
+        )
 
         model = ONNXModel(load_model(save_path))
     return model
 
+
 class ConvTransposeConvModel(torch.nn.Module):
     def __init__(self):
         super(ConvTransposeConvModel, self).__init__()
-        self.conv1 = torch.nn.Conv2d(in_channels=3, out_channels=7, kernel_size=2, stride=1)
-        self.conv2 = torch.nn.Conv2d(in_channels=8, out_channels=4, kernel_size=3, stride=1)
+        self.conv1 = torch.nn.Conv2d(
+            in_channels=3, out_channels=7, kernel_size=2, stride=1
+        )
+        self.conv2 = torch.nn.Conv2d(
+            in_channels=8, out_channels=4, kernel_size=3, stride=1
+        )
         self.relu1 = torch.nn.ReLU()
 
     def forward(self, inp):

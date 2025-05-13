@@ -37,17 +37,18 @@
 """
 Connected graph class and utilities
 """
+
 import typing
 import tensorflow as tf
 from keras.layers.core.tf_op_layer import TFOpLambda
 
 from aimet_common.connected_graph.connectedgraph import (
-        ConnectedGraph as AimetCommonConnectedGraph,
-        )
+    ConnectedGraph as AimetCommonConnectedGraph,
+)
 from aimet_common.connected_graph.operation import (
-        Op,
-        determine_preceding_op_input_product_index_in_multi_input_op,
-        )
+    Op,
+    determine_preceding_op_input_product_index_in_multi_input_op,
+)
 from aimet_common.connected_graph.product import Product
 from aimet_common.model_module import KerasModelModule
 from aimet_common.utils import AimetLogger
@@ -112,15 +113,16 @@ map_tf_op_lambda_symbol_to_onnx = {
     "where": ["Where"],
 }
 
+
 class ConnectedGraph(AimetCommonConnectedGraph):
     """
     Connected Graph class
     """
 
     def __init__(
-            self,
-            model: tf.keras.Model,
-            ):
+        self,
+        model: tf.keras.Model,
+    ):
         """
         If the model object is implemented in a subclassing manner, resulting object is different from
         the original object because this method is converting to Functional manner
@@ -266,9 +268,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             self._products[product_name] = product
 
     def _generate_usual_product(
-            self,
-            target_layer: tf.keras.layers.Layer,
-            inbound_layer: tf.keras.layers.Layer
+        self, target_layer: tf.keras.layers.Layer, inbound_layer: tf.keras.layers.Layer
     ):
         """
         Generate usual product which is producer is not model input
@@ -277,8 +277,11 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :param inbound_layer: tf.keras.layer related to producer Op
         """
         consumer_op = self._layer_to_op.get(target_layer)
-        inbound_layer_output_name = \
-            inbound_layer.output[0].name if isinstance(inbound_layer.output, typing.List) else inbound_layer.output.name
+        inbound_layer_output_name = (
+            inbound_layer.output[0].name
+            if isinstance(inbound_layer.output, typing.List)
+            else inbound_layer.output.name
+        )
         producer_op = self.get_op_from_module_name(inbound_layer_output_name)
 
         if producer_op is None:
@@ -324,7 +327,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 tensor_descriptions = ["weight", "bias", "running_mean", "running_var"]
                 weight_tensors = layer.get_weights()
 
-                for weight_tensor, tensor_description in zip(weight_tensors, tensor_descriptions):
+                for weight_tensor, tensor_description in zip(
+                    weight_tensors, tensor_descriptions
+                ):
                     self._create_and_add_param_product_if_not_exists(
                         op,
                         f"{layer_name}.{tensor_description}",
@@ -332,7 +337,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     )
 
     def _create_and_add_param_product_if_not_exists(
-            self, op: Op, product_name: str, shape: typing.List[int]
+        self, op: Op, product_name: str, shape: typing.List[int]
     ):
         """
         Given a name of a product, create it if it doesn't exist, and attach it to the specified op as a parameter.
@@ -353,9 +358,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         After finding split ops, create and link product as intended
         """
         for op in self.ordered_ops:
-            self._determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(op)
+            self._determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(
+                op
+            )
 
-    def _determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(self, op: Op):
+    def _determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(
+        self, op: Op
+    ):
         """
         Determine if an Op's output is used as an input to more than one Op. If it is, create a Split Op and
         insert it in the connected graph, below this Op.
@@ -444,7 +453,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # 4. Set the Split Op's input to point to current Op's output.
         split_op.inputs.append(preceding_op.outputs[0])
 
-    def _create_split_op_output_product(self, preceding_op: Op, split_op: Op) -> Product:
+    def _create_split_op_output_product(
+        self, preceding_op: Op, split_op: Op
+    ) -> Product:
         """
         Create output product of the split op and connected it to the split op
         :param preceding_op: Op prior to split op
@@ -471,7 +482,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         self._products[name] = product
         return product
 
-    def _add_consumers_to_split_op_product(self, preceding_op: Op, split_op_product: Product):
+    def _add_consumers_to_split_op_product(
+        self, preceding_op: Op, split_op_product: Product
+    ):
         """
         A Split Op's output product has multiple consumers. Add them to the product.
         :param preceding_op: Op prior to split op
@@ -500,19 +513,33 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             a_product = self.get_product(out_product_names[a_product_index])
             a_consumer = a_product.consumers[0]
             split_op_product.consumers.append(a_consumer)
-            logger.debug("Insert Split Op: Step 2a. Consumer Op: %s, a_product_index: %s",
-                         a_consumer.dotted_name, a_product_index)
+            logger.debug(
+                "Insert Split Op: Step 2a. Consumer Op: %s, a_product_index: %s",
+                a_consumer.dotted_name,
+                a_product_index,
+            )
             # Need to insert the newly created split_op product in the correct input index of the op
-            logger.debug("Insert Split Op: Step 2b. Op has multiple input products: %s", a_consumer.inputs)
-            input_product_index = determine_preceding_op_input_product_index_in_multi_input_op(preceding_op,
-                                                                                               a_consumer)
+            logger.debug(
+                "Insert Split Op: Step 2b. Op has multiple input products: %s",
+                a_consumer.inputs,
+            )
+            input_product_index = (
+                determine_preceding_op_input_product_index_in_multi_input_op(
+                    preceding_op, a_consumer
+                )
+            )
 
             a_consumer.inputs[input_product_index] = split_op_product
-            logger.debug("Insert Split Op: Step 2c. For product: %s, split_op input_product_index: %s",
-                         split_op_product.name, input_product_index)
+            logger.debug(
+                "Insert Split Op: Step 2c. For product: %s, split_op input_product_index: %s",
+                split_op_product.name,
+                input_product_index,
+            )
             consumer_index += 1
 
-    def _create_product_linking_preceding_op_to_split_op(self, preceding_op: Op, split_op: Op):
+    def _create_product_linking_preceding_op_to_split_op(
+        self, preceding_op: Op, split_op: Op
+    ):
         """
         Create a new product to connect the preceding Op to the Split Op
 
@@ -535,7 +562,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             # Please read the details comments in _add_consumers_to_split_op_product()
             if preceding_op.name in name:
                 deleted_product = self._products.pop(name)
-                logger.debug("Insert Split Op: Step 3. Deleted product: %s", deleted_product)
+                logger.debug(
+                    "Insert Split Op: Step 3. Deleted product: %s", deleted_product
+                )
 
         new_product = self._add_product(
             f"{preceding_op.name}__to__{split_op.name}", preceding_op.outputs[0].shape

@@ -33,21 +33,32 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Unit tests for Keras tensor quantizer """
+"""Unit tests for Keras tensor quantizer"""
+
 import tensorflow as tf
 import numpy as np
 import aimet_common.libpymo as libpymo
-from aimet_tensorflow.keras.quant_sim.tensor_quantizer import ActivationTensorQuantizer, ParamPerTensorQuantizer
+from aimet_tensorflow.keras.quant_sim.tensor_quantizer import (
+    ActivationTensorQuantizer,
+    ParamPerTensorQuantizer,
+)
 from aimet_common.defs import QuantScheme, QuantizationDataType
 
 
 def test_set_encodings():
     tf.keras.backend.clear_session()
-    quantizer = ActivationTensorQuantizer(tf.keras.layers.Layer(), name='quantizer',
-                                          quant_scheme=QuantScheme.post_training_tf,
-                                          round_mode='nearest', bitwidth=4, data_type=QuantizationDataType.int,
-                                          is_symmetric=True, use_unsigned_symmetric=False,
-                                          use_strict_symmetric=True, enabled=True)
+    quantizer = ActivationTensorQuantizer(
+        tf.keras.layers.Layer(),
+        name="quantizer",
+        quant_scheme=QuantScheme.post_training_tf,
+        round_mode="nearest",
+        bitwidth=4,
+        data_type=QuantizationDataType.int,
+        is_symmetric=True,
+        use_unsigned_symmetric=False,
+        use_strict_symmetric=True,
+        enabled=True,
+    )
     assert not quantizer._is_encoding_valid
 
     # Create encoding and set
@@ -67,10 +78,18 @@ def test_set_encodings():
 
 def test_tensor_quantizer_freeze_encodings():
     tf.keras.backend.clear_session()
-    quantizer = ParamPerTensorQuantizer(tf.keras.layers.Layer(), name='quantizer',
-                                        quant_scheme=QuantScheme.post_training_tf, round_mode='nearest',
-                                        bitwidth=4, data_type=QuantizationDataType.int, is_symmetric=True,
-                                        use_unsigned_symmetric=False, use_strict_symmetric=True, enabled=True)
+    quantizer = ParamPerTensorQuantizer(
+        tf.keras.layers.Layer(),
+        name="quantizer",
+        quant_scheme=QuantScheme.post_training_tf,
+        round_mode="nearest",
+        bitwidth=4,
+        data_type=QuantizationDataType.int,
+        is_symmetric=True,
+        use_unsigned_symmetric=False,
+        use_strict_symmetric=True,
+        enabled=True,
+    )
     # Create encoding and set
     encoding = libpymo.TfEncoding()
     encoding.min = 0.0
@@ -84,7 +103,7 @@ def test_tensor_quantizer_freeze_encodings():
     assert quantizer.bitwidth == 4
     quantizer.quant_scheme = QuantScheme.post_training_tf_enhanced
     assert quantizer.quant_scheme == QuantScheme.post_training_tf
-    quantizer.round_mode = 'stochastic'
+    quantizer.round_mode = "stochastic"
     assert quantizer.round_mode == libpymo.ROUND_NEAREST
     quantizer.is_symmetric = False
     assert quantizer.is_symmetric
@@ -93,6 +112,8 @@ def test_tensor_quantizer_freeze_encodings():
     quantizer.use_strict_symmetric = False
     assert quantizer.use_strict_symmetric
     quantizer.disable()
-    assert quantizer.quant_mode == int(libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize)
+    assert quantizer.quant_mode == int(
+        libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize
+    )
     quantizer.reset_quant_mode()
     assert quantizer._is_encoding_valid

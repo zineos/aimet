@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Models for use in unit testing """
+"""Models for use in unit testing"""
+
 # pylint: skip-file
 from collections import namedtuple
 from typing import Dict, List
@@ -52,8 +53,8 @@ from aimet_torch._base.nn.modules.custom import Multiply
 
 
 class SingleResidual(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidual, self).__init__()
@@ -107,8 +108,8 @@ class SingleResidual(nn.Module):
 
 
 class SingleResidualWithAvgPool(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithAvgPool, self).__init__()
@@ -162,8 +163,8 @@ class SingleResidualWithAvgPool(nn.Module):
 
 
 class SingleResidualWithModuleAdd(nn.Module):
-    """ A model with a single residual connection.
-        Use this model for unit testing purposes. """
+    """A model with a single residual connection.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=10):
         super(SingleResidualWithModuleAdd, self).__init__()
@@ -218,8 +219,8 @@ class SingleResidualWithModuleAdd(nn.Module):
 
 
 class MultiInput(nn.Module):
-    """ A model with multiple inputs.
-        Use this model for unit testing purposes. """
+    """A model with multiple inputs.
+    Use this model for unit testing purposes."""
 
     def __init__(self, num_classes=3):
         super(MultiInput, self).__init__()
@@ -245,7 +246,8 @@ class MultiInput(nn.Module):
 
 
 class DictInputModel(nn.Module):
-    """ Model with dictionary as input. """
+    """Model with dictionary as input."""
+
     def __init__(self, num_classes=3):
         super(DictInputModel, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=3, bias=False)
@@ -257,9 +259,9 @@ class DictInputModel(nn.Module):
         self.fc = nn.Linear(288, num_classes)
 
     def forward(self, *inputs):
-        x1 = self.conv1(inputs[0]['inp_1'])
+        x1 = self.conv1(inputs[0]["inp_1"])
         x1 = self.conv2(x1)
-        x2 = self.conv3(inputs[0]['inp_2'])
+        x2 = self.conv3(inputs[0]["inp_2"])
         x = x1 + x2
         x = self.bn1(x)
         x = self.relu1(x)
@@ -270,9 +272,9 @@ class DictInputModel(nn.Module):
 
 
 class ConcatModel(nn.Module):
-    """ A model with concat op.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with concat op.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(ConcatModel, self).__init__()
@@ -293,23 +295,27 @@ class ConcatModel(nn.Module):
 
 
 class ModuleListModel(nn.Module):
-    """ A model with modules defined using ModuleLists.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with modules defined using ModuleLists.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(ModuleListModel, self).__init__()
-        self.mod_list = nn.ModuleList([
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),       # use 4th
-            nn.ReLU(inplace=True),      # use 3rd
-            nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),                # use 5th
-            nn.ReLU(),      # dummy unused op
-            nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False)        # use 1st
-        ])
+        self.mod_list = nn.ModuleList(
+            [
+                nn.MaxPool2d(kernel_size=2, stride=2, padding=1),  # use 4th
+                nn.ReLU(inplace=True),  # use 3rd
+                nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),  # use 5th
+                nn.ReLU(),  # dummy unused op
+                nn.Conv2d(
+                    3, 16, kernel_size=2, stride=2, padding=2, bias=False
+                ),  # use 1st
+            ]
+        )
         self.seq_list = nn.Sequential(
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),                # use 6th
-            nn.ReLU(),      # dummy unused op
-            nn.BatchNorm2d(16),     # use 2nd
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),  # use 6th
+            nn.ReLU(),  # dummy unused op
+            nn.BatchNorm2d(16),  # use 2nd
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -326,7 +332,7 @@ class ModuleListModel(nn.Module):
 
 
 class TinyModel(nn.Module):
-    """ Use this model for unit testing purposes. Expect input shape (1, 3, 32, 32) """
+    """Use this model for unit testing purposes. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(TinyModel, self).__init__()
@@ -360,8 +366,9 @@ class TinyModel(nn.Module):
         x = self.fc(x)
         return x
 
+
 class QuantSimTinyModel(nn.Module):
-    """ Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32) """
+    """Use this model for quantsim_config unit testing purposes. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(QuantSimTinyModel, self).__init__()
@@ -397,15 +404,15 @@ class QuantSimTinyModel(nn.Module):
 
 
 class ModelWithDropouts(nn.Module):
-    """ Use this model for unit testing purposes. """
+    """Use this model for unit testing purposes."""
 
     def __init__(self):
         super(ModelWithDropouts, self).__init__()
         self.conv1 = nn.Conv2d(3, 8, kernel_size=2, stride=2, padding=2, bias=False)
         self.bn1 = nn.BatchNorm2d(8)
         self.relu1 = nn.ReLU(inplace=True)
-        self.dropout1 = nn.Dropout(p=.4)
-        self.dropout2 = nn.Dropout2d(p=.6)
+        self.dropout1 = nn.Dropout(p=0.4)
+        self.dropout2 = nn.Dropout2d(p=0.6)
         self.fc = nn.Linear(2592, 10)
 
     def forward(self, *inputs):
@@ -420,7 +427,7 @@ class ModelWithDropouts(nn.Module):
 
 
 class ModelWithReusedNodes(nn.Module):
-    """ Model that reuses a relu module. Expects input of shape (1, 3, 32, 32) """
+    """Model that reuses a relu module. Expects input of shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(ModelWithReusedNodes, self).__init__()
@@ -442,7 +449,7 @@ class ModelWithReusedNodes(nn.Module):
 
 
 class ModelWithFunctionalOps(nn.Module):
-    """ Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses functional modules instead of nn.Modules. Expects input of shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(ModelWithFunctionalOps, self).__init__()
@@ -463,9 +470,9 @@ class ModelWithFunctionalOps(nn.Module):
 
 
 class SequentialModel(nn.Module):
-    """ A model with modules defined using nn.Sequential.
-        Use this model for unit testing purposes.
-        Expected inputs: 3 inputs, all of size (1, 3, 8, 8) """
+    """A model with modules defined using nn.Sequential.
+    Use this model for unit testing purposes.
+    Expected inputs: 3 inputs, all of size (1, 3, 8, 8)"""
 
     def __init__(self, num_classes=3):
         super(SequentialModel, self).__init__()
@@ -475,7 +482,7 @@ class SequentialModel(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2)
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -487,7 +494,7 @@ class SequentialModel(nn.Module):
 
 
 class BasicConv2d(nn.Module):
-    """ A Simple Super Node Model used as building block in Hierarchical Model  """
+    """A Simple Super Node Model used as building block in Hierarchical Model"""
 
     def __init__(self, **kwargs):
         super(BasicConv2d, self).__init__()
@@ -504,14 +511,14 @@ class BasicConv2d(nn.Module):
 
 
 class MultiConv2dModel(nn.Module):
-    """ Sequential Model contains sequences of BasicConv2d Model  """
+    """Sequential Model contains sequences of BasicConv2d Model"""
 
     def __init__(self):
         super(MultiConv2dModel, self).__init__()
         self.seq_list = nn.Sequential(
             BasicConv2d(kernel_size=3),
             BasicConv2d(kernel_size=1),
-            BasicConv2d(kernel_size=3)
+            BasicConv2d(kernel_size=3),
         )
 
     def forward(self, *inputs):
@@ -519,7 +526,7 @@ class MultiConv2dModel(nn.Module):
 
 
 class NestedModel(nn.Module):
-    """ Aggregation Model contains two instance of Tiny Model """
+    """Aggregation Model contains two instance of Tiny Model"""
 
     def __init__(self):
         super(NestedModel, self).__init__()
@@ -535,13 +542,13 @@ class NestedModel(nn.Module):
 
 
 class HierarchicalModel(nn.Module):
-    """ Aggregation Model contains multi-level of PyTorch Module
-        Expected 5 inputs with shapes  in the following order:
-            (1, 64, 32, 32)
-            (1,  3, 32, 32)
-            (1, 64, 32, 32)
-            (1,  3, 32, 32)
-            (1,  3,  8,  8) """
+    """Aggregation Model contains multi-level of PyTorch Module
+    Expected 5 inputs with shapes  in the following order:
+        (1, 64, 32, 32)
+        (1,  3, 32, 32)
+        (1, 64, 32, 32)
+        (1,  3, 32, 32)
+        (1,  3,  8,  8)"""
 
     def __init__(self):
         super(HierarchicalModel, self).__init__()
@@ -567,7 +574,7 @@ class HierarchicalModel(nn.Module):
 
 
 class PassThroughOpLastLayerModel(nn.Module):
-    """ Model with PassThroughOp as last layer. Expect input shape (1, 3, 32, 32) """
+    """Model with PassThroughOp as last layer. Expect input shape (1, 3, 32, 32)"""
 
     def __init__(self):
         super(PassThroughOpLastLayerModel, self).__init__()
@@ -584,6 +591,7 @@ class TransposedConvModel(torch.nn.Module):
     """
     Model with transposed conv2D
     """
+
     def __init__(self):
         super(TransposedConvModel, self).__init__()
         self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3)
@@ -609,6 +617,7 @@ class TransposedConvModelWithoutBN(torch.nn.Module):
     """
     Model with transposed conv2D
     """
+
     def __init__(self):
         super(TransposedConvModelWithoutBN, self).__init__()
         self.conv1 = torch.nn.ConvTranspose2d(10, 10, 3)
@@ -628,6 +637,7 @@ class TupleOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output
     """
+
     def __init__(self):
         super(TupleOutputModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(3, 2, kernel_size=3, padding=1, bias=False)
@@ -645,6 +655,7 @@ class MultiOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output
     """
+
     def __init__(self):
         super(MultiOutputModel, self).__init__()
         self.layer = TupleOutputModel()
@@ -664,6 +675,7 @@ class ConfigurableTupleOutputModel(torch.nn.Module):
     """
     Model with Tuple of Tensors as output with configurable channels
     """
+
     def __init__(self, channels=(2, 4, 6)):
         super(ConfigurableTupleOutputModel, self).__init__()
         self.conv1 = torch.nn.Conv2d(channels[0], channels[0], kernel_size=3, padding=1)
@@ -682,6 +694,7 @@ class SingleLayerRNNModel(nn.Module):
     Model using torch.nn.RNN module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(SingleLayerRNNModel, self).__init__()
         self.rnn = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=1)
@@ -696,9 +709,12 @@ class SingleLayerBidirectionalLstmModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(SingleLayerBidirectionalLstmModel, self).__init__()
-        self.lstm = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1, bidirectional=True)
+        self.lstm = torch.nn.LSTM(
+            input_size=3, hidden_size=5, num_layers=1, bidirectional=True
+        )
 
     # pylint: disable=arguments-differ
     def forward(self, x, hx=None):
@@ -710,9 +726,12 @@ class TwoLayerBidirectionalLSTMModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionalLSTMModel, self).__init__()
-        self.recurrent = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.LSTM(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     # pylint: disable=arguments-differ
     def forward(self, x, hx=None):
@@ -724,9 +743,12 @@ class TwoLayerBidirectionaRNNModel(nn.Module):
     Model using torch.nn.RNN module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionaRNNModel, self).__init__()
-        self.recurrent = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.RNN(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     # pylint: disable=arguments-differ
     def forward(self, x, hx=None):
@@ -738,9 +760,12 @@ class TwoLayerBidirectionalGRUModel(nn.Module):
     Model using torch.nn.GRU module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(TwoLayerBidirectionalGRUModel, self).__init__()
-        self.recurrent = torch.nn.GRU(input_size=3, hidden_size=5, num_layers=2, bidirectional=True)
+        self.recurrent = torch.nn.GRU(
+            input_size=3, hidden_size=5, num_layers=2, bidirectional=True
+        )
 
     # pylint: disable=arguments-differ
     def forward(self, x, hx=None):
@@ -752,6 +777,7 @@ class MultiLayerRNNModel(nn.Module):
     Model using torch.nn.RNN module with multiple layers
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(MultiLayerRNNModel, self).__init__()
         self.rnn = torch.nn.RNN(input_size=3, hidden_size=5, num_layers=2)
@@ -766,6 +792,7 @@ class RNNCellModel(nn.Module):
     Model using torch.nn.RNNCell module
     Expected input shape = (SEQ_LENGTH=10, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(RNNCellModel, self).__init__()
         self.rnn_cell = torch.nn.RNNCell(input_size=3, hidden_size=5)
@@ -784,6 +811,7 @@ class LSTMModel(nn.Module):
     Model using torch.nn.LSTM module
     Expected input shape = (SEQ_LENGTH, BATCH_SIZE, INPUT_SIZE=3)
     """
+
     def __init__(self):
         super(LSTMModel, self).__init__()
         self.rnn = torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1)
@@ -798,18 +826,19 @@ class NestedSequentialModel(nn.Module):
     Model using nested Sequential modules
     Expected input shape = (1, 3, 8, 8)
     """
+
     def __init__(self, num_classes=3):
         super(NestedSequentialModel, self).__init__()
         self.inner_seq = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=2, bias=False),
-            nn.BatchNorm2d(16)
+            nn.BatchNorm2d(16),
         )
         self.seq_list = nn.Sequential(
             self.inner_seq,
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             nn.Conv2d(16, 8, kernel_size=2, stride=2, padding=2),
-            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2)
+            nn.Conv2d(8, 4, kernel_size=2, stride=2, padding=2),
         )
         self.fc = nn.Linear(64, num_classes)
 
@@ -821,7 +850,8 @@ class NestedSequentialModel(nn.Module):
 
 
 class ModelWithFunctionalReLU(nn.Module):
-    """ Model that uses functional ReLU instead of nn.Modules. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses functional ReLU instead of nn.Modules. Expects input of shape (1, 3, 32, 32)"""
+
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -843,7 +873,8 @@ class ModelWithFunctionalReLU(nn.Module):
 
 
 class ModelWithDuplicateReLU(nn.Module):
-    """ Model that uses single ReLU instances multiple times in the forward. Expects input of shape (1, 3, 32, 32) """
+    """Model that uses single ReLU instances multiple times in the forward. Expects input of shape (1, 3, 32, 32)"""
+
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -871,7 +902,6 @@ class ModelWithDuplicateReLU(nn.Module):
 
 
 class ModelWithTwoInputs(nn.Module):
-
     def __init__(self):
         super(ModelWithTwoInputs, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -907,7 +937,6 @@ class ModelWithTwoInputs(nn.Module):
 
 
 class ModelWithTransposeConv(nn.Module):
-
     def __init__(self):
         super(ModelWithTransposeConv, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -947,10 +976,11 @@ class SimpleConditional(torch.nn.Module):
     Model using conditional paths
     Expected input shape = (1, 3)
     """
+
     def __init__(self):
         super(SimpleConditional, self).__init__()
-        self.prelu1 = torch.nn.PReLU(init=.3)
-        self.prelu2 = torch.nn.PReLU(init=.4)
+        self.prelu1 = torch.nn.PReLU(init=0.3)
+        self.prelu2 = torch.nn.PReLU(init=0.4)
         self.linear1 = torch.nn.Linear(3, 2)
         self.linear2 = torch.nn.Linear(3, 10)
         self.softmax = torch.nn.Softmax()
@@ -972,7 +1002,7 @@ class LinearAndLSTMModel(torch.nn.Module):
         super(LinearAndLSTMModel, self).__init__()
 
         self.linear = torch.nn.Linear(10, 4)
-        self.prelu = torch.nn.PReLU(init=.3)
+        self.prelu = torch.nn.PReLU(init=0.3)
         self.recurrent = torch.nn.LSTM(input_size=4, hidden_size=5, num_layers=2)
 
     def forward(self, x, h_and_c=None):
@@ -982,9 +1012,7 @@ class LinearAndLSTMModel(torch.nn.Module):
         return self.recurrent(x, h_and_c)
 
 
-
 class RoiAlignPyTorch(torch.nn.Module):
-
     def __init__(self, aligned_height, aligned_width, spatial_scale):
         super(RoiAlignPyTorch, self).__init__()
         self.aligned_width = int(aligned_width)
@@ -992,19 +1020,21 @@ class RoiAlignPyTorch(torch.nn.Module):
         self.spatial_scale = float(spatial_scale)
 
     def forward(self, features, rois):
-        return roi_align(input=features,
-                         boxes = rois,
-                         output_size = [self.aligned_height, self.aligned_width],
-                         spatial_scale = self.spatial_scale,
-                         sampling_ratio = 0)
+        return roi_align(
+            input=features,
+            boxes=rois,
+            output_size=[self.aligned_height, self.aligned_width],
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=0,
+        )
 
 
 from aimet_torch.v2.nn.fake_quant._legacy_impl import _FakeQuantizedUnaryOpMixin
+
 FakeQuantizedRoiAlignPyTorch = _FakeQuantizedUnaryOpMixin.wrap(RoiAlignPyTorch)
 
 
 class RoiModel(torch.nn.Module):
-
     def __init__(self, height, width, scale):
         super(RoiModel, self).__init__()
         self.roi = RoiAlignPyTorch(height, width, scale)
@@ -1021,11 +1051,11 @@ class InputOutputDictModel(nn.Module):
         self.mul3 = Multiply()
 
     def forward(self, inputs: Dict[str, torch.Tensor]):
-        ab = self.mul1(inputs['a'], inputs['b'])
-        bc = self.mul2(inputs['b'], inputs['c'])
-        ca = self.mul3(inputs['c'], inputs['a'])
+        ab = self.mul1(inputs["a"], inputs["b"])
+        bc = self.mul2(inputs["b"], inputs["c"])
+        ca = self.mul3(inputs["c"], inputs["a"])
 
-        output_def = namedtuple('output_def', ['ab', 'bc', 'ca'])
+        output_def = namedtuple("output_def", ["ab", "bc", "ca"])
         return output_def(ab, bc, ca)
 
 
@@ -1033,6 +1063,7 @@ class Float32AndInt64InputModel(nn.Module):
     """
     This model uses a list of Tensors as input. The input Tensor list contains both float32 and int63 tensors.
     """
+
     def __init__(self):
         super(Float32AndInt64InputModel, self).__init__()
         self.index_feature_map = 0
@@ -1055,7 +1086,6 @@ class Float32AndInt64InputModel(nn.Module):
 
 
 class Conv3dModel(nn.Module):
-
     def __init__(self):
         super(Conv3dModel, self).__init__()
 
@@ -1068,7 +1098,6 @@ class Conv3dModel(nn.Module):
         self.relu2 = nn.ReLU()
 
     def forward(self, inp):
-
         out = self.conv1(inp)
         out = self.bn1(out)
         out = self.relu1(out)
@@ -1081,7 +1110,6 @@ class Conv3dModel(nn.Module):
 
 
 class Conv3dModel1(nn.Module):
-
     def __init__(self):
         super(Conv3dModel1, self).__init__()
 
@@ -1094,7 +1122,6 @@ class Conv3dModel1(nn.Module):
         self.bn2 = nn.BatchNorm3d(8)
 
     def forward(self, inp):
-
         out = self.conv1(inp)
         out = self.relu1(out)
         out = self.bn1(out)
@@ -1110,9 +1137,7 @@ class ModuleWithListInputModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.reshape = aimet_modules.Reshape()
-        self.conv = torch.nn.Conv2d(in_channels=1,
-                                    out_channels=16,
-                                    kernel_size=3)
+        self.conv = torch.nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3)
 
     def forward(self, *inputs):
         # Module with list input (second argument)
@@ -1157,7 +1182,9 @@ class MultiplePReluModel(nn.Module):
 class GroupedConvModel(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, groups=2, bias=False)
+        self.conv = nn.Conv2d(
+            in_channels, out_channels, kernel_size=3, groups=2, bias=False
+        )
 
     def forward(self, *inputs):
         return self.conv(inputs[0])
@@ -1174,16 +1201,18 @@ class CustomGroupedConvModel(nn.Module):
         output1, output2 = self.conv1(input1), self.conv2(input2)
         return torch.cat([output1, output2], dim=1)
 
+
 class LinearPrelu(torch.nn.Module):
     def __init__(self, in_features, out_features):
         super(LinearPrelu, self).__init__()
-        self.prelu = torch.nn.PReLU(init=.3)
+        self.prelu = torch.nn.PReLU(init=0.3)
         self.linear = torch.nn.Linear(in_features, out_features)
 
     def forward(self, _input):
         x = self.linear(_input)
         x = self.prelu(x)
         return x
+
 
 class NestedConditional(torch.nn.Module):
     """
@@ -1202,6 +1231,7 @@ class NestedConditional(torch.nn.Module):
         x = self.false_branch(_input)
         x = self.softmax(x)
         return x
+
 
 class TinyModelWithNoMathInvariantOps(torch.nn.Module):
     def __init__(self):
@@ -1223,6 +1253,7 @@ class ModelWithMatMul(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.PReLU()
@@ -1235,10 +1266,12 @@ class ModelWithMatMul(torch.nn.Module):
         y = y.reshape(10, 4, 5)
         return self.matmul(x, y)
 
+
 class ModelWithMatMul2(torch.nn.Module):
     """
     Model with MatMul module
     """
+
     def __init__(self):
         super().__init__()
         self.act1 = nn.PReLU()
@@ -1253,10 +1286,12 @@ class ModelWithMatMul2(torch.nn.Module):
         y = y.reshape(10, 4, 5)
         return self.matmul(x, y)
 
+
 class ModelWithGroupNorm(torch.nn.Module):
     """
     Model with GroupNorm module
     """
+
     def __init__(self):
         super().__init__()
         self.gn = torch.nn.GroupNorm(2, 6)
@@ -1265,10 +1300,12 @@ class ModelWithGroupNorm(torch.nn.Module):
     def forward(self, *inputs):
         return self.gn_with_no_affine(self.gn(inputs[0]))
 
+
 class ModelWithEmbedding(torch.nn.Module):
     """
     Model with embedding module
     """
+
     def __init__(self):
         super().__init__()
         self.embedding = torch.nn.Embedding(8, 4)
@@ -1301,6 +1338,7 @@ class SmallMnist(nn.Module):
         x = self.fc2(x)
         return self.log_softmax(x)
 
+
 class ModelWithUnusedAdd(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -1309,6 +1347,7 @@ class ModelWithUnusedAdd(torch.nn.Module):
 
     def forward(self, x):
         return self.identity(x)
+
 
 class ModelWithUnusedRNN(torch.nn.Module):
     def __init__(self):
@@ -1319,6 +1358,7 @@ class ModelWithUnusedRNN(torch.nn.Module):
     def forward(self, x):
         return self.identity(x)
 
+
 class ModelWithAbstractModule(torch.nn.Module):
     def __init__(self):
         super().__init__()
@@ -1327,6 +1367,7 @@ class ModelWithAbstractModule(torch.nn.Module):
 
     def forward(self, x):
         return self.module.conv(x)
+
 
 class ExpandModel(torch.nn.Module):
     def __init__(self):
@@ -1356,6 +1397,7 @@ class SmallLinearModel(nn.Module):
         x = self.prelu2(x)
         return self.linear2(x)
 
+
 class InnerLinear(nn.Module):
     def __init__(self):
         super(InnerLinear, self).__init__()
@@ -1366,6 +1408,7 @@ class InnerLinear(nn.Module):
         x = self.in_linear1(inp)
         x = self.linear_modlist[0](x)
         return x
+
 
 class ModelWithLinears(nn.Module):
     def __init__(self):
@@ -1380,6 +1423,7 @@ class ModelWithLinears(nn.Module):
         x = self.relu1(self.fc1(x))
         x = self.dropout(x)
         return self.fc2(x)
+
 
 class ModelWithConsecutiveLinearBlocks(torch.nn.Module):
     def __init__(self):

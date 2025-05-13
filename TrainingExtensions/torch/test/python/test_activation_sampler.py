@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Unit tests for Adaround """
+"""Unit tests for Adaround"""
 
 import pytest
 import torch
@@ -61,8 +61,12 @@ def model():
 def sim(request, model):
     QuantizationSimModel = request.param
     assert QuantizationSimModel in (v1.QuantizationSimModel, v2.QuantizationSimModel)
-    sim = QuantizationSimModel(model, dummy_input=torch.randn(1, 3, 32, 32), quant_scheme='tf_enhanced',
-                               default_param_bw=4)
+    sim = QuantizationSimModel(
+        model,
+        dummy_input=torch.randn(1, 3, 32, 32),
+        quant_scheme="tf_enhanced",
+        default_param_bw=4,
+    )
 
     if QuantizationSimModel == v1.QuantizationSimModel:
         for module in sim.model.modules():
@@ -82,40 +86,55 @@ class TestAdaroundActivationSampler:
     """
     Adaround unit tests
     """
-    @pytest.mark.parametrize('sim', [v1.QuantizationSimModel, v2.QuantizationSimModel], indirect=True)
+
+    @pytest.mark.parametrize(
+        "sim", [v1.QuantizationSimModel, v2.QuantizationSimModel], indirect=True
+    )
     def test_activation_sampler_conv(self, sim, model, tmpdir):
-        """ Test ActivationSampler for a Conv module """
+        """Test ActivationSampler for a Conv module"""
         dataset_size = 100
         batch_size = 10
         image_size = (3, 32, 32)
         data_loader = create_fake_data_loader(dataset_size, batch_size, image_size)
         possible_batches = dataset_size // batch_size
+
         def forward_fn(model, inputs):
             inputs, _ = inputs
             model(inputs)
 
-        act_sampler = ActivationSampler(model.conv1, sim.model.conv1, model, sim.model, forward_fn)
+        act_sampler = ActivationSampler(
+            model.conv1, sim.model.conv1, model, sim.model, forward_fn
+        )
         cached_dataset = CachedDataset(data_loader, possible_batches, tmpdir)
-        quant_inp, orig_out = act_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
+        quant_inp, orig_out = act_sampler.sample_and_place_all_acts_on_cpu(
+            cached_dataset
+        )
 
         assert list(quant_inp.shape) == [batch_size * possible_batches, 3, 32, 32]
         assert list(orig_out.shape) == [batch_size * possible_batches, 32, 18, 18]
 
-    @pytest.mark.parametrize('sim', [v1.QuantizationSimModel, v2.QuantizationSimModel], indirect=True)
+    @pytest.mark.parametrize(
+        "sim", [v1.QuantizationSimModel, v2.QuantizationSimModel], indirect=True
+    )
     def test_activation_sampler_fully_connected_module(self, sim, model, tmpdir):
-        """ Test ActivationSampler for a fully connected module """
+        """Test ActivationSampler for a fully connected module"""
         dataset_size = 100
         batch_size = 10
         image_size = (3, 32, 32)
         possible_batches = dataset_size // batch_size
         data_loader = create_fake_data_loader(dataset_size, batch_size, image_size)
+
         def forward_fn(model, inputs):
             inputs, _ = inputs
             model(inputs)
 
-        act_sampler = ActivationSampler(model.fc, sim.model.fc, model, sim.model, forward_fn)
+        act_sampler = ActivationSampler(
+            model.fc, sim.model.fc, model, sim.model, forward_fn
+        )
         cached_dataset = CachedDataset(data_loader, possible_batches, tmpdir)
-        quant_inp, orig_out = act_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
+        quant_inp, orig_out = act_sampler.sample_and_place_all_acts_on_cpu(
+            cached_dataset
+        )
 
         assert list(quant_inp.shape) == [batch_size * possible_batches, 36]
         assert list(orig_out.shape) == [batch_size * possible_batches, 12]

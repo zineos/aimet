@@ -37,13 +37,15 @@
 #
 #  =============================================================================
 
-""" Winnow the API provided input channels from the modules in a model. """
+"""Winnow the API provided input channels from the modules in a model."""
 
 import copy
 from typing import List, Tuple, Dict
 import torch
 from aimet_common.utils import AimetLogger, ModelApi
-from aimet_common.winnow.mask_propagation_winnower import MaskPropagationWinnower as AimetCommonMaskPropagationWinnower
+from aimet_common.winnow.mask_propagation_winnower import (
+    MaskPropagationWinnower as AimetCommonMaskPropagationWinnower,
+)
 from aimet_common.winnow.mask_propagator import MaskPropagator
 from aimet_torch.meta.connectedgraph import ConnectedGraph
 from aimet_torch.utils import get_layer_name, has_hooks
@@ -53,12 +55,18 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Winnow)
 
 
 class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
-    """ The MaskPropagationWinnower class implements winnowing based on propagating masks corresponding to each
-    module's input channels identified to be winnowed.  """
+    """The MaskPropagationWinnower class implements winnowing based on propagating masks corresponding to each
+    module's input channels identified to be winnowed."""
 
-    def __init__(self, model: torch.nn.Module, input_shape: Tuple,
-                 list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List]] = None, reshape=True,
-                 in_place=False, verbose=False):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        input_shape: Tuple,
+        list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List]] = None,
+        reshape=True,
+        in_place=False,
+        verbose=False,
+    ):
         """
         MaskPropagationWinnower object initialization.
         :param model: The model to be winnowed.
@@ -75,7 +83,9 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
         super().__init__(list_of_modules_to_winnow, reshape, in_place, verbose)
 
         if any(has_hooks(module) for module in model.modules()):
-            logger.warning("The specified model has registered hooks which might break winnowing")
+            logger.warning(
+                "The specified model has registered hooks which might break winnowing"
+            )
 
         debug_level = logger.getEffectiveLevel()
         logger.debug("Current log level: %s", debug_level)
@@ -97,15 +107,22 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
             dummy_input = torch.tensor(dummy_input).cuda()  # pylint: disable=not-callable
 
         self._graph = ConnectedGraph(self._model, (dummy_input,))
-        self.list_of_modules_to_winnow_with_names = \
-            generate_and_add_module_winnow_list_with_names(model, self._list_of_modules_to_winnow)
+        self.list_of_modules_to_winnow_with_names = (
+            generate_and_add_module_winnow_list_with_names(
+                model, self._list_of_modules_to_winnow
+            )
+        )
         self._mask_propagator = MaskPropagator(self._graph, ModelApi.pytorch)
-        self._module_reducer = ModuleReducer(self._model, self._using_cuda, self._reshape,
-                                             self._mask_propagator.op_to_mask_dict)
+        self._module_reducer = ModuleReducer(
+            self._model,
+            self._using_cuda,
+            self._reshape,
+            self._mask_propagator.op_to_mask_dict,
+        )
 
     def propagate_masks_and_winnow(self):
-        """  For the modules to be winnowed, create and propagate the masks.
-        Once mask propagation is completed, winnow the model. """
+        """For the modules to be winnowed, create and propagate the masks.
+        Once mask propagation is completed, winnow the model."""
 
         # Propagate the masks
         self._propagate_masks()
@@ -117,7 +134,9 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
         modified_modules_dict = self._module_reducer.reduce_modules(modified_op_list)
 
         if modified_modules_dict:
-            ordered_module_list = self._create_modified_modules_list(modified_modules_dict)
+            ordered_module_list = self._create_modified_modules_list(
+                modified_modules_dict
+            )
         else:
             ordered_module_list = None
             logger.info("No modules were winnowed. Original model is returned.")
@@ -125,15 +144,25 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
         return self._model, ordered_module_list
 
     def _propagate_masks(self):
-        """  For the modules to be winnowed, set the channels to winnow and propagate the masks."""
-        for module, list_of_channels_to_winnow, name in self.list_of_modules_to_winnow_with_names:
-            self.validate_winnow_api_parameters(module, name, list_of_channels_to_winnow)
+        """For the modules to be winnowed, set the channels to winnow and propagate the masks."""
+        for (
+            module,
+            list_of_channels_to_winnow,
+            name,
+        ) in self.list_of_modules_to_winnow_with_names:
+            self.validate_winnow_api_parameters(
+                module, name, list_of_channels_to_winnow
+            )
 
             input_channels_to_winnow = list_of_channels_to_winnow
             output_channels_to_winnow = None
             if isinstance(module, (torch.nn.Linear, torch.nn.modules.conv.Conv2d)):
-                self._mask_propagator.update_channels_to_winnow(name, self._reshape, input_channels_to_winnow,
-                                                                output_channels_to_winnow)
+                self._mask_propagator.update_channels_to_winnow(
+                    name,
+                    self._reshape,
+                    input_channels_to_winnow,
+                    output_channels_to_winnow,
+                )
 
         # The channels to winnow have been updated
         # Propagate the masks.
@@ -141,7 +170,7 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
 
     @staticmethod
     def _create_modified_modules_list(modified_modules: Dict[str, torch.nn.Module]):
-        """ Creates and returns a list of tuples with each tuple containing
+        """Creates and returns a list of tuples with each tuple containing
         the original module and its replacement module
         :param modified_modules: dictionary of modules modified during module reduction
         :return list of tuples of name of the original module in the model and corresponding new module
@@ -151,9 +180,9 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
         for orig_module_name, new_module in modified_modules.items():
             # Remove prefix of the model name
             # E.g. the module_name maybe Net.layer1.conv1, we only want layer1.conv1
-            first_dot_position = orig_module_name.find('.')
+            first_dot_position = orig_module_name.find(".")
             if first_dot_position != -1:
-                orig_module_name = orig_module_name[first_dot_position + 1:]
+                orig_module_name = orig_module_name[first_dot_position + 1 :]
             modified_module_list.append((orig_module_name, new_module))
 
         return modified_module_list
@@ -167,37 +196,49 @@ class MaskPropagationWinnower(AimetCommonMaskPropagationWinnower):
         """
 
         if not isinstance(module, torch.nn.Conv2d):
-            error_msg = (f'Winnowing is currently only supported for torch.nn.Conv2d modules. Attempting to winnow '
-                         f'module of type {type(module)}')
+            error_msg = (
+                f"Winnowing is currently only supported for torch.nn.Conv2d modules. Attempting to winnow "
+                f"module of type {type(module)}"
+            )
             logger.error(error_msg)
             raise NotImplementedError(error_msg)
 
         # Validate the list of channels.
         num_channels_to_winnow = len(list_of_channels_to_winnow)
         if num_channels_to_winnow == 0:
-            raise ValueError("The list of channels to winnow is empty for the module: %s" % name)
+            raise ValueError(
+                "The list of channels to winnow is empty for the module: %s" % name
+            )
 
         max_channel_num = max(list_of_channels_to_winnow)
         max_in_channel_index = module.in_channels - 1
         if max_channel_num > max_in_channel_index:
-            raise ValueError("Channel number: %s exceeds module's max channel number index: %s for module: %s" %
-                             (max_channel_num, max_in_channel_index, name))
+            raise ValueError(
+                "Channel number: %s exceeds module's max channel number index: %s for module: %s"
+                % (max_channel_num, max_in_channel_index, name)
+            )
 
         if num_channels_to_winnow == module.in_channels:
-            raise ValueError("Winnowing all the input channels is not allowed, module: %s" % name)
+            raise ValueError(
+                "Winnowing all the input channels is not allowed, module: %s" % name
+            )
 
         module_op = self._graph.get_op_from_module_name(name)
-        input_index = 0     # Using op index 0 to examine input to op
+        input_index = 0  # Using op index 0 to examine input to op
         if module_op.inputs[input_index].is_model_input:
-            error_msg = (f'Winnowing the first module of a model is NOT supported. Please ignore the first '
-                         f'module and try again. First module: {module_op.dotted_name}, shape '
-                         f'{module_op.inputs[input_index].shape}, channels to winnow: {list_of_channels_to_winnow}')
+            error_msg = (
+                f"Winnowing the first module of a model is NOT supported. Please ignore the first "
+                f"module and try again. First module: {module_op.dotted_name}, shape "
+                f"{module_op.inputs[input_index].shape}, channels to winnow: {list_of_channels_to_winnow}"
+            )
             logger.error(error_msg)
             raise NotImplementedError(error_msg)
 
 
-def generate_and_add_module_winnow_list_with_names(model: torch.nn.Module,
-                                                   list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List[int]]]):
+def generate_and_add_module_winnow_list_with_names(
+    model: torch.nn.Module,
+    list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List[int]]],
+):
     """
     Generates the module names for the modules to winnow.
     Creates a Tuple with Module, list of channels to winnow and Module Name
@@ -210,16 +251,18 @@ def generate_and_add_module_winnow_list_with_names(model: torch.nn.Module,
 
     list_of_module_info = []
     if list_of_modules_to_winnow is not None:
-
         model_name = type(model).__name__
         logger.debug("Model name: %s", model_name)
 
-        for module, list_of_channels_to_winnow, in list_of_modules_to_winnow:
+        for (
+            module,
+            list_of_channels_to_winnow,
+        ) in list_of_modules_to_winnow:
             name = get_layer_name(model, module)
 
             # This name doesn't contain the model's name.
             # Prepend the model's name to the module's name.
-            name = '.'.join([model_name, name])
+            name = ".".join([model_name, name])
 
             mod_tuple = (module, list_of_channels_to_winnow, name)
             list_of_module_info.append(mod_tuple)

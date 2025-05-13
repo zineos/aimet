@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Unit tests for keras model preparer """
+"""Unit tests for keras model preparer"""
+
 import logging
 import os
 import tempfile
@@ -51,7 +52,10 @@ from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 from aimet_tensorflow.keras.model_preparer import prepare_model, _KerasModelPreparer
 
 get_models_custom_objects = _KerasModelPreparer._get_models_custom_objects
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_output_ops
+from aimet_common.connected_graph.connectedgraph_utils import (
+    get_all_input_ops,
+    get_all_output_ops,
+)
 
 from test_models_keras import resnet_34, tiny_conv_net
 
@@ -63,15 +67,13 @@ AimetLogger.set_level_for_all_areas(logging.DEBUG)
 class TwoConvs(tf.keras.layers.Layer):
     def __init__(self, **kwargs):
         super(TwoConvs, self).__init__(**kwargs)
-        self.conv = tf.keras.layers.Conv2D(32,
-                                           kernel_size=(3, 3),
-                                           activation="relu",
-                                           name="class_conv")
+        self.conv = tf.keras.layers.Conv2D(
+            32, kernel_size=(3, 3), activation="relu", name="class_conv"
+        )
 
-        self.conv_transpose = tf.keras.layers.Conv2DTranspose(64,
-                                                              kernel_size=(3, 3),
-                                                              activation="relu",
-                                                              name="class_conv_transpose")
+        self.conv_transpose = tf.keras.layers.Conv2DTranspose(
+            64, kernel_size=(3, 3), activation="relu", name="class_conv_transpose"
+        )
 
     def call(self, x, **kwargs):
         x = self.conv(x)
@@ -82,10 +84,12 @@ class TwoConvs(tf.keras.layers.Layer):
 class ConvTimesThree(tf.keras.layers.Layer):
     def __init__(self, **kwargs):
         super(ConvTimesThree, self).__init__(**kwargs)
-        self.depth_conv = tf.keras.layers.DepthwiseConv2D(depth_multiplier=1,
-                                                          kernel_size=(3, 3),
-                                                          activation="relu",
-                                                          name="class_conv_depth")
+        self.depth_conv = tf.keras.layers.DepthwiseConv2D(
+            depth_multiplier=1,
+            kernel_size=(3, 3),
+            activation="relu",
+            name="class_conv_depth",
+        )
         self.two_convs = TwoConvs()
 
     def call(self, x, **kwargs):
@@ -98,6 +102,7 @@ class ConvTimesThree(tf.keras.layers.Layer):
 #                                                                                                         #
 ###########################################################################################################
 
+
 # Only Subclassing
 class CustomerTicketModel(tf.keras.Model):
     def __init__(self, num_departments):
@@ -105,7 +110,9 @@ class CustomerTicketModel(tf.keras.Model):
         self.concat_layer = tf.keras.layers.Concatenate()
         self.mixing_layer = tf.keras.layers.Dense(64, activation="relu")
         self.priority_scorer = tf.keras.layers.Dense(1, activation="sigmoid")
-        self.department_classifier = tf.keras.layers.Dense(num_departments, activation="softmax")
+        self.department_classifier = tf.keras.layers.Dense(
+            num_departments, activation="softmax"
+        )
 
     def call(self, inputs, **kwargs):
         title = inputs["title"]
@@ -153,7 +160,7 @@ class Linear(tf.keras.layers.Layer):
             name="bias",
             shape=(self.units,),
             initializer="random_normal",
-            trainable=True
+            trainable=True,
         )
 
     def call(self, inputs):
@@ -166,10 +173,12 @@ class Linear(tf.keras.layers.Layer):
 
 
 class KerasDefinedAndAcceptableDefined(tf.keras.layers.Layer):
-
     def __init__(self):
         super().__init__(name="keras_defined_and_acceptable_defined")
-        self.conv = tf.keras.layers.Conv2D(32, kernel_size=(3, 3), )
+        self.conv = tf.keras.layers.Conv2D(
+            32,
+            kernel_size=(3, 3),
+        )
         self.linear = Linear()
         self.relu = tf.keras.layers.ReLU()
 
@@ -184,9 +193,14 @@ class KerasDefinedAndAcceptableDefined(tf.keras.layers.Layer):
 class TransformerBlock(tf.keras.layers.Layer):
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super(TransformerBlock, self).__init__()
-        self.att = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=embed_dim)
+        self.att = tf.keras.layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=embed_dim
+        )
         self.ffn = tf.keras.Sequential(
-            [tf.keras.layers.Dense(ff_dim, activation="relu"), tf.keras.layers.Dense(embed_dim), ]
+            [
+                tf.keras.layers.Dense(ff_dim, activation="relu"),
+                tf.keras.layers.Dense(embed_dim),
+            ]
         )
         self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
@@ -205,7 +219,9 @@ class TransformerBlock(tf.keras.layers.Layer):
 class TokenAndPositionEmbedding(tf.keras.layers.Layer):
     def __init__(self, maxlen, vocab_size, embed_dim):
         super(TokenAndPositionEmbedding, self).__init__()
-        self.token_emb = tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=embed_dim)
+        self.token_emb = tf.keras.layers.Embedding(
+            input_dim=vocab_size, output_dim=embed_dim
+        )
         self.pos_emb = tf.keras.layers.Embedding(input_dim=maxlen, output_dim=embed_dim)
 
     def call(self, x, **kwargs):
@@ -255,7 +271,7 @@ class MultiOutLayer(tf.keras.layers.Layer):
 
 
 class TestModelPreparer:
-    """ Class for Testing aimet_tensorflow.keras Model Preparer"""
+    """Class for Testing aimet_tensorflow.keras Model Preparer"""
 
     # Model Getters
     @staticmethod
@@ -321,7 +337,9 @@ class TestModelPreparer:
         x = tf.keras.layers.Dropout(0.1)(x)
         outputs = tf.keras.layers.Dense(2, activation="softmax")(x)
 
-        return tf.keras.Model(inputs=inputs, outputs=outputs, name="text_classification")
+        return tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="text_classification"
+        )
 
     @staticmethod
     def get_multi_math_op_model():
@@ -337,7 +355,9 @@ class TestModelPreparer:
         y = tf.keras.layers.Conv2D(16, 3, activation="relu")(input2)
         outputs = MultiInputLayer()([x, y])
 
-        return tf.keras.Model(inputs=[input1, input2], outputs=outputs, name="multi_input")
+        return tf.keras.Model(
+            inputs=[input1, input2], outputs=outputs, name="multi_input"
+        )
 
     @staticmethod
     def get_model_with_multiple_outputs(use_lambdas):
@@ -350,7 +370,11 @@ class TestModelPreparer:
         else:
             outputs = MultiOutLayer()(x)
 
-        return tf.keras.Model(inputs=inputs, outputs=outputs, name=f"multi_output_with_lambda_{use_lambdas}")
+        return tf.keras.Model(
+            inputs=inputs,
+            outputs=outputs,
+            name=f"multi_output_with_lambda_{use_lambdas}",
+        )
 
     @staticmethod
     def get_model_with_acceptable_subclass_layers():
@@ -360,11 +384,19 @@ class TestModelPreparer:
         x = Linear()(x)
         outputs = tf.keras.layers.ReLU()(x)
 
-        return tf.keras.Model(inputs=inputs, outputs=outputs, name="acceptable_subclasses")
+        return tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="acceptable_subclasses"
+        )
 
     @staticmethod
     def get_model_with_keras_and_acceptable_subclass_layers_defined():
-        inputs = tf.keras.Input(shape=(28, 28, 1,))
+        inputs = tf.keras.Input(
+            shape=(
+                28,
+                28,
+                1,
+            )
+        )
         outputs = KerasDefinedAndAcceptableDefined()(inputs)
 
         return tf.keras.Model(inputs=inputs, outputs=outputs)
@@ -374,7 +406,8 @@ class TestModelPreparer:
         original_model = get_model_func()
         if isinstance(original_model.input_shape, List):
             self.random_input = [
-                np.random.rand(1, *input_shape[1:]) for input_shape in original_model.input_shape
+                np.random.rand(1, *input_shape[1:])
+                for input_shape in original_model.input_shape
             ]
         else:
             self.random_input = np.random.rand(1, *original_model.input_shape[1:])
@@ -385,11 +418,10 @@ class TestModelPreparer:
         class LayerWithoutConfig(tf.keras.Model):  # Note: Inherits from Model
             def __init__(self, value_to_save_in_config, *args, **kwargs):
                 super().__init__(*args, **kwargs)
-                self.dense = tf.keras.layers.Dense(value_to_save_in_config, 'relu')
+                self.dense = tf.keras.layers.Dense(value_to_save_in_config, "relu")
 
             def call(self, inputs, training=None, mask=None):
                 return self.dense(inputs)
-
 
         class MyTempModel(tf.keras.Model):
             def __init__(self):
@@ -418,7 +450,11 @@ class TestModelPreparer:
         with tempfile.TemporaryDirectory() as temp_dir:
             sim = QuantizationSimModel(self.prepared_model)
             sim.compute_encodings(lambda model, _: model(self.random_input), None)
-            sim.export(temp_dir, self.prepared_model.name, custom_objects=self.__dict__.get("custom_objects"))
+            sim.export(
+                temp_dir,
+                self.prepared_model.name,
+                custom_objects=self.__dict__.get("custom_objects"),
+            )
         del self.prepared_model
 
     @pytest.mark.skip("Need to verify how functional model should look")
@@ -433,23 +469,44 @@ class TestModelPreparer:
         tags_data = np.random.randint(0, 2, size=(1, num_samples, num_tags))
 
         model = CustomerTicketModel(num_departments=num_departments)
-        _ = model({"title": title_data,
-                   "text_body": text_body_data,
-                   "tags": tags_data})
+        _ = model({"title": title_data, "text_body": text_body_data, "tags": tags_data})
         # Since this model is fully subclassed, specifically at the beginning, we call prepare model with
         # the inputs to have Keras symoblic tensor fit the rest of the layers correctly.
-        input_layers = [tf.keras.Input(shape=(num_samples, vocabulary_size,), name="title"),
-                        tf.keras.Input(shape=(num_samples, vocabulary_size,), name="text_body"),
-                        tf.keras.Input(shape=(num_samples, num_tags,), name="tags")]
+        input_layers = [
+            tf.keras.Input(
+                shape=(
+                    num_samples,
+                    vocabulary_size,
+                ),
+                name="title",
+            ),
+            tf.keras.Input(
+                shape=(
+                    num_samples,
+                    vocabulary_size,
+                ),
+                name="text_body",
+            ),
+            tf.keras.Input(
+                shape=(
+                    num_samples,
+                    num_tags,
+                ),
+                name="tags",
+            ),
+        ]
         _ = prepare_model(model, input_layers)
 
-    @pytest.mark.parametrize("model_func_str", [
-        "get_multi_math_op_model",
-        "get_model_with_multiple_inputs",
-        "get_keras_text_classification_example_model_and_data_input",
-        "get_model_with_keras_and_acceptable_subclass_layers_defined",
-        "get_model_with_multiple_outputs"
-    ])
+    @pytest.mark.parametrize(
+        "model_func_str",
+        [
+            "get_multi_math_op_model",
+            "get_model_with_multiple_inputs",
+            "get_keras_text_classification_example_model_and_data_input",
+            "get_model_with_keras_and_acceptable_subclass_layers_defined",
+            "get_model_with_multiple_outputs",
+        ],
+    )
     def test_models_with_common_flow(self, model_func_str):
         model_func = self.__getattribute__(model_func_str)
         if model_func_str == "get_model_with_multiple_outputs":
@@ -461,7 +518,9 @@ class TestModelPreparer:
         self.custom_objects = get_models_custom_objects(self.prepared_model)
 
     def test_functional_model_with_subclassed_layers_to_functional(self):
-        original_model = self.get_model_and_set_random_input(self.get_functional_model_with_subclassed_layers)
+        original_model = self.get_model_and_set_random_input(
+            self.get_functional_model_with_subclassed_layers
+        )
 
         self.prepared_model = prepare_model(original_model)
 
@@ -479,7 +538,9 @@ class TestModelPreparer:
         output_ops = get_all_output_ops(connected_graph)
         assert len(output_ops) == 1
         assert output_ops[0].get_module() == self.prepared_model.layers[-1]
-        assert isinstance(output_ops[0].get_module(), type(original_model.layers[-1].dense))
+        assert isinstance(
+            output_ops[0].get_module(), type(original_model.layers[-1].dense)
+        )
 
     def test_input_layer_missing(self):
         model = self.get_subclass_model_with_functional_layers()
@@ -495,7 +556,9 @@ class TestModelPreparer:
         self.random_input = np.random.rand(*input_shape)
         _ = original_model(self.random_input)
 
-        self.prepared_model = prepare_model(original_model, tf.keras.Input(shape=input_shape[1:]))
+        self.prepared_model = prepare_model(
+            original_model, tf.keras.Input(shape=input_shape[1:])
+        )
 
         connected_graph = ConnectedGraph(self.prepared_model)
         assert "Unknown" not in connected_graph.ordered_ops
@@ -511,7 +574,9 @@ class TestModelPreparer:
         output_ops = get_all_output_ops(connected_graph)
         assert len(output_ops) == 1
         assert output_ops[0].get_module() == self.prepared_model.layers[-1]
-        assert isinstance(output_ops[0].get_module(), type(original_model.layers[-1].layers[-1]))
+        assert isinstance(
+            output_ops[0].get_module(), type(original_model.layers[-1].layers[-1])
+        )
 
     def test_conv_times_three_subclass_to_functional(self):
         original_model = self.get_model_and_set_random_input(self.get_conv_sub_class)
@@ -528,7 +593,9 @@ class TestModelPreparer:
         input_ops = get_all_input_ops(connected_graph)
         assert len(input_ops) == 1
         assert input_ops[0].get_module() == self.prepared_model.layers[1]
-        assert isinstance(input_ops[0].get_module(), type(original_model.layers[1].two_convs.conv))
+        assert isinstance(
+            input_ops[0].get_module(), type(original_model.layers[1].two_convs.conv)
+        )
 
         output_ops = get_all_output_ops(connected_graph)
         assert len(output_ops) == 1
@@ -540,23 +607,30 @@ class TestModelPreparer:
 
         self.prepared_model = prepare_model(original_model)
 
-        assert original_model.get_config() == self.prepared_model.get_config(), \
+        assert original_model.get_config() == self.prepared_model.get_config(), (
             "Prepare model did not give back the original model. This model does not need to be prepared."
+        )
 
     def test_multi_output_with_lambdas(self):
-        original_model = self.get_model_and_set_random_input(lambda: self.get_model_with_multiple_outputs(True))
+        original_model = self.get_model_and_set_random_input(
+            lambda: self.get_model_with_multiple_outputs(True)
+        )
 
         # NOTE: Verification of the model occurs in the prepare_model function.
         self.prepared_model = prepare_model(original_model)
-        assert original_model.get_config() == self.prepared_model.get_config(), \
+        assert original_model.get_config() == self.prepared_model.get_config(), (
             "The original model does not contain any nested layers. The original model should be returned."
+        )
 
     def test_model_with_acceptable_subclass_layers(self):
-        original_model = self.get_model_and_set_random_input(self.get_model_with_acceptable_subclass_layers)
+        original_model = self.get_model_and_set_random_input(
+            self.get_model_with_acceptable_subclass_layers
+        )
 
         self.prepared_model = prepare_model(original_model)
-        assert original_model.get_config() == self.prepared_model.get_config(), \
+        assert original_model.get_config() == self.prepared_model.get_config(), (
             "The original model contains acceptable subclass layers. The original model should be returned."
+        )
         self.custom_objects = get_models_custom_objects(self.prepared_model)
 
     def test_model_inherits_from_Model_without_get_config_defined(self):

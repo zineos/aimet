@@ -57,7 +57,7 @@ protected:
     {
         if (perChannelWeightScale.size() == 0)
         {
-            perChannelWeightScale.insert(perChannelWeightScale.end(), {-0.5f, -0.25f, 0.25, 0.5, 0.75}); 
+            perChannelWeightScale.insert(perChannelWeightScale.end(), {-0.5f, -0.25f, 0.25, 0.5, 0.75});
         }
         if (perTensorWeightScale.size() == 0)
         {

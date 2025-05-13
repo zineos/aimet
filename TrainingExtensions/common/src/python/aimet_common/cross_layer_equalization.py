@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Cross Layer Equalization
+"""Cross Layer Equalization
 
 Some terminology for this code.
 CLS set: Set of layers (2 or 3) that can be used for cross-layer scaling
@@ -59,6 +59,7 @@ ScaleFactor = Union[np.ndarray, Tuple[np.ndarray]]
 
 class ClsLayerType(Enum):
     """Enum class to represent CLS layer types"""
+
     Unsupported = 0
     Conv = 1  # Overloaded for conv and ConvTranspose
     DepthwiseConv = 2
@@ -75,8 +76,13 @@ class ClsSetInfo:
         Models a pair of layers that were scaled using CLS. And related information.
         """
 
-        def __init__(self, layer1, layer2, scale_factor: np.ndarray,
-                     relu_activation_between_layers: bool):
+        def __init__(
+            self,
+            layer1,
+            layer2,
+            scale_factor: np.ndarray,
+            relu_activation_between_layers: bool,
+        ):
             """
             :param layer1: Layer whose bias is folded
             :param layer2: Layer to which bias of previous layer's bias is folded
@@ -88,7 +94,9 @@ class ClsSetInfo:
             self.scale_factor = scale_factor
             self.relu_activation_between_layers = relu_activation_between_layers
 
-    def __init__(self, cls_pair_1: ClsSetLayerPairInfo, cls_pair_2: ClsSetLayerPairInfo = None):
+    def __init__(
+        self, cls_pair_1: ClsSetLayerPairInfo, cls_pair_2: ClsSetLayerPairInfo = None
+    ):
         """
         Constructor takes 2 pairs if Depth-wise separable layer is being folded
 
@@ -105,8 +113,14 @@ class GraphSearchUtils:
     """
     Code to search a model graph to find nodes to use for cross-layer-scaling and high-bias-fold
     """
-    def __init__(self, connected_graph, ordered_modules_list, cls_supported_layer_types,
-                 cls_supported_activation_types):
+
+    def __init__(
+        self,
+        connected_graph,
+        ordered_modules_list,
+        cls_supported_layer_types,
+        cls_supported_activation_types,
+    ):
         self._connected_graph = connected_graph
         self._ordered_module_list = ordered_modules_list
         self._cls_supported_layer_types = cls_supported_layer_types
@@ -168,12 +182,18 @@ class GraphSearchUtils:
             :param layer: layer to check
             :return: Tuple of ClsLayerType and the layer
             """
-            weight_param_shape = [param for param, param_type in layer.parameters.values() if param_type == 'weight'][
-                0].shape
+            weight_param_shape = [
+                param
+                for param, param_type in layer.parameters.values()
+                if param_type == "weight"
+            ][0].shape
 
             if layer.groups == 1:
                 layer_type = ClsLayerType.Conv
-            elif layer.groups == weight_param_shape[0] and weight_param_shape[0] == weight_param_shape[1] * layer.groups:
+            elif (
+                layer.groups == weight_param_shape[0]
+                and weight_param_shape[0] == weight_param_shape[1] * layer.groups
+            ):
                 # depthwiseConv layer with depth multiplier = 1
                 layer_type = ClsLayerType.DepthwiseConv
             else:
@@ -197,7 +217,10 @@ class GraphSearchUtils:
             while layer_group and first_layer_to_scale[0] is ClsLayerType.Unsupported:
                 first_layer_to_scale = get_next_layer()
                 if first_layer_to_scale[0] is ClsLayerType.Unsupported:
-                    logger.info('Layer %s is not supported. Ignoring for cls', first_layer_to_scale[1])
+                    logger.info(
+                        "Layer %s is not supported. Ignoring for cls",
+                        first_layer_to_scale[1],
+                    )
 
             second_layer_to_scale = get_next_layer()
             if first_layer_to_scale[0] == ClsLayerType.Conv:
@@ -210,26 +233,39 @@ class GraphSearchUtils:
                         third_layer_to_scale = convert_to_cls_layer_type(layer_group[0])
                         if third_layer_to_scale[0] == ClsLayerType.Conv:
                             cls_sets.append(
-                                (first_layer_to_scale[1], second_layer_to_scale[1], third_layer_to_scale[1]))
+                                (
+                                    first_layer_to_scale[1],
+                                    second_layer_to_scale[1],
+                                    third_layer_to_scale[1],
+                                )
+                            )
                             # adding third_layer_to_scale for the next round of CLS set determination
                             first_layer_to_scale = get_next_layer()
                         else:
                             # unsupported combination encountered
                             first_layer_to_scale = second_layer_to_scale
                 else:
-                    logger.info('Layer %s is not supported. Ignoring for cls', second_layer_to_scale[1])
+                    logger.info(
+                        "Layer %s is not supported. Ignoring for cls",
+                        second_layer_to_scale[1],
+                    )
                     first_layer_to_scale = (ClsLayerType.Unsupported, None)
             elif first_layer_to_scale[0] == ClsLayerType.DepthwiseConv:
                 if second_layer_to_scale[0] == ClsLayerType.Conv:
                     cls_sets.append((first_layer_to_scale[1], second_layer_to_scale[1]))
                 first_layer_to_scale = second_layer_to_scale
             else:
-                logger.info('Layer %s is not supported. Ignoring for cls', first_layer_to_scale[1])
+                logger.info(
+                    "Layer %s is not supported. Ignoring for cls",
+                    first_layer_to_scale[1],
+                )
                 first_layer_to_scale = second_layer_to_scale
 
         return cls_sets
 
-    def find_downstream_layer_groups_to_scale(self, op, layer_groups: List, current_group=None, visited_nodes=None):
+    def find_downstream_layer_groups_to_scale(
+        self, op, layer_groups: List, current_group=None, visited_nodes=None
+    ):
         """
         Recursive function to find cls layer groups downstream from a given op
         :param op: Starting op to search from
@@ -252,15 +288,20 @@ class GraphSearchUtils:
             current_group.append(op)
 
         # Terminating condition for current group
-        if not op.get_module() or not op.type in self._cls_supported_layer_types + self._cls_supported_activation_types \
-                or len(op.output_ops) > 1:
+        if (
+            not op.get_module()
+            or not op.type
+            in self._cls_supported_layer_types + self._cls_supported_activation_types
+            or len(op.output_ops) > 1
+        ):
             if (len(current_group) > 1) and (current_group not in layer_groups):
                 layer_groups.append(current_group)
             current_group = []
 
         for consumer in op.output_ops:
-            self.find_downstream_layer_groups_to_scale(consumer, layer_groups,
-                                                       current_group, visited_nodes)
+            self.find_downstream_layer_groups_to_scale(
+                consumer, layer_groups, current_group, visited_nodes
+            )
 
         # Reached a leaf.. See if the current group has something to grab
         if (len(current_group) > 1) and (current_group not in layer_groups):
@@ -274,7 +315,6 @@ class GraphSearchUtils:
         """
 
         for op in self._connected_graph.get_all_ops().values():
-
             if op.name == module.dotted_name and len(op.output_ops) == 1:
                 return op.output_ops[0].type in self._cls_supported_activation_types
 
@@ -288,14 +328,15 @@ class GraphSearchUtils:
 
         is_relu_activation_in_cls_sets = []
         for cls_set in cls_sets:
-
             # We need to check activation functions for all layers but the last one in the set
             # Because we are only interested in checking activation functions between the layers we will scale
             cls_set = cls_set[:-1]
 
             is_relu_activation_in_cls_set = ()
             for module in cls_set:
-                is_relu_activation_in_cls_set += (self.does_module_have_relu_activation(module),)
+                is_relu_activation_in_cls_set += (
+                    self.does_module_have_relu_activation(module),
+                )
 
             if len(is_relu_activation_in_cls_set) == 1:
                 is_relu_activation_in_cls_set = is_relu_activation_in_cls_set[0]
@@ -359,7 +400,9 @@ class CrossLayerScaling(ABC):
 
         return scaling_factor
 
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(
+        self, cls_set
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -373,19 +416,26 @@ class CrossLayerScaling(ABC):
         next_layer_params = libpymo.EqualizationParams()
 
         # Prepare and pack data structures for cls set.
-        self._pack_params_for_depthwise_conv(cls_set, prev_layer_params, curr_layer_params, next_layer_params)
+        self._pack_params_for_depthwise_conv(
+            cls_set, prev_layer_params, curr_layer_params, next_layer_params
+        )
 
         # Scales weights and bias for consecutive layers and updates data structures in-place.
-        scaling_params = libpymo.scaleDepthWiseSeparableLayer(prev_layer_params, curr_layer_params, next_layer_params)
+        scaling_params = libpymo.scaleDepthWiseSeparableLayer(
+            prev_layer_params, curr_layer_params, next_layer_params
+        )
 
         # Update weight and biases for cls set using updated data structures.
-        self._update_params_for_depthwise_conv(cls_set, prev_layer_params, curr_layer_params, next_layer_params)
+        self._update_params_for_depthwise_conv(
+            cls_set, prev_layer_params, curr_layer_params, next_layer_params
+        )
 
         return scaling_params.scalingMatrix12, scaling_params.scalingMatrix23
 
     @staticmethod
-    def create_cls_set_info_list(cls_sets: List, scale_factors: List[ScaleFactor],
-                                 is_relu_activation_in_cls_sets):
+    def create_cls_set_info_list(
+        cls_sets: List, scale_factors: List[ScaleFactor], is_relu_activation_in_cls_sets
+    ):
         """
         Binds information from there separate lists into one [ClsInfoSet] data-structure
         :param cls_sets: List of CLS sets
@@ -394,26 +444,43 @@ class CrossLayerScaling(ABC):
         :return: List of ClsSetInfo
         """
         cls_set_info_list = []
-        assert len(cls_sets) == len(scale_factors) == len(is_relu_activation_in_cls_sets)
+        assert (
+            len(cls_sets) == len(scale_factors) == len(is_relu_activation_in_cls_sets)
+        )
 
         for index, cls_set in enumerate(cls_sets):
-
             if isinstance(scale_factors[index], tuple):
                 # If we are dealing with a triplet of layers, then we should have 2 scale factors and 2 relu flags
                 # Assert that this is true
                 assert len(cls_set) == 3
-                assert len(scale_factors[index]) == len(is_relu_activation_in_cls_sets[index]) == 2
+                assert (
+                    len(scale_factors[index])
+                    == len(is_relu_activation_in_cls_sets[index])
+                    == 2
+                )
 
-                cls_pair_1 = ClsSetInfo.ClsSetLayerPairInfo(cls_set[0], cls_set[1], scale_factors[index][0],
-                                                            is_relu_activation_in_cls_sets[index][0])
-                cls_pair_2 = ClsSetInfo.ClsSetLayerPairInfo(cls_set[1], cls_set[2], scale_factors[index][1],
-                                                            is_relu_activation_in_cls_sets[index][1])
+                cls_pair_1 = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[0],
+                    cls_set[1],
+                    scale_factors[index][0],
+                    is_relu_activation_in_cls_sets[index][0],
+                )
+                cls_pair_2 = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[1],
+                    cls_set[2],
+                    scale_factors[index][1],
+                    is_relu_activation_in_cls_sets[index][1],
+                )
 
                 cls_set_info = ClsSetInfo(cls_pair_1, cls_pair_2)
 
             else:
-                cls_pair = ClsSetInfo.ClsSetLayerPairInfo(cls_set[0], cls_set[1], scale_factors[index],
-                                                          is_relu_activation_in_cls_sets[index])
+                cls_pair = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[0],
+                    cls_set[1],
+                    scale_factors[index],
+                    is_relu_activation_in_cls_sets[index],
+                )
 
                 cls_set_info = ClsSetInfo(cls_pair)
 
@@ -422,10 +489,12 @@ class CrossLayerScaling(ABC):
         return cls_set_info_list
 
     @abstractmethod
-    def _pack_params_for_conv(self,
-                              cls_set,
-                              prev_layer_params: libpymo.EqualizationParams,
-                              curr_layer_params: libpymo.EqualizationParams):
+    def _pack_params_for_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Prepare and pack data structure for previous and current layer in given cls set.
 
@@ -435,9 +504,12 @@ class CrossLayerScaling(ABC):
         """
 
     @abstractmethod
-    def _update_params_for_conv(self, cls_set,
-                                prev_layer_params: libpymo.EqualizationParams,
-                                curr_layer_params: libpymo.EqualizationParams):
+    def _update_params_for_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Update weight and biases for cls set using updated data structures.
 
@@ -447,10 +519,13 @@ class CrossLayerScaling(ABC):
         """
 
     @abstractmethod
-    def _pack_params_for_depthwise_conv(self, cls_set,
-                                        prev_layer_params: libpymo.EqualizationParams,
-                                        curr_layer_params: libpymo.EqualizationParams,
-                                        next_layer_params: libpymo.EqualizationParams):
+    def _pack_params_for_depthwise_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+        next_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Prepare and pack data structure for previous, current and next layer in given cls set.
 
@@ -462,10 +537,13 @@ class CrossLayerScaling(ABC):
         """
 
     @abstractmethod
-    def _update_params_for_depthwise_conv(self, cls_set,
-                                          prev_layer_params: libpymo.EqualizationParams,
-                                          curr_layer_params: libpymo.EqualizationParams,
-                                          next_layer_params: libpymo.EqualizationParams):
+    def _update_params_for_depthwise_conv(
+        self,
+        cls_set,
+        prev_layer_params: libpymo.EqualizationParams,
+        curr_layer_params: libpymo.EqualizationParams,
+        next_layer_params: libpymo.EqualizationParams,
+    ):
         """
         Update weight and biases for cls set using updated data structures.
 
@@ -486,10 +564,9 @@ class HighBiasFold(ABC):
 
     @abstractmethod
     def _check_if_bias_is_none(self, layer) -> bool:
-        """ Returns if bias is a None for a layer. True if bias is None"""
+        """Returns if bias is a None for a layer. True if bias is None"""
 
-    def bias_fold(self, cls_set_info_list: List[ClsSetInfo],
-                  bn_layers: Dict):
+    def bias_fold(self, cls_set_info_list: List[ClsSetInfo], bn_layers: Dict):
         """
         Folds bias values greater than 3 * sigma to next layer's bias
 
@@ -498,14 +575,18 @@ class HighBiasFold(ABC):
         :return: None
         """
         if not bn_layers:
-            logger.info('High Bias folding is not supported for models without BatchNorm Layers')
+            logger.info(
+                "High Bias folding is not supported for models without BatchNorm Layers"
+            )
             return
 
         for cls_set_info in cls_set_info_list:
             for cls_pair_info in cls_set_info.cls_pair_info_list:
-
-                if self._check_if_bias_is_none(cls_pair_info.layer1) or self._check_if_bias_is_none(cls_pair_info.layer2)\
-                        or (cls_pair_info.layer1.dotted_name not in bn_layers):
+                if (
+                    self._check_if_bias_is_none(cls_pair_info.layer1)
+                    or self._check_if_bias_is_none(cls_pair_info.layer2)
+                    or (cls_pair_info.layer1.dotted_name not in bn_layers)
+                ):
                     continue
 
                 # Create data structures for holding layer weights and bias parameters.
@@ -514,26 +595,39 @@ class HighBiasFold(ABC):
                 prev_layer_bn_params = libpymo.BNParamsHighBiasFold()
 
                 # Prepare and pack data structures for high bias fold.
-                self._pack_bn_layer_params(cls_pair_info, bn_layers, prev_layer_bn_params)
-                self._pack_previous_and_current_layer_params(cls_pair_info, prev_layer_params, curr_layer_params)
+                self._pack_bn_layer_params(
+                    cls_pair_info, bn_layers, prev_layer_bn_params
+                )
+                self._pack_previous_and_current_layer_params(
+                    cls_pair_info, prev_layer_params, curr_layer_params
+                )
 
                 # Update bias for previous and current layer and data structures in-place.
-                libpymo.updateBias(prev_layer_params, curr_layer_params, prev_layer_bn_params)
+                libpymo.updateBias(
+                    prev_layer_params, curr_layer_params, prev_layer_bn_params
+                )
 
                 # Set updated biases for previous and current layer.
-                self._update_previous_and_current_layer_bias(cls_pair_info, prev_layer_params, curr_layer_params)
+                self._update_previous_and_current_layer_bias(
+                    cls_pair_info, prev_layer_params, curr_layer_params
+                )
 
     @abstractmethod
-    def _populate_bn_params_in_libpymo_obj(self, prev_layer_bn_params: libpymo.BNParamsHighBiasFold, bn_layer):
+    def _populate_bn_params_in_libpymo_obj(
+        self, prev_layer_bn_params: libpymo.BNParamsHighBiasFold, bn_layer
+    ):
         """
         Populates BatchNorm params in the libpymo object
         :param prev_layer_bn_params: Data structure to pack batch norm parameter
         :param bn_layer: BatchNorm layer
         """
 
-    def _pack_bn_layer_params(self, cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-                              bn_layers: Dict,
-                              prev_layer_bn_params: libpymo.BNParamsHighBiasFold):
+    def _pack_bn_layer_params(
+        self,
+        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
+        bn_layers: Dict,
+        prev_layer_bn_params: libpymo.BNParamsHighBiasFold,
+    ):
         """
         Helper method to pack batch norm layer parameter for high bias fold.
 
@@ -543,16 +637,27 @@ class HighBiasFold(ABC):
         """
         scaling_parameter = cls_pair_info.scale_factor
 
-        self._populate_bn_params_in_libpymo_obj(prev_layer_bn_params, bn_layers[cls_pair_info.layer1.dotted_name])
+        self._populate_bn_params_in_libpymo_obj(
+            prev_layer_bn_params, bn_layers[cls_pair_info.layer1.dotted_name]
+        )
 
-        if len(scaling_parameter) != len(prev_layer_bn_params.gamma) or \
-                len(scaling_parameter) != len(prev_layer_bn_params.beta):
-            raise ValueError("High Bias absorption is not supported for networks with fold-forward BatchNorms")
-        prev_layer_bn_params.gamma = np.divide(prev_layer_bn_params.gamma, scaling_parameter)
-        prev_layer_bn_params.beta = np.divide(prev_layer_bn_params.beta, scaling_parameter)
+        if len(scaling_parameter) != len(prev_layer_bn_params.gamma) or len(
+            scaling_parameter
+        ) != len(prev_layer_bn_params.beta):
+            raise ValueError(
+                "High Bias absorption is not supported for networks with fold-forward BatchNorms"
+            )
+        prev_layer_bn_params.gamma = np.divide(
+            prev_layer_bn_params.gamma, scaling_parameter
+        )
+        prev_layer_bn_params.beta = np.divide(
+            prev_layer_bn_params.beta, scaling_parameter
+        )
 
     @abstractmethod
-    def _pack_previous_and_current_layer_params(self, cls_pair_info, prev_layer_params, curr_layer_params):
+    def _pack_previous_and_current_layer_params(
+        self, cls_pair_info, prev_layer_params, curr_layer_params
+    ):
         """
         Helper method to pack information of previous and current layer.
 
@@ -562,9 +667,12 @@ class HighBiasFold(ABC):
         """
 
     @abstractmethod
-    def _update_previous_and_current_layer_bias(self, cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-                                                prev_layer_params: libpymo.LayerParams,
-                                                curr_layer_params: libpymo.LayerParams):
+    def _update_previous_and_current_layer_bias(
+        self,
+        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
+        prev_layer_params: libpymo.LayerParams,
+        curr_layer_params: libpymo.LayerParams,
+    ):
         """
         Update biases for previous and current layer.
 
@@ -578,8 +686,11 @@ class ClsImpl(ABC):
     """
     The Implementation interface declares methods common to both MO (c++) and python versions of CLS algorithm.
     """
+
     @abstractmethod
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(
+        self, cls_set
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -598,8 +709,9 @@ class ClsImpl(ABC):
         """
 
     @staticmethod
-    def compute_scaling_params_for_depthwise_conv(weight_0: np.ndarray, weight_1: np.ndarray, weight_2: np.ndarray) \
-            -> Tuple[np.ndarray, np.ndarray]:
+    def compute_scaling_params_for_depthwise_conv(
+        weight_0: np.ndarray, weight_1: np.ndarray, weight_2: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute scaling parameters for depth-wise separable layer.
 
@@ -623,7 +735,9 @@ class ClsImpl(ABC):
         return s_12, s_23
 
     @staticmethod
-    def compute_scaling_params_for_conv(weight_0: np.ndarray, weight_1: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def compute_scaling_params_for_conv(
+        weight_0: np.ndarray, weight_1: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute scaling parameters for conv layer.
         :param weight_0:
@@ -632,7 +746,7 @@ class ClsImpl(ABC):
         """
         max_0 = np.max(np.abs(weight_0), axis=(1, 2, 3))
         max_1 = np.max(np.abs(weight_1), axis=(0, 2, 3))
-        scale_factor = max_0 / np.power(max_0 * max_1, 1. / 2)
+        scale_factor = max_0 / np.power(max_0 * max_1, 1.0 / 2)
 
         # Avoid divide by zero, NaN or Inf by using a value that does no scaling. i.e., 1.
         scale_factor = np.nan_to_num(scale_factor, nan=1.0, posinf=1.0)
@@ -641,8 +755,15 @@ class ClsImpl(ABC):
         return scale_factor
 
     @staticmethod
-    def fold_scaling_params_for_depthwise_conv(weight_0: np.ndarray, weight_1: np.ndarray, weight_2: np.ndarray,
-                                               bias_0: np.ndarray, bias_1: np.ndarray, s_12: np.ndarray, s_23: np.ndarray):
+    def fold_scaling_params_for_depthwise_conv(
+        weight_0: np.ndarray,
+        weight_1: np.ndarray,
+        weight_2: np.ndarray,
+        bias_0: np.ndarray,
+        bias_1: np.ndarray,
+        s_12: np.ndarray,
+        s_23: np.ndarray,
+    ):
         """
         Fold scaling parameters into weight matrices and biases.
 
@@ -655,7 +776,9 @@ class ClsImpl(ABC):
         :param s_23:
         """
         weight_0 = weight_0 * (1.0 / s_12[:, None, None, None])
-        weight_1 = weight_1 * s_12[:, None, None, None] * (1.0 / s_23[:, None, None, None])
+        weight_1 = (
+            weight_1 * s_12[:, None, None, None] * (1.0 / s_23[:, None, None, None])
+        )
         weight_2 = weight_2 * s_23[None, :, None, None]
         if bias_0 is not None:
             bias_0 = bias_0 * (1.0 / s_12)
@@ -665,8 +788,12 @@ class ClsImpl(ABC):
         return weight_0, weight_1, weight_2, bias_0, bias_1
 
     @staticmethod
-    def fold_scaling_params_for_conv(weight_0: np.ndarray, weight_1: np.ndarray, bias_0: Union[np.ndarray, None],
-                                     scale_factor: np.ndarray):
+    def fold_scaling_params_for_conv(
+        weight_0: np.ndarray,
+        weight_1: np.ndarray,
+        bias_0: Union[np.ndarray, None],
+        scale_factor: np.ndarray,
+    ):
         """
         Fold scaling parameters into weight matrices and biases.
         :param weight_0:
@@ -687,6 +814,7 @@ class HbfImpl(ABC):
     """
     The Implementation interface declares methods common to both MO (c++) and python versions of HBF algorithm.
     """
+
     @abstractmethod
     def bias_fold(self, cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo, bn_layers: Dict):
         """
@@ -697,8 +825,9 @@ class HbfImpl(ABC):
         """
 
     @staticmethod
-    def _absorb_bias(activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer)\
-            -> Tuple[np.ndarray, np.ndarray]:
+    def _absorb_bias(
+        activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
 
         :param activation_is_relu:

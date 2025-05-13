@@ -46,14 +46,17 @@ from aimet_common.cost_calculator import CostCalculator as GenericCostCalculator
 from aimet_torch.layer_database import Layer
 from aimet_torch._base.nn.modules.custom import Multiply
 
-SUPPORTED_LAYER_TYPES = [torch.nn.modules.conv.Conv2d,
-                         torch.nn.modules.linear.Linear,
-                         torch.nn.modules.activation.Sigmoid,
-                         torch.nn.modules.pooling.AvgPool2d,
-                         Multiply]
+SUPPORTED_LAYER_TYPES = [
+    torch.nn.modules.conv.Conv2d,
+    torch.nn.modules.linear.Linear,
+    torch.nn.modules.activation.Sigmoid,
+    torch.nn.modules.pooling.AvgPool2d,
+    Multiply,
+]
+
 
 class CostCalculator(GenericCostCalculator):
-    """ This is a specialized implementation of CostCalculator for PyTorch"""
+    """This is a specialized implementation of CostCalculator for PyTorch"""
 
     @staticmethod
     def compute_layer_cost(layer: Layer):
@@ -64,7 +67,9 @@ class CostCalculator(GenericCostCalculator):
         :return: Cost of the layer
         """
 
-        assert isinstance(layer.module, tuple(SUPPORTED_LAYER_TYPES)), "Unsupported layer type encountered"
+        assert isinstance(layer.module, tuple(SUPPORTED_LAYER_TYPES)), (
+            "Unsupported layer type encountered"
+        )
 
         weight_dim = list(layer.weight_shape)
         if len(weight_dim) > 1:
@@ -79,7 +84,9 @@ class CostCalculator(GenericCostCalculator):
             if layer.input_shape:
                 if not isinstance(layer.input_shape, List):
                     layer.input_shape = [layer.input_shape]
-                input_mac_cost = max(np.prod(i_input).item() for i_input in layer.input_shape)
+                input_mac_cost = max(
+                    np.prod(i_input).item() for i_input in layer.input_shape
+                )
 
             mac_cost = max([output_mac_cost, input_mac_cost])
             mem_cost = mac_cost

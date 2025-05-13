@@ -48,45 +48,60 @@ from aimet_torch.meta.connectedgraph import ConnectedGraph
 from aimet_torch.meta.operation import Op as CG_Op
 from aimet_torch.v2.nn import BaseQuantizationMixin
 from aimet_torch.v2.quantsim import QuantizationSimModel
-from aimet_torch.v2.utils import rgetattr, flatten_list, has_no_quantizers, apply_fn_recursively_to_all_elems
+from aimet_torch.v2.utils import (
+    rgetattr,
+    flatten_list,
+    has_no_quantizers,
+    apply_fn_recursively_to_all_elems,
+)
+
 
 @dataclass
 class ModuleProduct:
-    """ Data structure to store a particular input product to or output product from a torch module"""
+    """Data structure to store a particular input product to or output product from a torch module"""
+
     module: torch.nn.Module
     index: int
+
 
 class ConnectedGraphTraverser:
     """
     GraphTraverser class provides APIs for traversing a model graph
     """
+
     def __init__(self, sim: QuantizationSimModel):
         self._sim = sim
 
-    def get_leaf_modules(self, torch_module: torch.nn.Module) -> Generator[Tuple[str, torch.nn.Module], None, None]:
-        """ Get all the leaf modules in the given module """
+    def get_leaf_modules(
+        self, torch_module: torch.nn.Module
+    ) -> Generator[Tuple[str, torch.nn.Module], None, None]:
+        """Get all the leaf modules in the given module"""
         for name, module in torch_module.named_modules():
             if module not in self._sim.model.modules():
-                raise ValueError(f"Specified module {module} is not part of the sim object")
+                raise ValueError(
+                    f"Specified module {module} is not part of the sim object"
+                )
             if isinstance(module, BaseQuantizationMixin):
                 yield name, module
 
     def get_modules_of_type(self, module_type):
-        """ Get all the modules of given type"""
+        """Get all the modules of given type"""
         for name, module in self._sim.model.named_modules():
-            if isinstance(module, BaseQuantizationMixin) and isinstance(module.get_original_module(), module_type):
+            if isinstance(module, BaseQuantizationMixin) and isinstance(
+                module.get_original_module(), module_type
+            ):
                 yield name, module
 
     @functools.lru_cache()
     def get_module_name(self, inp_module):
-        """ Find the name of the provided module"""
+        """Find the name of the provided module"""
         for name, module in self._sim.model.named_modules():
             if inp_module == module:
                 return name
         raise RuntimeError("Provided module is not part of the sim object.")
 
     def get_module_from_cg_op(self, cg_op: CG_Op) -> Optional[torch.nn.Module]:
-        """ Find the torch.nn.Module corresponding to the given CG_Op """
+        """Find the torch.nn.Module corresponding to the given CG_Op"""
         if cg_op is None:
             return None
 
@@ -95,8 +110,8 @@ class ConnectedGraphTraverser:
         if module is None:
             return None
 
-        fully_qualified_name = self._sim.connected_graph._module_to_name[module] # pylint: disable=protected-access
-        _, name = fully_qualified_name.split('.', maxsplit=1)
+        fully_qualified_name = self._sim.connected_graph._module_to_name[module]  # pylint: disable=protected-access
+        _, name = fully_qualified_name.split(".", maxsplit=1)
         quant_module = rgetattr(self._sim.model, name)
         return quant_module
 
@@ -108,8 +123,12 @@ class ConnectedGraphTraverser:
         """
         # pylint: disable=protected-access
         return apply_fn_recursively_to_all_elems(
-            lambda model_input: ModuleProduct(module=self.get_module_from_cg_op(model_input.op), index=model_input.index),
-            self._sim.connected_graph._input_structure)
+            lambda model_input: ModuleProduct(
+                module=self.get_module_from_cg_op(model_input.op),
+                index=model_input.index,
+            ),
+            self._sim.connected_graph._input_structure,
+        )
 
     @functools.cached_property
     def model_outputs(self):
@@ -119,8 +138,12 @@ class ConnectedGraphTraverser:
         """
         # pylint: disable=protected-access
         return apply_fn_recursively_to_all_elems(
-            lambda model_output: ModuleProduct(module=self.get_module_from_cg_op(model_output.op), index=model_output.index),
-            self._sim.connected_graph._output_structure)
+            lambda model_output: ModuleProduct(
+                module=self.get_module_from_cg_op(model_output.op),
+                index=model_output.index,
+            ),
+            self._sim.connected_graph._output_structure,
+        )
 
     @functools.cached_property
     def model_input_modules(self):
@@ -129,8 +152,10 @@ class ConnectedGraphTraverser:
         torch.nn.Modules
         """
         # pylint: disable=protected-access
-        return apply_fn_recursively_to_all_elems(lambda model_input: self.get_module_from_cg_op(model_input.op),
-                                                  self._sim.connected_graph._input_structure)
+        return apply_fn_recursively_to_all_elems(
+            lambda model_input: self.get_module_from_cg_op(model_input.op),
+            self._sim.connected_graph._input_structure,
+        )
 
     @functools.cached_property
     def model_output_modules(self):
@@ -139,8 +164,10 @@ class ConnectedGraphTraverser:
         torch.nn.Modules
         """
         # pylint: disable=protected-access
-        return apply_fn_recursively_to_all_elems(lambda model_output: self.get_module_from_cg_op(model_output.op),
-                                                  self._sim.connected_graph._output_structure)
+        return apply_fn_recursively_to_all_elems(
+            lambda model_output: self.get_module_from_cg_op(model_output.op),
+            self._sim.connected_graph._output_structure,
+        )
 
     @functools.cached_property
     def module_to_cg_op_mapping(self) -> Dict[torch.nn.Module, CG_Op]:
@@ -155,10 +182,12 @@ class ConnectedGraphTraverser:
         return module_to_op_dict
 
     def get_cg_op_from_module(self, module):
-        """ Helper functions to lookup CG_Op corresponding to the given module """
+        """Helper functions to lookup CG_Op corresponding to the given module"""
         return self.module_to_cg_op_mapping[module]
 
-    def get_valid_parent_module_at_input_idx(self, module, input_idx) -> Union[torch.nn.Module, None]:
+    def get_valid_parent_module_at_input_idx(
+        self, module, input_idx
+    ) -> Union[torch.nn.Module, None]:
         """
         Traverses upstream to determine the parent module provided input idx.
         This method errors out if a functional is encountered which is not a data movement op.
@@ -174,13 +203,18 @@ class ConnectedGraphTraverser:
             if parent_cg_op.get_module():
                 return parent_cg_op.get_module()
 
-            if parent_cg_op.type in ConnectedGraph.math_invariant_types or parent_cg_op.type == CG_SPLIT:
+            if (
+                parent_cg_op.type in ConnectedGraph.math_invariant_types
+                or parent_cg_op.type == CG_SPLIT
+            ):
                 # Split op or "functional data movement" op is encountered. Query its parent.
                 parent_cg_op = parent_cg_op.inputs[0].producer
             else:
-                raise RuntimeError(f"Parent of {cg_op.dotted_name} is a functional which is not a data movement op"
-                                   f"CG name of the op:{parent_cg_op.dotted_name}. Considering removing this functional "
-                                   f"to process")
+                raise RuntimeError(
+                    f"Parent of {cg_op.dotted_name} is a functional which is not a data movement op"
+                    f"CG name of the op:{parent_cg_op.dotted_name}. Considering removing this functional "
+                    f"to process"
+                )
         return None
 
     def get_child_module_at_output(self, module):
@@ -199,8 +233,11 @@ class ConnectedGraphTraverser:
 
                 # this means that the output is being consumed by an implicit op (if output_module is None) OR
                 # an op that has no quantizers because it is a data movement or is in a supergroup
-                if output_module is None or \
-                        has_no_quantizers(output_module) and output_module not in flatten_list([self.model_output_modules]):
+                if (
+                    output_module is None
+                    or has_no_quantizers(output_module)
+                    and output_module not in flatten_list([self.model_output_modules])
+                ):
                     output_ops.extend(_get_child_modules_from_cg_op(output_op))
                 else:
                     for idx, input_tensor in enumerate(output_op.inputs):
@@ -209,7 +246,9 @@ class ConnectedGraphTraverser:
                             break
                     else:
                         # condition is triggered if break statement in loop is not encountered
-                        assert False, "Could not match inputs and outputs at adjacent ops. Indicates CG is broken."
+                        assert False, (
+                            "Could not match inputs and outputs at adjacent ops. Indicates CG is broken."
+                        )
             return output_ops
 
         cg_op = self.get_cg_op_from_module(module)

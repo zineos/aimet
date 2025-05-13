@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Prunes layers using Spatial SVD or Weight SVD schemes """
+"""Prunes layers using Spatial SVD or Weight SVD schemes"""
 
 import abc
 from typing import Tuple
@@ -55,18 +55,29 @@ class SpatialSvdPruner(Pruner):
     """
     Pruner for Spatial-SVD method
     """
-    # pylint: disable=unused-argument
-    def _prune_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase, layer: Layer,
-                     comp_ratio: float, cost_metric: CostMetric):
 
+    # pylint: disable=unused-argument
+    def _prune_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: float,
+        cost_metric: CostMetric,
+    ):
         # Given a compression ratio, find the appropriate rank
-        rank = cost_calculator.SpatialSvdCostCalculator.calculate_rank_given_comp_ratio(layer, comp_ratio, cost_metric)
+        rank = cost_calculator.SpatialSvdCostCalculator.calculate_rank_given_comp_ratio(
+            layer, comp_ratio, cost_metric
+        )
 
         logger.info("Spatial SVD splitting layer: %s using rank: %s", layer.name, rank)
 
         # For the rounded rank compute the new compression ratio
-        actual_comp_ratio = cost_calculator.SpatialSvdCostCalculator.calculate_comp_ratio_given_rank(layer, rank,
-                                                                                                     cost_metric)
+        actual_comp_ratio = (
+            cost_calculator.SpatialSvdCostCalculator.calculate_comp_ratio_given_rank(
+                layer, rank, cost_metric
+            )
+        )
 
         # Perform svd and split the layers
         self._perform_svd_and_split_layer(layer, rank, comp_layer_db)
@@ -74,7 +85,9 @@ class SpatialSvdPruner(Pruner):
         return actual_comp_ratio
 
     @abc.abstractmethod
-    def _perform_svd_and_split_layer(self, layer: Layer, rank: int, comp_layer_db: LayerDatabase):
+    def _perform_svd_and_split_layer(
+        self, layer: Layer, rank: int, comp_layer_db: LayerDatabase
+    ):
         """
         Performs spatial svd and splits given layer into two layers
         :param layer: Layer to split
@@ -84,8 +97,14 @@ class SpatialSvdPruner(Pruner):
         """
 
     @staticmethod
-    def lingalg_spatial_svd(weight_tensor: np.array, rank: int,
-                            in_channels: int, out_channels: int, height: int, width: int) -> Tuple[np.array, np.array]:
+    def lingalg_spatial_svd(
+        weight_tensor: np.array,
+        rank: int,
+        in_channels: int,
+        out_channels: int,
+        height: int,
+        width: int,
+    ) -> Tuple[np.array, np.array]:
         """
         Splits a weight tensor using spatial svd
 
@@ -100,8 +119,12 @@ class SpatialSvdPruner(Pruner):
         assert rank <= in_channels * height
 
         # Reshape into a 2D matrix - because that's what numpy needs
-        weight_tensor = np.transpose(weight_tensor, [1, 2, 0, 3])  # in_channels height out_channels width
-        weight_tensor = weight_tensor.reshape(in_channels * height, out_channels * width)
+        weight_tensor = np.transpose(
+            weight_tensor, [1, 2, 0, 3]
+        )  # in_channels height out_channels width
+        weight_tensor = weight_tensor.reshape(
+            in_channels * height, out_channels * width
+        )
 
         v, s, h = np.linalg.svd(weight_tensor, full_matrices=False)
 
@@ -126,22 +149,38 @@ class WeightSvdPruner(Pruner):
     """
     Pruner for Weight-SVD method
     """
-    # pylint: disable=unused-argument
-    def _prune_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase, layer: Layer,
-                     comp_ratio: Decimal, cost_metric: CostMetric):
 
+    # pylint: disable=unused-argument
+    def _prune_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: Decimal,
+        cost_metric: CostMetric,
+    ):
         # Given a compression ratio, find the appropriate rounded rank
-        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(layer, comp_ratio, cost_metric)
+        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(
+            layer, comp_ratio, cost_metric
+        )
 
         logger.info("Weight SVD splitting layer: %s using rank: %s", layer.name, rank)
 
         # Perform svd and split the layers
-        comp_ratio = self._perform_svd_and_split_layer(layer, rank, cost_metric, comp_layer_db)
+        comp_ratio = self._perform_svd_and_split_layer(
+            layer, rank, cost_metric, comp_layer_db
+        )
 
         return comp_ratio
 
     @abc.abstractmethod
-    def _perform_svd_and_split_layer(self, layer: Layer, rank: int, cost_metric: CostMetric, comp_layer_db: LayerDatabase):
+    def _perform_svd_and_split_layer(
+        self,
+        layer: Layer,
+        rank: int,
+        cost_metric: CostMetric,
+        comp_layer_db: LayerDatabase,
+    ):
         """
         Performs spatial svd and splits given layer into two layers
 
@@ -153,7 +192,9 @@ class WeightSvdPruner(Pruner):
         """
 
     @staticmethod
-    def lingalg_weight_svd(weight_tensor: np.ndarray, rank: int) -> Tuple[np.ndarray, np.ndarray]:
+    def lingalg_weight_svd(
+        weight_tensor: np.ndarray, rank: int
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Splits a weight tensor using weight svd
 

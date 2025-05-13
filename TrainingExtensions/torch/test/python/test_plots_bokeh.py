@@ -42,7 +42,11 @@ import torch
 import tempfile
 from bokeh.models import Range1d
 from bokeh.plotting import figure
-from aimet_common.utils import AimetLogger, kill_process_with_name_and_port_number, start_bokeh_server_session
+from aimet_common.utils import (
+    AimetLogger,
+    kill_process_with_name_and_port_number,
+    start_bokeh_server_session,
+)
 from aimet_common import bokeh_plots
 from aimet_torch import plotting_utils
 from aimet_torch import visualize_model
@@ -53,7 +57,6 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
 
 class CNNModel(torch.nn.Module):
-
     def __init__(self):
         super(CNNModel, self).__init__()
         # input channel, output channels, 5x5 square convolution
@@ -91,7 +94,9 @@ class VisualizeNetwork(unittest.TestCase):
         try:
             visualization_url, process = start_bokeh_server_session()
             bokeh_session = BokehServerSession(url=visualization_url, session_id="test")
-            progress_bar = ProgressBar(total=10, bokeh_document=bokeh_session, title="testing", color="green")
+            progress_bar = ProgressBar(
+                total=10, bokeh_document=bokeh_session, title="testing", color="green"
+            )
             for i in range(10):
                 progress_bar.update()
             progress_bar.update()
@@ -122,7 +127,12 @@ class VisualizeNetwork(unittest.TestCase):
         try:
             visualization_url, process = start_bokeh_server_session()
             bokeh_session = BokehServerSession(url=visualization_url, session_id="test")
-            progress_bar = ProgressBar(80, title="Some Title Goes Here", color="green", bokeh_document=bokeh_session)
+            progress_bar = ProgressBar(
+                80,
+                title="Some Title Goes Here",
+                color="green",
+                bokeh_document=bokeh_session,
+            )
 
             for i in range(80):
                 progress_bar.update()
@@ -138,7 +148,9 @@ class VisualizeNetwork(unittest.TestCase):
 
         num_conv_and_linear_layers = 0
         for name, module in model.named_modules():
-            if isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)):
+            if isinstance(
+                module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)
+            ):
                 num_conv_and_linear_layers += 1
 
         # verify that there are the same number of data frames as there are conv and linear layers
@@ -146,4 +158,6 @@ class VisualizeNetwork(unittest.TestCase):
 
     def test_line_plot_visualizations_per_layer(self):
         with tempfile.TemporaryDirectory() as tempdir:
-            plot = visualize_model.visualize_relative_weight_ranges_to_identify_problematic_layers(model, tempdir)
+            plot = visualize_model.visualize_relative_weight_ranges_to_identify_problematic_layers(
+                model, tempdir
+            )

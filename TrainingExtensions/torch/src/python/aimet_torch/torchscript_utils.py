@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Implementation for simulating models running on Quantized hardware """
+"""Implementation for simulating models running on Quantized hardware"""
+
 from typing import List, Union, Dict, Tuple
 import torch
 
@@ -49,20 +50,20 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 # Map torch module types to normalized names to provide backward compatibility to
 # trace code based construction
 op_type_map = {
-    torch.nn.Conv2d: 'convolution',
-    torch.nn.ConvTranspose2d: 'convolution',
-    torch.nn.BatchNorm1d: 'batch_norm',
-    torch.nn.BatchNorm2d: 'batch_norm',
-    torch.nn.ReLU: 'relu',
-    torch.nn.ReLU6: 'hardtanh',
-    torch.nn.MaxPool2d: 'max_pool2d',
-    torch.nn.AdaptiveAvgPool2d: 'adaptive_avg_pool2d',
-    torch.nn.AvgPool2d: 'avg_pool2d',
-    torch.nn.Linear: 'addmm',
-    torch.nn.Dropout: 'dropout',
-    torch.nn.Dropout2d: 'feature_dropout',
-    torch.nn.LogSoftmax: 'log_softmax',
-    torch.nn.Sigmoid: 'sigmoid'
+    torch.nn.Conv2d: "convolution",
+    torch.nn.ConvTranspose2d: "convolution",
+    torch.nn.BatchNorm1d: "batch_norm",
+    torch.nn.BatchNorm2d: "batch_norm",
+    torch.nn.ReLU: "relu",
+    torch.nn.ReLU6: "hardtanh",
+    torch.nn.MaxPool2d: "max_pool2d",
+    torch.nn.AdaptiveAvgPool2d: "adaptive_avg_pool2d",
+    torch.nn.AvgPool2d: "avg_pool2d",
+    torch.nn.Linear: "addmm",
+    torch.nn.Dropout: "dropout",
+    torch.nn.Dropout2d: "feature_dropout",
+    torch.nn.LogSoftmax: "log_softmax",
+    torch.nn.Sigmoid: "sigmoid",
 }
 
 
@@ -71,8 +72,14 @@ class IrNode:
     """
     Representation for a module in torch graph.
     """
-    def __init__(self, node_type: str, inputs: List[Union[List, torch._C.TensorType]],
-                 outputs: List[Union[List, torch._C.TensorType]], module: torch.nn.Module):
+
+    def __init__(
+        self,
+        node_type: str,
+        inputs: List[Union[List, torch._C.TensorType]],
+        outputs: List[Union[List, torch._C.TensorType]],
+        module: torch.nn.Module,
+    ):
         self.node_type = node_type
         self.inputs = inputs
         self.outputs = outputs
@@ -99,8 +106,9 @@ def _get_attribute_name(node: torch._C.Node) -> Dict[str, str]:
     return attributes
 
 
-def _get_module_instance(node: torch._C.Node,
-                         node_name_to_module: Dict[str, torch.nn.Module]) -> torch.nn.Module:
+def _get_module_instance(
+    node: torch._C.Node, node_name_to_module: Dict[str, torch.nn.Module]
+) -> torch.nn.Module:
     """
     Get the torch.nn.Module referenced by the node.
     :param node: trace graph node
@@ -110,7 +118,7 @@ def _get_module_instance(node: torch._C.Node,
     input_name: str = node.input().debugName()
     attributes = _get_attribute_name(node)
     model = node_name_to_module[input_name]
-    sub_model = getattr(model, attributes['name'])
+    sub_model = getattr(model, attributes["name"])
     return sub_model
 
 
@@ -135,7 +143,7 @@ def _parse_graph(graph: torch._C.Graph, model: torch.nn.Module) -> List[IrNode]:
         outputs = [output for output in node.outputs()]
 
         # retrieving a module reference
-        if 'GetAttr' in node.kind():
+        if "GetAttr" in node.kind():
             # For GetAttr lines, the output name will be referring to the module, and not the module's output(s)
             assert len(outputs) == 1
             node_name = outputs[0].debugName()
@@ -147,11 +155,16 @@ def _parse_graph(graph: torch._C.Graph, model: torch.nn.Module) -> List[IrNode]:
             if "Constant" not in op_type:
                 # pylint: disable=unnecessary-comprehension
                 outputs = [output for output in node.outputs()]
-                ir_node = IrNode(node_type=op_type,
-                                 inputs=[inp for inp in node.inputs() if
-                                         "Constant" not in ConnectedGraph._parse_op_type(inp.node())],
-                                 outputs=outputs,
-                                 module=None)
+                ir_node = IrNode(
+                    node_type=op_type,
+                    inputs=[
+                        inp
+                        for inp in node.inputs()
+                        if "Constant" not in ConnectedGraph._parse_op_type(inp.node())
+                    ],
+                    outputs=outputs,
+                    module=None,
+                )
                 ir_nodes_list.append(ir_node)
 
     for ir_node in ir_nodes_list:
@@ -180,22 +193,26 @@ def _coalesce_add_and_mm_nodes(ir_nodes_list: List[IrNode]):
 
     del_node_indices = []
     for i, ir_node in enumerate(ir_nodes_list):
-        if ir_node.node_type == 'add' and len(ir_node.inputs) == 1:
-            producer_ir_node = ir_nodes_list[i-1]
-            if producer_ir_node.node_type == 'mm' and len(producer_ir_node.outputs) == 1 and \
-                    producer_ir_node.outputs[0] == ir_node.inputs[0]:
+        if ir_node.node_type == "add" and len(ir_node.inputs) == 1:
+            producer_ir_node = ir_nodes_list[i - 1]
+            if (
+                producer_ir_node.node_type == "mm"
+                and len(producer_ir_node.outputs) == 1
+                and producer_ir_node.outputs[0] == ir_node.inputs[0]
+            ):
                 producer_ir_node.outputs = ir_node.outputs
-                producer_ir_node.node_type = 'addmm'
+                producer_ir_node.node_type = "addmm"
                 del_node_indices.insert(0, i)
 
     for index in del_node_indices:
         del ir_nodes_list[index]
 
 
-def get_node_to_io_tensor_names_map(model: torch.nn.Module,
-                                    trace: torch.jit.TopLevelTracedModule,
-                                    inputs: List[torch.Tensor]) -> \
-        (Dict[str, Union[OpToIOTensors, List[OpToIOTensors]]], set):
+def get_node_to_io_tensor_names_map(
+    model: torch.nn.Module,
+    trace: torch.jit.TopLevelTracedModule,
+    inputs: List[torch.Tensor],
+) -> (Dict[str, Union[OpToIOTensors, List[OpToIOTensors]]], set):
     """
     Given an Torch model, gets the inputs and output tensor names for each node in the model.
     :param model: The user provided model instance
@@ -230,7 +247,9 @@ def get_node_to_io_tensor_names_map(model: torch.nn.Module,
         :param curr_module: Current module being traversed during forward pass.
         """
         if isinstance(curr_module, (torch.nn.RNN, torch.nn.LSTM, torch.nn.GRU)):
-            raise NotImplementedError('exporting encoding for RNN module via torchscript not supported')
+            raise NotImplementedError(
+                "exporting encoding for RNN module via torchscript not supported"
+            )
 
         if not isinstance(curr_module, torch.nn.Identity):
             modules.append(curr_module)
@@ -249,20 +268,24 @@ def get_node_to_io_tensor_names_map(model: torch.nn.Module,
         module_name = module_to_name[node.module][prefix_len:]
         index = index + 1
 
-        node_to_io_tensor_name_map[module_name] = \
-            OpToIOTensors(
-                [inp.debugName() for inp in node.inputs],
-                [output.debugName() for output in node.outputs])
+        node_to_io_tensor_name_map[module_name] = OpToIOTensors(
+            [inp.debugName() for inp in node.inputs],
+            [output.debugName() for output in node.outputs],
+        )
 
         for param_name, _ in node.module.named_parameters():
-            valid_param_set.add(module_name + '.' + param_name)
+            valid_param_set.add(module_name + "." + param_name)
 
-    #assert index == len(modules)
+    # assert index == len(modules)
 
     return node_to_io_tensor_name_map, valid_param_set
 
 
-def create_torch_script_model(ts_path: str, original_model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]):
+def create_torch_script_model(
+    ts_path: str,
+    original_model: torch.nn.Module,
+    dummy_input: Union[torch.Tensor, Tuple],
+):
     """
     This utility obtains an equivalent torchscript model for the given pytorch model. Whatever pre-processing/post-processing
     steps to be done on the resultant torchscript model must be done here.

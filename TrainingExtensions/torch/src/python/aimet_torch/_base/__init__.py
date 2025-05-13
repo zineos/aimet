@@ -34,4 +34,4 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base package to define the interface/base classes common in aimet_torch.v1 and v2 """
+"""Base package to define the interface/base classes common in aimet_torch.v1 and v2"""

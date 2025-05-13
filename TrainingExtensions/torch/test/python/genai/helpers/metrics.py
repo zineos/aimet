@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Metrics for GenAI testing """
+"""Metrics for GenAI testing"""
 
 from abc import ABC, abstractmethod
 import torch
@@ -50,19 +50,26 @@ from .datasets import (
     MMMLU as MMMLUDataset,
 )
 
+
 class EvaluationMetric(ABC):
-    """ Generic GenAI evaluation metric """
+    """Generic GenAI evaluation metric"""
+
     @classmethod
     @abstractmethod
-    def evaluate(cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int) -> float:
-        """ Perform evaluation on provided model """
+    def evaluate(
+        cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int
+    ) -> float:
+        """Perform evaluation on provided model"""
 
 
 class PPL(EvaluationMetric):
-    """ PPL evaluation metric """
+    """PPL evaluation metric"""
+
     @staticmethod
-    def _compute_loss_from_logits(output_logits: torch.Tensor, input_tokens: torch.Tensor) -> torch.Tensor:
-        """ Helper function to compute loss """
+    def _compute_loss_from_logits(
+        output_logits: torch.Tensor, input_tokens: torch.Tensor
+    ) -> torch.Tensor:
+        """Helper function to compute loss"""
 
         # Get the outputs and move it to CPU. Assumes that index 0 is logits as
         lm_logits = output_logits.cpu()
@@ -80,15 +87,23 @@ class PPL(EvaluationMetric):
 
     @classmethod
     @torch.no_grad()
-    def evaluate(cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int, batch_size: int = 1) -> float:
-        dataset = Wikitext.load_encoded_dataset(tokenizer, context_length , "test")
+    def evaluate(
+        cls,
+        model: torch.nn.Module,
+        tokenizer: PreTrainedTokenizer,
+        context_length: int,
+        batch_size: int = 1,
+    ) -> float:
+        dataset = Wikitext.load_encoded_dataset(tokenizer, context_length, "test")
         dataloader = DataLoader(dataset, batch_size=batch_size)
 
         neg_log_likelihoods = []
         for batch in tqdm(dataloader, total=len(dataloader), desc="Evaluating PPL"):
             batch["input_ids"] = batch["input_ids"].to(model.device)
             outputs = model(input_ids=batch["input_ids"][0])
-            neg_log_likelihoods.append(cls._compute_loss_from_logits(outputs[0], batch["input_ids"]))
+            neg_log_likelihoods.append(
+                cls._compute_loss_from_logits(outputs[0], batch["input_ids"])
+            )
             del outputs
 
         ppl = torch.exp(torch.stack(neg_log_likelihoods).mean())
@@ -96,27 +111,50 @@ class PPL(EvaluationMetric):
 
 
 class GenericMMLU(EvaluationMetric):
-    """ Generic MMLU evaluation metric. Should work with any MMLU dataset. """
+    """Generic MMLU evaluation metric. Should work with any MMLU dataset."""
+
     @staticmethod
     @abstractmethod
-    def get_dataloader(tokenizer: PreTrainedTokenizer, context_length: int) -> DataLoader:
-        """ Get the dataloader associated with this MMLU evaluator. """
+    def get_dataloader(
+        tokenizer: PreTrainedTokenizer, context_length: int
+    ) -> DataLoader:
+        """Get the dataloader associated with this MMLU evaluator."""
 
     @classmethod
-    def evaluate(cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int, **kwargs) -> float:
+    def evaluate(
+        cls,
+        model: torch.nn.Module,
+        tokenizer: PreTrainedTokenizer,
+        context_length: int,
+        **kwargs,
+    ) -> float:
         dataloader = cls.get_dataloader(tokenizer, context_length, **kwargs)
 
         def tokenize_letter(letter: str):
-            return torch.Tensor(tokenizer(letter, add_special_tokens=False)["input_ids"]).to(dtype=torch.int)
+            return torch.Tensor(
+                tokenizer(letter, add_special_tokens=False)["input_ids"]
+            ).to(dtype=torch.int)
+
         choices = tuple(tokenize_letter(letter) for letter in ("A", "B", "C", "D"))
 
         correct_predictions = 0
 
-        for batch in tqdm(dataloader, total=len(dataloader), desc=f"Evaluating {cls.__name__}"):
-            batch["input_ids"] = torch.Tensor(batch["input_ids"]).to(dtype=torch.int, device=model.device).unsqueeze(0)
+        for batch in tqdm(
+            dataloader, total=len(dataloader), desc=f"Evaluating {cls.__name__}"
+        ):
+            batch["input_ids"] = (
+                torch.Tensor(batch["input_ids"])
+                .to(dtype=torch.int, device=model.device)
+                .unsqueeze(0)
+            )
             outputs = model(input_ids=batch["input_ids"])
 
-            last_logit = outputs[0][..., -1, :].contiguous().to(dtype=torch.float32, device="cpu").flatten()
+            last_logit = (
+                outputs[0][..., -1, :]
+                .contiguous()
+                .to(dtype=torch.float32, device="cpu")
+                .flatten()
+            )
             last_logit = torch.nn.functional.log_softmax(last_logit, dim=-1)
 
             scores = tuple(last_logit[choice] for choice in choices)
@@ -132,20 +170,34 @@ class GenericMMLU(EvaluationMetric):
 
 class TinyMMLU(GenericMMLU):
     @staticmethod
-    def get_dataloader(tokenizer: PreTrainedTokenizer, context_length: int, batch_size: int = 1) -> DataLoader:
-        dataset = TinyMMLUDataset.load_encoded_dataset(tokenizer, context_length, "test")
+    def get_dataloader(
+        tokenizer: PreTrainedTokenizer, context_length: int, batch_size: int = 1
+    ) -> DataLoader:
+        dataset = TinyMMLUDataset.load_encoded_dataset(
+            tokenizer, context_length, "test"
+        )
         return DataLoader(dataset)
 
 
 class MMLU(GenericMMLU):
     @staticmethod
-    def get_dataloader(tokenizer: PreTrainedTokenizer, context_length: int, batch_size: int = 1) -> DataLoader:
+    def get_dataloader(
+        tokenizer: PreTrainedTokenizer, context_length: int, batch_size: int = 1
+    ) -> DataLoader:
         dataset = MMLUDataset.load_encoded_dataset(tokenizer, context_length, "test")
         return DataLoader(dataset)
 
 
 class MMMLU(GenericMMLU):
     @staticmethod
-    def get_dataloader(tokenizer: PreTrainedTokenizer, context_length: int, split: str, num_fewshot: int = 5, batch_size: int = 1) -> DataLoader:
-        dataset = MMMLUDataset.load_encoded_dataset(tokenizer, context_length, split, num_fewshot)
+    def get_dataloader(
+        tokenizer: PreTrainedTokenizer,
+        context_length: int,
+        split: str,
+        num_fewshot: int = 5,
+        batch_size: int = 1,
+    ) -> DataLoader:
+        dataset = MMMLUDataset.load_encoded_dataset(
+            tokenizer, context_length, split, num_fewshot
+        )
         return DataLoader(dataset)

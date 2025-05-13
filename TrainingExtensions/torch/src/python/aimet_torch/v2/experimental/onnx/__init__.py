@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utility APIs for onnx export """
+"""Utility APIs for onnx export"""
+
 from ._export import export, remove_quantization_nodes_from_onnx_graph

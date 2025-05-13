@@ -99,88 +99,121 @@ def get_quantsim_artifacts(_QuantizationSimModel, model_and_input=None):
             layer_names.append(name)
 
     # Obtain quantsim model
-    quantsim = _QuantizationSimModel(model=model, quant_scheme='tf_enhanced',
-                                     dummy_input=dummy_input, rounding_mode='nearest',
-                                     default_output_bw=8, default_param_bw=8, in_place=False)
+    quantsim = _QuantizationSimModel(
+        model=model,
+        quant_scheme="tf_enhanced",
+        dummy_input=dummy_input,
+        rounding_mode="nearest",
+        default_output_bw=8,
+        default_param_bw=8,
+        in_place=False,
+    )
 
-    quantsim.compute_encodings(forward_pass_callback=dummy_forward_pass,
-                               forward_pass_callback_args=dummy_input)
+    quantsim.compute_encodings(
+        forward_pass_callback=dummy_forward_pass, forward_pass_callback_args=dummy_input
+    )
 
     return quantsim, layer_names, dummy_input
 
 
 class TestLayerOutput:
     def test_get_original_model_outputs(self):
-        """ Test whether outputs are generated for all the layers of an original model """
+        """Test whether outputs are generated for all the layers of an original model"""
 
         # Get original model artifacts
         original_model, layer_names, dummy_input = get_original_model_artifacts()
-        layer_names = [re.sub(r'\W+', "_", name) for name in layer_names]
+        layer_names = [re.sub(r"\W+", "_", name) for name in layer_names]
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-outputs of quantsim model
-        layer_output = LayerOutput(model=original_model, dir_path=temp_dir_path, naming_scheme=NamingScheme.PYTORCH)
+        layer_output = LayerOutput(
+            model=original_model,
+            dir_path=temp_dir_path,
+            naming_scheme=NamingScheme.PYTORCH,
+        )
         name_to_output_dict = layer_output.get_outputs(dummy_input)
 
         # Verify whether outputs are generated for all the layers
         for layer_name in layer_names:
-            assert layer_name in name_to_output_dict, \
+            assert layer_name in name_to_output_dict, (
                 "Output not generated for layer " + layer_name
+            )
 
         # Verify whether outputs are correct. This can only be checked for final output of the model
-        assert torch.equal(original_model(dummy_input), name_to_output_dict['fc']), \
+        assert torch.equal(original_model(dummy_input), name_to_output_dict["fc"]), (
             "Output of last layer of original model doesn't match with captured layer-output"
+        )
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
-    @pytest.mark.parametrize('_QuantizationSimModel', [QuantizationSimModelV1, QuantizationSimModelV2])
+    @pytest.mark.parametrize(
+        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
+    )
     def test_get_quantsim_outputs(self, _QuantizationSimModel):
-        """ Test whether outputs are generated for all the layers of a quantsim model """
+        """Test whether outputs are generated for all the layers of a quantsim model"""
 
         # Get quantsim artifacts
-        quantsim, layer_names, dummy_input = get_quantsim_artifacts(_QuantizationSimModel)
-        layer_names = [re.sub(r'\W+', "_", name) for name in layer_names]
+        quantsim, layer_names, dummy_input = get_quantsim_artifacts(
+            _QuantizationSimModel
+        )
+        layer_names = [re.sub(r"\W+", "_", name) for name in layer_names]
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-outputs of quantsim model
-        layer_output = LayerOutput(model=quantsim.model, dir_path=temp_dir_path, naming_scheme=NamingScheme.PYTORCH)
+        layer_output = LayerOutput(
+            model=quantsim.model,
+            dir_path=temp_dir_path,
+            naming_scheme=NamingScheme.PYTORCH,
+        )
         name_to_output_dict = layer_output.get_outputs(dummy_input)
 
         # Verify whether outputs are generated for all the layers
         for layer_name in layer_names:
-            assert layer_name in name_to_output_dict, \
+            assert layer_name in name_to_output_dict, (
                 "Output not generated for layer " + layer_name
+            )
 
         # Verify whether outputs are quantized outputs. This can only be checked for final output of the model
-        assert torch.equal(quantsim.model(dummy_input), name_to_output_dict['fc']), \
+        assert torch.equal(quantsim.model(dummy_input), name_to_output_dict["fc"]), (
             "Output of last layer of quantsim model doesn't match with captured layer-output"
+        )
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
-    @pytest.mark.parametrize('_QuantizationSimModel', [QuantizationSimModelV1, QuantizationSimModelV2])
+    @pytest.mark.parametrize(
+        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
+    )
     def test_layer_name_to_onnx_layer_output_name_dict(self, _QuantizationSimModel):
-        """ Test whether every layer-name has corresponding onnx layer-output-name """
+        """Test whether every layer-name has corresponding onnx layer-output-name"""
 
         # Get quantsim artifacts
-        quantsim, layer_names, dummy_input = get_quantsim_artifacts(_QuantizationSimModel)
+        quantsim, layer_names, dummy_input = get_quantsim_artifacts(
+            _QuantizationSimModel
+        )
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-output names of the onnx model used in layer-output utils api
-        layer_output = LayerOutput(model=quantsim.model, dir_path=temp_dir_path, naming_scheme=NamingScheme.ONNX,
-                                   dummy_input=dummy_input, onnx_export_args=OnnxExportApiArgs())
+        layer_output = LayerOutput(
+            model=quantsim.model,
+            dir_path=temp_dir_path,
+            naming_scheme=NamingScheme.ONNX,
+            dummy_input=dummy_input,
+            onnx_export_args=OnnxExportApiArgs(),
+        )
 
         # Check if every layer-name has corresponding onnx layer-output-name
         for layer_name in layer_names:
-            assert layer_name in layer_output.layer_name_to_layer_output_name_dict, \
-                "Missing onnx output name for layer "+layer_name
+            assert layer_name in layer_output.layer_name_to_layer_output_name_dict, (
+                "Missing onnx output name for layer " + layer_name
+            )
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
@@ -219,55 +252,72 @@ def get_dataset_artifacts():
 
 
 class TestLayerOutputUtil:
-    @pytest.mark.parametrize('_QuantizationSimModel', [QuantizationSimModelV1, QuantizationSimModelV2])
+    @pytest.mark.parametrize(
+        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
+    )
     def test_generate_layer_outputs(self, _QuantizationSimModel):
-        """ Test whether input files and corresponding layer-output files are generated """
+        """Test whether input files and corresponding layer-output files are generated"""
 
         # Get quantsim artifacts
-        quantsim, layer_output_names, dummy_input = get_quantsim_artifacts(_QuantizationSimModel)
-        layer_output_names = [re.sub(r'\W+', "_", name) for name in layer_output_names]
+        quantsim, layer_output_names, dummy_input = get_quantsim_artifacts(
+            _QuantizationSimModel
+        )
+        layer_output_names = [re.sub(r"\W+", "_", name) for name in layer_output_names]
 
         # Get dataset artifacts
         dummy_dataset, dummy_data_loader, data_count = get_dataset_artifacts()
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Generate layer-outputs
-        layer_output_util = LayerOutputUtil(model=quantsim.model, dir_path=temp_dir_path)
+        layer_output_util = LayerOutputUtil(
+            model=quantsim.model, dir_path=temp_dir_path
+        )
         for input_batch in dummy_data_loader:
             for single_input in input_batch:
                 layer_output_util.generate_layer_outputs(single_input.unsqueeze(0))
 
         # Verify number of inputs
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, 'inputs')))
+        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "inputs")))
 
         # Verify number of layer-output folders
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, 'outputs')))
+        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "outputs")))
 
         # Verify number of layer-outputs
-        saved_layer_outputs = os.listdir(os.path.join(temp_dir_path, 'outputs', 'layer_outputs_0'))
-        saved_layer_outputs = [i[:-len('.raw')] for i in saved_layer_outputs]
+        saved_layer_outputs = os.listdir(
+            os.path.join(temp_dir_path, "outputs", "layer_outputs_0")
+        )
+        saved_layer_outputs = [i[: -len(".raw")] for i in saved_layer_outputs]
         for name in layer_output_names:
             assert name in saved_layer_outputs
 
         # Ensure generated layer-outputs can be correctly loaded for layer-output comparison
-        saved_last_layer_output = np.fromfile(os.path.join(temp_dir_path, 'outputs', 'layer_outputs_0', 'fc.raw'), dtype=np.float32).reshape((1, 1000))
+        saved_last_layer_output = np.fromfile(
+            os.path.join(temp_dir_path, "outputs", "layer_outputs_0", "fc.raw"),
+            dtype=np.float32,
+        ).reshape((1, 1000))
         saved_last_layer_output = torch.from_numpy(saved_last_layer_output)
-        last_layer_output = quantsim.model(torch.unsqueeze(dummy_dataset.__getitem__(0), dim=0))
+        last_layer_output = quantsim.model(
+            torch.unsqueeze(dummy_dataset.__getitem__(0), dim=0)
+        )
         assert torch.equal(last_layer_output, saved_last_layer_output)
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
-    @pytest.mark.parametrize('_QuantizationSimModel', [QuantizationSimModelV1, QuantizationSimModelV2])
+    @pytest.mark.parametrize(
+        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
+    )
     def test_layer_output_axis_transform(self, _QuantizationSimModel):
-        """ Test to ensure the layer outputs are saved with axis-transform """
+        """Test to ensure the layer outputs are saved with axis-transform"""
 
-        model = test_models.ModelWithOneSplit().to(device='cpu')
+        model = test_models.ModelWithOneSplit().to(device="cpu")
         input_shapes = (1, 1, 10, 10)
         dummy_input = torch.randn(input_shapes)
-        qsim, layer_names, _ = get_quantsim_artifacts(_QuantizationSimModel, model_and_input=(model, dummy_input))
+        qsim, layer_names, _ = get_quantsim_artifacts(
+            _QuantizationSimModel, model_and_input=(model, dummy_input)
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Generate layer-outputs
@@ -277,12 +327,18 @@ class TestLayerOutputUtil:
 
             for conv_layer_name in layer_names:
                 # Output in NCHW format
-                layer_output_from_dict = layer_output_util.layer_output.layer_name_to_layer_output_dict[conv_layer_name]
+                layer_output_from_dict = (
+                    layer_output_util.layer_output.layer_name_to_layer_output_dict[
+                        conv_layer_name
+                    ]
+                )
 
                 layer_output_from_dict = layer_output_from_dict.detach()
 
-                saved_output = np.fromfile(tmpdir+f"/outputs/layer_outputs_0/{conv_layer_name}.raw",
-                                           dtype=np.float32).reshape(layer_output_from_dict.shape)
+                saved_output = np.fromfile(
+                    tmpdir + f"/outputs/layer_outputs_0/{conv_layer_name}.raw",
+                    dtype=np.float32,
+                ).reshape(layer_output_from_dict.shape)
                 saved_output = torch.from_numpy(saved_output)
 
                 assert torch.equal(layer_output_from_dict, saved_output)

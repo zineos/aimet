@@ -46,7 +46,9 @@ from aimet_tensorflow.keras.connectedgraph import ConnectedGraph as KerasConnect
 
 def test_connected_graph_resnet50_keras():
     if version.parse(tf.version.VERSION) >= version.parse("2.00"):
-        keras_model = tf.keras.applications.ResNet50(weights=None, input_shape=(224, 224, 3))
+        keras_model = tf.keras.applications.ResNet50(
+            weights=None, input_shape=(224, 224, 3)
+        )
         connected_graph_from_keras_model = KerasConnectedGraph(keras_model)
 
         ops_from_keras_model = connected_graph_from_keras_model.get_all_ops()
@@ -65,27 +67,43 @@ def test_connected_graph_resnet50_keras():
         add_op = ops_from_keras_model["Add_16"]
         assert ops_from_keras_model["BatchNormalization_14"] in add_op.input_ops
         assert ops_from_keras_model["BatchNormalization_15"] in add_op.input_ops
-        assert products_from_keras_model["BatchNormalization_14_to_Add_16"] in add_op.inputs
-        assert products_from_keras_model["BatchNormalization_15_to_Add_16"] in add_op.inputs
+        assert (
+            products_from_keras_model["BatchNormalization_14_to_Add_16"]
+            in add_op.inputs
+        )
+        assert (
+            products_from_keras_model["BatchNormalization_15_to_Add_16"]
+            in add_op.inputs
+        )
 
 
 def test_graph_searcher_functionality_keras():
     if version.parse(tf.version.VERSION) >= version.parse("2.00"):
-        keras_model = tf.keras.applications.ResNet50(weights=None, input_shape=(224, 224, 3))
+        keras_model = tf.keras.applications.ResNet50(
+            weights=None, input_shape=(224, 224, 3)
+        )
         connected_graph_from_keras_model = KerasConnectedGraph(keras_model)
 
         patterns_with_callbacks = []
         layer_select_handler = ConvBnPatternHandler()
-        conv_types = ['Conv1d', 'Conv', 'ConvTranspose']
-        linear_types = ['Gemm']
+        conv_types = ["Conv1d", "Conv", "ConvTranspose"]
+        linear_types = ["Gemm"]
 
         for op_type in conv_types + linear_types:
-            patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', op_type],
-                                                       action=layer_select_handler))
-            patterns_with_callbacks.append(PatternType(pattern=[op_type, 'BatchNormalization'],
-                                                       action=layer_select_handler))
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=["BatchNormalization", op_type], action=layer_select_handler
+                )
+            )
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=[op_type, "BatchNormalization"], action=layer_select_handler
+                )
+            )
 
-        graph_searcher = GraphSearcher(connected_graph_from_keras_model, patterns_with_callbacks)
+        graph_searcher = GraphSearcher(
+            connected_graph_from_keras_model, patterns_with_callbacks
+        )
 
         graph_searcher.find_all_patterns_in_graph_apply_actions()
         conv_linear_bn_info_dict = layer_select_handler.get_conv_linear_bn_info_dict()

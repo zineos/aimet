@@ -61,7 +61,9 @@ _TORCH = {
 }
 
 
-def _get_deps_dir(cuda_version: str, tf_verson: str, torch_version: str, onnx_version: str) -> Path:
+def _get_deps_dir(
+    cuda_version: str, tf_verson: str, torch_version: str, onnx_version: str
+) -> Path:
     """Returns a directory where reqs_pip_[framework]*.txt are located."""
     dep_dir = []
     if tf_verson:
@@ -75,11 +77,16 @@ def _get_deps_dir(cuda_version: str, tf_verson: str, torch_version: str, onnx_ve
 
 
 def _get_pip_reqs_for_framework(
-    cuda_version: str, tf_verson: str, torch_version: str, onnx_version: str, framework: str
+    cuda_version: str,
+    tf_verson: str,
+    torch_version: str,
+    onnx_version: str,
+    framework: str,
 ) -> List[str]:
     """Parse reqs_pip_[framework]*.txt files and return requirements.
     Parsing is dumb, fancy syntax of requrements.txt is not supported.
     """
+
     def _filter_reqs(line: str) -> List[str]:
         if line.startswith("#"):
             return False
@@ -92,32 +99,47 @@ def _get_pip_reqs_for_framework(
         f"reqs_pip_{framework}_common.txt",
         f"reqs_pip_{framework}_{'cpu' if cuda_version == 'cpu' else 'gpu'}.txt",
     ):
-        text = (_get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version) / file).read_text(
-            encoding="utf8"
-        )
+        text = (
+            _get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version) / file
+        ).read_text(encoding="utf8")
         reqs.extend(line for line in text.splitlines() if _filter_reqs(line))
     return reqs
 
 
 def get_reqs_apt_torch(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via APT to use aimet with pytorch"""
     return []
 
+
 def get_reqs_apt_onnx(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via APT to use aimet with onnx"""
     return []
 
+
 def get_reqs_pip_torch(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via PIP to use aimet with pytorch"""
-    reqs = _get_pip_reqs_for_framework(cuda_version, tf_verson, torch_version, onnx_version, "torch")
+    reqs = _get_pip_reqs_for_framework(
+        cuda_version, tf_verson, torch_version, onnx_version, "torch"
+    )
     # Delete torch and torchvision with pinned version
-    reqs = filter(lambda r: not (r.startswith("torch==") or r.startswith("torchvision==")), reqs)
+    reqs = filter(
+        lambda r: not (r.startswith("torch==") or r.startswith("torchvision==")), reqs
+    )
     # Almost all cuda packages use `cuXYZ` notation to define a cuda version,
     # Replace it to user defined cuda version
     cu = "cpu" if cuda_version == "cpu" else f"cu{cuda_version.replace('.', '')}"
@@ -129,14 +151,22 @@ def get_reqs_pip_torch(
         + ["--extra-index-url=https://download.pytorch.org/whl/torch/"]
     )
     return reqs
+
 
 def get_reqs_pip_onnx(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via PIP to use aimet with onnx"""
-    reqs = _get_pip_reqs_for_framework(cuda_version, tf_verson, torch_version, onnx_version, "onnx")
+    reqs = _get_pip_reqs_for_framework(
+        cuda_version, tf_verson, torch_version, onnx_version, "onnx"
+    )
     # Delete torch and torchvision with pinned version
-    reqs = filter(lambda r: not (r.startswith("torch==") or r.startswith("torchvision==")), reqs)
+    reqs = filter(
+        lambda r: not (r.startswith("torch==") or r.startswith("torchvision==")), reqs
+    )
     # Almost all cuda packages use `cuXYZ` notation to define a cuda version,
     # Replace it to user defined cuda version
     cu = "cpu" if cuda_version == "cpu" else f"cu{cuda_version.replace('.', '')}"
@@ -149,64 +179,98 @@ def get_reqs_pip_onnx(
     )
     return reqs
 
+
 def get_reqs_apt_tf(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via APT to use aimet with tensorflow"""
     return []
 
 
 def get_reqs_pip_tf(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via PIP to use aimet with tensorflow"""
-    reqs = _get_pip_reqs_for_framework(cuda_version, tf_verson, torch_version, onnx_version, "tf")
+    reqs = _get_pip_reqs_for_framework(
+        cuda_version, tf_verson, torch_version, onnx_version, "tf"
+    )
     # Delete tensorflow with pinned version
     reqs = filter(
-        lambda r: not (r.startswith("tensorflow-cpu==") or r.startswith("tensorflow-gpu==")), reqs
+        lambda r: not (
+            r.startswith("tensorflow-cpu==") or r.startswith("tensorflow-gpu==")
+        ),
+        reqs,
     )
-    reqs = list(reqs) + [f"tensorflow-{'cpu' if cuda_version == 'cpu' else 'gpu'}=={tf_verson}"]
+    reqs = list(reqs) + [
+        f"tensorflow-{'cpu' if cuda_version == 'cpu' else 'gpu'}=={tf_verson}"
+    ]
     return reqs
 
 
 def get_reqs_pip(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via PIP to use aimet"""
     return (
-        (_get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version) / "reqs_pip_common.txt")
+        (
+            _get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version)
+            / "reqs_pip_common.txt"
+        )
         .read_text(encoding="utf8")
         .splitlines()
     )
 
 
 def get_reqs_pip_dev(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via PIP to develop aimet"""
     return get_reqs_pip(cuda_version, tf_verson, torch_version, onnx_version)
 
 
 def get_reqs_apt(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via APT to use aimet"""
     return (
-        (_get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version) / "reqs_deb_common.txt")
+        (
+            _get_deps_dir(cuda_version, tf_verson, torch_version, onnx_version)
+            / "reqs_deb_common.txt"
+        )
         .read_text(encoding="utf8")
         .splitlines()
     )
 
 
 def get_reqs_apt_dev(
-    cuda_version: str = "cpu", tf_verson: str = "", torch_version: str = "", onnx_version: str = ""
+    cuda_version: str = "cpu",
+    tf_verson: str = "",
+    torch_version: str = "",
+    onnx_version: str = "",
 ) -> List[str]:
     """Return list of packages which should be installd via APT to develop aimet"""
     return get_reqs_apt(cuda_version, tf_verson, torch_version, onnx_version)
 
 
 def get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Get AIMET dependencies for a package manager. ")
+    parser = argparse.ArgumentParser(
+        description="Get AIMET dependencies for a package manager. "
+    )
     parser.add_argument("pkg_mgr", choices=["apt", "pip"], help="A package manager")
     parser.add_argument("--dev", action="store_true", help="Include dev dependencies")
     parser.add_argument(
@@ -258,5 +322,5 @@ def get_dependencies(argv: Optional[List[str]] = None) -> None:
     print("\n".join(deps))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     get_dependencies()

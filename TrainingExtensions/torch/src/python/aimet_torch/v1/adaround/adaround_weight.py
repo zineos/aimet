@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top level API for Adaptive Rounding - Post-Training Quantization (PTQ) """
+"""Top level API for Adaptive Rounding - Post-Training Quantization (PTQ)"""
 
 import itertools
 from typing import Union
@@ -58,9 +58,9 @@ from aimet_torch.v1.adaround.adaround_wrapper import AdaroundWrapper
 
 
 __all__ = [
-    'Adaround',
-    'AdaroundParameters',
-    'AdaroundSupportedModules',
+    "Adaround",
+    "AdaroundParameters",
+    "AdaroundSupportedModules",
 ]
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
@@ -70,6 +70,7 @@ class Adaround(AdaroundBase):
     """
     Weight-rounding mechanism for Post Training Quantization (PTQ)
     """
+
     @staticmethod
     def _compute_param_encodings(quant_sim: QuantizationSimModel):
         """
@@ -96,11 +97,20 @@ class Adaround(AdaroundBase):
                 quant_module.set_mode(QcQuantizeOpMode.ACTIVE)
 
     @staticmethod
-    def _get_quantsim(model: torch.nn.Module, dummy_input: torch.Tensor,
-                      quant_scheme: QuantScheme, default_param_bw: int, config_file: str):
-        return QuantizationSimModel(model, dummy_input=dummy_input, quant_scheme=quant_scheme,
-                                    default_param_bw=default_param_bw,
-                                    config_file=config_file)
+    def _get_quantsim(
+        model: torch.nn.Module,
+        dummy_input: torch.Tensor,
+        quant_scheme: QuantScheme,
+        default_param_bw: int,
+        config_file: str,
+    ):
+        return QuantizationSimModel(
+            model,
+            dummy_input=dummy_input,
+            quant_scheme=quant_scheme,
+            default_param_bw=default_param_bw,
+            config_file=config_file,
+        )
 
     @staticmethod
     def _get_adaround_wrapper(quant_module: QcQuantizeWrapper):
@@ -112,8 +122,12 @@ class Adaround(AdaroundBase):
 
     @staticmethod
     def _validate_quant_module_for_adaround(quant_module: StaticGridQuantWrapper):
-        assert quant_module.param_quantizers['weight'], '%s does not have weight parameter.' % quant_module
-        assert quant_module.param_quantizers['weight'].encoding, '%s encoding needs to be set.' % quant_module
+        assert quant_module.param_quantizers["weight"], (
+            "%s does not have weight parameter." % quant_module
+        )
+        assert quant_module.param_quantizers["weight"].encoding, (
+            "%s encoding needs to be set." % quant_module
+        )
 
     @staticmethod
     def _check_input_output_quantizers_for_adaround(quant_model: torch.nn.Module):
@@ -125,12 +139,15 @@ class Adaround(AdaroundBase):
     def _get_lowest_weight_bw(quant_model: torch.nn.Module):
         param_quantizers, _, _ = utils.get_all_quantizers(quant_model)
         return min(
-            quantizer.bitwidth for quantizer in param_quantizers
+            quantizer.bitwidth
+            for quantizer in param_quantizers
             if quantizer.enabled and quantizer.data_type == QuantizationDataType.int
         )
 
     @staticmethod
-    def _get_quant_wrapper(quant_sim_model: torch.nn.Module, module_name: str) -> Union[StaticGridQuantWrapper, None]:
+    def _get_quant_wrapper(
+        quant_sim_model: torch.nn.Module, module_name: str
+    ) -> Union[StaticGridQuantWrapper, None]:
         """
         For given module name, get the quantized wrapper module from the QuantSim model
         :param quant_sim_model: Model with simulation ops

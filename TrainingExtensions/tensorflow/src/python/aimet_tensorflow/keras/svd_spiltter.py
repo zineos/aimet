@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Implementation of layer splitting logic for spatial svd schemes """
+"""Implementation of layer splitting logic for spatial svd schemes"""
+
 from typing import Tuple
 import numpy as np
 import tensorflow as tf
@@ -51,10 +52,12 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
 
 class SpatialSvdModuleSplitter:
-    """ Spatial SVD module splitter"""
+    """Spatial SVD module splitter"""
 
     @staticmethod
-    def split_module(model: tf.keras.Model, layer: Layer, rank: int) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
+    def split_module(
+        model: tf.keras.Model, layer: Layer, rank: int
+    ) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
         """
         :param  model: Keras Model whose layer we want to split
         :param layer: Module to be split
@@ -64,25 +67,38 @@ class SpatialSvdModuleSplitter:
 
         h, v = SpatialSvdModuleSplitter.get_svd_matrices(layer, rank)
 
-        conv_a_stride, conv_b_stride = get_strides_for_split_conv_ops(layer=layer.module)
+        conv_a_stride, conv_b_stride = get_strides_for_split_conv_ops(
+            layer=layer.module
+        )
 
         data_format_channels = layer.module.data_format
         padding = layer.module.padding
 
-        conv_a = tf.keras.layers.Conv2D(filters=v.shape[3], kernel_size=(v.shape[0], v.shape[1]),
-                                        strides=conv_a_stride, data_format=data_format_channels,
-                                        activation=None, padding=padding,
-                                        name=layer.module.name + '_a', use_bias=False)
+        conv_a = tf.keras.layers.Conv2D(
+            filters=v.shape[3],
+            kernel_size=(v.shape[0], v.shape[1]),
+            strides=conv_a_stride,
+            data_format=data_format_channels,
+            activation=None,
+            padding=padding,
+            name=layer.module.name + "_a",
+            use_bias=False,
+        )
 
         # get the succeeding bias tensor if present
         use_bias = False
         if len(layer.module.get_weights()) > 1:
             use_bias = True
 
-        conv_b = tf.keras.layers.Conv2D(filters=h.shape[3], kernel_size=(h.shape[0], h.shape[1]),
-                                        strides=conv_b_stride,
-                                        name=layer.module.name + '_b',
-                                        data_format=data_format_channels, padding=padding, use_bias=use_bias)
+        conv_b = tf.keras.layers.Conv2D(
+            filters=h.shape[3],
+            kernel_size=(h.shape[0], h.shape[1]),
+            strides=conv_b_stride,
+            name=layer.module.name + "_b",
+            data_format=data_format_channels,
+            padding=padding,
+            use_bias=use_bias,
+        )
 
         # Replace the layer in the model
         replace_layer_in_functional_model(model, layer.module, [conv_a, conv_b])
@@ -118,11 +134,15 @@ class SpatialSvdModuleSplitter:
 
         # Conv2d weight shape in TensorFlow  [kh, kw, Nic, Noc]
         # re-order in the common shape  [Noc, Nic, kh, kw]
-        weight_tensor = WeightTensorUtils.transpose_from_tf_to_libpymo_format(weight_tensor, layer.module)
+        weight_tensor = WeightTensorUtils.transpose_from_tf_to_libpymo_format(
+            weight_tensor, layer.module
+        )
 
         out_channels, in_channels, height, width = weight_tensor.shape
 
-        h, v = SpatialSvdPruner.lingalg_spatial_svd(weight_tensor, rank, in_channels, out_channels, height, width)
+        h, v = SpatialSvdPruner.lingalg_spatial_svd(
+            weight_tensor, rank, in_channels, out_channels, height, width
+        )
 
         # h, v matrices are in the common shape [Noc, Nic, kh, kw]
         # re order in TensorFlow Conv2d shape [kh, kw, Nic, Noc]
@@ -133,10 +153,13 @@ class SpatialSvdModuleSplitter:
 
 
 class WeightSvdModuleSplitter:
-    """ Weight SVD module splitter """
+    """Weight SVD module splitter"""
+
     # pylint: disable=too-many-locals
     @classmethod
-    def split_module(cls, model, layer, rank, svd_lib_ref) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
+    def split_module(
+        cls, model, layer, rank, svd_lib_ref
+    ) -> Tuple[tf.keras.layers.Layer, tf.keras.layers.Layer]:
         """
         Split a given module using weight svd
 
@@ -153,13 +176,16 @@ class WeightSvdModuleSplitter:
             split_modules = cls.split_fc_module(model, layer, rank, svd_lib_ref)
 
         else:
-            raise AssertionError('Weight SVD only supports Conv2d and FC modules currently')
+            raise AssertionError(
+                "Weight SVD only supports Conv2d and FC modules currently"
+            )
 
         return split_modules
 
     @classmethod
-    def split_conv_module(cls, model: tf.keras.Model, layer: tf.keras.layers, rank, svd_lib_ref) \
-            -> Tuple[tf.keras.layers.Conv2D, tf.keras.layers.Conv2D]:
+    def split_conv_module(
+        cls, model: tf.keras.Model, layer: tf.keras.layers, rank, svd_lib_ref
+    ) -> Tuple[tf.keras.layers.Conv2D, tf.keras.layers.Conv2D]:
         """
         Split a given Conv2D module using weight svd
 
@@ -171,7 +197,7 @@ class WeightSvdModuleSplitter:
         """
 
         name = layer.name
-        logger.debug('Splitting conv op: %s with rank %d', name, rank)
+        logger.debug("Splitting conv op: %s with rank %d", name, rank)
         split_weights, weight_sizes = [], []
         split_biases, bias_sizes = [], []
         bias_present = False
@@ -199,8 +225,9 @@ class WeightSvdModuleSplitter:
         split_weights.append(conv_b_weight.flatten().tolist())
         weight_sizes.append(conv_b_weight.size)
 
-        split_weights = svd_lib_ref.SplitLayerWeights(str(name), split_weights, weight_sizes,
-                                                      [rank])
+        split_weights = svd_lib_ref.SplitLayerWeights(
+            str(name), split_weights, weight_sizes, [rank]
+        )
 
         if bias_present:
             conv_a_bias = np.zeros(rank)
@@ -211,38 +238,80 @@ class WeightSvdModuleSplitter:
             split_biases.append(conv_b_bias.flatten().tolist())
             bias_sizes.append(conv_b_bias.size)
 
-            split_biases = svd_lib_ref.SplitLayerBiases(str(name), split_biases, bias_sizes,
-                                                        [rank])
+            split_biases = svd_lib_ref.SplitLayerBiases(
+                str(name), split_biases, bias_sizes, [rank]
+            )
 
-        logger.debug("Splitting conv module weight of shape %r into %r and %r",
-                     conv_parameters[0].shape, conv_a_weight.shape, conv_b_weight.shape)
+        logger.debug(
+            "Splitting conv module weight of shape %r into %r and %r",
+            conv_parameters[0].shape,
+            conv_a_weight.shape,
+            conv_b_weight.shape,
+        )
 
-        conv_a = tf.keras.layers.Conv2D(filters=rank, kernel_size=(1, 1),
-                                        strides=(1, 1), data_format=data_format_channels,
-                                        activation=None, padding=padding,
-                                        name=layer.name + '_a', use_bias=bias_present)
+        conv_a = tf.keras.layers.Conv2D(
+            filters=rank,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            data_format=data_format_channels,
+            activation=None,
+            padding=padding,
+            name=layer.name + "_a",
+            use_bias=bias_present,
+        )
 
-        conv_b = tf.keras.layers.Conv2D(filters=out_channels, kernel_size=layer.kernel_size,
-                                        strides=layer.strides,
-                                        name=layer.name + '_b',
-                                        data_format=data_format_channels, padding=padding, use_bias=bias_present)
+        conv_b = tf.keras.layers.Conv2D(
+            filters=out_channels,
+            kernel_size=layer.kernel_size,
+            strides=layer.strides,
+            name=layer.name + "_b",
+            data_format=data_format_channels,
+            padding=padding,
+            use_bias=bias_present,
+        )
 
         # Replace the layer in the model
         replace_layer_in_functional_model(model, layer, [conv_a, conv_b])
 
         if bias_present:
-            conv_a.set_weights([np.array(split_weights[0], dtype=np.float32).reshape(conv_a_weight_shape).transpose(2, 3, 1, 0),
-                                np.array(split_biases[0], dtype=np.float32)])
-            conv_b.set_weights([np.array(split_weights[1], dtype=np.float32).reshape(conv_b_weight_shape).transpose(2, 3, 1, 0),
-                                np.array(split_biases[1], dtype=np.float32)])
+            conv_a.set_weights(
+                [
+                    np.array(split_weights[0], dtype=np.float32)
+                    .reshape(conv_a_weight_shape)
+                    .transpose(2, 3, 1, 0),
+                    np.array(split_biases[0], dtype=np.float32),
+                ]
+            )
+            conv_b.set_weights(
+                [
+                    np.array(split_weights[1], dtype=np.float32)
+                    .reshape(conv_b_weight_shape)
+                    .transpose(2, 3, 1, 0),
+                    np.array(split_biases[1], dtype=np.float32),
+                ]
+            )
         else:
-            conv_a.set_weights([np.array(split_weights[0], dtype=np.float32).reshape(conv_a_weight_shape).transpose(2, 3, 1, 0)])
-            conv_b.set_weights([np.array(split_weights[1], dtype=np.float32).reshape(conv_b_weight_shape).transpose(2, 3, 1, 0)])
+            conv_a.set_weights(
+                [
+                    np.array(split_weights[0], dtype=np.float32)
+                    .reshape(conv_a_weight_shape)
+                    .transpose(2, 3, 1, 0)
+                ]
+            )
+            conv_b.set_weights(
+                [
+                    np.array(split_weights[1], dtype=np.float32)
+                    .reshape(conv_b_weight_shape)
+                    .transpose(2, 3, 1, 0)
+                ]
+            )
 
         return conv_a, conv_b
 
     @classmethod
-    def split_fc_module(cls, model, layer, rank, svd_lib_ref) -> Tuple[tf.keras.layers.Dense, tf.keras.layers.Dense]:
+    def split_fc_module(
+        cls, model, layer, rank, svd_lib_ref
+    ) -> Tuple[tf.keras.layers.Dense, tf.keras.layers.Dense]:
         """
         Split a given Linear module using weight svd
 
@@ -254,7 +323,7 @@ class WeightSvdModuleSplitter:
         """
 
         name = layer.name
-        logger.debug('Splitting FC layer: %s with rank %d', name, rank)
+        logger.debug("Splitting FC layer: %s with rank %d", name, rank)
         split_weights, weight_sizes = [], []
         split_biases, bias_sizes = [], []
         bias_present = False
@@ -277,8 +346,9 @@ class WeightSvdModuleSplitter:
         split_weights.append(fc_b_weight.flatten().tolist())
         weight_sizes.append(fc_b_weight.size)
 
-        split_weights = svd_lib_ref.SplitLayerWeights(str(name), split_weights, weight_sizes,
-                                                      [rank])
+        split_weights = svd_lib_ref.SplitLayerWeights(
+            str(name), split_weights, weight_sizes, [rank]
+        )
 
         if bias_present:
             fc_a_bias = np.zeros(rank)
@@ -289,22 +359,51 @@ class WeightSvdModuleSplitter:
             split_biases.append(fc_b_bias.flatten().tolist())
             bias_sizes.append(fc_b_bias.size)
 
-            split_biases = svd_lib_ref.SplitLayerBiases(str(name), split_biases, bias_sizes,
-                                                        [rank])
+            split_biases = svd_lib_ref.SplitLayerBiases(
+                str(name), split_biases, bias_sizes, [rank]
+            )
 
-        fc_a = tf.keras.layers.Dense(units=rank, name=layer.name + '_a', use_bias=bias_present)
-        fc_b = tf.keras.layers.Dense(units=out_features, name=layer.name + '_b', use_bias=bias_present)
+        fc_a = tf.keras.layers.Dense(
+            units=rank, name=layer.name + "_a", use_bias=bias_present
+        )
+        fc_b = tf.keras.layers.Dense(
+            units=out_features, name=layer.name + "_b", use_bias=bias_present
+        )
 
         # Replace the layer in the model
         replace_layer_in_functional_model(model, layer, [fc_a, fc_b])
 
         if bias_present:
-            fc_a.set_weights([np.array(split_weights[0], dtype=np.float32).reshape(fc_a_weight_shape).transpose(1, 0),
-                              np.array(split_biases[0], dtype=np.float32)])
-            fc_b.set_weights([np.array(split_weights[1], dtype=np.float32).reshape(fc_b_weight_shape).transpose(1, 0),
-                              np.array(split_biases[1], dtype=np.float32)])
+            fc_a.set_weights(
+                [
+                    np.array(split_weights[0], dtype=np.float32)
+                    .reshape(fc_a_weight_shape)
+                    .transpose(1, 0),
+                    np.array(split_biases[0], dtype=np.float32),
+                ]
+            )
+            fc_b.set_weights(
+                [
+                    np.array(split_weights[1], dtype=np.float32)
+                    .reshape(fc_b_weight_shape)
+                    .transpose(1, 0),
+                    np.array(split_biases[1], dtype=np.float32),
+                ]
+            )
         else:
-            fc_a.set_weights([np.array(split_weights[0], dtype=np.float32).reshape(fc_a_weight_shape).transpose(1, 0)])
-            fc_b.set_weights([np.array(split_weights[1], dtype=np.float32).reshape(fc_b_weight_shape).transpose(1, 0)])
+            fc_a.set_weights(
+                [
+                    np.array(split_weights[0], dtype=np.float32)
+                    .reshape(fc_a_weight_shape)
+                    .transpose(1, 0)
+                ]
+            )
+            fc_b.set_weights(
+                [
+                    np.array(split_weights[1], dtype=np.float32)
+                    .reshape(fc_b_weight_shape)
+                    .transpose(1, 0)
+                ]
+            )
 
         return fc_a, fc_b

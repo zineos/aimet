@@ -36,7 +36,9 @@
 # =============================================================================
 from pathlib import Path
 
+
 def per_tensor_config():
-     from aimet_common import quantsim_config
-     for path in quantsim_config.__path__:
-         return Path(path) / "default_config.json"
+    from aimet_common import quantsim_config
+
+    for path in quantsim_config.__path__:
+        return Path(path) / "default_config.json"

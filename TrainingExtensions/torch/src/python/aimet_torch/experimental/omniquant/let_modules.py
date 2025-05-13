@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" LET Quantized Module """
+"""LET Quantized Module"""
+
 from aimet_torch.v2.nn import (
     QuantizedLinear,
     QuantizedLayerNorm,
@@ -43,17 +44,23 @@ from aimet_torch.v2.nn import (
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.utils import patch_attr
 
-from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import QuantizedLlamaRMSNorm
-from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import QuantizedGemma3RMSNorm
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
+    QuantizedLlamaRMSNorm,
+)
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
+    QuantizedGemma3RMSNorm,
+)
 
 import torch
 import copy
 from abc import abstractmethod
 
-class LETModule():
+
+class LETModule:
     """
     LET modules implementation for omniquant
     """
+
     def __init__(self, source: QuantizationMixin):
         # LET scale
         self.prev_scale = None
@@ -68,18 +75,18 @@ class LETModule():
         self._reset_let_params()
         # TODO in e2e integration decide what happens if some of the quantizers are None/missing
         # For now we assume all 3 values are present, else we throw an error
-        for quantizers in ['input_quantizers', 'output_quantizers', 'param_quantizers']:
+        for quantizers in ["input_quantizers", "output_quantizers", "param_quantizers"]:
             src_quant = getattr(source, quantizers)
-            assert src_quant, f'{quantizers} should not be none for LETModule'
+            assert src_quant, f"{quantizers} should not be none for LETModule"
             setattr(self, quantizers, copy.deepcopy(src_quant))
 
     def _reset_let_params(self):
-        """ Set LET modules prev_scale/foll_scale to None"""
+        """Set LET modules prev_scale/foll_scale to None"""
         self.prev_scale = None
         self.foll_scale = None
 
     def get_let_params(self):
-        """ Query LET modules prev_scale/foll_scale """
+        """Query LET modules prev_scale/foll_scale"""
         let_params = {
             "prev_scale": self.prev_scale,
             "foll_scale": self.foll_scale,
@@ -87,8 +94,8 @@ class LETModule():
         return let_params
 
     # pylint: disable=attribute-defined-outside-init
-    def register_let_params(self, prev_scale = None, foll_scale = None, num_repeats = 1):
-        """ Set prev_scale and foll_sclae to LET pairs. """
+    def register_let_params(self, prev_scale=None, foll_scale=None, num_repeats=1):
+        """Set prev_scale and foll_sclae to LET pairs."""
         if prev_scale is not None:
             self.prev_scale = prev_scale
         if foll_scale is not None:
@@ -99,16 +106,20 @@ class LETModule():
         self.num_repeats = num_repeats
 
     def _cache_train_scale(self):
-        """ Cache trained scale to numpy tensor. """
-        self._cached_prev_scale = self.prev_scale.data.cpu().numpy() if self.prev_scale is not None else None
-        self._cached_foll_scale = self.foll_scale.data.cpu().numpy() if self.foll_scale is not None else None
+        """Cache trained scale to numpy tensor."""
+        self._cached_prev_scale = (
+            self.prev_scale.data.cpu().numpy() if self.prev_scale is not None else None
+        )
+        self._cached_foll_scale = (
+            self.foll_scale.data.cpu().numpy() if self.foll_scale is not None else None
+        )
 
     def swap_out_let_scale(self):
         """
         Move scale to _temp.
         Can't reuse _cached_prev_scale because once a variable is assigned to a torch.nn.Parameter object.
-        It can't be re-assign to another data with type other than nn.Parameter or None, but _cached_prev_scale is expected to be 
-        assigned to a numpy data type. 
+        It can't be re-assign to another data with type other than nn.Parameter or None, but _cached_prev_scale is expected to be
+        assigned to a numpy data type.
         """
         if self.prev_scale is not None:
             self._temp_prev = self.prev_scale
@@ -119,7 +130,7 @@ class LETModule():
             self.foll_scale = None
 
     def restore_let_scales(self):
-        """ Restore trained scale to LET scale. """
+        """Restore trained scale to LET scale."""
         if self._temp_prev is not None:
             self.prev_scale = self._temp_prev
             self._temp_prev = None
@@ -129,19 +140,23 @@ class LETModule():
             self._temp_foll = None
 
     def fold_let_params(self):
-        """ Call (usually at the end) to fold the scales into the model params, cache trained scale, reset let param to None. """
+        """Call (usually at the end) to fold the scales into the model params, cache trained scale, reset let param to None."""
         self._fold()
         self._cache_train_scale()
         self._reset_let_params()
 
     def _fold(self):
-        """ Impl for fold scale to model. """
+        """Impl for fold scale to model."""
         # Restore cached scale before fold
         if self._cached_prev_scale is not None:
-            self.prev_scale = torch.nn.Parameter(torch.from_numpy(self._cached_prev_scale))
+            self.prev_scale = torch.nn.Parameter(
+                torch.from_numpy(self._cached_prev_scale)
+            )
 
         if self._cached_foll_scale is not None:
-            self.foll_scale = torch.nn.Parameter(torch.from_numpy(self._cached_foll_scale))
+            self.foll_scale = torch.nn.Parameter(
+                torch.from_numpy(self._cached_foll_scale)
+            )
 
         params = self._update_parameters()
         with torch.no_grad():
@@ -155,11 +170,11 @@ class LETModule():
         assert False, "Override in child class"
 
     def get_source_quant_module(self):
-        """ Create original quantize module with new quantizer and parameter. """
+        """Create original quantize module with new quantizer and parameter."""
         source_quant_module = self._get_source_quant_module()
-        for quantizers in ['input_quantizers', 'output_quantizers', 'param_quantizers']:
+        for quantizers in ["input_quantizers", "output_quantizers", "param_quantizers"]:
             let_quant = getattr(self, quantizers)
-            assert let_quant, f'{quantizers} should not be none for LETModule'
+            assert let_quant, f"{quantizers} should not be none for LETModule"
             setattr(source_quant_module, quantizers, copy.deepcopy(let_quant))
 
         for w_b in ["weight", "bias"]:
@@ -176,7 +191,7 @@ class LETModule():
 
     @staticmethod
     def get_let_module(mdl):
-        """ Return corresponding LETQuantized module for different Quantized modules """
+        """Return corresponding LETQuantized module for different Quantized modules"""
         if isinstance(mdl, QuantizedLinear):
             return LETQuantizedLinear(mdl)
         if isinstance(mdl, QuantizedLayerNorm):
@@ -189,12 +204,16 @@ class LETModule():
             return LETQuantizedGemmaNorm(mdl)
         assert False, "Let Quantized module is not implemented"
 
+
 # pylint: disable=too-many-ancestors
 class LETQuantizedLinear(QuantizedLinear, LETModule):
-    """ LET module implementation for QuantizedLinear """
-    def __init__(self, module:QuantizationMixin):
+    """LET module implementation for QuantizedLinear"""
+
+    def __init__(self, module: QuantizationMixin):
         # TODO pass in all params to ctor
-        super().__init__(module.weight.shape[1], module.weight.shape[0], bias=module.bias is not None)
+        super().__init__(
+            module.weight.shape[1], module.weight.shape[0], bias=module.bias is not None
+        )
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
 
@@ -215,28 +234,41 @@ class LETQuantizedLinear(QuantizedLinear, LETModule):
             # For some pairs prev_layer out channel != foll_layer in channel. In such cases assert that
             # foll_scale has the correct shape in let_modules. We will repeat the prev_scale num_repeats times to match the dimension.
             # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
-            foll_scale = torch.repeat_interleave(self.foll_scale, dim=0, repeats=self.num_repeats)
+            foll_scale = torch.repeat_interleave(
+                self.foll_scale, dim=0, repeats=self.num_repeats
+            )
             weight = weight * foll_scale
 
-        return {'weight': weight, 'bias': bias}
+        return {"weight": weight, "bias": bias}
 
     def _get_source_quant_module(self):
-        return QuantizedLinear(self.weight.shape[1], self.weight.shape[0], bias=self.bias is not None)
+        return QuantizedLinear(
+            self.weight.shape[1], self.weight.shape[0], bias=self.bias is not None
+        )
 
     def __call__(self, *args, **kwargs):
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
-            with patch_attr(self, 'bias', params['bias']):
+        with patch_attr(self, "weight", params["weight"]):
+            with patch_attr(self, "bias", params["bias"]):
                 # No need to call compute_encodings here as we don't want to calibrate
                 # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
+
 # pylint: disable=too-many-ancestors
 class LETQuantizedConv2d(QuantizedConv2d, LETModule):
-    """ LET module implementation for QuantizedConv2d """
-    def __init__(self, module:QuantizationMixin):
+    """LET module implementation for QuantizedConv2d"""
+
+    def __init__(self, module: QuantizationMixin):
         # TODO pass in all params to ctor
-        super().__init__(module.weight.shape[1], module.weight.shape[0], module.kernel_size, module.stride, module.padding, bias=module.bias is not None)
+        super().__init__(
+            module.weight.shape[1],
+            module.weight.shape[0],
+            module.kernel_size,
+            module.stride,
+            module.padding,
+            bias=module.bias is not None,
+        )
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
 
@@ -257,23 +289,32 @@ class LETQuantizedConv2d(QuantizedConv2d, LETModule):
             foll_scale = self.foll_scale
             weight = weight * foll_scale.reshape(1, -1, 1, 1)
 
-        return {'weight': weight, 'bias': bias}
+        return {"weight": weight, "bias": bias}
 
     def _get_source_quant_module(self):
-        return QuantizedConv2d(self.weight.shape[1], self.weight.shape[0], self.kernel_size, self.stride, self.padding, bias=self.bias is not None)
+        return QuantizedConv2d(
+            self.weight.shape[1],
+            self.weight.shape[0],
+            self.kernel_size,
+            self.stride,
+            self.padding,
+            bias=self.bias is not None,
+        )
 
     def __call__(self, *args, **kwargs):
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
-            with patch_attr(self, 'bias', params['bias']):
+        with patch_attr(self, "weight", params["weight"]):
+            with patch_attr(self, "bias", params["bias"]):
                 # No need to call compute_encodings here as we don't want to calibrate
                 # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
+
 # pylint: disable=too-many-ancestors
 class LETQuantizedLayerNorm(QuantizedLayerNorm, LETModule):
-    """ LET module implementation for QuantizedLayerNorm """
-    def __init__(self, module:QuantizationMixin):
+    """LET module implementation for QuantizedLayerNorm"""
+
+    def __init__(self, module: QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
@@ -290,20 +331,22 @@ class LETQuantizedLayerNorm(QuantizedLayerNorm, LETModule):
             if bias is not None:
                 bias = bias / prev_scale
 
-        return {'weight': weight, 'bias': bias}
+        return {"weight": weight, "bias": bias}
 
     def __call__(self, *args, **kwargs):
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
-            with patch_attr(self, 'bias', params['bias']):
+        with patch_attr(self, "weight", params["weight"]):
+            with patch_attr(self, "bias", params["bias"]):
                 # No need to call compute_encodings here as we don't want to calibrate
                 # min-max when doing LET blockwise training.
                 return super().__call__(*args, **kwargs)
 
+
 # pylint: disable=too-many-ancestors
 class LETQuantizedLlamaRMSNorm(QuantizedLlamaRMSNorm, LETModule):
-    """ LET module implementation for QuantizedLlamaRMSNorm """
-    def __init__(self, module:QuantizationMixin):
+    """LET module implementation for QuantizedLlamaRMSNorm"""
+
+    def __init__(self, module: QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.variance_epsilon = module.variance_epsilon
@@ -318,22 +361,24 @@ class LETQuantizedLlamaRMSNorm(QuantizedLlamaRMSNorm, LETModule):
             prev_scale = self.prev_scale
             weight = weight / prev_scale
 
-        return {'weight': weight}
+        return {"weight": weight}
 
     def _get_source_quant_module(self):
         return QuantizedLlamaRMSNorm(self.weight.shape)
 
     def __call__(self, *args, **kwargs):
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
+        with patch_attr(self, "weight", params["weight"]):
             # No need to call compute_encodings here as we don't want to calibrate
             # min-max when doing LET blockwise training.
             return super().__call__(*args, **kwargs)
 
+
 # pylint: disable=too-many-ancestors
 class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
-    """ LET module implementation for QuantizedGemmaNorm """
-    def __init__(self, module:QuantizationMixin):
+    """LET module implementation for QuantizedGemmaNorm"""
+
+    def __init__(self, module: QuantizationMixin):
         super().__init__(module.weight.shape)
         LETModule.__init__(self, module)
         self.load_state_dict(module.state_dict())
@@ -345,9 +390,9 @@ class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
         weight = self.weight
         if self.prev_scale is not None:
             prev_scale = self.prev_scale
-            weight = (weight/prev_scale) + (1/prev_scale) - 1
+            weight = (weight / prev_scale) + (1 / prev_scale) - 1
 
-        return {'weight': weight}
+        return {"weight": weight}
 
     def _get_source_quant_module(self):
         return QuantizedGemma3RMSNorm(self.weight.shape)
@@ -355,7 +400,7 @@ class LETQuantizedGemmaNorm(QuantizedGemma3RMSNorm, LETModule):
     def forward(self, hidden_states):
         # pylint: disable=arguments-differ
         params = self._update_parameters()
-        with patch_attr(self, 'weight', params['weight']):
+        with patch_attr(self, "weight", params["weight"]):
             weight = self.weight
             if self.input_quantizers[0]:
                 hidden_states = self.input_quantizers[0](hidden_states)

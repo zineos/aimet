@@ -1,4 +1,4 @@
-#==============================================================================
+# ==============================================================================
 #  @@-COPYRIGHT-START-@@
 #
 #  Copyright (c) 2020, Qualcomm Innovation Center, Inc. All rights reserved.
@@ -32,7 +32,7 @@
 #  SPDX-License-Identifier: BSD-3-Clause
 #
 #  @@-COPYRIGHT-END-@@
-#==============================================================================
+# ==============================================================================
 
 import os
 import shlex
@@ -47,6 +47,7 @@ from setuptools.command.build_ext import build_ext
 CURRENT_DIR = Path(__file__).parent.resolve()
 PACKAGING_DIR = CURRENT_DIR / ".." / ".." / ".." / ".." / "packaging"
 
+
 def str2bool(str_):
     TRUE_VALS = {"true", "yes", "y", "on", "1"}
     FALSE_VALS = {"false", "no", "n", "off", "0"}
@@ -55,11 +56,16 @@ def str2bool(str_):
     elif str_.lower() in FALSE_VALS:
         return False
     else:
-        raise RuntimeError(f"Unknown boolean value '{str_}' (known values are: {TRUE_VALS | FALSE_VALS}")
+        raise RuntimeError(
+            f"Unknown boolean value '{str_}' (known values are: {TRUE_VALS | FALSE_VALS}"
+        )
+
 
 if {"AIMET_CU_VER", "AIMET_TF_VER", "AIMET_PT_VER"} > os.environ.keys():
-    raise RuntimeError("Please specify what veriosn of cuda, tensorflow and pytorch you would like"
-    "to use using environment variables: AIMET_CU_VER, AIMET_TF_VER, AIMET_PT_VER")
+    raise RuntimeError(
+        "Please specify what veriosn of cuda, tensorflow and pytorch you would like"
+        "to use using environment variables: AIMET_CU_VER, AIMET_TF_VER, AIMET_PT_VER"
+    )
 
 ENABLE_CUDA = str2bool(os.environ.get("ENABLE_CUDA", "False"))
 ENABLE_TORCH = str2bool(os.environ.get("ENABLE_TORCH", "True"))
@@ -77,10 +83,17 @@ AIMET_COMMON_VERSION = os.environ.get("SW_VERSION")
 if AIMET_COMMON_VERSION is None:
     AIMET_COMMON_VERSION = (PACKAGING_DIR / "version.txt").read_text().strip()
 
-AIMET_COMMON_URL = subprocess.run(
-        shlex.split("git config --get remote.origin.url"), check=True,
-        cwd=CURRENT_DIR, stdout=subprocess.PIPE, encoding="utf8",
-    ).stdout + f"/releases/download/{AIMET_COMMON_VERSION}"
+AIMET_COMMON_URL = (
+    subprocess.run(
+        shlex.split("git config --get remote.origin.url"),
+        check=True,
+        cwd=CURRENT_DIR,
+        stdout=subprocess.PIPE,
+        encoding="utf8",
+    ).stdout
+    + f"/releases/download/{AIMET_COMMON_VERSION}"
+)
+
 
 class BuildExtensionCommand(build_ext):
     def run(self):
@@ -104,63 +117,104 @@ class BuildExtensionCommand(build_ext):
                 f"-DENABLE_TORCH={'OFF' if os.environ['AIMET_PT_VER'] == '' else 'ON'}",
                 f"-DENABLE_TENSORFLOW={'OFF' if os.environ['AIMET_TF_VER'] == '' else 'ON'}",
             ]
-            subprocess.run(["cmake", "-B", bld_dir, "-S",  src_dir] + cmake_args,
-                check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                )
-            subprocess.run(["cmake", "--build",  bld_dir, "-j", "-t", tgt + "common"],
-                check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                )
-            if os.environ['AIMET_PT_VER']:
+            subprocess.run(
+                ["cmake", "-B", bld_dir, "-S", src_dir] + cmake_args,
+                check=True,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                encoding="utf8",
+            )
+            subprocess.run(
+                ["cmake", "--build", bld_dir, "-j", "-t", tgt + "common"],
+                check=True,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                encoding="utf8",
+            )
+            if os.environ["AIMET_PT_VER"]:
                 subprocess.run(
-                    ["cmake", "--build",  bld_dir, "-j", "-t", tgt + "torch"],
-                    check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                    )
-            if os.environ['AIMET_TF_VER']:
+                    ["cmake", "--build", bld_dir, "-j", "-t", tgt + "torch"],
+                    check=True,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    encoding="utf8",
+                )
+            if os.environ["AIMET_TF_VER"]:
                 subprocess.run(
-                    ["cmake", "--build",  bld_dir, "-j", "-t", tgt + "tensorflow"],
-                    check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                    )
+                    ["cmake", "--build", bld_dir, "-j", "-t", tgt + "tensorflow"],
+                    check=True,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                    encoding="utf8",
+                )
         # Copy C++ part into wheel package
         subprocess.run(
             shlex.split(f"cp -Prv {whl_prep_dir}/aimet_common/. {dst_dir}"),
-            check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-            )
-        if os.environ['AIMET_PT_VER']:
+            check=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            encoding="utf8",
+        )
+        if os.environ["AIMET_PT_VER"]:
             subprocess.run(
                 shlex.split(f"cp -Prv {whl_prep_dir}/aimet_torch/. {dst_dir}"),
-                check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                )
-        if os.environ['AIMET_TF_VER']:
+                check=True,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                encoding="utf8",
+            )
+        if os.environ["AIMET_TF_VER"]:
             subprocess.run(
                 shlex.split(f"cp -Prv {whl_prep_dir}/aimet_tensorflow/. {dst_dir}"),
-                check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
-                )
-        subprocess.run(
-            shlex.split(f"cp -Lrv {' '.join(str(PACKAGING_DIR / f) for f in PKG_FILES)} {dst_dir / 'bin'}"),
-            check=True, stdout=sys.stdout, stderr=sys.stderr, encoding="utf8",
+                check=True,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                encoding="utf8",
             )
-
+        subprocess.run(
+            shlex.split(
+                f"cp -Lrv {' '.join(str(PACKAGING_DIR / f) for f in PKG_FILES)} {dst_dir / 'bin'}"
+            ),
+            check=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+            encoding="utf8",
+        )
 
 
 class BinaryDistribution(Distribution):
     def has_ext_modules(self):
         return True
 
+
 setup(
     author_email="aimet.os@quicinc.com",
     author="Qualcomm Innovation Center, Inc.",
-    cmdclass={"build_ext": BuildExtensionCommand, },
+    cmdclass={
+        "build_ext": BuildExtensionCommand,
+    },
     description="AIMET Common Package",
-    distclass = BinaryDistribution,
-    install_requires=list(filter(lambda r: not r.startswith('-'),
-        subprocess.run([sys.executable, str(PACKAGING_DIR / "dependencies.py"), "pip"],
-        check=True, stdout=subprocess.PIPE, encoding="utf8").stdout.splitlines()
-    )),
+    distclass=BinaryDistribution,
+    install_requires=list(
+        filter(
+            lambda r: not r.startswith("-"),
+            subprocess.run(
+                [sys.executable, str(PACKAGING_DIR / "dependencies.py"), "pip"],
+                check=True,
+                stdout=subprocess.PIPE,
+                encoding="utf8",
+            ).stdout.splitlines(),
+        )
+    ),
     license="NOTICE.txt",
     long_description=(PACKAGING_DIR / "README.txt").read_text(),
     name="AimetCommon",
-    package_data={"": ["*.json"], },
-    package_dir={"": ".", },
+    package_data={
+        "": ["*.json"],
+    },
+    package_dir={
+        "": ".",
+    },
     packages=find_namespace_packages(where=".", exclude=["build", "x86_64-linux-gnu"]),
     platforms="x86",
     python_requires=">=3.6",

@@ -40,7 +40,10 @@ import torch
 import torch.nn.functional as F
 from aimet_torch.v2.quantization.affine.backends import quantize_dequantize
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
-from aimet_torch.v2.nn.fake_quant._legacy_impl import FakeQuantizedSoftmax, FakeQuantizedReshape
+from aimet_torch.v2.nn.fake_quant._legacy_impl import (
+    FakeQuantizedSoftmax,
+    FakeQuantizedReshape,
+)
 from aimet_torch.v2.quantization.affine.encoding import AffineEncoding
 from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
 from aimet_torch.v2.quantization.tensor import DequantizedTensor
@@ -79,7 +82,9 @@ class TestFakeQuantizedSoftmax:
         Then: The output should hold the same encoding as input
         """
         input = input.as_subclass(DequantizedTensor)
-        input.encoding = AffineEncoding(scale=torch.ones(()), offset=torch.zeros(()), bitwidth=8)
+        input.encoding = AffineEncoding(
+            scale=torch.ones(()), offset=torch.zeros(()), bitwidth=8
+        )
         output = FakeQuantizedReshape()(input, (100,))
 
         assert isinstance(output, DequantizedTensor)
@@ -94,10 +99,12 @@ class TestFakeQuantizedSoftmax:
         Given: Instantiate a fake-quantized module with input quantizer spec specified
         """
         quant_softmax = FakeQuantizedSoftmax()
-        quant_softmax.input_quantizers[0] = QuantizeDequantize((),
-                                                               bitwidth=8,
-                                                               symmetric=False,
-                                                               encoding_analyzer=MinMaxEncodingAnalyzer(()))
+        quant_softmax.input_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
 
         """
         When: Inspect `input_quantizer` attribute.
@@ -136,10 +143,12 @@ class TestFakeQuantizedSoftmax:
         Given: Instantiate a fake-quantized module with output quantizer spec specified
         """
         quant_softmax = FakeQuantizedSoftmax()
-        quant_softmax.output_quantizers[0] = QuantizeDequantize((),
-                                                                bitwidth=8,
-                                                                symmetric=False,
-                                                                encoding_analyzer=MinMaxEncodingAnalyzer(()))
+        quant_softmax.output_quantizers[0] = QuantizeDequantize(
+            (),
+            bitwidth=8,
+            symmetric=False,
+            encoding_analyzer=MinMaxEncodingAnalyzer(()),
+        )
 
         """
         When: Inspect `output_quantizer` attribute.

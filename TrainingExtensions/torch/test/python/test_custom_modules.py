@@ -113,7 +113,9 @@ class TestTrainingExtensionElementwiseOps:
         out1 = input1 + input2
         assert np.allclose(out, out1)
 
-    @pytest.mark.parametrize("QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel])
+    @pytest.mark.parametrize(
+        "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+    )
     def test_quantsim_export(self, QuantizationSimModel):
         torch.manual_seed(10)
         model = Model2(aimet_modules.Add())
@@ -121,13 +123,15 @@ class TestTrainingExtensionElementwiseOps:
         sim = QuantizationSimModel(model, dummy_input)
         sim.compute_encodings(lambda model, _: model(dummy_input), None)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            sim.export(path=tmp_dir, filename_prefix='quant_model', dummy_input=dummy_input)
+            sim.export(
+                path=tmp_dir, filename_prefix="quant_model", dummy_input=dummy_input
+            )
 
-            with open(os.path.join(tmp_dir, 'quant_model.encodings')) as f:
+            with open(os.path.join(tmp_dir, "quant_model.encodings")) as f:
                 data = json.load(f)
 
-            assert len(data['activation_encodings']) == 3
-            assert len(data['param_encodings']) == 1
+            assert len(data["activation_encodings"]) == 3
+            assert len(data["param_encodings"]) == 1
 
     def test_subtract_op(self):
         torch.manual_seed(10)
@@ -176,7 +180,9 @@ class TestTrainingExtensionElementwiseOps:
         out1 = torch.cat((input1, input2, input3, input4), 0)
         assert np.allclose(out, out1)
 
-    @pytest.mark.parametrize("QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel])
+    @pytest.mark.parametrize(
+        "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+    )
     def test_concat_compute_encodings(self, QuantizationSimModel):
         torch.manual_seed(10)
         model = Model3(aimet_modules.Concat())
@@ -185,7 +191,9 @@ class TestTrainingExtensionElementwiseOps:
         sim.compute_encodings(dummy_forward_pass, None)
         print(sim)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            sim.export(path=tmp_dir, filename_prefix='concat_model', dummy_input=dummy_input)
+            sim.export(
+                path=tmp_dir, filename_prefix="concat_model", dummy_input=dummy_input
+            )
 
     def test_matmul_op(self):
         torch.manual_seed(10)
@@ -196,14 +204,17 @@ class TestTrainingExtensionElementwiseOps:
         out1 = torch.matmul(tensor1, tensor2)
         assert np.allclose(out, out1)
 
-    @pytest.mark.parametrize("QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel])
+    @pytest.mark.parametrize(
+        "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+    )
     def test_concat_op_with_qat(self, QuantizationSimModel):
         """
         Test torch.cat op for both QAT and QAT-range learning
         """
+
         class ModelWithConCatWrapper(nn.Module):
-            """ A model with concat wrapper. Use this model for unit testing purposes.
-                Expected inputs: 3 inputs, of size (1, 3, 8, 8) """
+            """A model with concat wrapper. Use this model for unit testing purposes.
+            Expected inputs: 3 inputs, of size (1, 3, 8, 8)"""
 
             def __init__(self):
                 super(ModelWithConCatWrapper, self).__init__()
@@ -228,14 +239,22 @@ class TestTrainingExtensionElementwiseOps:
 
         # Test with torch.cat dim=1 with both QAT and QAT-range learning.
         input_shape = (1, 10, 10, 20)
-        dummy_input = [torch.randn(*input_shape), torch.randn(*input_shape), torch.randn(*input_shape)]
+        dummy_input = [
+            torch.randn(*input_shape),
+            torch.randn(*input_shape),
+            torch.randn(*input_shape),
+        ]
         model = ModelWithConCatWrapper().eval()
-        quant_schemes = [QuantScheme.post_training_tf_enhanced,
-                         QuantScheme.training_range_learning_with_tf_init,
-                         QuantScheme.post_training_tf_enhanced,
-                         QuantScheme.training_range_learning_with_tf_enhanced_init]
+        quant_schemes = [
+            QuantScheme.post_training_tf_enhanced,
+            QuantScheme.training_range_learning_with_tf_init,
+            QuantScheme.post_training_tf_enhanced,
+            QuantScheme.training_range_learning_with_tf_enhanced_init,
+        ]
         for quant_scheme in quant_schemes:
-            quant_sim = QuantizationSimModel(model, dummy_input, quant_scheme=quant_scheme)
+            quant_sim = QuantizationSimModel(
+                model, dummy_input, quant_scheme=quant_scheme
+            )
             quant_sim.compute_encodings(evaluate, dummy_input)
             quant_sim.model.train()
             out = quant_sim.model(*dummy_input)
@@ -243,12 +262,15 @@ class TestTrainingExtensionElementwiseOps:
             loss.backward()
             assert quant_sim.model.cat.output_quantizers[0] is not None
 
-    @pytest.mark.parametrize("QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel])
+    @pytest.mark.parametrize(
+        "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+    )
     def test_dtypes_to_ignore_for_quantization(self, QuantizationSimModel):
         """
         test dtypes to be ignored for quantization when inputs to elementwise ops are scalar numbers.
         We just skip quantization for scalars.
         """
+
         class Model(nn.Module):
             def __init__(self):
                 super(Model, self).__init__()
@@ -269,18 +291,27 @@ class TestTrainingExtensionElementwiseOps:
         sim.compute_encodings(dummy_forward_pass, None)
         sim.model(dummy_input)
 
-        assert all(e is None for e in sim.model.add.export_input_encodings('0.6.1'))
-        assert all(e is not None for e in sim.model.add.export_output_encodings('0.6.1'))
+        assert all(e is None for e in sim.model.add.export_input_encodings("0.6.1"))
+        assert all(
+            e is not None for e in sim.model.add.export_output_encodings("0.6.1")
+        )
 
-        assert all(e is None for e in sim.model.mul.export_input_encodings('0.6.1'))
-        assert all(e is not None for e in sim.model.mul.export_output_encodings('0.6.1'))
+        assert all(e is None for e in sim.model.mul.export_input_encodings("0.6.1"))
+        assert all(
+            e is not None for e in sim.model.mul.export_output_encodings("0.6.1")
+        )
 
-    @pytest.mark.parametrize("QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel])
-    def test_dtypes_to_ignore_for_quantization_quant_scheme_range_learning(self, QuantizationSimModel):
+    @pytest.mark.parametrize(
+        "QuantizationSimModel", [v1.QuantizationSimModel, v2.QuantizationSimModel]
+    )
+    def test_dtypes_to_ignore_for_quantization_quant_scheme_range_learning(
+        self, QuantizationSimModel
+    ):
         """
         test dtypes to be ignored for quantization when inputs to elementwise ops are scalar numbers.
         We just skip quantization for scalars.
         """
+
         class Model(nn.Module):
             def __init__(self):
                 super(Model, self).__init__()
@@ -297,26 +328,33 @@ class TestTrainingExtensionElementwiseOps:
         model = Model().eval()
         dummy_input = torch.randn(1, 10, 10, 20)
         model(dummy_input)
-        sim = QuantizationSimModel(model, dummy_input,
-                                   quant_scheme=QuantScheme.training_range_learning_with_tf_enhanced_init)
+        sim = QuantizationSimModel(
+            model,
+            dummy_input,
+            quant_scheme=QuantScheme.training_range_learning_with_tf_enhanced_init,
+        )
         sim.compute_encodings(dummy_forward_pass, None)
         sim.model.train()
         out = sim.model(dummy_input)
         loss = out.flatten().sum()
         loss.backward()
 
-        assert all(e is None for e in sim.model.add.export_input_encodings('0.6.1'))
-        assert all(e is not None for e in sim.model.add.export_output_encodings('0.6.1'))
+        assert all(e is None for e in sim.model.add.export_input_encodings("0.6.1"))
+        assert all(
+            e is not None for e in sim.model.add.export_output_encodings("0.6.1")
+        )
 
-        assert all(e is None for e in sim.model.mul.export_input_encodings('0.6.1'))
-        assert all(e is not None for e in sim.model.mul.export_output_encodings('0.6.1'))
+        assert all(e is None for e in sim.model.mul.export_input_encodings("0.6.1"))
+        assert all(
+            e is not None for e in sim.model.mul.export_output_encodings("0.6.1")
+        )
 
     def test_erf_op(self):
         """
         Test gaussian error function
         """
         model = Model3(aimet_modules.Erf())
-        inputs = torch.tensor([0, -1., 10.])
+        inputs = torch.tensor([0, -1.0, 10.0])
 
         custom_module_out = model(inputs)
         original_module_out = torch.erf(inputs)
@@ -326,6 +364,7 @@ class TestTrainingExtensionElementwiseOps:
         """
         Test erf combined with other ops
         """
+
         class ErfWithOtherOpsModel(nn.Module):
             def __init__(self):
                 super(ErfWithOtherOpsModel, self).__init__()
@@ -333,7 +372,11 @@ class TestTrainingExtensionElementwiseOps:
                 self.sqrt = aimet_modules.Sqrt()
 
             def forward(self, *inputs):
-                return inputs[0] / 2 * (1 + self.erf(inputs[0] / self.sqrt(torch.tensor(2))))
+                return (
+                    inputs[0]
+                    / 2
+                    * (1 + self.erf(inputs[0] / self.sqrt(torch.tensor(2))))
+                )
 
         model = ErfWithOtherOpsModel()
         dummy_input = torch.randn(2)
@@ -467,10 +510,10 @@ class TestTrainingExtensionElementwiseOps:
         torch.manual_seed(42)
         model = Model3(aimet_modules.StridedSlice())
         input1 = torch.rand(4, 3, 28, 28)
-        input2 = [[0,4,2]]
+        input2 = [[0, 4, 2]]
 
         custom_module_out = model(input1, input2)
-        original_module_out = input1[input2[0][0]:input2[0][1]:input2[0][2]]
+        original_module_out = input1[input2[0][0] : input2[0][1] : input2[0][2]]
         assert np.allclose(custom_module_out, original_module_out)
 
     def test_channel_shuffle_op(self):
@@ -532,7 +575,9 @@ class TestTrainingExtensionElementwiseOps:
 
         for split_size_or_sections, dim in [(3, 0), (3, 1), ([1, 9], 0), ([2, 8], 1)]:
             custom_module_out = model(inputs, split_size_or_sections, dim)
-            original_module_out = torch.split(inputs, split_size_or_sections=split_size_or_sections, dim=dim)
+            original_module_out = torch.split(
+                inputs, split_size_or_sections=split_size_or_sections, dim=dim
+            )
             for i in range(len(original_module_out)):
                 assert np.allclose(custom_module_out[i], original_module_out[i])
 
@@ -560,7 +605,10 @@ class TestTrainingExtensionElementwiseOps:
         torch.manual_seed(42)
         model = Model3(aimet_modules.CustomGather())
         inputs = torch.rand((5, 10, 20))
-        indices_list = [torch.tensor([[0, 1], [1, 2]]), torch.tensor([[0, 1], [-1, -2]])]
+        indices_list = [
+            torch.tensor([[0, 1], [1, 2]]),
+            torch.tensor([[0, 1], [-1, -2]]),
+        ]
         axis = 1
 
         for indices in indices_list:
@@ -574,7 +622,7 @@ class TestTrainingExtensionElementwiseOps:
         inputs = torch.rand(1, 2, 3)
         indices = torch.tensor([[[[0, 1, 2]], [[0, 1, 0]], [[0, 0, 2]]]])
         updates = torch.rand(1, 3, 1)
-        
+
         original_module_out = inputs.clone()
         original_module_out[0, 1, 2] = updates[0, 0, 0]
         original_module_out[0, 1, 0] = updates[0, 1, 0]

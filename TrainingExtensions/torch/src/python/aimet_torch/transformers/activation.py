@@ -119,7 +119,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This file contains a modified version of PyTorch's quantizable MultiHeadAttn unit """
+"""This file contains a modified version of PyTorch's quantizable MultiHeadAttn unit"""
 # --------------------------------------------------------------------------------------------------------
 # Reference : https://github.com/pytorch/pytorch/blob/master/torch/nn/quantizable/modules/activation.py#L11
 # Above PyTorch code is used as base implementation of this MHA unit, along with addition updates listed below :
@@ -139,9 +139,11 @@ from torch import nn
 import torch.nn.functional as nnF
 import aimet_torch._base.nn.modules.custom as aimet_modules
 
+
 # pylint: disable=too-many-arguments
 class QuantizableMultiheadAttention(nn.MultiheadAttention):
-    """ quantizable defn of MHA """
+    """quantizable defn of MHA"""
+
     _FLOAT_MODULE = nn.MultiheadAttention
 
     r"""Quantizable implementation of the MultiheadAttention.
@@ -187,23 +189,50 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
     Note::
         Please, follow the quantization flow to convert the quantizable MHA.
     """
-    __constants__ = ['batch_first']
+    __constants__ = ["batch_first"]
+
     # pylint: disable=too-many-arguments
     # pylint: disable=arguments-differ
-    def __init__(self, embed_dim: int, num_heads: int,
-                 dropout: float = 0., bias: bool = True,
-                 add_bias_kv: bool = False, add_zero_attn: bool = False,
-                 kdim: int = None, vdim: int = None, batch_first: bool = False,
-                 device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
-        super().__init__(embed_dim, num_heads, dropout,
-                                                            bias, add_bias_kv,
-                                                            add_zero_attn, kdim, vdim, batch_first, **factory_kwargs)
-        self.linear_Q = nn.Linear(self.embed_dim, self.embed_dim, bias=bias, **factory_kwargs)
-        self.linear_K = nn.Linear(self.kdim, self.embed_dim, bias=bias, **factory_kwargs)
-        self.linear_V = nn.Linear(self.vdim, self.embed_dim, bias=bias, **factory_kwargs)
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        dropout: float = 0.0,
+        bias: bool = True,
+        add_bias_kv: bool = False,
+        add_zero_attn: bool = False,
+        kdim: int = None,
+        vdim: int = None,
+        batch_first: bool = False,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__(
+            embed_dim,
+            num_heads,
+            dropout,
+            bias,
+            add_bias_kv,
+            add_zero_attn,
+            kdim,
+            vdim,
+            batch_first,
+            **factory_kwargs,
+        )
+        self.linear_Q = nn.Linear(
+            self.embed_dim, self.embed_dim, bias=bias, **factory_kwargs
+        )
+        self.linear_K = nn.Linear(
+            self.kdim, self.embed_dim, bias=bias, **factory_kwargs
+        )
+        self.linear_V = nn.Linear(
+            self.vdim, self.embed_dim, bias=bias, **factory_kwargs
+        )
         # for the type: ignore, see https://github.com/pytorch/pytorch/issues/58969
-        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim, bias=bias, **factory_kwargs)  # type: ignore[assignment]
+        self.out_proj = nn.Linear(
+            self.embed_dim, self.embed_dim, bias=bias, **factory_kwargs
+        )  # type: ignore[assignment]
 
         self.div = aimet_modules.Divide()
         self.matmul_1 = aimet_modules.MatMul()
@@ -213,90 +242,102 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
         self.mask_add = aimet_modules.Add()
 
     def _get_name(self):
-        return 'QuantizableMultiheadAttention'
+        return "QuantizableMultiheadAttention"
 
     # pylint: disable=too-many-arguments
     # pylint: disable=unused-argument
-    def forward(self,
-                query: Tensor,
-                key: Tensor,
-                value: Tensor,
-                key_padding_mask: Optional[Tensor] = None,
-                need_weights: bool = True,
-                attn_mask: Optional[Tensor] = None,
-                average_attn_weights: bool = True,
-                is_causal: bool = False) -> Tuple[Tensor, Optional[Tensor]]:
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask: Optional[Tensor] = None,
+        need_weights: bool = True,
+        attn_mask: Optional[Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         r"""
-    Note::
-        Please, refer to :func:`~torch.nn.MultiheadAttention.forward` for more
-        information
+        Note::
+            Please, refer to :func:`~torch.nn.MultiheadAttention.forward` for more
+            information
 
-    Args:
-        query, key, value: map a query and a set of key-value pairs to an output.
-            See "Attention Is All You Need" for more details.
-        key_padding_mask: if provided, specified padding elements in the key will
-            be ignored by the attention. When given a binary mask and a value is True,
-            the corresponding value on the attention layer will be ignored. When given
-            a byte mask and a value is non-zero, the corresponding value on the attention
-            layer will be ignored
-        need_weights: output attn_output_weights.
-        attn_mask: 2D or 3D mask that prevents attention to certain positions. A 2D mask will be broadcasted for all
-            the batches while a 3D mask allows to specify a different mask for the entries of each batch.
-        average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
-            heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
-            effect when ``need_weights=True``. Default: ``True`` (i.e. average weights across heads)
-        is_causal: If specified, applies a causal mask as attention mask.
-            Default: ``False``.
-            Warning:
-            ``is_causal`` provides a hint that ``attn_mask`` is the
-            causal mask. Providing incorrect hints can result in
-            incorrect execution, including forward and backward
-            compatibility.
+        Args:
+            query, key, value: map a query and a set of key-value pairs to an output.
+                See "Attention Is All You Need" for more details.
+            key_padding_mask: if provided, specified padding elements in the key will
+                be ignored by the attention. When given a binary mask and a value is True,
+                the corresponding value on the attention layer will be ignored. When given
+                a byte mask and a value is non-zero, the corresponding value on the attention
+                layer will be ignored
+            need_weights: output attn_output_weights.
+            attn_mask: 2D or 3D mask that prevents attention to certain positions. A 2D mask will be broadcasted for all
+                the batches while a 3D mask allows to specify a different mask for the entries of each batch.
+            average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
+                heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
+                effect when ``need_weights=True``. Default: ``True`` (i.e. average weights across heads)
+            is_causal: If specified, applies a causal mask as attention mask.
+                Default: ``False``.
+                Warning:
+                ``is_causal`` provides a hint that ``attn_mask`` is the
+                causal mask. Providing incorrect hints can result in
+                incorrect execution, including forward and backward
+                compatibility.
 
-    Shape:
-        - Inputs:
-        - query: :math:`(L, N, E)` where L is the target sequence length, N is the batch size, E is
-          the embedding dimension. :math:`(N, L, E)` if ``batch_first`` is ``True``.
-        - key: :math:`(S, N, E)`, where S is the source sequence length, N is the batch size, E is
-          the embedding dimension. :math:`(N, S, E)` if ``batch_first`` is ``True``.
-        - value: :math:`(S, N, E)` where S is the source sequence length, N is the batch size, E is
-          the embedding dimension. :math:`(N, S, E)` if ``batch_first`` is ``True``.
-        - key_padding_mask: :math:`(N, S)` where N is the batch size, S is the source sequence length.
-          If a ByteTensor is provided, the non-zero positions will be ignored while the position
-          with the zero positions will be unchanged. If a BoolTensor is provided, the positions with the
-          value of ``True`` will be ignored while the position with the value of ``False`` will be unchanged.
-        - attn_mask: 2D mask :math:`(L, S)` where L is the target sequence length, S is the source sequence length.
-          3D mask :math:`(N*num_heads, L, S)` where N is the batch size, L is the target sequence length,
-          S is the source sequence length. attn_mask ensure that position i is allowed to attend the unmasked
-          positions. If a ByteTensor is provided, the non-zero positions are not allowed to attend
-          while the zero positions will be unchanged. If a BoolTensor is provided, positions with ``True``
-          is not allowed to attend while ``False`` values will be unchanged. If a FloatTensor
-          is provided, it will be added to the attention weight.
-        - average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
-          heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
-          effect when ``need_weights=True.``. Default: True (i.e. average weights across heads)
+        Shape:
+            - Inputs:
+            - query: :math:`(L, N, E)` where L is the target sequence length, N is the batch size, E is
+              the embedding dimension. :math:`(N, L, E)` if ``batch_first`` is ``True``.
+            - key: :math:`(S, N, E)`, where S is the source sequence length, N is the batch size, E is
+              the embedding dimension. :math:`(N, S, E)` if ``batch_first`` is ``True``.
+            - value: :math:`(S, N, E)` where S is the source sequence length, N is the batch size, E is
+              the embedding dimension. :math:`(N, S, E)` if ``batch_first`` is ``True``.
+            - key_padding_mask: :math:`(N, S)` where N is the batch size, S is the source sequence length.
+              If a ByteTensor is provided, the non-zero positions will be ignored while the position
+              with the zero positions will be unchanged. If a BoolTensor is provided, the positions with the
+              value of ``True`` will be ignored while the position with the value of ``False`` will be unchanged.
+            - attn_mask: 2D mask :math:`(L, S)` where L is the target sequence length, S is the source sequence length.
+              3D mask :math:`(N*num_heads, L, S)` where N is the batch size, L is the target sequence length,
+              S is the source sequence length. attn_mask ensure that position i is allowed to attend the unmasked
+              positions. If a ByteTensor is provided, the non-zero positions are not allowed to attend
+              while the zero positions will be unchanged. If a BoolTensor is provided, positions with ``True``
+              is not allowed to attend while ``False`` values will be unchanged. If a FloatTensor
+              is provided, it will be added to the attention weight.
+            - average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
+              heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
+              effect when ``need_weights=True.``. Default: True (i.e. average weights across heads)
 
-        - Outputs:
-        - attn_output: :math:`(L, N, E)` where L is the target sequence length, N is the batch size,
-          E is the embedding dimension. :math:`(N, L, E)` if ``batch_first`` is ``True``.
-        - attn_output_weights: If ``average_attn_weights=True``, returns attention weights averaged
-          across heads of shape :math:`(N, L, S)`, where N is the batch size, L is the target sequence length,
-          S is the source sequence length. If ``average_weights=False``, returns attention weights per
-          head of shape :math:`(N, num_heads, L, S)`.
+            - Outputs:
+            - attn_output: :math:`(L, N, E)` where L is the target sequence length, N is the batch size,
+              E is the embedding dimension. :math:`(N, L, E)` if ``batch_first`` is ``True``.
+            - attn_output_weights: If ``average_attn_weights=True``, returns attention weights averaged
+              across heads of shape :math:`(N, L, S)`, where N is the batch size, L is the target sequence length,
+              S is the source sequence length. If ``average_weights=False``, returns attention weights per
+              head of shape :math:`(N, num_heads, L, S)`.
         """
-        return self._forward_impl(query, key, value, key_padding_mask,
-                                  need_weights, attn_mask, average_attn_weights)
+        return self._forward_impl(
+            query,
+            key,
+            value,
+            key_padding_mask,
+            need_weights,
+            attn_mask,
+            average_attn_weights,
+        )
+
     # pylint: disable = too-many-locals
     # pylint: disable = too-many-branches
     # pylint: disable = too-many-statements
-    def _forward_impl(self,
-                      query: Tensor,
-                      key: Tensor,
-                      value: Tensor,
-                      key_padding_mask: Optional[Tensor] = None,
-                      need_weights: bool = True,
-                      attn_mask: Optional[Tensor] = None,
-                      average_attn_weights: bool = True) -> Tuple[Tensor, Optional[Tensor]]:
+    def _forward_impl(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask: Optional[Tensor] = None,
+        need_weights: bool = True,
+        attn_mask: Optional[Tensor] = None,
+        average_attn_weights: bool = True,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         # This version will not deal with the static key/value pairs.
         # Keeping it here for future changes.
         #
@@ -314,38 +355,57 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
         assert key.size(0) == value.size(0) and key.size(1) == value.size(1)
 
         head_dim = self.embed_dim // self.num_heads
-        assert head_dim * self.num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+        assert head_dim * self.num_heads == self.embed_dim, (
+            "embed_dim must be divisible by num_heads"
+        )
         k = self.linear_K(key)
         v = self.linear_V(value)
         scaling = float(head_dim) ** 0.5
         q = self.div(self.linear_Q(query), scaling)
 
         if attn_mask is not None:
-            assert attn_mask.dtype == torch.float32 or attn_mask.dtype == torch.float64 or \
-                   attn_mask.dtype == torch.float16 or attn_mask.dtype == torch.uint8 or attn_mask.dtype == torch.bool, \
-                'Only float, byte, and bool types are supported for attn_mask, not {}'.format(attn_mask.dtype)
+            assert (
+                attn_mask.dtype == torch.float32
+                or attn_mask.dtype == torch.float64
+                or attn_mask.dtype == torch.float16
+                or attn_mask.dtype == torch.uint8
+                or attn_mask.dtype == torch.bool
+            ), (
+                "Only float, byte, and bool types are supported for attn_mask, not {}".format(
+                    attn_mask.dtype
+                )
+            )
             if attn_mask.dtype == torch.uint8:
-                warnings.warn("Byte tensor for attn_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
+                warnings.warn(
+                    "Byte tensor for attn_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead."
+                )
                 attn_mask = attn_mask.to(torch.bool)
 
             if attn_mask.dim() == 2:
                 attn_mask = attn_mask.unsqueeze(0)
                 if list(attn_mask.size()) != [1, query.size(0), key.size(0)]:
-                    raise RuntimeError('The size of the 2D attn_mask is not correct.')
+                    raise RuntimeError("The size of the 2D attn_mask is not correct.")
             elif attn_mask.dim() == 3:
-                if list(attn_mask.size()) != [bsz * self.num_heads, query.size(0), key.size(0)]:
-                    raise RuntimeError('The size of the 3D attn_mask is not correct.')
+                if list(attn_mask.size()) != [
+                    bsz * self.num_heads,
+                    query.size(0),
+                    key.size(0),
+                ]:
+                    raise RuntimeError("The size of the 3D attn_mask is not correct.")
             else:
-                raise RuntimeError("attn_mask's dimension {} is not supported".format(attn_mask.dim()))
+                raise RuntimeError(
+                    "attn_mask's dimension {} is not supported".format(attn_mask.dim())
+                )
             # attn_mask's dim is 3 now.
 
         # convert ByteTensor key_padding_mask to bool
         if key_padding_mask is not None and key_padding_mask.dtype == torch.uint8:
-            warnings.warn("Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead.")
+            warnings.warn(
+                "Byte tensor for key_padding_mask in nn.MultiheadAttention is deprecated. Use bool tensor instead."
+            )
             key_padding_mask = key_padding_mask.to(torch.bool)
         if self.bias_k is not None and self.bias_v is not None:
             if static_k is None and static_v is None:
-
                 # Explicitly assert that bias_k and bias_v are not None
                 # in a way that TorchScript can understand.
                 bias_k = self.bias_k
@@ -402,24 +462,34 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
 
         attn_output_weights = self.matmul_1(q, k.transpose(1, 2))
 
-        assert list(attn_output_weights.size()) == [bsz * self.num_heads, tgt_len, src_len]
+        assert list(attn_output_weights.size()) == [
+            bsz * self.num_heads,
+            tgt_len,
+            src_len,
+        ]
 
         if attn_mask is not None:
             if attn_mask.dtype == torch.bool:
-                attn_output_weights.masked_fill_(attn_mask, float('-inf'))
+                attn_output_weights.masked_fill_(attn_mask, float("-inf"))
             else:
                 self.mask_add(attn_output_weights, attn_mask)
 
         if key_padding_mask is not None:
-            attn_output_weights = attn_output_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            attn_output_weights = attn_output_weights.view(
+                bsz, self.num_heads, tgt_len, src_len
+            )
             attn_output_weights = attn_output_weights.masked_fill(
                 key_padding_mask.unsqueeze(1).unsqueeze(2),
-                float('-inf'),
+                float("-inf"),
             )
-            attn_output_weights = attn_output_weights.view(bsz * self.num_heads, tgt_len, src_len)
+            attn_output_weights = attn_output_weights.view(
+                bsz * self.num_heads, tgt_len, src_len
+            )
 
         attn_output_weights = self.softmax(attn_output_weights)
-        attn_output_weights = nnF.dropout(attn_output_weights, p=self.dropout, training=self.training)
+        attn_output_weights = nnF.dropout(
+            attn_output_weights, p=self.dropout, training=self.training
+        )
 
         # attn_output = torch.bmm(attn_output_weights, v)
         attn_output = self.matmul_2(attn_output_weights, v)
@@ -428,7 +498,11 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
         if self.batch_first:
             attn_output = attn_output.view(bsz, tgt_len, self.embed_dim)
         else:
-            attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len, bsz, self.embed_dim)
+            attn_output = (
+                attn_output.transpose(0, 1)
+                .contiguous()
+                .view(tgt_len, bsz, self.embed_dim)
+            )
 
         # for the type: ignore[has-type], see https://github.com/pytorch/pytorch/issues/58969
         attn_output = self.out_proj(attn_output)  # type: ignore[has-type]
@@ -436,7 +510,9 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
         # pylint: disable = no-else-return
         if need_weights:
             # average attention weights over heads
-            attn_output_weights = attn_output_weights.view(bsz, self.num_heads, tgt_len, src_len)
+            attn_output_weights = attn_output_weights.view(
+                bsz, self.num_heads, tgt_len, src_len
+            )
             if average_attn_weights:
                 attn_output_weights = attn_output_weights.mean(dim=1)
             return attn_output, attn_output_weights
@@ -444,7 +520,9 @@ class QuantizableMultiheadAttention(nn.MultiheadAttention):
             return attn_output, None
 
 
-def create_quantizable_multihead_attention(module: torch.nn.MultiheadAttention) -> QuantizableMultiheadAttention:
+def create_quantizable_multihead_attention(
+    module: torch.nn.MultiheadAttention,
+) -> QuantizableMultiheadAttention:
     """
     Create QuantizableMultiheadAttention using existing torch.nn.MultiheadAttention module
     :param module: Existing torch.nn.MultiheadAttention module
@@ -456,15 +534,24 @@ def create_quantizable_multihead_attention(module: torch.nn.MultiheadAttention) 
     # if bias k/v parameter exist set quantizable MHA to create 3 separate bias tensors as expected.
     add_bias_kv = module.bias_k is not None and module.bias_v is not None
 
-    q_MHA = QuantizableMultiheadAttention(embed_dim=module.embed_dim, num_heads=module.num_heads,
-                                          dropout=module.dropout, bias=bias, add_bias_kv=add_bias_kv,
-                                          add_zero_attn=module.add_zero_attn, kdim=module.kdim, vdim=module.vdim,
-                                          batch_first=module.batch_first)
+    q_MHA = QuantizableMultiheadAttention(
+        embed_dim=module.embed_dim,
+        num_heads=module.num_heads,
+        dropout=module.dropout,
+        bias=bias,
+        add_bias_kv=add_bias_kv,
+        add_zero_attn=module.add_zero_attn,
+        kdim=module.kdim,
+        vdim=module.vdim,
+        batch_first=module.batch_first,
+    )
 
     # copy over weight and bias tensors
     with torch.no_grad():
         if module.in_proj_weight is not None:
-            weights_q, weights_k, weights_v = torch.chunk(module.in_proj_weight.data, 3, dim=0)
+            weights_q, weights_k, weights_v = torch.chunk(
+                module.in_proj_weight.data, 3, dim=0
+            )
         else:
             weights_q = module.q_proj_weight.data
             weights_k = module.k_proj_weight.data
@@ -488,26 +575,49 @@ def create_quantizable_multihead_attention(module: torch.nn.MultiheadAttention) 
 
     return q_MHA
 
+
 class QuantizableTransformerEncoderLayer(nn.TransformerEncoderLayer):
     """
-       QuantizableTransformerEncoderLayer replaces add operations in TransformerEncoderLayer with elementwise add operations
-       """
-    __constants__ = ['batch_first', 'norm_first']
+    QuantizableTransformerEncoderLayer replaces add operations in TransformerEncoderLayer with elementwise add operations
+    """
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation=nnF.relu, layer_norm_eps=1e-5,
-                 batch_first=False, norm_first=False, device=None, dtype=None) -> None:
-        super().__init__(d_model, nhead, dim_feedforward, dropout, activation, layer_norm_eps, batch_first)
+    __constants__ = ["batch_first", "norm_first"]
+
+    def __init__(
+        self,
+        d_model,
+        nhead,
+        dim_feedforward=2048,
+        dropout=0.1,
+        activation=nnF.relu,
+        layer_norm_eps=1e-5,
+        batch_first=False,
+        norm_first=False,
+        device=None,
+        dtype=None,
+    ) -> None:
+        super().__init__(
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+        )
         self.norm_first = norm_first
         self.add1 = aimet_modules.Add()
         self.add2 = aimet_modules.Add()
 
     # pylint: disable=unused-argument
     # pylint: disable=arguments-differ
-    def forward(self,
-                src: Tensor,
-                src_mask: Optional[Tensor] = None,
-                src_key_padding_mask: Optional[Tensor] = None,
-                is_causal: bool = False) -> Tensor:
+    def forward(
+        self,
+        src: Tensor,
+        src_mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        is_causal: bool = False,
+    ) -> Tensor:
         r"""Pass the input through the encoder layer.
 
         Args:
@@ -528,14 +638,19 @@ class QuantizableTransformerEncoderLayer(nn.TransformerEncoderLayer):
         # pylint: disable = too-many-branches
         if src_key_padding_mask is not None:
             _skpm_dtype = src_key_padding_mask.dtype
-            if _skpm_dtype != torch.bool and not torch.is_floating_point(src_key_padding_mask):
+            if _skpm_dtype != torch.bool and not torch.is_floating_point(
+                src_key_padding_mask
+            ):
                 raise AssertionError(
-                    "only bool and floating types of key_padding_mask are supported")
+                    "only bool and floating types of key_padding_mask are supported"
+                )
         # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
-        why_not_sparsity_fast_path = ''
+        why_not_sparsity_fast_path = ""
         # pylint: disable = protected-access
         if not src.dim() == 3:
-            why_not_sparsity_fast_path = f"input not batched; expected src.dim() of 3 but got {src.dim()}"
+            why_not_sparsity_fast_path = (
+                f"input not batched; expected src.dim() of 3 but got {src.dim()}"
+            )
         elif self.training:
             why_not_sparsity_fast_path = "training is enabled"
         elif not self.self_attn.batch_first:
@@ -576,11 +691,15 @@ class QuantizableTransformerEncoderLayer(nn.TransformerEncoderLayer):
             # generator expressions.
             if torch.overrides.has_torch_function(tensor_args):
                 why_not_sparsity_fast_path = "some Tensor argument has_torch_function"
-            elif not all((x.is_cuda or 'cpu' in str(x.device)) for x in tensor_args):
-                why_not_sparsity_fast_path = "some Tensor argument is neither CUDA nor CPU"
+            elif not all((x.is_cuda or "cpu" in str(x.device)) for x in tensor_args):
+                why_not_sparsity_fast_path = (
+                    "some Tensor argument is neither CUDA nor CPU"
+                )
             elif torch.is_grad_enabled() and any(x.requires_grad for x in tensor_args):
-                why_not_sparsity_fast_path = ("grad is enabled and at least one of query or the "
-                                              "input/output projection weights or biases requires_grad")
+                why_not_sparsity_fast_path = (
+                    "grad is enabled and at least one of query or the "
+                    "input/output projection weights or biases requires_grad"
+                )
 
             if not why_not_sparsity_fast_path:
                 return torch._transformer_encoder_layer_fwd(
@@ -604,17 +723,23 @@ class QuantizableTransformerEncoderLayer(nn.TransformerEncoderLayer):
                     self.linear2.bias,
                     # TODO: if src_mask and src_key_padding_mask merge to single 4-dim mask
                     src_mask if src_mask is not None else src_key_padding_mask,
-                    1 if src_key_padding_mask is not None else
-                    0 if src_mask is not None else
-                    None,
+                    1
+                    if src_key_padding_mask is not None
+                    else 0
+                    if src_mask is not None
+                    else None,
                 )
 
         x = src
         if self.norm_first:
-            x = self.add1(x, self._sa_block(self.norm1(x), src_mask, src_key_padding_mask))
+            x = self.add1(
+                x, self._sa_block(self.norm1(x), src_mask, src_key_padding_mask)
+            )
             x = self.add2(x, self._ff_block(self.norm2(x)))
         else:
-            x = self.norm1(self.add1(x, self._sa_block(x, src_mask, src_key_padding_mask)))
+            x = self.norm1(
+                self.add1(x, self._sa_block(x, src_mask, src_key_padding_mask))
+            )
             x = self.norm2(self.add2(x, self._ff_block(x)))
 
         return x
@@ -624,11 +749,31 @@ class QuantizableTransformerDecoderLayer(nn.TransformerDecoderLayer):
     """
     QuantizableTransformerDecoderLayer replaces add operations in TransformerDecoderLayer with elementwise add operations
     """
-    __constants__ = ['batch_first', 'norm_first']
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation=nnF.relu, layer_norm_eps=1e-5,
-                 batch_first=False, norm_first=False, device=None, dtype=None) -> None:
-        super().__init__(d_model, nhead, dim_feedforward, dropout, activation, layer_norm_eps, batch_first)
+    __constants__ = ["batch_first", "norm_first"]
+
+    def __init__(
+        self,
+        d_model,
+        nhead,
+        dim_feedforward=2048,
+        dropout=0.1,
+        activation=nnF.relu,
+        layer_norm_eps=1e-5,
+        batch_first=False,
+        norm_first=False,
+        device=None,
+        dtype=None,
+    ) -> None:
+        super().__init__(
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+        )
         self.norm_first = norm_first
         self.add1 = aimet_modules.Add()
         self.add2 = aimet_modules.Add()
@@ -636,15 +781,17 @@ class QuantizableTransformerDecoderLayer(nn.TransformerDecoderLayer):
 
     # pylint: disable=unused-argument
     # pylint: disable=arguments-differ
-    def forward(self,
-                tgt: Tensor,
-                memory: Tensor,
-                tgt_mask: Optional[Tensor] = None,
-                memory_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None,
-                memory_key_padding_mask: Optional[Tensor] = None,
-                tgt_is_causal: bool = False,
-                memory_is_causal: bool = False) -> Tensor:
+    def forward(
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+        tgt_is_causal: bool = False,
+        memory_is_causal: bool = False,
+    ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer.
 
         Args:
@@ -673,18 +820,38 @@ class QuantizableTransformerDecoderLayer(nn.TransformerDecoderLayer):
 
         x = tgt
         if self.norm_first:
-            x = self.add1(x, self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask))
-            x = self.add2(x, self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask))
+            x = self.add1(
+                x, self._sa_block(self.norm1(x), tgt_mask, tgt_key_padding_mask)
+            )
+            x = self.add2(
+                x,
+                self._mha_block(
+                    self.norm2(x), memory, memory_mask, memory_key_padding_mask
+                ),
+            )
             x = self.add3(x, self._ff_block(self.norm3(x)))
         else:
-            x = self.norm1(self.add1(x, self._sa_block(x, tgt_mask, tgt_key_padding_mask)))
-            x = self.norm2(self.add2(x, self._mha_block(x, memory, memory_mask, memory_key_padding_mask)))
+            x = self.norm1(
+                self.add1(x, self._sa_block(x, tgt_mask, tgt_key_padding_mask))
+            )
+            x = self.norm2(
+                self.add2(
+                    x, self._mha_block(x, memory, memory_mask, memory_key_padding_mask)
+                )
+            )
             x = self.norm3(self.add3(x, self._ff_block(x)))
 
         return x
 
-def copy_params_helper(src_module: Union[torch.nn.TransformerEncoderLayer, torch.nn.TransformerDecoderLayer],
-                       dest_module: Union[QuantizableTransformerEncoderLayer, QuantizableTransformerDecoderLayer]):
+
+def copy_params_helper(
+    src_module: Union[
+        torch.nn.TransformerEncoderLayer, torch.nn.TransformerDecoderLayer
+    ],
+    dest_module: Union[
+        QuantizableTransformerEncoderLayer, QuantizableTransformerDecoderLayer
+    ],
+):
     """
     Copy params in torch enc/dec modules to equivalent quantizable enc/dec modules
     :param src_module: source module of type torch.nn.TransformerEncoderLayer or torch.nn.TransformerDecoderLayer
@@ -709,11 +876,13 @@ def copy_params_helper(src_module: Union[torch.nn.TransformerEncoderLayer, torch
         for layer_name in enc_layers:
             for param_name, _ in enc_layers[layer_name].named_parameters():
                 q_enc_layers[layer_name].get_parameter(param_name).data.copy_(
-                    enc_layers[layer_name].get_parameter(param_name).data)
+                    enc_layers[layer_name].get_parameter(param_name).data
+                )
 
 
 def create_quantizable_transformer_encoder_layer(
-        transformerEncoderLayer: torch.nn.TransformerEncoderLayer) -> QuantizableTransformerEncoderLayer:
+    transformerEncoderLayer: torch.nn.TransformerEncoderLayer,
+) -> QuantizableTransformerEncoderLayer:
     """
     Create QuantizableTransformerEncoderLayer using existing torch.nn.TransformerEncoderLayer module
     :param transformerEncoderLayer: Existing torch.nn.TransformerEncoderLayer module
@@ -722,30 +891,35 @@ def create_quantizable_transformer_encoder_layer(
     activation = transformerEncoderLayer.activation
 
     if activation is nnF.relu or isinstance(activation, torch.nn.ReLU):
-        activation = 'relu'
+        activation = "relu"
     elif activation is nnF.gelu or isinstance(activation, torch.nn.GELU):
-        activation = 'gelu'
+        activation = "gelu"
     else:
         raise RuntimeError(
             "Invalid activation type. Expected one of nn.ReLU or nn.GELU, "
             f"but got {activation}"
         )
 
-    quantizable_encoder = QuantizableTransformerEncoderLayer(d_model=transformerEncoderLayer.linear1.in_features,
-                                                             nhead=transformerEncoderLayer.self_attn.num_heads,
-                                                             dim_feedforward=transformerEncoderLayer.linear1.out_features,
-                                                             dropout=transformerEncoderLayer.dropout.p,
-                                                             activation=activation,
-                                                             layer_norm_eps=transformerEncoderLayer.norm1.eps,
-                                                             batch_first=transformerEncoderLayer.self_attn.batch_first,
-                                                             norm_first=transformerEncoderLayer.norm_first)
+    quantizable_encoder = QuantizableTransformerEncoderLayer(
+        d_model=transformerEncoderLayer.linear1.in_features,
+        nhead=transformerEncoderLayer.self_attn.num_heads,
+        dim_feedforward=transformerEncoderLayer.linear1.out_features,
+        dropout=transformerEncoderLayer.dropout.p,
+        activation=activation,
+        layer_norm_eps=transformerEncoderLayer.norm1.eps,
+        batch_first=transformerEncoderLayer.self_attn.batch_first,
+        norm_first=transformerEncoderLayer.norm_first,
+    )
 
-    copy_params_helper(src_module=transformerEncoderLayer, dest_module=quantizable_encoder)
+    copy_params_helper(
+        src_module=transformerEncoderLayer, dest_module=quantizable_encoder
+    )
     return quantizable_encoder
 
 
 def create_quantizable_transformer_decoder_layer(
-        transformerDecoderLayer: torch.nn.TransformerDecoderLayer) -> QuantizableTransformerDecoderLayer:
+    transformerDecoderLayer: torch.nn.TransformerDecoderLayer,
+) -> QuantizableTransformerDecoderLayer:
     """
     Create QuantizableTransformerDecoderLayer using existing torch.nn.TransformerDecoderLayer module
     :param transformerDecoderLayer: Existing torch.nn.TransformerDecoderLayer module
@@ -754,23 +928,27 @@ def create_quantizable_transformer_decoder_layer(
     activation = transformerDecoderLayer.activation
 
     if activation is nnF.relu or isinstance(activation, torch.nn.ReLU):
-        activation = 'relu'
+        activation = "relu"
     elif activation is nnF.gelu or isinstance(activation, torch.nn.GELU):
-        activation = 'gelu'
+        activation = "gelu"
     else:
         raise RuntimeError(
             "Invalid activation type. Expected one of nn.ReLU or nn.GELU, "
             f"but got {activation}"
         )
 
-    quantizable_decoder = QuantizableTransformerDecoderLayer(d_model=transformerDecoderLayer.linear1.in_features,
-                                                             nhead=transformerDecoderLayer.self_attn.num_heads,
-                                                             dim_feedforward=transformerDecoderLayer.linear1.out_features,
-                                                             dropout=transformerDecoderLayer.dropout.p,
-                                                             activation=activation,
-                                                             layer_norm_eps=transformerDecoderLayer.norm1.eps,
-                                                             batch_first=transformerDecoderLayer.self_attn.batch_first,
-                                                             norm_first=transformerDecoderLayer.norm_first)
+    quantizable_decoder = QuantizableTransformerDecoderLayer(
+        d_model=transformerDecoderLayer.linear1.in_features,
+        nhead=transformerDecoderLayer.self_attn.num_heads,
+        dim_feedforward=transformerDecoderLayer.linear1.out_features,
+        dropout=transformerDecoderLayer.dropout.p,
+        activation=activation,
+        layer_norm_eps=transformerDecoderLayer.norm1.eps,
+        batch_first=transformerDecoderLayer.self_attn.batch_first,
+        norm_first=transformerDecoderLayer.norm_first,
+    )
 
-    copy_params_helper(src_module=transformerDecoderLayer, dest_module=quantizable_decoder)
+    copy_params_helper(
+        src_module=transformerDecoderLayer, dest_module=quantizable_decoder
+    )
     return quantizable_decoder

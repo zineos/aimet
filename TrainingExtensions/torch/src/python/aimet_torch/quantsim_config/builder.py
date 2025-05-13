@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Wrapper and quantizer builder class for supporting both v1 and v2 blocks """
+"""Wrapper and quantizer builder class for supporting both v1 and v2 blocks"""
 
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Type
@@ -49,23 +49,39 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
 # pylint: disable=import-outside-toplevel
 
-class LazyQuantizeWrapper(torch.nn.Module, ABC): # pylint: disable=too-many-instance-attributes
+
+class LazyQuantizeWrapper(torch.nn.Module, ABC):  # pylint: disable=too-many-instance-attributes
     """
     Wrapper builder class for supporting both v1 and v2 blocks
     """
-    _lazy_qtzr_cls: Type['LazyQuantizer']
+
+    _lazy_qtzr_cls: Type["LazyQuantizer"]
 
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-locals
-    def __init__(self, module_to_wrap: torch.nn.Module, weight_bw: int, activation_bw: int, rounding_mode,
-                 quant_scheme: QuantScheme, is_output_quantized=True, is_symmetric=False, num_inputs=1, num_outputs=1,
-                 data_type: QuantizationDataType = QuantizationDataType.int):
+    def __init__(
+        self,
+        module_to_wrap: torch.nn.Module,
+        weight_bw: int,
+        activation_bw: int,
+        rounding_mode,
+        quant_scheme: QuantScheme,
+        is_output_quantized=True,
+        is_symmetric=False,
+        num_inputs=1,
+        num_outputs=1,
+        data_type: QuantizationDataType = QuantizationDataType.int,
+    ):
         super().__init__()
         if data_type == QuantizationDataType.float and weight_bw not in [8, 16, 32]:
-            raise ValueError('weight_bw in [8, 16, 32] is the only supported configuration with floating point data type')
+            raise ValueError(
+                "weight_bw in [8, 16, 32] is the only supported configuration with floating point data type"
+            )
 
         if data_type == QuantizationDataType.float and activation_bw not in [8, 16, 32]:
-            raise ValueError('activation_bw in [8, 16, 32] is the only supported configuration with floating point data type')
+            raise ValueError(
+                "activation_bw in [8, 16, 32] is the only supported configuration with floating point data type"
+            )
 
         # Save those parameters for v1 quant wrapper initialization
         self._weight_bw = weight_bw
@@ -80,19 +96,24 @@ class LazyQuantizeWrapper(torch.nn.Module, ABC): # pylint: disable=too-many-inst
         self._module_to_wrap = module_to_wrap
 
         # Create quantizer for layer output
-        self.output_quantizers = [self._lazy_qtzr_cls(activation_bw,
-                                                     rounding_mode,
-                                                     quant_scheme,
-                                                     is_symmetric,
-                                                     enabled_by_default=is_output_quantized,
-                                                     data_type=data_type)
-                                  for _ in range(num_outputs)]
+        self.output_quantizers = [
+            self._lazy_qtzr_cls(
+                activation_bw,
+                rounding_mode,
+                quant_scheme,
+                is_symmetric,
+                enabled_by_default=is_output_quantized,
+                data_type=data_type,
+            )
+            for _ in range(num_outputs)
+        ]
 
         # Create quantizer for each parameter and compute encodings
         self.param_quantizers = {}
 
         # pylint: disable=import-outside-toplevel, cyclic-import
         from aimet_torch.v2.nn import BaseQuantizationMixin
+
         if isinstance(module_to_wrap, BaseQuantizationMixin):
             # NOTE: AIMET v2 qmodule always only quantizes the paramters that it directly owns
             recurse = False
@@ -105,24 +126,31 @@ class LazyQuantizeWrapper(torch.nn.Module, ABC): # pylint: disable=too-many-inst
 
         for name, param in module_to_wrap.named_parameters(recurse=recurse):
             logger.debug("Adding quantizer for parameter: %s", name)
-            qtzr = self._lazy_qtzr_cls(weight_bw,
-                                       rounding_mode,
-                                       quant_scheme,
-                                       is_symmetric,
-                                       enabled_by_default=True,
-                                       data_type=data_type)
+            qtzr = self._lazy_qtzr_cls(
+                weight_bw,
+                rounding_mode,
+                quant_scheme,
+                is_symmetric,
+                enabled_by_default=True,
+                data_type=data_type,
+            )
             from aimet_torch.v2.deepspeed_utils import _get_shape
+
             qtzr.input_tensor_shape = _get_shape(param)
             self.param_quantizers[name] = qtzr
 
         # Create quantizer for layer input
-        self.input_quantizers = [self._lazy_qtzr_cls(activation_bw,
-                                                     rounding_mode,
-                                                     quant_scheme,
-                                                     is_symmetric,
-                                                     enabled_by_default=False,
-                                                     data_type=data_type)
-                                 for _ in range(num_inputs)]
+        self.input_quantizers = [
+            self._lazy_qtzr_cls(
+                activation_bw,
+                rounding_mode,
+                quant_scheme,
+                is_symmetric,
+                enabled_by_default=False,
+                data_type=data_type,
+            )
+            for _ in range(num_inputs)
+        ]
 
         self.supported_kernels = {}
 
@@ -144,29 +172,41 @@ class LazyQuantizeWrapper(torch.nn.Module, ABC): # pylint: disable=too-many-inst
         """
         for param_name, param_quantizer in self.param_quantizers.items():
             # pylint: disable = protected-access
-            param_quantizer.channel_axis = get_param_channel_axis(self._module_to_wrap, param_name)
+            param_quantizer.channel_axis = get_param_channel_axis(
+                self._module_to_wrap, param_name
+            )
 
     @staticmethod
     def forward(_):
         """
         Dummy forward-pass routine for implementing abstract function.
         """
-        raise RuntimeError("forward function of LazyQuantizeWrapper should not be called before it is realized")
+        raise RuntimeError(
+            "forward function of LazyQuantizeWrapper should not be called before it is realized"
+        )
 
     @abstractmethod
     def realize(self):
-        """ Returns v1 or v2 quantized module using collected information. """
+        """Returns v1 or v2 quantized module using collected information."""
 
 
 class LazyQuantizer(ABC):
     """
     Quantizer builder class for supporting both v1 and v2 blocks
     """
+
     # pylint: disable=too-many-instance-attributes, too-many-arguments
-    def __init__(self, bitwidth: int, round_mode, quant_scheme: QuantScheme,
-                 use_symmetric_encodings: bool, enabled_by_default: bool,
-                 data_type: QuantizationDataType = QuantizationDataType.int, input_shape: tuple = None,
-                 ch_axis: int = None):
+    def __init__(
+        self,
+        bitwidth: int,
+        round_mode,
+        quant_scheme: QuantScheme,
+        use_symmetric_encodings: bool,
+        enabled_by_default: bool,
+        data_type: QuantizationDataType = QuantizationDataType.int,
+        input_shape: tuple = None,
+        ch_axis: int = None,
+    ):
         self.round_mode = MAP_ROUND_MODE_TO_PYMO[round_mode]
         self.quant_scheme = quant_scheme
         self.use_symmetric_encodings = use_symmetric_encodings
@@ -177,27 +217,35 @@ class LazyQuantizer(ABC):
         self.enabled = enabled_by_default
         self.data_type = data_type
         self._encoding_min_max_fixed_vals = None
-        self.input_tensor_shape = input_shape # None indicates unknown
+        self.input_tensor_shape = input_shape  # None indicates unknown
         self.channel_axis = ch_axis
 
     @property
     def encoding_min_max_fixed_vals(self) -> Optional[Tuple[float, float]]:
-        """ Accessor to self._encoding_min_max_fixed_vals """
+        """Accessor to self._encoding_min_max_fixed_vals"""
         return self._encoding_min_max_fixed_vals
 
     @encoding_min_max_fixed_vals.setter
     def encoding_min_max_fixed_vals(self, min_max_vals: Tuple[float, float]):
-        """ self._encoding_min_max_fixed_vals setter """
-        log_with_error_and_assert_if_false(isinstance(min_max_vals, tuple), logger, 'Min max vals must be a tuple')
-        log_with_error_and_assert_if_false(len(min_max_vals) == 2, logger, 'Min max vals must be a tuple of two '
-                                                                           'values')
-        log_with_error_and_assert_if_false(min_max_vals[0] < min_max_vals[1], logger,
-                                           'Min value ' + str(min_max_vals[0]) + ' is not less than max val ' +
-                                           str(min_max_vals[1]))
+        """self._encoding_min_max_fixed_vals setter"""
+        log_with_error_and_assert_if_false(
+            isinstance(min_max_vals, tuple), logger, "Min max vals must be a tuple"
+        )
+        log_with_error_and_assert_if_false(
+            len(min_max_vals) == 2, logger, "Min max vals must be a tuple of two values"
+        )
+        log_with_error_and_assert_if_false(
+            min_max_vals[0] < min_max_vals[1],
+            logger,
+            "Min value "
+            + str(min_max_vals[0])
+            + " is not less than max val "
+            + str(min_max_vals[1]),
+        )
         if self.quant_scheme != QuantScheme.post_training_tf:
             self.quant_scheme = QuantScheme.post_training_tf
         self._encoding_min_max_fixed_vals = min_max_vals
 
     @abstractmethod
     def realize(self):
-        """ Returns v1 or v2 quantizer using collected information. """
+        """Returns v1 or v2 quantizer using collected information."""

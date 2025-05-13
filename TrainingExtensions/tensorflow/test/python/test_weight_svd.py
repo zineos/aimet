@@ -50,18 +50,29 @@ import aimet_common.libpymo as pymo
 def get_model(model_type="Sequential"):
     tf.keras.backend.clear_session()
     if model_type == "Sequential":
-        return tf.keras.Sequential([
-            tf.keras.layers.Conv2D(32, 3, strides=(2, 2), name='conv1', padding='same', input_shape=(28, 28, 3)),
-            tf.keras.layers.Conv2D(64, 5, name='conv2', padding='same'),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(10, name='linear')
-        ])
+        return tf.keras.Sequential(
+            [
+                tf.keras.layers.Conv2D(
+                    32,
+                    3,
+                    strides=(2, 2),
+                    name="conv1",
+                    padding="same",
+                    input_shape=(28, 28, 3),
+                ),
+                tf.keras.layers.Conv2D(64, 5, name="conv2", padding="same"),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(10, name="linear"),
+            ]
+        )
     elif model_type == "Functional":
         inp = tf.keras.Input((28, 28, 3))
-        x = tf.keras.layers.Conv2D(32, 3, strides=(2, 2), name='conv1', padding='same')(inp)
-        x = tf.keras.layers.Conv2D(64, 5, name='conv2', padding='same')(x)
+        x = tf.keras.layers.Conv2D(32, 3, strides=(2, 2), name="conv1", padding="same")(
+            inp
+        )
+        x = tf.keras.layers.Conv2D(64, 5, name="conv2", padding="same")(x)
         x = tf.keras.layers.Flatten()(x)
-        out = tf.keras.layers.Dense(10, name = 'linear')(x)
+        out = tf.keras.layers.Dense(10, name="linear")(x)
 
         return tf.keras.Model(inp, out)
 
@@ -75,7 +86,6 @@ def _get_layers(model, model_type="Sequential"):
 
 
 class TestWeightSvdLayerSplitandSVDPrunner:
-
     @pytest.mark.parametrize("model_type", ["Sequential", "Functional"])
     @pytest.mark.parametrize("rank", [12, 20])
     @pytest.mark.parametrize("cost_metric", [CostMetric.mac, CostMetric.memory])
@@ -91,9 +101,13 @@ class TestWeightSvdLayerSplitandSVDPrunner:
         layer1 = Layer(orig_conv_op, orig_conv_op.name, output_shape=org_conv_op_shape)
 
         svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd([layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE)
+        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
+            [layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
+        )
 
-        split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(model, layer1.module, rank, svd_lib_ref)
+        split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(
+            model, layer1.module, rank, svd_lib_ref
+        )
 
         split_conv_output = split_conv_op2.output_shape
 
@@ -103,7 +117,6 @@ class TestWeightSvdLayerSplitandSVDPrunner:
 
         assert len(split_conv_op2.get_weights()) == len(orig_conv_op.get_weights())
         if len(orig_conv_op.get_weights()) > 1:
-
             orig_bias_out = orig_conv_op.get_weights()[1]
             split_bias_out = split_conv_op2.get_weights()[1]
 
@@ -127,12 +140,18 @@ class TestWeightSvdLayerSplitandSVDPrunner:
         org_conv_op_shape = orig_conv_op.output_shape
 
         layer1 = Layer(orig_conv_op, orig_conv_op.name, output_shape=org_conv_op_shape)
-        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(layer1, 0.5, cost_metric)
+        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(
+            layer1, 0.5, cost_metric
+        )
 
         svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd([layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE)
+        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
+            [layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
+        )
 
-        split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(model, layer1.module, rank, svd_lib_ref)
+        split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(
+            model, layer1.module, rank, svd_lib_ref
+        )
 
         split_conv_output = split_conv_op2.output_shape
 
@@ -142,7 +161,6 @@ class TestWeightSvdLayerSplitandSVDPrunner:
 
         assert len(split_conv_op2.get_weights()) == len(orig_conv_op.get_weights())
         if len(orig_conv_op.get_weights()) > 1:
-
             orig_bias_out = orig_conv_op.get_weights()[1]
             split_bias_out = split_conv_op2.get_weights()[1]
 
@@ -154,20 +172,24 @@ class TestWeightSvdLayerSplitandSVDPrunner:
         # Length of the bias of first conv split should be equal to rank
         assert len(split_conv_op1.get_weights()[1]) == rank
 
-
     @pytest.mark.parametrize("model_type", ["Sequential", "Functional"])
     @pytest.mark.parametrize("cmp_ratio", [0.4, 0.75])
     @pytest.mark.parametrize("cost_metric", [CostMetric.mac, CostMetric.memory])
-    @pytest.mark.parametrize("layer_index", [1, 3]) # 2 points to conv and 4 points to FC
-    def test_perform_svd_and_split_layer(self, model_type, cmp_ratio, cost_metric, layer_index):
-
+    @pytest.mark.parametrize(
+        "layer_index", [1, 3]
+    )  # 2 points to conv and 4 points to FC
+    def test_perform_svd_and_split_layer(
+        self, model_type, cmp_ratio, cost_metric, layer_index
+    ):
         model = get_model(model_type)
         layer_db = LayerDatabase(model)
 
         # Copy the db
         comp_layer_db = copy.deepcopy(layer_db)
 
-        layer = comp_layer_db.find_layer_by_name(_get_layers(model, model_type)[layer_index].name)
+        layer = comp_layer_db.find_layer_by_name(
+            _get_layers(model, model_type)[layer_index].name
+        )
         org_count = len(list(comp_layer_db._compressible_layers.values()))
         splitter = WeightSvdPruner()
 
@@ -178,4 +200,3 @@ class TestWeightSvdLayerSplitandSVDPrunner:
 
         after_split_count = len(list(comp_layer_db._compressible_layers.values()))
         assert (org_count + 1) == after_split_count
-

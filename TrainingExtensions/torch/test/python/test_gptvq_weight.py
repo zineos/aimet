@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 """Test GPTVQ weight"""
+
 import itertools
 import json
 import os
@@ -85,7 +86,7 @@ QUANTSIM_CONFIG = {
 
 
 @contextmanager
-def swap_encoding_version(version='1.0.0'):
+def swap_encoding_version(version="1.0.0"):
     old_version = quantsim.encoding_version
     quantsim.encoding_version = version
 
@@ -95,7 +96,7 @@ def swap_encoding_version(version='1.0.0'):
 
 
 class RandomDataset(Dataset):
-    def __init__(self, data_size = 32, input_dim: Union[int, Tuple] = 10):
+    def __init__(self, data_size=32, input_dim: Union[int, Tuple] = 10):
         self.data_size = data_size
         self.input_dim = input_dim
 
@@ -119,11 +120,14 @@ class TestGPTVQWeight:
     def test_quant_sim_initialization_in_gptvq(self, vector_bw, rows_per_block):
         model = test_models.ModelWithThreeLinears()
 
-        data_loader = DataLoader(RandomDataset(data_size=2, input_dim=768), batch_size=1, shuffle=False)
+        data_loader = DataLoader(
+            RandomDataset(data_size=2, input_dim=768), batch_size=1, shuffle=False
+        )
         gptvq_parameters = GPTVQParameters(
             data_loader=data_loader,
             forward_fn=lambda m, d: m(d[0]),
-            vector_bw=vector_bw, rows_per_block=rows_per_block
+            vector_bw=vector_bw,
+            rows_per_block=rows_per_block,
         )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -131,12 +135,20 @@ class TestGPTVQWeight:
             with open(config_path, "w") as f:
                 json.dump(QUANTSIM_CONFIG, f)
 
-            module_name_set = GPTVQ._get_candidate_module_name_set(model, module_names_to_exclude=None)
+            module_name_set = GPTVQ._get_candidate_module_name_set(
+                model, module_names_to_exclude=None
+            )
             quant_sim = GPTVQ._get_quantsim(
-                model, dummy_input, gptvq_parameters, config_file_path=config_path, module_name_set=module_name_set
+                model,
+                dummy_input,
+                gptvq_parameters,
+                config_file_path=config_path,
+                module_name_set=module_name_set,
             )
 
-        with GPTVQ._disable_quantizers_for_gptvq_optimization(quant_sim, module_name_set):
+        with GPTVQ._disable_quantizers_for_gptvq_optimization(
+            quant_sim, module_name_set
+        ):
             for module in quant_sim.model.modules():
                 if isinstance(module, BaseQuantizationMixin):
                     # Input/Output quantizers should be disabled
@@ -148,14 +160,26 @@ class TestGPTVQWeight:
                         weight_quantizer = module.param_quantizers["weight"]
                         # Bitwidth, shape and block_size should be matched with GPTVQ parameters
                         assert weight_quantizer.bitwidth == gptvq_parameters.vector_bw
-                        assert weight_quantizer.shape == (weight_shape[0] // gptvq_parameters.rows_per_block, 1)
-                        assert weight_quantizer.block_size == (gptvq_parameters.rows_per_block, weight_shape[1])
-                        assert not weight_quantizer.is_initialized(), "Weight quantizer should be initialized during GPTVQ optimization"
+                        assert weight_quantizer.shape == (
+                            weight_shape[0] // gptvq_parameters.rows_per_block,
+                            1,
+                        )
+                        assert weight_quantizer.block_size == (
+                            gptvq_parameters.rows_per_block,
+                            weight_shape[1],
+                        )
+                        assert not weight_quantizer.is_initialized(), (
+                            "Weight quantizer should be initialized during GPTVQ optimization"
+                        )
 
     def test_gptvq_weight_update(self):
         model = test_models.ModelWithThreeLinears()
-        data_loader = DataLoader(RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        data_loader = DataLoader(
+            RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False
+        )
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -176,8 +200,12 @@ class TestGPTVQWeight:
 
     def test_exported_param_encodings_after_gptvq(self):
         model = test_models.ModelWithThreeLinears()
-        data_loader = DataLoader(RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        data_loader = DataLoader(
+            RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False
+        )
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -205,13 +233,37 @@ class TestGPTVQWeight:
                 # Encodings in same block should have same encodings parameters
                 # e.g., 0 to 31 channel (First block) should have same min/max encodings
                 for i in range(0, num_of_channels, gptvq_parameters.rows_per_block):
-                    assert len({x["min"] for x in weight_encodings[i : i + gptvq_parameters.rows_per_block]}) == 1
-                    assert len({x["max"] for x in weight_encodings[i : i + gptvq_parameters.rows_per_block]}) == 1
+                    assert (
+                        len(
+                            {
+                                x["min"]
+                                for x in weight_encodings[
+                                    i : i + gptvq_parameters.rows_per_block
+                                ]
+                            }
+                        )
+                        == 1
+                    )
+                    assert (
+                        len(
+                            {
+                                x["max"]
+                                for x in weight_encodings[
+                                    i : i + gptvq_parameters.rows_per_block
+                                ]
+                            }
+                        )
+                        == 1
+                    )
 
     def test_gptvq_weight_update_with_block_level_modules(self):
         model = test_models.ModelWithThreeLinears()
-        data_loader = DataLoader(RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        data_loader = DataLoader(
+            RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False
+        )
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -224,7 +276,7 @@ class TestGPTVQWeight:
                 gptvq_parameters,
                 param_encoding_path=temp_dir,
                 config_file_path=config_path,
-                block_level_module_names=[["linear1"], ["linear2"]]
+                block_level_module_names=[["linear1"], ["linear2"]],
             )
             block_level_rounded_model = GPTVQ.apply_gptvq(
                 model,
@@ -232,26 +284,44 @@ class TestGPTVQWeight:
                 gptvq_parameters,
                 param_encoding_path=temp_dir,
                 config_file_path=config_path,
-                block_level_module_names=[["linear1", "linear2"]]
+                block_level_module_names=[["linear1", "linear2"]],
             )
 
         # Updated weight of first module should be same both leaf level and block level
-        assert torch.allclose(leaf_level_rounded_model.linear1.weight, block_level_rounded_model.linear1.weight)
+        assert torch.allclose(
+            leaf_level_rounded_model.linear1.weight,
+            block_level_rounded_model.linear1.weight,
+        )
         # After first module optimization, Hessian of next module is affected by previous module if leaf level optimization
-        assert not torch.allclose(leaf_level_rounded_model.linear2.weight, block_level_rounded_model.linear2.weight)
+        assert not torch.allclose(
+            leaf_level_rounded_model.linear2.weight,
+            block_level_rounded_model.linear2.weight,
+        )
 
     def test_gptvq_module_name_validation(self):
         model = test_models.ModelWithThreeLinears()
         with pytest.raises(ValueError):
             module_names_to_exclude = ["foo", "bar"]
-            GPTVQ._validate_module_names(model, module_names_to_exclude, "module_names_to_exclude")
+            GPTVQ._validate_module_names(
+                model, module_names_to_exclude, "module_names_to_exclude"
+            )
 
         with pytest.raises(ValueError):
-            block_level_module_names = itertools.chain.from_iterable([["linear1"], ["linear2", "foo"]])
-            GPTVQ._validate_module_names(model, block_level_module_names, "block_level_module_names")
+            block_level_module_names = itertools.chain.from_iterable(
+                [["linear1"], ["linear2", "foo"]]
+            )
+            GPTVQ._validate_module_names(
+                model, block_level_module_names, "block_level_module_names"
+            )
 
-        GPTVQ._validate_module_names(model, ["linear1", "linear2"], "module_names_to_exclude")
-        GPTVQ._validate_module_names(model, itertools.chain.from_iterable([["linear1", "linear2"], ["linear3"]]), "block_level_module_names")
+        GPTVQ._validate_module_names(
+            model, ["linear1", "linear2"], "module_names_to_exclude"
+        )
+        GPTVQ._validate_module_names(
+            model,
+            itertools.chain.from_iterable([["linear1", "linear2"], ["linear3"]]),
+            "block_level_module_names",
+        )
 
     def test_gptvq_block_level_module_names(self):
         model = test_models.ModelWithThreeLinears()
@@ -294,8 +364,12 @@ class TestGPTVQWeight:
 
     def test_gptvq_and_load_encodings(self):
         model = test_models.ModelWithThreeLinears()
-        data_loader = DataLoader(RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        data_loader = DataLoader(
+            RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False
+        )
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -308,14 +382,14 @@ class TestGPTVQWeight:
                 gptvq_parameters,
                 param_encoding_path=temp_dir,
                 config_file_path=config_path,
-                module_names_to_exclude=["linear2"]
+                module_names_to_exclude=["linear2"],
             )
 
             sim = QuantizationSimModel(
                 rounded_model,
                 dummy_input=dummy_input,
                 default_param_bw=gptvq_parameters.vector_bw,
-                config_file=config_path
+                config_file=config_path,
             )
             sim.load_encodings(f"{temp_dir}/gptvq.encodings", allow_overwrite=False)
             assert hasattr(sim.model.linear1.weight, "encoding")
@@ -332,8 +406,12 @@ class TestGPTVQWeight:
 
     def test_gptvq_export(self):
         model = test_models.ModelWithThreeLinears()
-        data_loader = DataLoader(RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        data_loader = DataLoader(
+            RandomDataset(data_size=1, input_dim=768), batch_size=1, shuffle=False
+        )
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 768)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -346,14 +424,14 @@ class TestGPTVQWeight:
                 gptvq_parameters,
                 param_encoding_path=temp_dir,
                 config_file_path=config_path,
-                module_names_to_exclude=["linear2"]
+                module_names_to_exclude=["linear2"],
             )
 
             sim = QuantizationSimModel(
                 rounded_model,
                 dummy_input=dummy_input,
                 default_param_bw=gptvq_parameters.vector_bw,
-                config_file=config_path
+                config_file=config_path,
             )
             sim.load_encodings(f"{temp_dir}/gptvq.encodings", allow_overwrite=False)
             sim.compute_encodings(lambda m, _: m(dummy_input), None)
@@ -363,7 +441,9 @@ class TestGPTVQWeight:
             with open(os.path.join(temp_dir, "vq_with_activation.encodings")) as f:
                 encodings = json.load(f)
 
-        assert len(encodings["activation_encodings"]) == 1 + 4  # One input, four output encodings
+        assert (
+            len(encodings["activation_encodings"]) == 1 + 4
+        )  # One input, four output encodings
 
         param_encodings = encodings["param_encodings"]
         linear1_encoding, linear2_encoding, linear3_encoding = param_encodings
@@ -373,7 +453,7 @@ class TestGPTVQWeight:
         assert num_scales == sim.model.linear1.weight.shape[0]
         for i in range(0, num_scales, rows_per_block):
             # per-channel scales should be same within a block
-            assert len(set(linear1_encoding["scale"][i:i + rows_per_block])) == 1
+            assert len(set(linear1_encoding["scale"][i : i + rows_per_block])) == 1
 
         assert linear2_encoding["enc_type"] == "PER_CHANNEL"
         assert len(linear2_encoding["scale"]) == sim.model.linear2.weight.shape[0]
@@ -384,13 +464,15 @@ class TestGPTVQWeight:
         assert num_scales == sim.model.linear3.weight.shape[0]
         for i in range(0, num_scales, rows_per_block):
             # per-channel scales should be same within a block
-            assert len(set(linear3_encoding["scale"][i:i + rows_per_block])) == 1
+            assert len(set(linear3_encoding["scale"][i : i + rows_per_block])) == 1
 
     def test_gptvq_conv_model(self):
         model = test_models.BasicConv2d(kernel_size=3)
         dataset = RandomDataset(data_size=4, input_dim=(64, 8, 8))
         data_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-        gptvq_parameters = GPTVQParameters(data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1)
+        gptvq_parameters = GPTVQParameters(
+            data_loader, forward_fn=lambda m, d: m(d[0]), num_of_kmeans_iterations=1
+        )
         dummy_input = torch.randn(1, 64, 8, 8)
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = f"{temp_dir}/quantsim_config.json"
@@ -410,7 +492,7 @@ class TestGPTVQWeight:
                 rounded_model,
                 dummy_input=dummy_input,
                 default_param_bw=gptvq_parameters.vector_bw,
-                config_file=config_path
+                config_file=config_path,
             )
             sim.load_encodings(f"{temp_dir}/gptvq.encodings", allow_overwrite=False)
             sim.compute_encodings(lambda m, _: m(dummy_input), None)
@@ -420,7 +502,9 @@ class TestGPTVQWeight:
             with open(os.path.join(temp_dir, "vq_conv.encodings")) as f:
                 encodings = json.load(f)
 
-        assert len(encodings["activation_encodings"]) == 1 + 3  # One input, three (Conv, BN, Relu) output encodings
+        assert (
+            len(encodings["activation_encodings"]) == 1 + 3
+        )  # One input, three (Conv, BN, Relu) output encodings
         param_encodings = encodings["param_encodings"]
         conv_encoding, *_ = param_encodings
         assert is_vector_encoding([conv_encoding])
@@ -437,4 +521,4 @@ class TestGPTVQWeight:
         assert num_scales == sim.model.conv.weight.shape[0]
         for i in range(0, num_scales, rows_per_block):
             # per-channel scales should be same within a block
-            assert len(set(conv_encoding["scale"][i:i + rows_per_block])) == 1
+            assert len(set(conv_encoding["scale"][i : i + rows_per_block])) == 1

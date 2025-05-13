@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base directory to hold quantized transformers modules """
+"""Base directory to hold quantized transformers modules"""
 
 from .llama import *
 from .gemma3 import *

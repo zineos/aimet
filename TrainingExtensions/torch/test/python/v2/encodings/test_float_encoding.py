@@ -39,12 +39,13 @@ import torch
 
 from aimet_torch.v2.quantization.float import FloatEncoding
 
+
 @pytest.fixture
 def maxval():
     return torch.tensor(1.0)
 
-class TestFloatEncoding:
 
+class TestFloatEncoding:
     @pytest.mark.parametrize("mantissa_bits, exponent_bits", ((5, 10), (8, 23), (4, 8)))
     def test_create_encoding(self, mantissa_bits, exponent_bits, maxval):
         """
@@ -63,8 +64,9 @@ class TestFloatEncoding:
         assert encoding.mapping == "float"
 
     @pytest.mark.cuda()
-    @pytest.mark.parametrize("device, new_device", (("cuda:0", "cpu"),
-                                                    ("cpu", "cuda:0")))
+    @pytest.mark.parametrize(
+        "device, new_device", (("cuda:0", "cpu"), ("cpu", "cuda:0"))
+    )
     def test_create_encoding_correct_device(self, device, new_device):
         """
         When: Create an encoding with tensors on device
@@ -85,8 +87,10 @@ class TestFloatEncoding:
         assert encoding.maxval.device == torch.device(device)
         assert new_encoding.maxval.device == torch.device(new_device)
 
-    @pytest.mark.parametrize("dtype, new_dtype", ((torch.float16, torch.float32),
-                                                  (torch.float32, torch.float16)))
+    @pytest.mark.parametrize(
+        "dtype, new_dtype",
+        ((torch.float16, torch.float32), (torch.float32, torch.float16)),
+    )
     def test_create_encoding_correct_dtype(self, dtype, new_dtype):
         """
         When: Create an encoding with tensors of type dtype in {torch.float16, torch.float32}

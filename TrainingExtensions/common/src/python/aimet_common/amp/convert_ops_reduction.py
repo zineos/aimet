@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" This module contains common utilities for convert op reduction stage of AMP """
+"""This module contains common utilities for convert op reduction stage of AMP"""
+
 import os
 import re
 from collections import defaultdict
@@ -44,6 +45,7 @@ from typing import List, Dict, Callable, Tuple
 import math
 import abc
 import json
+
 try:
     import cvxpy as cp
 except ImportError:
@@ -61,7 +63,8 @@ _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.MixedPrecision)
 
 
 class SamplingStrategy(Enum):
-    """ Enum to represent the sampling strategy used"""
+    """Enum to represent the sampling strategy used"""
+
     unweighted_cut_size = 1
     weighted_with_tensor_size = 2
     weighted_with_predicted_convert_cost = 3
@@ -69,11 +72,17 @@ class SamplingStrategy(Enum):
 
 # pylint: disable=too-many-public-methods
 class ReduceConvertOps(abc.ABC):
-    """ Base class for convert op reduction alogrithm """
+    """Base class for convert op reduction alogrithm"""
 
     DEFAULT_ALPHA_OPTIONS = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
 
-    def __init__(self, aimet_sim, quantizer_groups: List[QuantizerGroupBase], candidates: List, mac_dict: Dict):
+    def __init__(
+        self,
+        aimet_sim,
+        quantizer_groups: List[QuantizerGroupBase],
+        candidates: List,
+        mac_dict: Dict,
+    ):
         """
         :param aimet_sim: Sim object with loaded quantizer settings
         :param quantizer_groups: List of quantizer groups of aimet_sim
@@ -92,7 +101,9 @@ class ReduceConvertOps(abc.ABC):
         self.add_convert_cost_predictions_to_graph()
         # Add bit-operation cost to the nodes of quantizer_group graph
         for i_candidate in self._candidates:
-            ReduceConvertOps.add_bit_op_cost_to_graph(self.quantizer_group_graph, self._mac_dict, i_candidate, self.op_graph)
+            ReduceConvertOps.add_bit_op_cost_to_graph(
+                self.quantizer_group_graph, self._mac_dict, i_candidate, self.op_graph
+            )
 
         self._phase_two_sol = self.get_phase_two_solution(self.quantizer_group_graph)
 
@@ -131,8 +142,13 @@ class ReduceConvertOps(abc.ABC):
         return G
 
     @staticmethod
-    def rename_nodes(G: nx.DiGraph, module_name_to_module_dict: Dict, dotted_name2op_name: Dict, ops_dict: Dict,
-                     find_wrapper_module: Callable):
+    def rename_nodes(
+        G: nx.DiGraph,
+        module_name_to_module_dict: Dict,
+        dotted_name2op_name: Dict,
+        ops_dict: Dict,
+        find_wrapper_module: Callable,
+    ):
         """
         Rename nodes of networkx graph from op dotted name to quantizer-group name
         :param G: networkx graph
@@ -147,8 +163,13 @@ class ReduceConvertOps(abc.ABC):
 
         for node in G_copy.nodes:
             if node not in ["input_ops", "output_ops"]:
-                if ("input_ops", node) in G_copy.edges:  # quantizer groups with an input quantizer
-                    module_name, _ = find_wrapper_module(node, module_name_to_module_dict)
+                if (
+                    "input_ops",
+                    node,
+                ) in G_copy.edges:  # quantizer groups with an input quantizer
+                    module_name, _ = find_wrapper_module(
+                        node, module_name_to_module_dict
+                    )
                     if module_name is not None:
                         mapping = {node: module_name + "_output"}
                         G = nx.relabel_nodes(G, mapping)
@@ -159,12 +180,15 @@ class ReduceConvertOps(abc.ABC):
                         # populate the data for the new input node
                         new_node_name = module_name + "_input"
                         op_name = dotted_name2op_name[node]
-                        input_shape = ops_dict[op_name].inputs[0].shape # TODO: if there is more than one input tensor, this could be wrong
+                        input_shape = (
+                            ops_dict[op_name].inputs[0].shape
+                        )  # TODO: if there is more than one input tensor, this could be wrong
 
                         if input_shape is None:
                             input_shape = [1, 1, 1, 1]
                             _logger.info(
-                                "WARNING: input_shape is None; setting it to [1,1,1,1] as a temporary fix.")  # TODO: to be revisited for a more permanent solution
+                                "WARNING: input_shape is None; setting it to [1,1,1,1] as a temporary fix."
+                            )  # TODO: to be revisited for a more permanent solution
 
                         input_shape = [dim if dim else 1 for dim in input_shape]
                         input_size = 1
@@ -176,7 +200,9 @@ class ReduceConvertOps(abc.ABC):
                     else:
                         _logger.info("did not change node name: %s", node)
                 else:
-                    module_name, _ = find_wrapper_module(node, module_name_to_module_dict)
+                    module_name, _ = find_wrapper_module(
+                        node, module_name_to_module_dict
+                    )
                     if module_name is not None:
                         mapping = {node: module_name + "_output"}
                         G = nx.relabel_nodes(G, mapping)
@@ -203,21 +229,32 @@ class ReduceConvertOps(abc.ABC):
             else:
                 if qgroup_name in G.nodes:
                     G.nodes[qgroup_name]["is_quantizer_group"] = True
-                else: # This happens when intermediate ops have input quantizers enabled (not a common scenario, happens for LeViT).
+                else:  # This happens when intermediate ops have input quantizers enabled (not a common scenario, happens for LeViT).
                     if "_input" in qgroup_name:
-                        _logger.info("Warning: Unexpected enabling of input quantizer for %s", qgroup_name)
+                        _logger.info(
+                            "Warning: Unexpected enabling of input quantizer for %s",
+                            qgroup_name,
+                        )
                         G.add_node(qgroup_name)
                         G.nodes[qgroup_name]["is_quantizer_group"] = True
 
                         ind = qgroup_name.rfind("_input")
                         successor_node = qgroup_name[:ind] + "_output"
                         G.add_edge(qgroup_name, successor_node)
-                        G.nodes[qgroup_name]["tensor_dims"] = G.nodes[successor_node]["tensor_dims"]
-                        G.nodes[qgroup_name]["tensor_size"] = G.nodes[successor_node]["tensor_size"]
+                        G.nodes[qgroup_name]["tensor_dims"] = G.nodes[successor_node][
+                            "tensor_dims"
+                        ]
+                        G.nodes[qgroup_name]["tensor_size"] = G.nodes[successor_node][
+                            "tensor_size"
+                        ]
 
                         # reroute the edges
                         edges_to_remove = []
-                        predecessors = [pred for pred in G.predecessors(successor_node) if pred != qgroup_name]
+                        predecessors = [
+                            pred
+                            for pred in G.predecessors(successor_node)
+                            if pred != qgroup_name
+                        ]
                         for pred in predecessors:
                             G.add_edge(pred, qgroup_name)
                             edges_to_remove.append((pred, successor_node))
@@ -234,7 +271,9 @@ class ReduceConvertOps(abc.ABC):
         :param G: Op graph
         :return: QuantizerGroup Graph
         """
-        num_quantizer_group_nodes = sum(G.nodes[node]["is_quantizer_group"] for node in G.nodes)
+        num_quantizer_group_nodes = sum(
+            G.nodes[node]["is_quantizer_group"] for node in G.nodes
+        )
         while num_quantizer_group_nodes < G.number_of_nodes():
             for node in G.nodes:
                 if not G.nodes[node]["is_quantizer_group"]:
@@ -243,14 +282,22 @@ class ReduceConvertOps(abc.ABC):
                     if len(predecessors) == 1:
                         pred_node = predecessors[0]
                         if G.nodes[pred_node]["is_quantizer_group"]:
-                            G = nx.contracted_nodes(G, pred_node, node, self_loops=False)
+                            G = nx.contracted_nodes(
+                                G, pred_node, node, self_loops=False
+                            )
                             break
-                    if len(successors) == 1:  # we need this for the Add op, which has 2 predecessors and one successor
+                    if (
+                        len(successors) == 1
+                    ):  # we need this for the Add op, which has 2 predecessors and one successor
                         succ_node = successors[0]
                         if G.nodes[succ_node]["is_quantizer_group"]:
-                            G = nx.contracted_nodes(G, succ_node, node, self_loops=False)
+                            G = nx.contracted_nodes(
+                                G, succ_node, node, self_loops=False
+                            )
                             break
-            num_quantizer_group_nodes = sum(G.nodes[node]["is_quantizer_group"] for node in G.nodes)
+            num_quantizer_group_nodes = sum(
+                G.nodes[node]["is_quantizer_group"] for node in G.nodes
+            )
         return G
 
     @staticmethod
@@ -261,10 +308,22 @@ class ReduceConvertOps(abc.ABC):
         :param tensor_format: axis format
         :return:
         """
-        if tensor_format == "nchw":  # this is the 'transpose' op, example: [1,2,3,4] --> [1,4,2,3]
-            input_tensor_dims[1:] = input_tensor_dims[3], input_tensor_dims[1], input_tensor_dims[2]
-        elif tensor_format == "nhwc":  # this is the 'transpose' op, example: [1,2,3,4] --> [1,3,4,2]
-            input_tensor_dims[1:] = input_tensor_dims[2], input_tensor_dims[3], input_tensor_dims[1]
+        if (
+            tensor_format == "nchw"
+        ):  # this is the 'transpose' op, example: [1,2,3,4] --> [1,4,2,3]
+            input_tensor_dims[1:] = (
+                input_tensor_dims[3],
+                input_tensor_dims[1],
+                input_tensor_dims[2],
+            )
+        elif (
+            tensor_format == "nhwc"
+        ):  # this is the 'transpose' op, example: [1,2,3,4] --> [1,3,4,2]
+            input_tensor_dims[1:] = (
+                input_tensor_dims[2],
+                input_tensor_dims[3],
+                input_tensor_dims[1],
+            )
         else:
             raise RuntimeError("Unsupported permute format.")
 
@@ -281,7 +340,9 @@ class ReduceConvertOps(abc.ABC):
         dotted_name2op_name = {}
         for op in ops_dict:
             # pylint: disable=protected-access
-            dotted_name2output_shape[ops_dict[op].dotted_name] = [dim if dim else 1 for dim in ops_dict[op]._output_shape]
+            dotted_name2output_shape[ops_dict[op].dotted_name] = [
+                dim if dim else 1 for dim in ops_dict[op]._output_shape
+            ]
             dotted_name2op_name[ops_dict[op].dotted_name] = op
         return dotted_name2output_shape, dotted_name2op_name
 
@@ -337,33 +398,54 @@ class ReduceConvertOps(abc.ABC):
             :return:
             """
             # prediction_coefficients = [1.66187677e+01, 0, 0, 0, 2.76830774e-01, 3.67453119e+00, 0, 2.43569237e+03]
-            prediction_coefficients = [2.75170939e+00, 0, 0, 8.06526234e-01, 0, 4.27417544e+00, 3.62439292e-02,
-                                       2.25527950e+03]  # new coeffs 1/22/2024
+            prediction_coefficients = [
+                2.75170939e00,
+                0,
+                0,
+                8.06526234e-01,
+                0,
+                4.27417544e00,
+                3.62439292e-02,
+                2.25527950e03,
+            ]  # new coeffs 1/22/2024
             if len(tensor_dims) == 4:
                 tensor_dims_corr = tensor_dims
             elif len(tensor_dims) == 2:
                 tensor_dims_corr = list(tensor_dims)
                 tensor_dims_corr.extend([1, 1])
-            elif len(tensor_dims) == 3:  # TODO: the way to address 3-dim tensors needs to be reviewed further later!
+            elif (
+                len(tensor_dims) == 3
+            ):  # TODO: the way to address 3-dim tensors needs to be reviewed further later!
                 tensor_dims_corr = list(tensor_dims)
                 tensor_dims_corr.extend([1])
-            elif len(
-                    tensor_dims) == 5:  # TODO: this is only temporary to make the SwinV2 model work, which has 5-dim tensors
+            elif (
+                len(tensor_dims) == 5
+            ):  # TODO: this is only temporary to make the SwinV2 model work, which has 5-dim tensors
                 tensor_dims_corr = list(tensor_dims)[1:]
-                _logger.info("WARNING: 5-dimensional tensor, taking the last 4 dimensions only!")
+                _logger.info(
+                    "WARNING: 5-dimensional tensor, taking the last 4 dimensions only!"
+                )
             else:
                 raise RuntimeError("Unexpected tensor dimensions.")
 
             # pylint: disable=no-member
-            convert_cost = \
-                prediction_coefficients[0] * tensor_dims_corr[self.TensorAxis.C.value] + \
-                prediction_coefficients[1] * tensor_dims_corr[self.TensorAxis.W.value] + \
-                prediction_coefficients[2] * tensor_dims_corr[self.TensorAxis.H.value] + \
-                prediction_coefficients[3] * tensor_dims_corr[self.TensorAxis.H.value] * tensor_dims_corr[self.TensorAxis.C.value] + \
-                prediction_coefficients[4] * tensor_dims_corr[self.TensorAxis.W.value] * tensor_dims_corr[self.TensorAxis.C.value] + \
-                prediction_coefficients[5] * tensor_dims_corr[self.TensorAxis.H.value] * tensor_dims_corr[self.TensorAxis.W.value] + \
-                prediction_coefficients[6] * tensor_size + \
-                prediction_coefficients[7] * math.ceil(tensor_dims_corr[self.TensorAxis.H.value] / 8)
+            convert_cost = (
+                prediction_coefficients[0] * tensor_dims_corr[self.TensorAxis.C.value]
+                + prediction_coefficients[1] * tensor_dims_corr[self.TensorAxis.W.value]
+                + prediction_coefficients[2] * tensor_dims_corr[self.TensorAxis.H.value]
+                + prediction_coefficients[3]
+                * tensor_dims_corr[self.TensorAxis.H.value]
+                * tensor_dims_corr[self.TensorAxis.C.value]
+                + prediction_coefficients[4]
+                * tensor_dims_corr[self.TensorAxis.W.value]
+                * tensor_dims_corr[self.TensorAxis.C.value]
+                + prediction_coefficients[5]
+                * tensor_dims_corr[self.TensorAxis.H.value]
+                * tensor_dims_corr[self.TensorAxis.W.value]
+                + prediction_coefficients[6] * tensor_size
+                + prediction_coefficients[7]
+                * math.ceil(tensor_dims_corr[self.TensorAxis.H.value] / 8)
+            )
 
             return convert_cost
 
@@ -373,18 +455,30 @@ class ReduceConvertOps(abc.ABC):
             candidate_nodes.append(origin_node)
             if "contraction" in self.quantizer_group_graph.nodes[origin_node]:
                 # pylint: disable=unnecessary-comprehension
-                candidate_nodes.extend([contracted_node for contracted_node in
-                                        self.quantizer_group_graph.nodes[origin_node]["contraction"]])
+                candidate_nodes.extend(
+                    [
+                        contracted_node
+                        for contracted_node in self.quantizer_group_graph.nodes[
+                            origin_node
+                        ]["contraction"]
+                    ]
+                )
 
             max_cost = 0
             for node_i in candidate_nodes:
-                convert_cost_node_i = convert_cost_prediction(self.op_graph.nodes[node_i]["tensor_dims"],
-                                                              self.op_graph.nodes[node_i]["tensor_size"])
+                convert_cost_node_i = convert_cost_prediction(
+                    self.op_graph.nodes[node_i]["tensor_dims"],
+                    self.op_graph.nodes[node_i]["tensor_size"],
+                )
                 if convert_cost_node_i >= max_cost:
                     max_cost = convert_cost_node_i
                     max_node = node_i
-            self.quantizer_group_graph.edges[edge]["tensor_dims"] = self.op_graph.nodes[max_node]["tensor_dims"]
-            self.quantizer_group_graph.edges[edge]["tensor_size"] = self.op_graph.nodes[max_node]["tensor_size"]
+            self.quantizer_group_graph.edges[edge]["tensor_dims"] = self.op_graph.nodes[
+                max_node
+            ]["tensor_dims"]
+            self.quantizer_group_graph.edges[edge]["tensor_size"] = self.op_graph.nodes[
+                max_node
+            ]["tensor_size"]
             self.quantizer_group_graph.edges[edge]["convert_cycles"] = max_cost
 
     @staticmethod
@@ -393,26 +487,32 @@ class ReduceConvertOps(abc.ABC):
         Loads convert cost from the qnn profiling file
         """
         cost_info = defaultdict(dict)
-        with open(qnn_profiling_file, 'r') as file:
+        with open(qnn_profiling_file, "r") as file:
             lines = file.readlines()
             start = 0
             for i_line in lines:
-                if 'Backend (Accelerator (execute) time (cycles))' in i_line:
+                if "Backend (Accelerator (execute) time (cycles))" in i_line:
                     start = 1
                     continue
-                if 'Backend (Accelerator (execute) time)' in i_line:
+                if "Backend (Accelerator (execute) time)" in i_line:
                     start = 0
                     break
                 if start == 1:
-                    op_fullname = i_line.split(':')[0].strip().split(' ')[0]
-                    op_type = op_fullname.split('_')[-1]
-                    cycle = int(i_line.split(':')[-1].split('cycles')[0])
-                    cost_info[op_fullname].update({'cycle': cycle, 'op': op_type})
+                    op_fullname = i_line.split(":")[0].strip().split(" ")[0]
+                    op_type = op_fullname.split("_")[-1]
+                    cycle = int(i_line.split(":")[-1].split("cycles")[0])
+                    cost_info[op_fullname].update({"cycle": cycle, "op": op_type})
         return cost_info
 
     @staticmethod
-    def add_bit_op_cost_to_graph(networkx_graph, mac_dict, candidate, op_graph, op_cost_from_hw=False,
-                                 qnn_profiling_file=None):
+    def add_bit_op_cost_to_graph(
+        networkx_graph,
+        mac_dict,
+        candidate,
+        op_graph,
+        op_cost_from_hw=False,
+        qnn_profiling_file=None,
+    ):
         """
         Generates bit-operations cost for every node in the graph
 
@@ -430,12 +530,15 @@ class ReduceConvertOps(abc.ABC):
             # TODO change the file name based on act_bw/param_bw
             cost_info = ReduceConvertOps.load_profiling_cost(qnn_profiling_file)
         for i_node in networkx_graph.nodes:
-            bit_op = ReduceConvertOps.generate_cost_for_node(networkx_graph, i_node, mac_dict, act_bw, param_bw,
-                                                             op_graph, cost_info)
+            bit_op = ReduceConvertOps.generate_cost_for_node(
+                networkx_graph, i_node, mac_dict, act_bw, param_bw, op_graph, cost_info
+            )
             networkx_graph.nodes[i_node][(act_bw, param_bw)] = bit_op
 
     @staticmethod
-    def generate_cost_for_node(networkx_graph, node, mac_dict, act_bw, param_bw, op_graph, cost_info=None):
+    def generate_cost_for_node(
+        networkx_graph, node, mac_dict, act_bw, param_bw, op_graph, cost_info=None
+    ):
         """
         Helper method to generate bit-op cost for every node in the graph
 
@@ -451,20 +554,20 @@ class ReduceConvertOps(abc.ABC):
 
         op_cost = 0
         nodes_collection = [node]
-        if 'contraction' in networkx_graph.nodes[node]:
-            for i in networkx_graph.nodes[node]['contraction']:
+        if "contraction" in networkx_graph.nodes[node]:
+            for i in networkx_graph.nodes[node]["contraction"]:
                 nodes_collection.append(i)
-        pattern = r'_(input|output|weights_only)$'
+        pattern = r"_(input|output|weights_only)$"
         for i_node in nodes_collection:
-            if 'output' in i_node:
-                op_name = re.sub(pattern, '', i_node)
+            if "output" in i_node:
+                op_name = re.sub(pattern, "", i_node)
 
                 if cost_info is not None:
                     if op_name in cost_info:
-                        op_cost += cost_info[op_name]['cycle']
+                        op_cost += cost_info[op_name]["cycle"]
                 else:
                     if op_name in mac_dict:
-                        if op_graph.nodes[i_node]['has_weight']:
+                        if op_graph.nodes[i_node]["has_weight"]:
                             op_cost += mac_dict[op_name] * act_bw * param_bw
                         else:
                             # pylint: disable=unnecessary-comprehension
@@ -473,10 +576,12 @@ class ReduceConvertOps(abc.ABC):
                                 op_cost += mac_dict[op_name] * act_bw
                             elif len(i_node_pred) == 2:
                                 # extend this logic for other Ops if needed
-                                assert 'Mul' in op_name
+                                assert "Mul" in op_name
                                 op_cost += mac_dict[op_name] * act_bw * act_bw
                             else:
-                                raise RuntimeError('unexpected cases for op_cost calculation')
+                                raise RuntimeError(
+                                    "unexpected cases for op_cost calculation"
+                                )
 
         return op_cost
 
@@ -534,25 +639,34 @@ class ReduceConvertOps(abc.ABC):
         _logger.info("Solving MIP for alpha = %f", alpha)
 
         if alpha < 1:
-            phase_three_sol, solve_data_dict = ReduceConvertOps.run_convert_op_reduction_solver(
-                self.quantizer_group_graph,
-                alpha, self._phase_two_sol, self._candidates,
-                sampling_strategy)
+            phase_three_sol, solve_data_dict = (
+                ReduceConvertOps.run_convert_op_reduction_solver(
+                    self.quantizer_group_graph,
+                    alpha,
+                    self._phase_two_sol,
+                    self._candidates,
+                    sampling_strategy,
+                )
+            )
 
         elif alpha == 1.0:  # output the phase 2 solution
             phase_three_sol = self._phase_two_sol.copy()
             solve_data_dict = {}
             solve_data_dict["status"] = "alpha = 1.0; solution copied from phase 2."
-            solve_data_dict["num_precision_changes_phase_2"] = ReduceConvertOps.compute_num_precision_changes(
-                self.quantizer_group_graph,
-                self._phase_two_sol)
+            solve_data_dict["num_precision_changes_phase_2"] = (
+                ReduceConvertOps.compute_num_precision_changes(
+                    self.quantizer_group_graph, self._phase_two_sol
+                )
+            )
         else:
             raise RuntimeError("Invalid value for alpha.")
 
         return phase_three_sol, solve_data_dict
 
     @staticmethod
-    def run_convert_op_reduction_solver(qg_graph, alpha, phase_two_sol, candidates, sampling_strategy):
+    def run_convert_op_reduction_solver(
+        qg_graph, alpha, phase_two_sol, candidates, sampling_strategy
+    ):
         """
         This function solves the MIP for controlling conversion ops.
         qg_graph is the quantizer group graph in networkx.
@@ -574,14 +688,21 @@ class ReduceConvertOps(abc.ABC):
                 node2index[node] = i
 
         # calculate num_precision_changes
-        num_precision_changes = ReduceConvertOps.compute_num_precision_changes(qg_graph, phase_two_sol)
+        num_precision_changes = ReduceConvertOps.compute_num_precision_changes(
+            qg_graph, phase_two_sol
+        )
         _logger.info(
             "Number of precision changes (i.e. cut size with all weights set to 1) for the phase 2 solution is: %d",
-            num_precision_changes)
+            num_precision_changes,
+        )
 
         # calculate weighted cut size
-        weighted_cut_size = ReduceConvertOps.compute_weighted_cut_size(qg_graph, phase_two_sol)
-        _logger.info("Weighted cut size for the phase 2 solution is: %d", weighted_cut_size)
+        weighted_cut_size = ReduceConvertOps.compute_weighted_cut_size(
+            qg_graph, phase_two_sol
+        )
+        _logger.info(
+            "Weighted cut size for the phase 2 solution is: %d", weighted_cut_size
+        )
 
         # variables
         x = cp.Variable(num_nodes, boolean=True)
@@ -601,15 +722,27 @@ class ReduceConvertOps(abc.ABC):
         if sampling_strategy == SamplingStrategy.unweighted_cut_size:
             precision_change_terms = []
             for u, v in qg_graph.edges:
-                precision_change_terms.append(cp.abs(x[node2index[u]] - x[node2index[v]]))
-            constraints += [cp.sum(precision_change_terms) <= alpha * num_precision_changes]
-        elif sampling_strategy == SamplingStrategy.weighted_with_tensor_size:  # using tensor size as conversion cost
+                precision_change_terms.append(
+                    cp.abs(x[node2index[u]] - x[node2index[v]])
+                )
+            constraints += [
+                cp.sum(precision_change_terms) <= alpha * num_precision_changes
+            ]
+        elif (
+            sampling_strategy == SamplingStrategy.weighted_with_tensor_size
+        ):  # using tensor size as conversion cost
             weight_cut_terms = []
             for u, v in qg_graph.edges:
                 weight_cut_terms.append(
-                    cp.abs(x[node2index[u]] - x[node2index[v]]) * qg_graph.edges[(u, v)]["tensor_size"])
-            weighted_cut_size_tensor_size = ReduceConvertOps.compute_weighted_cut_size(qg_graph, phase_two_sol, weight_key="tensor_size")
-            constraints += [cp.sum(weight_cut_terms) <= alpha * weighted_cut_size_tensor_size]
+                    cp.abs(x[node2index[u]] - x[node2index[v]])
+                    * qg_graph.edges[(u, v)]["tensor_size"]
+                )
+            weighted_cut_size_tensor_size = ReduceConvertOps.compute_weighted_cut_size(
+                qg_graph, phase_two_sol, weight_key="tensor_size"
+            )
+            constraints += [
+                cp.sum(weight_cut_terms) <= alpha * weighted_cut_size_tensor_size
+            ]
         elif sampling_strategy == SamplingStrategy.weighted_with_predicted_convert_cost:
             # similar to SamplingStrategy.weighted_with_tensor_size but the upper bound of the constraint is determined differently
             # # Step 1: get a list of conversion costs in phase 2 solution
@@ -629,18 +762,25 @@ class ReduceConvertOps(abc.ABC):
             if alpha == 0:
                 cost_sum_threshold = 0
             else:
-                ind_conv_cost_total_ph2 = np.where(conversion_costs_np_cumsum < weighted_cut_size)[0][-1]
+                ind_conv_cost_total_ph2 = np.where(
+                    conversion_costs_np_cumsum < weighted_cut_size
+                )[0][-1]
                 # cost_sum_threshold = conversion_costs_np_cumsum[int(alpha * len(conversion_costs))]
-                cost_sum_threshold = conversion_costs_np_cumsum[int(alpha * ind_conv_cost_total_ph2)]
+                cost_sum_threshold = conversion_costs_np_cumsum[
+                    int(alpha * ind_conv_cost_total_ph2)
+                ]
             # Step 4: Enforce the constraint
             weight_cut_terms = []
             for u, v in qg_graph.edges:
                 weight_cut_terms.append(
-                    cp.abs(x[node2index[u]] - x[node2index[v]]) * qg_graph.edges[(u, v)]["convert_cycles"])
+                    cp.abs(x[node2index[u]] - x[node2index[v]])
+                    * qg_graph.edges[(u, v)]["convert_cycles"]
+                )
             constraints += [cp.sum(weight_cut_terms) <= cost_sum_threshold]
         else:
             raise RuntimeError(
-                "Available versions are unweighted_cut_size(1), weighted_with_tensor_size(2), and weighted_with_predicted_convert_cost(3)")
+                "Available versions are unweighted_cut_size(1), weighted_with_tensor_size(2), and weighted_with_predicted_convert_cost(3)"
+            )
 
         # objective
         objective_terms = []
@@ -654,7 +794,9 @@ class ReduceConvertOps(abc.ABC):
                     elif key == (16, 8):
                         objective_terms.append(qg_graph.nodes[node][key] * y[i])
                     else:
-                        raise RuntimeError("Considering only 8 or 16 bit activation candidates.")
+                        raise RuntimeError(
+                            "Considering only 8 or 16 bit activation candidates."
+                        )
         objective = cp.sum(objective_terms)
 
         # cvxpy problem instance
@@ -676,21 +818,35 @@ class ReduceConvertOps(abc.ABC):
         _logger.info("objective.value: %s", objective.value)
         phase_three_sol = {}
         for node, idx in node2index.items():
-            if round(x[idx].value) == 1 and round(y[idx].value) == 0:  # "round" is for tolerance
+            if (
+                round(x[idx].value) == 1 and round(y[idx].value) == 0
+            ):  # "round" is for tolerance
                 phase_three_sol[node] = 8
             elif round(x[idx].value) == 0 and round(y[idx].value) == 1:
                 phase_three_sol[node] = 16
             else:
                 raise RuntimeError("The solution has a bug")
 
-        solve_data_dict["num_nodes_8bits_phase2"] = sum(sol == 8 for sol in phase_two_sol.values())
-        solve_data_dict["num_nodes_16bits_phase2"] = sum(sol == 16 for sol in phase_two_sol.values())
-        solve_data_dict["num_nodes_8bits_phase3"] = sum(sol == 8 for sol in phase_three_sol.values())
-        solve_data_dict["num_nodes_16bits_phase3"] = sum(sol == 16 for sol in phase_three_sol.values())
+        solve_data_dict["num_nodes_8bits_phase2"] = sum(
+            sol == 8 for sol in phase_two_sol.values()
+        )
+        solve_data_dict["num_nodes_16bits_phase2"] = sum(
+            sol == 16 for sol in phase_two_sol.values()
+        )
+        solve_data_dict["num_nodes_8bits_phase3"] = sum(
+            sol == 8 for sol in phase_three_sol.values()
+        )
+        solve_data_dict["num_nodes_16bits_phase3"] = sum(
+            sol == 16 for sol in phase_three_sol.values()
+        )
 
-        num_precision_changes_phase_3 = ReduceConvertOps.compute_num_precision_changes(qg_graph, phase_three_sol)
+        num_precision_changes_phase_3 = ReduceConvertOps.compute_num_precision_changes(
+            qg_graph, phase_three_sol
+        )
         _logger.info("num_precision_changes_phase_3: %d", num_precision_changes_phase_3)
-        weighted_cut_size_phase_3 = ReduceConvertOps.compute_weighted_cut_size(qg_graph, phase_three_sol)
+        weighted_cut_size_phase_3 = ReduceConvertOps.compute_weighted_cut_size(
+            qg_graph, phase_three_sol
+        )
         _logger.info("weighted_cut_size_phase_3: %d", weighted_cut_size_phase_3)
 
         solve_data_dict["num_precision_changes_phase_2"] = num_precision_changes
@@ -706,7 +862,9 @@ class ReduceConvertOps(abc.ABC):
                 elif phase_two_sol[node] == 16:
                     objective_eval_for_phase2_sol += qg_graph.nodes[node][(16, 8)]
                 else:
-                    raise NotImplementedError("Considering only 8 or 16 bit activation candidates.")
+                    raise NotImplementedError(
+                        "Considering only 8 or 16 bit activation candidates."
+                    )
 
         solve_data_dict["objective_eval_for_phase2_sol"] = objective_eval_for_phase2_sol
 
@@ -725,12 +883,15 @@ class ReduceConvertOps(abc.ABC):
         This function saves the phase 3 solution as a json file.
         """
         filename = results_dir + "/AMP_phase_3_data_{}.json".format(filename_suffix)
-        with open(filename, 'w') as fp:
+        with open(filename, "w") as fp:
             json.dump(solve_data_dict, fp)
 
-    def apply(self, results_dir: str,
-              sampling_strategy: SamplingStrategy = SamplingStrategy.weighted_with_predicted_convert_cost,
-              alpha_options: List = None):
+    def apply(
+        self,
+        results_dir: str,
+        sampling_strategy: SamplingStrategy = SamplingStrategy.weighted_with_predicted_convert_cost,
+        alpha_options: List = None,
+    ):
         """
         Applies convert op reduction algorithm
 
@@ -744,17 +905,33 @@ class ReduceConvertOps(abc.ABC):
 
         for alpha in alpha_options:
             _logger.info("Solving MIP for alpha: %f", alpha)
-            phase_three_sol, solve_data_dict = self.run_amp_phase_3(alpha, sampling_strategy)
+            phase_three_sol, solve_data_dict = self.run_amp_phase_3(
+                alpha, sampling_strategy
+            )
             _ = self.generate_qg_solution(phase_three_sol)
 
-            ReduceConvertOps.save_graph_dot_w_color("dummy_model", self.quantizer_group_graph, self._phase_two_sol,
-                                                    results_dir, filename_suffix="phase2sol")
-            ReduceConvertOps.save_graph_dot_w_color("dummy_model", self.quantizer_group_graph, phase_three_sol,
-                                                    results_dir, filename_suffix="phase3sol_alpha{}".format(alpha))
-            ReduceConvertOps.save_phase_3_data_as_json(solve_data_dict, results_dir, filename_suffix="alpha_{}".format(alpha))
+            ReduceConvertOps.save_graph_dot_w_color(
+                "dummy_model",
+                self.quantizer_group_graph,
+                self._phase_two_sol,
+                results_dir,
+                filename_suffix="phase2sol",
+            )
+            ReduceConvertOps.save_graph_dot_w_color(
+                "dummy_model",
+                self.quantizer_group_graph,
+                phase_three_sol,
+                results_dir,
+                filename_suffix="phase3sol_alpha{}".format(alpha),
+            )
+            ReduceConvertOps.save_phase_3_data_as_json(
+                solve_data_dict, results_dir, filename_suffix="alpha_{}".format(alpha)
+            )
 
     @staticmethod
-    def save_graph_dot_w_color(model_name, qg_graph, solution_dict, results_dir, filename_suffix=""):
+    def save_graph_dot_w_color(
+        model_name, qg_graph, solution_dict, results_dir, filename_suffix=""
+    ):
         """
         This function saves the quantizer group graph as a dot file with node colors indicating their bitwidth.
         We need a copy without the contraction attribute; otherwise, pydot throws the following error:
@@ -777,15 +954,22 @@ class ReduceConvertOps(abc.ABC):
                 elif solution_dict[node] == 16:
                     G_without_contraction_attribute.nodes[node]["color"] = "red"
                 else:
-                    raise NotImplementedError("Just considering 8 or 16 bit activation candidates.")
+                    raise NotImplementedError(
+                        "Just considering 8 or 16 bit activation candidates."
+                    )
             G_without_contraction_attribute.nodes[node]["style"] = "filled"
 
         # Also, need to remove edge attributes, otherwise we get a pydot error
-        for edge in G_without_contraction_attribute.edges: # pylint: disable=consider-using-dict-items
+        for edge in G_without_contraction_attribute.edges:  # pylint: disable=consider-using-dict-items
             for attribute in qg_graph.edges[edge]:
                 del G_without_contraction_attribute.edges[edge][attribute]
 
         p = to_pydot(G_without_contraction_attribute)
-        p.write(results_dir + "/AMP_ph3_quantizer_group_graph_{}_color_{}.dot".format(model_name, filename_suffix))
+        p.write(
+            results_dir
+            + "/AMP_ph3_quantizer_group_graph_{}_color_{}.dot".format(
+                model_name, filename_suffix
+            )
+        )
 
         # Note: We can later convert the dot file to png using: "dot filename.dot -Tpng -o filename.png"

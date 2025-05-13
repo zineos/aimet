@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-"""  Module for holding all the constants """
+"""Module for holding all the constants"""
 
 import tensorflow as tf
 

@@ -35,7 +35,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Test Omniquant functions. (Not include LET modules.) """
+"""Test Omniquant functions. (Not include LET modules.)"""
+
 import contextlib
 import copy
 import numpy as np
@@ -44,7 +45,12 @@ from safetensors.numpy import save_file, load_file
 import tempfile
 import torch
 from pathlib import Path
-from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
+from peft import (
+    LoraConfig,
+    get_peft_model,
+    get_peft_model_state_dict,
+    set_peft_model_state_dict,
+)
 from peft.tuners.lora.layer import Linear as LoraLinear
 import pytest
 
@@ -69,23 +75,29 @@ def add_custom_model_class_to_support_model_group(model_class, target_group_name
 
     setattr(decoder_processor, target_group_name, target_group)
 
+
 class FakeLlamaModel(torch.nn.Module):
-    """ Toy model for test """
+    """Toy model for test"""
+
     def __init__(self, layer_num, seq_len, head_num, emb_dim):
         super().__init__()
         assert emb_dim % head_num == 0, "emb_dim need to be dividable by head_num."
-        self.layers = torch.nn.ModuleList([FakeDecoderBlcok(seq_len, head_num, emb_dim) for _ in range(layer_num)])
+        self.layers = torch.nn.ModuleList(
+            [FakeDecoderBlcok(seq_len, head_num, emb_dim) for _ in range(layer_num)]
+        )
         self.out_linear = torch.nn.Linear(emb_dim, 5)
 
     def forward(self, x):
-        """ model forward """
+        """model forward"""
         for layer in self.layers:
             x = layer(x)
         x = self.out_linear(x)
         return x
 
+
 class FakeDecoderBlcok(torch.nn.Module):
-    """ Toy model for test """
+    """Toy model for test"""
+
     def __init__(self, seq_len, head_num, emb_dim):
         super().__init__()
         self.input_layernorm = torch.nn.LayerNorm(emb_dim)
@@ -94,15 +106,17 @@ class FakeDecoderBlcok(torch.nn.Module):
         self.post_attention_layernorm = torch.nn.LayerNorm(emb_dim)
 
     def forward(self, x):
-        """ model forward """
+        """model forward"""
         x = self.input_layernorm(x)
         x = self.self_attn(x)
         x = self.mlp(x)
         x = self.post_attention_layernorm(x)
         return x
 
+
 class FakeSelfAttn(torch.nn.Module):
-    """ Toy model for test """
+    """Toy model for test"""
+
     def __init__(self, seq_len, head_num, emb_dim):
         super().__init__()
         self.seq_len = seq_len
@@ -114,19 +128,37 @@ class FakeSelfAttn(torch.nn.Module):
         self.o_proj = torch.nn.Linear(emb_dim, emb_dim)
 
     def forward(self, x):
-        """ model forward """
-        head_dim = self.emb_dim//self.head_num
-        q = self.q_proj(x).reshape(-1, self.seq_len, self.head_num, head_dim).permute(0, 2, 1, 3)
-        k = self.k_proj(x).reshape(-1, self.seq_len, self.head_num, head_dim).permute(0, 2, 3, 1)
-        v = self.v_proj(x).reshape(-1, self.seq_len, self.head_num, head_dim).permute(0, 2, 1, 3)
+        """model forward"""
+        head_dim = self.emb_dim // self.head_num
+        q = (
+            self.q_proj(x)
+            .reshape(-1, self.seq_len, self.head_num, head_dim)
+            .permute(0, 2, 1, 3)
+        )
+        k = (
+            self.k_proj(x)
+            .reshape(-1, self.seq_len, self.head_num, head_dim)
+            .permute(0, 2, 3, 1)
+        )
+        v = (
+            self.v_proj(x)
+            .reshape(-1, self.seq_len, self.head_num, head_dim)
+            .permute(0, 2, 1, 3)
+        )
         qk = torch.matmul(q, k)
-        qkv = torch.matmul(qk, v).permute(0, 2, 1, 3).reshape(-1, self.seq_len, self.head_num*head_dim)
+        qkv = (
+            torch.matmul(qk, v)
+            .permute(0, 2, 1, 3)
+            .reshape(-1, self.seq_len, self.head_num * head_dim)
+        )
         out = self.o_proj(qkv)
 
         return out
 
+
 class FakeMlp(torch.nn.Module):
-    """ Toy model for test """
+    """Toy model for test"""
+
     def __init__(self, emb_dim):
         super().__init__()
         self.gate_proj = torch.nn.Linear(emb_dim, emb_dim)
@@ -134,16 +166,18 @@ class FakeMlp(torch.nn.Module):
         self.down_proj = torch.nn.Linear(emb_dim, emb_dim)
 
     def forward(self, x):
-        """ model forward """
+        """model forward"""
         y0 = self.gate_proj(x)
         y1 = self.up_proj(x)
         y1 = self.down_proj(y1)
         return y0 + y1
 
+
 class TestOmniquant:
-    """ Test Omniquant. """
+    """Test Omniquant."""
+
     def test_get_transformer_processor(self):
-        """ Test get_transformer_processor returns correct TransformerProcessor and raise error. """
+        """Test get_transformer_processor returns correct TransformerProcessor and raise error."""
         layer_num = 5
         seq_len = 20
         head_num = 5
@@ -154,8 +188,12 @@ class TestOmniquant:
             # Make sure model is runnable.
             fake_llama_model(dummy_input)
 
-        with add_custom_model_class_to_support_model_group(FakeLlamaModel, "LlamaModelGroup"):
-            llama_processor = decoder_processor.get_transformer_processor(fake_llama_model)
+        with add_custom_model_class_to_support_model_group(
+            FakeLlamaModel, "LlamaModelGroup"
+        ):
+            llama_processor = decoder_processor.get_transformer_processor(
+                fake_llama_model
+            )
             assert llama_processor.__name__ == "LlamaProcessor"
 
             decoder_list = llama_processor.get_decoder_list(fake_llama_model)
@@ -163,14 +201,16 @@ class TestOmniquant:
 
             for _decoder_block in decoder_list:
                 let_module_pair = llama_processor.get_let_module_pair(_decoder_block)
-                assert len(let_module_pair) == 4 # Llama Model Group should have 4 let pairs.
+                assert (
+                    len(let_module_pair) == 4
+                )  # Llama Model Group should have 4 let pairs.
 
         with pytest.raises(ValueError):
             decoder_processor.get_transformer_processor(fake_llama_model)
 
     # pylint: disable=too-many-locals
     def test_dump_meta_data(self):
-        """ Test _dump_meta_data saves data and they are same as LET scale/ """
+        """Test _dump_meta_data saves data and they are same as LET scale/"""
         layer_num = 5
         seq_len = 20
         head_num = 5
@@ -181,22 +221,32 @@ class TestOmniquant:
         _convert_sim_to_letsim(qsim)
         omniquant = omniquant_optimizer.Omniquant()
 
-        with add_custom_model_class_to_support_model_group(FakeLlamaModel, "LlamaModelGroup"):
+        with add_custom_model_class_to_support_model_group(
+            FakeLlamaModel, "LlamaModelGroup"
+        ):
             with torch.no_grad():
-                llama_processor = decoder_processor.get_transformer_processor(fake_llama_model)
+                llama_processor = decoder_processor.get_transformer_processor(
+                    fake_llama_model
+                )
                 decoder_list = llama_processor.get_decoder_list(qsim.model)
 
                 for _decoder_block in decoder_list:
-                    qt_let_pair_list = llama_processor.get_let_module_pair(_decoder_block)
+                    qt_let_pair_list = llama_processor.get_let_module_pair(
+                        _decoder_block
+                    )
                     llama_processor.init_let_params(qt_let_pair_list, num_repeats=1)
 
                     # Manual apply scale to Let Module
                     for let_pair in qt_let_pair_list:
                         prev, foll = let_pair.prev, let_pair.follow
                         scale = torch.randn(emb_dim)
-                        prev[0].prev_scale = torch.nn.Parameter(prev[0].prev_scale*scale)
+                        prev[0].prev_scale = torch.nn.Parameter(
+                            prev[0].prev_scale * scale
+                        )
                         for _foll in foll:
-                            _foll.foll_scale = torch.nn.Parameter(_foll.foll_scale*scale)
+                            _foll.foll_scale = torch.nn.Parameter(
+                                _foll.foll_scale * scale
+                            )
 
                     for module in _decoder_block.modules():
                         if isinstance(module, LETModule):
@@ -204,23 +254,29 @@ class TestOmniquant:
                 # pylint: disable=protected-access
                 with tempfile.TemporaryDirectory() as tempdir:
                     omniquant._dump_meta_data(qsim.model, Path(tempdir))
-                    metadata_path = os.path.join(tempdir, "aimet_omniquant_metadata.safetensor")
+                    metadata_path = os.path.join(
+                        tempdir, "aimet_omniquant_metadata.safetensor"
+                    )
                     metadata = load_file(metadata_path)
-                    assert len(metadata) == 55 # There should be 55 scales dumped.
+                    assert len(metadata) == 55  # There should be 55 scales dumped.
 
                 for k, metadata_scale in metadata.items():
                     module_name = ".".join(k.split(".")[:-1])
                     prev_foll = k.split(".")[-1]
                     let_module = qsim.model.get_submodule(module_name)
-                    cached_scale = getattr(let_module, "_cached_" + prev_foll + "_scale")
+                    cached_scale = getattr(
+                        let_module, "_cached_" + prev_foll + "_scale"
+                    )
                     print(cached_scale)
                     print(metadata_scale)
                     print(np.equal(cached_scale, metadata_scale))
-                    assert (np.equal(cached_scale, metadata_scale)).all() # metadata_scale is numpy array
+                    assert (
+                        np.equal(cached_scale, metadata_scale)
+                    ).all()  # metadata_scale is numpy array
 
     # pylint: disable=too-many-locals
     def test_load_lora_model(self):
-        """ Test omniquant_optimizer.update_lora_weights """
+        """Test omniquant_optimizer.update_lora_weights"""
         layer_num = 2
         seq_len = 20
         head_num = 5
@@ -255,11 +311,15 @@ class TestOmniquant:
                 if layer_name.endswith("prev"):
                     if module.bias is not None:
                         module.bias.copy_(module.bias / scale)
-                    new_weight = module.weight / (scale.reshape(-1, 1) if isinstance(module, torch.nn.Linear) else scale)
+                    new_weight = module.weight / (
+                        scale.reshape(-1, 1)
+                        if isinstance(module, torch.nn.Linear)
+                        else scale
+                    )
                     module.weight.copy_(new_weight)
 
                 elif layer_name.endswith("foll"):
-                    module.weight.copy_(module.weight* scale.reshape(1, -1))
+                    module.weight.copy_(module.weight * scale.reshape(1, -1))
 
         let_output = let_model(dummy_input)
         ori_output = ori_model(dummy_input)
@@ -271,12 +331,12 @@ class TestOmniquant:
             lora_dropout=0.1,
             r=2,
             bias="none",
-            target_modules = ["q_proj", "v_proj", "up_proj", "down_proj"]
+            target_modules=["q_proj", "v_proj", "up_proj", "down_proj"],
         )
         peft_ori_model = get_peft_model(ori_model, lora_config)
         peft_let_model = get_peft_model(let_model, lora_config)
-        peft_ori_model.eval() # .eval() to disable lora dropout.
-        peft_let_model.eval() # .eval() to disable lora dropout.
+        peft_ori_model.eval()  # .eval() to disable lora dropout.
+        peft_let_model.eval()  # .eval() to disable lora dropout.
 
         # Lora B default init to zero weight.
         # Init lora B weight to random weight.
@@ -284,9 +344,13 @@ class TestOmniquant:
             for _, module in peft_ori_model.named_modules():
                 if isinstance(module, LoraLinear):
                     for _, _lora_b in module.lora_B.items():
-                        _lora_b.weight = torch.nn.Parameter(torch.randn(_lora_b.weight.shape))
+                        _lora_b.weight = torch.nn.Parameter(
+                            torch.randn(_lora_b.weight.shape)
+                        )
         # Copy peft weight to let peft model.
-        set_peft_model_state_dict(peft_let_model, get_peft_model_state_dict(peft_ori_model))
+        set_peft_model_state_dict(
+            peft_let_model, get_peft_model_state_dict(peft_ori_model)
+        )
 
         # Run omniquant_optimizer.update_lora_weights
         with tempfile.TemporaryDirectory() as tempdir:

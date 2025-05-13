@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=import-outside-toplevel
-""" v2 lazy quant wrapper / quantizer """
+"""v2 lazy quant wrapper / quantizer"""
 
 import itertools
 from typing import Sequence
@@ -55,7 +55,7 @@ from aimet_torch.v2.quantization.encoding_analyzer import (
 
 class _V2LazyQuantizer(LazyQuantizer):
     def realize(self):
-        """ Returns v2 quantizer using collected information. """
+        """Returns v2 quantizer using collected information."""
         if not self.enabled:
             return None
 
@@ -65,8 +65,12 @@ class _V2LazyQuantizer(LazyQuantizer):
 
         if self.data_type == QuantizationDataType.int:
             encoding_analyzer = self._get_v2_encoding_analyzer(scale_shape)
-            quantizer = QuantizeDequantize(scale_shape, self.bitwidth,
-                                           self.use_symmetric_encodings, encoding_analyzer)
+            quantizer = QuantizeDequantize(
+                scale_shape,
+                self.bitwidth,
+                self.use_symmetric_encodings,
+                encoding_analyzer,
+            )
         else:
             if self.bitwidth == 16:
                 quantizer = FloatQuantizeDequantize(dtype=torch.float16)
@@ -75,8 +79,9 @@ class _V2LazyQuantizer(LazyQuantizer):
                 mantissa_bits = v1_fp_quantization.NUM_MANTISSA_BITS
                 exponent_bits = 7 - mantissa_bits
                 encoding_analyzer = self._get_v2_encoding_analyzer(scale_shape)
-                quantizer = FloatQuantizeDequantize(exponent_bits, mantissa_bits,
-                                                    encoding_analyzer=encoding_analyzer)
+                quantizer = FloatQuantizeDequantize(
+                    exponent_bits, mantissa_bits, encoding_analyzer=encoding_analyzer
+                )
             # Float quantizers are not trainable in V1 quantsim
             for param in quantizer.parameters():
                 param.requires_grad = False
@@ -88,17 +93,24 @@ class _V2LazyQuantizer(LazyQuantizer):
         Checks quantizer properties before creating quantizer.
         """
         if self.use_symmetric_encodings:
-            assert not self.use_strict_symmetric, "Strict symmetric is not supported in quantsim v2"
-            assert not self.use_unsigned_symmetric, "Unsigned symmetric is not supported in quantsim v2"
-            assert not self.is_unsigned_symmetric, "Unsigned symmetric is not supported in quantsim v2"
+            assert not self.use_strict_symmetric, (
+                "Strict symmetric is not supported in quantsim v2"
+            )
+            assert not self.use_unsigned_symmetric, (
+                "Unsigned symmetric is not supported in quantsim v2"
+            )
+            assert not self.is_unsigned_symmetric, (
+                "Unsigned symmetric is not supported in quantsim v2"
+            )
 
         if self.channel_axis:
             assert self.input_tensor_shape
-            assert 0 <= self.channel_axis < len(self.input_tensor_shape), \
+            assert 0 <= self.channel_axis < len(self.input_tensor_shape), (
                 f"Channel axis {self.channel_axis} is out of bound of param shape {self.input_tensor_shape}"
+            )
 
     def _get_scale_shape(self) -> Sequence[int]:
-        """ Returns shape of quantization scale/offset. """
+        """Returns shape of quantization scale/offset."""
         if self.channel_axis is not None:
             assert self.input_tensor_shape
             channel_axis = self.channel_axis if self.channel_axis else 0
@@ -116,14 +128,21 @@ class _V2LazyQuantizer(LazyQuantizer):
 
         :return: corresponding v2 quant scheme
         """
-        if self.quant_scheme in (QuantScheme.post_training_tf, QuantScheme.training_range_learning_with_tf_init):
+        if self.quant_scheme in (
+            QuantScheme.post_training_tf,
+            QuantScheme.training_range_learning_with_tf_init,
+        ):
             return MinMaxEncodingAnalyzer(shape)
         if self.quant_scheme == QuantScheme.post_training_percentile:
             return PercentileEncodingAnalyzer(shape)
-        if self.quant_scheme in (QuantScheme.post_training_tf_enhanced,
-                                 QuantScheme.training_range_learning_with_tf_enhanced_init):
+        if self.quant_scheme in (
+            QuantScheme.post_training_tf_enhanced,
+            QuantScheme.training_range_learning_with_tf_enhanced_init,
+        ):
             return TfEnhancedEncodingAnalyzer(shape)
-        raise NotImplementedError(f"Quant scheme {self.quant_scheme} in old quantsim is not supported yet in quantsim v1.5")
+        raise NotImplementedError(
+            f"Quant scheme {self.quant_scheme} in old quantsim is not supported yet in quantsim v1.5"
+        )
 
 
 class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
@@ -139,7 +158,10 @@ class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
         from aimet_torch.v2.nn import QuantizationMixin
         from aimet_torch.v2.nn.fake_quant import _legacy_impl
 
-        assert isinstance(self._module_to_wrap, (QuantizationMixin, _legacy_impl.FakeQuantizationMixin))
+        assert isinstance(
+            self._module_to_wrap,
+            (QuantizationMixin, _legacy_impl.FakeQuantizationMixin),
+        )
         quantized_module = self._module_to_wrap
 
         # For unused modules, quantsim assumes # inputs = # outputs = 1
@@ -170,11 +192,16 @@ class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
 
         :param quantized_module: module containing quantizers whose requires_grad need to be updated
         """
-        if self._quant_scheme in (QuantScheme.post_training_tf_enhanced, QuantScheme.post_training_tf, \
-                                  QuantScheme.post_training_percentile):
-            for quantizer in itertools.chain(quantized_module.input_quantizers,
-                                             quantized_module.output_quantizers,
-                                             quantized_module.param_quantizers.values()):
+        if self._quant_scheme in (
+            QuantScheme.post_training_tf_enhanced,
+            QuantScheme.post_training_tf,
+            QuantScheme.post_training_percentile,
+        ):
+            for quantizer in itertools.chain(
+                quantized_module.input_quantizers,
+                quantized_module.output_quantizers,
+                quantized_module.param_quantizers.values(),
+            ):
                 if quantizer is not None:
                     for _, param in quantizer.named_parameters():
                         param.requires_grad = False
@@ -192,13 +219,23 @@ class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
             param_quantizers.append(param_quantizer_dict[key])
             param_quantizer_info_list.append(self.param_quantizers[key])
 
-        quantizer_list = quantized_module.input_quantizers + quantized_module.output_quantizers + param_quantizers
-        quantizer_info_list = self.input_quantizers + self.output_quantizers + param_quantizer_info_list
+        quantizer_list = (
+            quantized_module.input_quantizers
+            + quantized_module.output_quantizers
+            + param_quantizers
+        )
+        quantizer_info_list = (
+            self.input_quantizers + self.output_quantizers + param_quantizer_info_list
+        )
 
         for quantizer, quantizer_info in zip(quantizer_list, quantizer_info_list):
             # pylint: disable=protected-access
-            if quantizer is not None and quantizer_info.encoding_min_max_fixed_vals and \
-                    'min' in quantizer._initial_parameters and 'max' in quantizer._initial_parameters:
+            if (
+                quantizer is not None
+                and quantizer_info.encoding_min_max_fixed_vals
+                and "min" in quantizer._initial_parameters
+                and "max" in quantizer._initial_parameters
+            ):
                 with torch.no_grad():
                     quantizer.min.copy_(quantizer_info.encoding_min_max_fixed_vals[0])
                     quantizer.max.copy_(quantizer_info.encoding_min_max_fixed_vals[1])

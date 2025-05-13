@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Custom Wrapper for quantizing weights using Adaround """
+"""Custom Wrapper for quantizing weights using Adaround"""
 
 import contextlib
 from typing import Tuple
@@ -91,17 +91,25 @@ class AdaroundWrapper(AdaroundWrapperBase):
             return quantizer._ch_axis
         return 0
 
-    def _get_weight_quantizer_delta_and_offset(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_weight_quantizer_delta_and_offset(
+        self,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Returns delta and offset of the weight quantizer
         """
         quantizer = self.module_to_wrap.param_quantizers[self.weight_name]
         if isinstance(quantizer.encoding, list):
             # pylint: disable = protected-access
-            cpp_op = AimetTensorQuantizer.AimetTensorQuantizer(MAP_QUANT_SCHEME_TO_PYMO[quantizer.quant_scheme])
-            delta, offset = cpp_op.makeDeltaOffsetTensor(self.weight.device, quantizer.encoding)
+            cpp_op = AimetTensorQuantizer.AimetTensorQuantizer(
+                MAP_QUANT_SCHEME_TO_PYMO[quantizer.quant_scheme]
+            )
+            delta, offset = cpp_op.makeDeltaOffsetTensor(
+                self.weight.device, quantizer.encoding
+            )
         else:
             delta, offset = quantizer.encoding.delta, quantizer.encoding.offset
 
         ch_axis = self._get_weight_quantizer_channel_axis()
-        return broadcast_to_tensor(self.weight, delta, ch_axis), broadcast_to_tensor(self.weight, offset, ch_axis)
+        return broadcast_to_tensor(self.weight, delta, ch_axis), broadcast_to_tensor(
+            self.weight, offset, ch_axis
+        )

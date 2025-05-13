@@ -47,17 +47,16 @@ from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.CrosslayerEqualization)
 
-ClsSet = typing.Union[typing.Tuple[tf.keras.layers.Conv2D,
-                                   tf.keras.layers.Conv2D],
-                      typing.Tuple[tf.keras.layers.Conv2D,
-                                   tf.keras.layers.DepthwiseConv2D,
-                                   tf.keras.layers.Conv2D]]
+ClsSet = typing.Union[
+    typing.Tuple[tf.keras.layers.Conv2D, tf.keras.layers.Conv2D],
+    typing.Tuple[
+        tf.keras.layers.Conv2D, tf.keras.layers.DepthwiseConv2D, tf.keras.layers.Conv2D
+    ],
+]
 
 cls_supported_layers = (tf.keras.layers.Conv2D, tf.keras.layers.Conv1D)
 zero_padding_layers = (tf.keras.layers.ZeroPadding2D, tf.keras.layers.ZeroPadding1D)
 cls_supported_activations = (tf.keras.layers.ReLU, tf.keras.layers.PReLU)
-
-
 
 
 class GraphSearchUtils:
@@ -83,7 +82,9 @@ class GraphSearchUtils:
 
         return result
 
-    def find_layer_groups_to_scale(self) -> typing.List[typing.List[tf.keras.layers.Conv2D]]:
+    def find_layer_groups_to_scale(
+        self,
+    ) -> typing.List[typing.List[tf.keras.layers.Conv2D]]:
         """
         Find layer groups to scale
         :return: List of groups of layers. Each group can be independently equalized
@@ -108,7 +109,9 @@ class GraphSearchUtils:
         return ordered_layer_groups
 
     @staticmethod
-    def find_downstream_layer_groups_to_scale(op, layer_groups, current_group=None, visited_nodes=None):
+    def find_downstream_layer_groups_to_scale(
+        op, layer_groups, current_group=None, visited_nodes=None
+    ):
         """
         Recursive function to find cls layer groups downstream from a given op
         :param op: Starting op to search from
@@ -133,14 +136,17 @@ class GraphSearchUtils:
             current_group.append(current_layer)
 
         # Terminating condition for current group
-        if not current_layer or not GraphSearchUtils._is_supported_layer_case(current_layer):
+        if not current_layer or not GraphSearchUtils._is_supported_layer_case(
+            current_layer
+        ):
             if (len(current_group) > 1) and (current_group not in layer_groups):
                 layer_groups.append(current_group)
             current_group = []
 
         for consumer in op.output_ops:
-            GraphSearchUtils.find_downstream_layer_groups_to_scale(consumer, layer_groups,
-                                                                   current_group, visited_nodes)
+            GraphSearchUtils.find_downstream_layer_groups_to_scale(
+                consumer, layer_groups, current_group, visited_nodes
+            )
 
         # Reached a leaf.. See if the current group has something to grab
         if (len(current_group) > 1) and (current_group not in layer_groups):
@@ -153,9 +159,11 @@ class GraphSearchUtils:
         :param layer: tf.keras.layers.Layer
         :return: True if it's CLS supported layers or a supported layer
         """
-        return isinstance(layer, (cls_supported_layers + zero_padding_layers)) or \
-            GraphSearchUtils._is_supported_activations(layer) or \
-            GraphSearchUtils.is_folded_batch_normalization(layer)
+        return (
+            isinstance(layer, (cls_supported_layers + zero_padding_layers))
+            or GraphSearchUtils._is_supported_activations(layer)
+            or GraphSearchUtils.is_folded_batch_normalization(layer)
+        )
 
     @staticmethod
     def is_folded_batch_normalization(layer: tf.keras.layers.Layer) -> bool:
@@ -191,8 +199,9 @@ class GraphSearchUtils:
         return activation in ["relu", "relu6"]
 
     @staticmethod
-    def convert_layer_group_to_cls_sets(layer_group: typing.List[tf.keras.layers.Conv2D]) \
-            -> typing.List[ClsSet]:
+    def convert_layer_group_to_cls_sets(
+        layer_group: typing.List[tf.keras.layers.Conv2D],
+    ) -> typing.List[ClsSet]:
         """
         Helper function to convert a layer group to a list of cls sets
         :param layer_group: Given layer group to convert
@@ -208,12 +217,23 @@ class GraphSearchUtils:
             if isinstance(next_layer_to_scale, tf.keras.layers.DepthwiseConv2D):
                 next_non_depthwise_conv_layer = layer_group.popleft()
                 # DepthwiseConv layer right after DepthwiseConv layer is not currently supported
-                if isinstance(next_non_depthwise_conv_layer, tf.keras.layers.DepthwiseConv2D):
-                    _logger.error("Consecutive DepthwiseConv layer not currently supported")
-                    raise NotImplementedError("Consecutive DepthwiseConv layer not currently supported")
+                if isinstance(
+                    next_non_depthwise_conv_layer, tf.keras.layers.DepthwiseConv2D
+                ):
+                    _logger.error(
+                        "Consecutive DepthwiseConv layer not currently supported"
+                    )
+                    raise NotImplementedError(
+                        "Consecutive DepthwiseConv layer not currently supported"
+                    )
 
                 cls_sets.append(
-                    (prev_layer_to_scale, next_layer_to_scale, next_non_depthwise_conv_layer))
+                    (
+                        prev_layer_to_scale,
+                        next_layer_to_scale,
+                        next_non_depthwise_conv_layer,
+                    )
+                )
                 prev_layer_to_scale = next_non_depthwise_conv_layer
             else:
                 cls_sets.append((prev_layer_to_scale, next_layer_to_scale))
@@ -222,8 +242,9 @@ class GraphSearchUtils:
         return cls_sets
 
     @staticmethod
-    def is_relu_activation_present_in_cls_sets(cls_sets: typing.List[ClsSet]) \
-            -> typing.List[typing.Union[bool, typing.Tuple[bool, bool]]]:
+    def is_relu_activation_present_in_cls_sets(
+        cls_sets: typing.List[ClsSet],
+    ) -> typing.List[typing.Union[bool, typing.Tuple[bool, bool]]]:
         """
         Check if there is ReLU or PReLU activation between cls sets
         :param cls_sets: List of ClsSet to find ReLU activation in
@@ -236,13 +257,17 @@ class GraphSearchUtils:
 
             is_relu_activation_in_cls_set = []
             for layer in cls_set:
-                has_relu_activation = GraphSearchUtils._does_layer_have_relu_activation(layer)
+                has_relu_activation = GraphSearchUtils._does_layer_have_relu_activation(
+                    layer
+                )
                 is_relu_activation_in_cls_set.append(has_relu_activation)
 
             if len(is_relu_activation_in_cls_set) == 1:
                 is_relu_activation_in_cls_sets.append(is_relu_activation_in_cls_set[0])
             else:
-                is_relu_activation_in_cls_sets.append(tuple(is_relu_activation_in_cls_set))
+                is_relu_activation_in_cls_sets.append(
+                    tuple(is_relu_activation_in_cls_set)
+                )
 
         return is_relu_activation_in_cls_sets
 
@@ -253,6 +278,7 @@ class GraphSearchUtils:
         :param layer: Conv2D or it's subclass to check activation function
         :return: True If layer has ReLU or PReLU activation, otherwise False
         """
+
         def _get_activation_type(_layer: tf.keras.layers.Layer) -> str:
             """
             Get activation name string from _layer
@@ -284,9 +310,11 @@ class GraphSearchUtils:
             assert len(_layer.outbound_nodes) == 1
 
             _outbound_layer = _layer.outbound_nodes[0].outbound_layer
-            return _get_outbound_layer(_outbound_layer) \
-                if GraphSearchUtils.is_folded_batch_normalization(_outbound_layer) \
+            return (
+                _get_outbound_layer(_outbound_layer)
+                if GraphSearchUtils.is_folded_batch_normalization(_outbound_layer)
                 else _outbound_layer
+            )
 
         activation_type = _get_activation_type(layer)
         supported_activation_types = {"relu", "prelu"}
@@ -302,8 +330,10 @@ class GraphSearchUtils:
 
             # Case 1-2. Conv(..., activation=None) -> Activation(activation="relu") or
             #           Conv(..., activation=None) -> Folded BN -> Activation(activation="relu")
-            is_using_activation_layer = isinstance(outbound_layer, tf.keras.layers.Activation) and \
-                                        _get_activation_type(outbound_layer) in supported_activation_types
+            is_using_activation_layer = (
+                isinstance(outbound_layer, tf.keras.layers.Activation)
+                and _get_activation_type(outbound_layer) in supported_activation_types
+            )
             return is_using_relu_layer or is_using_activation_layer
 
         # Case 2. Fused use case

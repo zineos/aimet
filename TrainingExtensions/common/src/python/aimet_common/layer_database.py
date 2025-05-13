@@ -102,13 +102,14 @@ class LayerDatabase:
     Stores, creates and updates the Layer database
     Also stores compressible layers to model optimization
     """
+
     def __init__(self, model):
         self._model = model
         self._compressible_layers = OrderedDict()
 
     @property
     def model(self):
-        """ Property to expose the underlying model """
+        """Property to expose the underlying model"""
         return self._model
 
     def __iter__(self):
@@ -154,8 +155,11 @@ class LayerDatabase:
         """
         :return: Returns selected layers
         """
-        selected_layers = [layer for layer in self._compressible_layers.values()
-                           if layer.picked_for_compression is True]
+        selected_layers = [
+            layer
+            for layer in self._compressible_layers.values()
+            if layer.picked_for_compression is True
+        ]
         return selected_layers
 
     @abc.abstractmethod

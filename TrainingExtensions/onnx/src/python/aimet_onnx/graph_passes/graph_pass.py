@@ -44,10 +44,12 @@ from aimet_onnx.graph_passes.utils import get_const_input_names, get_output_name
 from aimet_onnx.utils import ModelProto
 from typing import Dict, List
 
+
 class GraphPass:
     """
     Abstract GraphPass to iterate over Ops from ConnectedGraph
     """
+
     @abstractmethod
     def match_pattern(self, op: Op, model: ModelProto):
         """
@@ -56,13 +58,20 @@ class GraphPass:
         raise NotImplementedError
 
     @abstractmethod
-    def apply_on_op(self, op: Op, model: ModelProto, op_quantizers: Dict[str, QcQuantizeOp]):
+    def apply_on_op(
+        self, op: Op, model: ModelProto, op_quantizers: Dict[str, QcQuantizeOp]
+    ):
         """
         Operate on given op.
         """
         raise NotImplementedError
 
-    def apply_on_graph(self, model: ModelProto, graph: ConnectedGraph, op_quantizers: Dict[str, QcQuantizeOp]):
+    def apply_on_graph(
+        self,
+        model: ModelProto,
+        graph: ConnectedGraph,
+        op_quantizers: Dict[str, QcQuantizeOp],
+    ):
         """
         Iterate over all the ops in ConnectedGraph and call `apply_on_op`
 
@@ -73,7 +82,12 @@ class GraphPass:
         for op in graph.ordered_ops:
             self.apply_on_op(op, model, op_quantizers)
 
-    def __call__(self, model: ModelProto, graph: ConnectedGraph, op_quantizers: Dict[str, QcQuantizeOp]):
+    def __call__(
+        self,
+        model: ModelProto,
+        graph: ConnectedGraph,
+        op_quantizers: Dict[str, QcQuantizeOp],
+    ):
         """
         Entry function to iterate over Ops from ConnectedGraph and apply pattern match
         Args:
@@ -94,7 +108,7 @@ class SupergroupGraphPass(GraphPass):
             - User to inherit `SupergroupGraphPass` and specify `match_pattern` for specific sub-graph
         3. If pattern matches, calls `disable_quantizers`
             - This by default disables quantization for all collected quantizer names
-            - If intent is to set quantization options differently, override `disable_quantizers` 
+            - If intent is to set quantization options differently, override `disable_quantizers`
 
     How to use SupergroupGraphPass?
         1. Inherit SupergroupGraphPass and implement `match_pattern` to capture
@@ -104,11 +118,12 @@ class SupergroupGraphPass(GraphPass):
         3. If need special handling for quantizers, override `disable_quantizers`
             - In this case, you can capture more variables in `match_pattern` as required
     """
+
     def __init__(self):
         """
         Collect quantizer names to disable quantization
         """
-        self.disable_quantizers : List[str] = []
+        self.disable_quantizers: List[str] = []
 
     @abstractmethod
     def match_pattern(self, op: Op, model: ModelProto):
@@ -117,7 +132,9 @@ class SupergroupGraphPass(GraphPass):
         """
         raise NotImplementedError
 
-    def apply_on_op(self, op: Op, model: ModelProto, op_quantizers: Dict[str, QcQuantizeOp]):
+    def apply_on_op(
+        self, op: Op, model: ModelProto, op_quantizers: Dict[str, QcQuantizeOp]
+    ):
         """
         Check for pattern match for given Op.
         If pattern matches, then invoke disable_quantizers with collected candidate nodes.
@@ -147,7 +164,7 @@ class SupergroupGraphPass(GraphPass):
         """
         self.disable_quantizers.extend(get_const_input_names(op_list))
 
-    def update_quantizers(self, op_quantizers:Dict[str, QcQuantizeOp]):
+    def update_quantizers(self, op_quantizers: Dict[str, QcQuantizeOp]):
         """
         Disable quantization for collected quantizers during match_pattern
 

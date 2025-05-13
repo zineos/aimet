@@ -35,22 +35,34 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Sample input to quantized wrapper module and output from original module for Adaround feature """
+"""Sample input to quantized wrapper module and output from original module for Adaround feature"""
+
 from typing import Tuple, Union, List, Callable, Any, Dict, Type, Optional
 import torch
 from torch.utils.data import Dataset
 
 # Import AIMET specific modules
 from aimet_common.utils import AimetLogger
-from aimet_torch.utils import CachedDataset, ModuleData, cache_intermediate_datasets,\
-    change_tensor_device_placement, in_eval_mode, save_to_cache, get_ordered_list_of_modules
-from aimet_torch._base.quantsim import _QuantizationSimModelInterface, _QuantizedModuleProtocol
+from aimet_torch.utils import (
+    CachedDataset,
+    ModuleData,
+    cache_intermediate_datasets,
+    change_tensor_device_placement,
+    in_eval_mode,
+    save_to_cache,
+    get_ordered_list_of_modules,
+)
+from aimet_torch._base.quantsim import (
+    _QuantizationSimModelInterface,
+    _QuantizedModuleProtocol,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
 
-def create_modulelist_for_group_modules(model: torch.nn.Module, sim: _QuantizationSimModelInterface, grouped_modules: Dict)\
-        -> Tuple[List[torch.nn.ModuleList], List[torch.nn.ModuleList]]:
+def create_modulelist_for_group_modules(
+    model: torch.nn.Module, sim: _QuantizationSimModelInterface, grouped_modules: Dict
+) -> Tuple[List[torch.nn.ModuleList], List[torch.nn.ModuleList]]:
     """
     Use torch.nn.ModuleList to group modules from a single block.
 
@@ -73,11 +85,17 @@ def create_modulelist_for_group_modules(model: torch.nn.Module, sim: _Quantizati
     return sub_fp_models, sub_sim_models
 
 
-def get_block_inputs(model: torch.nn.Module, sim: _QuantizationSimModelInterface,
-                     breakpoint_module_name: str, cached_dataset: CachedDataset,
-                     cache_on_cpu: bool, forward_fn: Callable, num_batches: int, working_dir: str,
-                     incl_kwargs: bool = False) \
-        -> Union[Tuple[List, List], Tuple[CachedDataset, CachedDataset]]:
+def get_block_inputs(
+    model: torch.nn.Module,
+    sim: _QuantizationSimModelInterface,
+    breakpoint_module_name: str,
+    cached_dataset: CachedDataset,
+    cache_on_cpu: bool,
+    forward_fn: Callable,
+    num_batches: int,
+    working_dir: str,
+    incl_kwargs: bool = False,
+) -> Union[Tuple[List, List], Tuple[CachedDataset, CachedDataset]]:
     # pylint: disable=too-many-arguments
     """
     Get inputs to block/module from FP32 and QuantizationSimModel models
@@ -97,26 +115,59 @@ def get_block_inputs(model: torch.nn.Module, sim: _QuantizationSimModelInterface
     """
     # Cache input data to first block from both FP32 and quant models
     if cache_on_cpu:
-        cached_fp_dataset = cache_intermediate_datasets(cached_dataset, cache_on_cpu, model,
-                                                        breakpoint_module_name, forward_fn, incl_kwargs=incl_kwargs)
-        cached_quant_dataset = cache_intermediate_datasets(cached_dataset, cache_on_cpu,
-                                                           sim.model, breakpoint_module_name, forward_fn,
-                                                           incl_kwargs=incl_kwargs)
+        cached_fp_dataset = cache_intermediate_datasets(
+            cached_dataset,
+            cache_on_cpu,
+            model,
+            breakpoint_module_name,
+            forward_fn,
+            incl_kwargs=incl_kwargs,
+        )
+        cached_quant_dataset = cache_intermediate_datasets(
+            cached_dataset,
+            cache_on_cpu,
+            sim.model,
+            breakpoint_module_name,
+            forward_fn,
+            incl_kwargs=incl_kwargs,
+        )
     else:
-        fp32_cache_path = working_dir + 'fp32/'
-        quant_cache_path = working_dir + 'quant/'
-        cache_intermediate_datasets(cached_dataset, cache_on_cpu, model, breakpoint_module_name,
-                                    forward_fn, fp32_cache_path, incl_kwargs=incl_kwargs)
-        cache_intermediate_datasets(cached_dataset, cache_on_cpu, sim.model, breakpoint_module_name,
-                                    forward_fn, quant_cache_path, incl_kwargs=incl_kwargs)
+        fp32_cache_path = working_dir + "fp32/"
+        quant_cache_path = working_dir + "quant/"
+        cache_intermediate_datasets(
+            cached_dataset,
+            cache_on_cpu,
+            model,
+            breakpoint_module_name,
+            forward_fn,
+            fp32_cache_path,
+            incl_kwargs=incl_kwargs,
+        )
+        cache_intermediate_datasets(
+            cached_dataset,
+            cache_on_cpu,
+            sim.model,
+            breakpoint_module_name,
+            forward_fn,
+            quant_cache_path,
+            incl_kwargs=incl_kwargs,
+        )
         cached_fp_dataset = CachedDataset(None, num_batches, fp32_cache_path)
         cached_quant_dataset = CachedDataset(None, num_batches, quant_cache_path)
     return cached_fp_dataset, cached_quant_dataset
 
 
-def get_block_outputs(fp_block: torch.nn.ModuleList, quant_block: torch.nn.ModuleList, include_static_inputs: str,
-                      cached_fp_dataset: List, cached_quant_dataset: List,
-                      cache_on_cpu: bool, forward_fn: Callable, device: torch.device, working_dir: str):
+def get_block_outputs(
+    fp_block: torch.nn.ModuleList,
+    quant_block: torch.nn.ModuleList,
+    include_static_inputs: str,
+    cached_fp_dataset: List,
+    cached_quant_dataset: List,
+    cache_on_cpu: bool,
+    forward_fn: Callable,
+    device: torch.device,
+    working_dir: str,
+):
     """
     Get outputs from block/module from FP32 and QuantizationSimModel models and assign for next block/module.
 
@@ -138,7 +189,9 @@ def get_block_outputs(fp_block: torch.nn.ModuleList, quant_block: torch.nn.Modul
     fp_block.to(device)
     quant_block.to(device)
 
-    for idx, (fp_inputs, quant_inputs) in enumerate(zip(cached_fp_dataset, cached_quant_dataset)):
+    for idx, (fp_inputs, quant_inputs) in enumerate(
+        zip(cached_fp_dataset, cached_quant_dataset)
+    ):
         fp_inputs = change_tensor_device_placement(fp_inputs, device)
         quant_inputs = change_tensor_device_placement(quant_inputs, device)
 
@@ -149,9 +202,17 @@ def get_block_outputs(fp_block: torch.nn.ModuleList, quant_block: torch.nn.Modul
 
         with in_eval_mode(fp_block), in_eval_mode(quant_block), torch.no_grad():
             fp_outputs = forward_fn(fp_block, *fp_args, **fp_kwargs)
-            fp_outputs = fp_outputs[0].cpu() if isinstance(fp_outputs, (tuple, list)) else fp_outputs.cpu()
+            fp_outputs = (
+                fp_outputs[0].cpu()
+                if isinstance(fp_outputs, (tuple, list))
+                else fp_outputs.cpu()
+            )
             quant_outputs = forward_fn(quant_block, *quant_args, **quant_kwargs)
-            quant_outputs = quant_outputs[0].cpu() if isinstance(quant_outputs, (tuple, list)) else quant_outputs.cpu()
+            quant_outputs = (
+                quant_outputs[0].cpu()
+                if isinstance(quant_outputs, (tuple, list))
+                else quant_outputs.cpu()
+            )
 
             # Check if the next ModuleList needs static inputs or not and assign
             # the outputs (fp32/quant) from current block to be the input (fp32/quant) of next block
@@ -165,8 +226,8 @@ def get_block_outputs(fp_block: torch.nn.ModuleList, quant_block: torch.nn.Modul
                 cached_fp_dataset[idx] = (fp_args, fp_kwargs)
                 cached_quant_dataset[idx] = (quant_args, quant_kwargs)
             else:
-                fp32_cache_path = working_dir + 'fp32/'
-                quant_cache_path = working_dir + 'quant/'
+                fp32_cache_path = working_dir + "fp32/"
+                quant_cache_path = working_dir + "quant/"
                 save_to_cache((fp_args, fp_kwargs), fp32_cache_path, idx)
                 save_to_cache((quant_args, quant_kwargs), quant_cache_path, idx)
 
@@ -179,9 +240,15 @@ class ActivationSampler:
     For a module in the original model and the corresponding module in the weight quantized QuantSim model,
     collect the module's output and input activation data respectively
     """
-    def __init__(self, orig_module: torch.nn.Module, quant_module: _QuantizedModuleProtocol,
-                 orig_model: torch.nn.Module, quant_model: torch.nn.Module,
-                 forward_fn: Callable[[torch.nn.Module, Any], Any]):
+
+    def __init__(
+        self,
+        orig_module: torch.nn.Module,
+        quant_module: _QuantizedModuleProtocol,
+        orig_model: torch.nn.Module,
+        quant_model: torch.nn.Module,
+        forward_fn: Callable[[torch.nn.Module, Any], Any],
+    ):
         """
         :param orig_module: Module from original model.
         :param quant_module: Quant wrapper from sim model.
@@ -197,8 +264,9 @@ class ActivationSampler:
         self._orig_module_collector = ModuleData(orig_model, orig_module, forward_fn)
         self._quant_module_collector = ModuleData(quant_model, quant_module, forward_fn)
 
-    def sample_and_place_all_acts_on_cpu(self, cached_dataset: Dataset,
-                                         cached_quant_dataset: Dataset = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def sample_and_place_all_acts_on_cpu(
+        self, cached_dataset: Dataset, cached_quant_dataset: Dataset = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         From the original module, collect output activations and input activations
         to corresponding quantized module.
@@ -220,9 +288,13 @@ class ActivationSampler:
         for batch_index in range(len(cached_dataset)):
             if cached_quant_dataset:
                 args, kwargs = next(quant_iterator)
-                inp_data, _ = self.sample_acts(args, kwargs, collect_input=True, collect_output=False)
+                inp_data, _ = self.sample_acts(
+                    args, kwargs, collect_input=True, collect_output=False
+                )
                 args, kwargs = next(iterator)
-                _, out_data = self.sample_acts(args, kwargs, collect_input=False, collect_output=True)
+                _, out_data = self.sample_acts(
+                    args, kwargs, collect_input=False, collect_output=True
+                )
             else:
                 args, kwargs = next(iterator)
                 inp_data, out_data = self.sample_acts(args, kwargs)
@@ -238,8 +310,9 @@ class ActivationSampler:
 
         return all_inp_data, all_out_data
 
-    def sample_acts(self, args, kwargs,
-                    collect_input=True, collect_output=True) -> Tuple[torch.Tensor, torch.Tensor]:
+    def sample_acts(
+        self, args, kwargs, collect_input=True, collect_output=True
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         For given model_inputs, collect input activations data to quant module and
         output activations data from original module.
@@ -253,20 +326,25 @@ class ActivationSampler:
         # (with all preceding weight modules quantized)
         inp_data, out_data = None, None
         if collect_input:
-            inp_data, _ = self._quant_module_collector.collect_inp_out_data(args,
-                                                                            kwargs,
-                                                                            collect_input=True,
-                                                                            collect_output=False)
+            inp_data, _ = self._quant_module_collector.collect_inp_out_data(
+                args, kwargs, collect_input=True, collect_output=False
+            )
         # Collect output activation data from original module
         if collect_output:
-            _, out_data = self._orig_module_collector.collect_inp_out_data(args,
-                                                                           kwargs,
-                                                                           collect_input=False,
-                                                                           collect_output=True)
+            _, out_data = self._orig_module_collector.collect_inp_out_data(
+                args, kwargs, collect_input=False, collect_output=True
+            )
         return inp_data, out_data
 
-def create_cached_block_schedule_list(model: torch.nn.Module, dummy_input, block_names: List[str], supported_modules: Tuple[Type]) \
-        -> List[Tuple[Optional[Tuple[torch.nn.Module, str]], List[Tuple[str, torch.nn.Module]]]]:
+
+def create_cached_block_schedule_list(
+    model: torch.nn.Module,
+    dummy_input,
+    block_names: List[str],
+    supported_modules: Tuple[Type],
+) -> List[
+    Tuple[Optional[Tuple[torch.nn.Module, str]], List[Tuple[str, torch.nn.Module]]]
+]:
     """
     Creates a schedule for modules with corresponding block if applicable.
 
@@ -279,31 +357,34 @@ def create_cached_block_schedule_list(model: torch.nn.Module, dummy_input, block
     # pylint: disable=too-many-locals
     modules = get_ordered_list_of_modules(model, dummy_input)
     modules = [m for m in modules if isinstance(m[1], supported_modules)]
-    caching_modules = {module: {'block': None, 'name': name} for name, module in modules}
+    caching_modules = {
+        module: {"block": None, "name": name} for name, module in modules
+    }
 
     for name in block_names:
         parent_module: torch.nn.Module = model.get_submodule(name)
         for _, module in parent_module.named_modules():
             if module in caching_modules:
-                module_name = caching_modules[module]['name']
+                module_name = caching_modules[module]["name"]
                 caching_modules[module].update(
                     {
-                        'block':(name, parent_module),
-                        'name': module_name[len(name)+1:]
-                    })
+                        "block": (name, parent_module),
+                        "name": module_name[len(name) + 1 :],
+                    }
+                )
 
     block_list = []
     block = (None, None)
     for module, value in caching_modules.items():
-        block_module = value['block']
-        name_module_pair = [value['name'], module]
-        if block == (None, None): # init ?
+        block_module = value["block"]
+        name_module_pair = [value["name"], module]
+        if block == (None, None):  # init ?
             block = (block_module, [name_module_pair])
-        elif block[0] != block_module: # end of block ?
+        elif block[0] != block_module:  # end of block ?
             block_list.append(block)
             block = (block_module, [name_module_pair])
         else:
             block[1].append(name_module_pair)
-    block_list.append(block) # last block
+    block_list.append(block)  # last block
 
     return block_list

@@ -42,6 +42,7 @@ import numpy as np
 
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 
+
 @pytest.mark.skip("Disable tests that requires eager execution")
 def test_quantizable_mha_export_backwards_pass():
     vocab_size = 20000  # Only consider the top 20k words
@@ -53,7 +54,9 @@ def test_quantizable_mha_export_backwards_pass():
     inputs = keras.layers.Input(shape=(maxlen,))
     # Embedding Layer
     positions = tf.range(start=0, limit=maxlen, delta=1)
-    positions = keras.layers.Embedding(input_dim=maxlen, output_dim=embed_dim)(positions)
+    positions = keras.layers.Embedding(input_dim=maxlen, output_dim=embed_dim)(
+        positions
+    )
     x = keras.layers.Embedding(input_dim=vocab_size, output_dim=embed_dim)(inputs)
     x = x + positions
 
@@ -84,7 +87,7 @@ def test_quantizable_mha_export_backwards_pass():
     val_outputs = np.random.randint(0, 2, (256,))
 
     quantized_model.compute_encodings(lambda m, _: m(val_inputs), None)
-    quantized_model.export('./data', 'pre_qat_mha')
+    quantized_model.export("./data", "pre_qat_mha")
 
     for wrapper in quantized_model.quant_wrappers():
         for quantizer in wrapper.input_quantizers:
@@ -95,13 +98,19 @@ def test_quantizable_mha_export_backwards_pass():
     with open("./data/pre_qat_mha.encodings", "r") as encodings_file:
         pre_encodings = json.load(encodings_file)
 
-    quantized_model.model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    quantized_model.model.compile(
+        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+    )
     quantized_model.model.fit(
-        train_inputs, train_outputs, batch_size=32, epochs=1, validation_data=(val_inputs, val_outputs)
+        train_inputs,
+        train_outputs,
+        batch_size=32,
+        epochs=1,
+        validation_data=(val_inputs, val_outputs),
     )
 
     quantized_model.compute_encodings(lambda m, _: m(val_inputs), None)
-    quantized_model.export('./data', 'post_qat_mha')
+    quantized_model.export("./data", "post_qat_mha")
 
     with open("./data/post_qat_mha.encodings", "r") as encodings_file:
         post_encodings = json.load(encodings_file)

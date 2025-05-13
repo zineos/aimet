@@ -55,7 +55,7 @@ popd
 *IMPORTANT:* Setup your pre-commit and commit-msg hook using the following way:
 ```
 cd aimet
-ln -s $(realpath -s .githooks/pre-commit) .git/hooks/pre-commit
+pip install pre-commit
 ln -s $(realpath -s .githooks/commit-msg) .git/hooks/commit-msg
 ```
 
@@ -143,9 +143,9 @@ git push origin branch_short_feature_description --force-with-lease
 ```
 
 ### Branch cleanup
-It is recommended that you commit code to your branches often. Prior to pushing the code and submitting PRs, please try to clean up your branch by squashing multiple commits together and amending commit messages as appropriate. See these pages for details:  
-https://blog.carbonfive.com/2017/08/28/always-squash-and-rebase-your-git-commits  
-https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History  
+It is recommended that you commit code to your branches often. Prior to pushing the code and submitting PRs, please try to clean up your branch by squashing multiple commits together and amending commit messages as appropriate. See these pages for details:
+https://blog.carbonfive.com/2017/08/28/always-squash-and-rebase-your-git-commits
+https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History
 
 ## Submission
 When you're ready to submit your code, issue a pull request from the branch on your FORK into the develop branch on the upstream repository using these [instructions](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork).

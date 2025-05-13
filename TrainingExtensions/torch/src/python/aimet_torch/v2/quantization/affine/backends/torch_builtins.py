@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Default quantization backend for quantizing weights and activations """
+"""Default quantization backend for quantizing weights and activations"""
+
 import functools
 from packaging import version
 from typing import Callable, Optional, List, Tuple
@@ -43,9 +44,11 @@ from aimet_torch.v2.utils import _is_expandable, _ContextManager
 import aimet_torch.v2.experimental.onnx._export as _onnx
 
 
-_torch_version: Tuple[int, int, int] = (version.parse(torch.__version__).major,
-                                        version.parse(torch.__version__).minor,
-                                        version.parse(torch.__version__).micro)
+_torch_version: Tuple[int, int, int] = (
+    version.parse(torch.__version__).major,
+    version.parse(torch.__version__).minor,
+    version.parse(torch.__version__).micro,
+)
 
 if _torch_version >= (2, 0, 0):
     _compile = torch.compile
@@ -66,10 +69,12 @@ def _is_grid_representable(dtype: torch.dtype, qmin: int, qmax: int):
     """
     Return whether a range of integers can be represented with the given dtype
     """
-    return _is_value_representable(dtype, qmax) and \
-            _is_value_representable(dtype, qmax - 1) and \
-            _is_value_representable(dtype, qmin + 1) and \
-            _is_value_representable(dtype, qmin)
+    return (
+        _is_value_representable(dtype, qmax)
+        and _is_value_representable(dtype, qmax - 1)
+        and _is_value_representable(dtype, qmin + 1)
+        and _is_value_representable(dtype, qmin)
+    )
 
 
 def _is_numerically_stable(dtype: torch.dtype, qmin: int, qmax: int):
@@ -91,40 +96,61 @@ def _is_numerically_stable(dtype: torch.dtype, qmin: int, qmax: int):
     return True
 
 
-def _validate_arguments(tensor: torch.Tensor, scale: torch.Tensor,
-                        qmin: int = None, qmax: int = None, block_size: Optional[List] = None):
+def _validate_arguments(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    qmin: int = None,
+    qmax: int = None,
+    block_size: Optional[List] = None,
+):
     if block_size is not None:
         if len(scale.shape) != len(block_size):
-            raise RuntimeError(f'Length of scale shape {scale.shape} must equal length of block size {block_size}')
+            raise RuntimeError(
+                f"Length of scale shape {scale.shape} must equal length of block size {block_size}"
+            )
         for i in range(1, len(block_size) + 1):
             if block_size[-i] == -1:
                 # Block size is calculated based on input and encoding parameter shape
                 if tensor.shape[-i] % scale.shape[-i] != 0:
-                    raise RuntimeError(f'Each tensor dimension size for tensor shape {tensor.shape} must divide '
-                                       f'evenly with corresponding scale dimension value for scale shape {scale.shape}')
+                    raise RuntimeError(
+                        f"Each tensor dimension size for tensor shape {tensor.shape} must divide "
+                        f"evenly with corresponding scale dimension value for scale shape {scale.shape}"
+                    )
             else:
                 if block_size[-i] * scale.shape[-i] != tensor.shape[-i]:
-                    raise RuntimeError(f'Each tensor dimension size for tensor shape {tensor.shape} must equal the '
-                                       f'corresponding scale dimension size * block size for scale shape {scale.shape} '
-                                       f'and block size {block_size}')
+                    raise RuntimeError(
+                        f"Each tensor dimension size for tensor shape {tensor.shape} must equal the "
+                        f"corresponding scale dimension size * block size for scale shape {scale.shape} "
+                        f"and block size {block_size}"
+                    )
 
     elif not _is_expandable(scale.shape, tensor.shape):
         msg = f"Scale of shape {scale.shape} cannot be expanded like input tensor of shape {tensor.shape}. "
         # Additional message if the tensor is empty
         if tensor.numel() == 0:
-            msg += ("Detected that the tensor is empty, which may be caused by the following reasons: "
-                    "1. The input tensor is incorrect. "
-                    "2. Improper use of model inference without initializing DeepSpeed after offloading parameters.")
+            msg += (
+                "Detected that the tensor is empty, which may be caused by the following reasons: "
+                "1. The input tensor is incorrect. "
+                "2. Improper use of model inference without initializing DeepSpeed after offloading parameters."
+            )
         raise RuntimeError(msg)
 
     if qmin is not None and qmax is not None:
         if qmin > qmax:
-            raise RuntimeError(f"qmin ({qmin}) must be smaller than or equal to qmax ({qmax})")
+            raise RuntimeError(
+                f"qmin ({qmin}) must be smaller than or equal to qmax ({qmax})"
+            )
 
 
 @_onnx.register_symbolic(_onnx.quantize_symbolic)
-def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-             qmin: int, qmax: int, block_size: Optional[List] = None) -> torch.Tensor:
+def quantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    qmin: int,
+    qmax: int,
+    block_size: Optional[List] = None,
+) -> torch.Tensor:
     """
     Performs differentiable quantization given scale, offset, and quantization range.
 
@@ -152,19 +178,28 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
     tensor = reshape_tensor_for_blocks(tensor, scale.shape, block_size)
     scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size))
     offset = offset.view(get_encoding_shape_with_blocks(offset.shape, block_size))
-    return QuantizeFunc.apply(tensor,
-                              scale.to(internal_dtype),
-                              offset.to(internal_dtype),
-                              qmin, qmax).to(output_dtype).view(orig_tensor_shape)
+    return (
+        QuantizeFunc.apply(
+            tensor, scale.to(internal_dtype), offset.to(internal_dtype), qmin, qmax
+        )
+        .to(output_dtype)
+        .view(orig_tensor_shape)
+    )
 
 
+_ALLOW_FAST_FORWARD = True  # temporary flag for debugging
 
-_ALLOW_FAST_FORWARD = True # temporary flag for debugging
 
 @_onnx.register_symbolic(_onnx.quantize_dequantize_symbolic)
-def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        qmin: int, qmax: int, block_size: Optional[List] = None,
-                        zero_point_shift: float = 0.0) -> torch.Tensor:
+def quantize_dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    qmin: int,
+    qmax: int,
+    block_size: Optional[List] = None,
+    zero_point_shift: float = 0.0,
+) -> torch.Tensor:
     """
     Performs differentiable quantize-dequantize given scale, offset, and quantization range.
 
@@ -187,10 +222,12 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
     _fast_forward &= not torch.jit.is_tracing()
 
     # torch.fake_quantize doesn't compute gradients for scale/offset
-    _fast_forward &= (not scale.requires_grad and not offset.requires_grad) or (not torch.is_grad_enabled())
+    _fast_forward &= (not scale.requires_grad and not offset.requires_grad) or (
+        not torch.is_grad_enabled()
+    )
 
     # if user explicitly designated specific rounding function, honor it strictly
-    _fast_forward &= (_round_fn == torch.round and _round_fn_inplace == torch.round_)
+    _fast_forward &= _round_fn == torch.round and _round_fn_inplace == torch.round_
 
     # if user explicitly designated specific rounding function, honor it strictly
     _fast_forward &= zero_point_shift == 0.0
@@ -214,26 +251,29 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
 
     orig_tensor_shape = tensor.shape
     tensor = reshape_tensor_for_blocks(tensor, scale.shape, block_size)
-    scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size)).to(internal_dtype)
+    scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size)).to(
+        internal_dtype
+    )
     offset = offset.view(get_encoding_shape_with_blocks(offset.shape, block_size))
     shifted_tensor = tensor
     if zero_point_shift != 0.0:
         shifted_tensor = torch.sub(tensor, scale, alpha=zero_point_shift)
-    qdq_tensor =  QuantDequantFunc.apply(shifted_tensor,
-                                         scale,
-                                         offset.to(internal_dtype),
-                                         qmin, qmax)
+    qdq_tensor = QuantDequantFunc.apply(
+        shifted_tensor, scale, offset.to(internal_dtype), qmin, qmax
+    )
     if zero_point_shift != 0.0:
         qdq_tensor = torch.add(qdq_tensor, scale, alpha=zero_point_shift)
 
     return qdq_tensor.to(output_dtype).view(orig_tensor_shape)
 
 
-def _torch_fake_quantize(tensor: torch.Tensor,
-                         scale: torch.Tensor,
-                         offset: torch.Tensor,
-                         qmin: int,
-                         qmax: int) -> Optional[torch.Tensor]:
+def _torch_fake_quantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    qmin: int,
+    qmax: int,
+) -> Optional[torch.Tensor]:
     scale_internal_dtype = torch.float32
     tensor_internal_dtype = tensor.dtype
 
@@ -244,35 +284,39 @@ def _torch_fake_quantize(tensor: torch.Tensor,
     is_per_tensor = scale.numel() == offset.numel() == 1
 
     if is_per_tensor:
-        return torch.fake_quantize_per_tensor_affine(tensor.to(tensor_internal_dtype),
-                                                     scale.view(()).to(scale_internal_dtype),
-                                                     -offset.to(torch.int32).view(()),
-                                                     qmin, qmax).to(tensor.dtype)
+        return torch.fake_quantize_per_tensor_affine(
+            tensor.to(tensor_internal_dtype),
+            scale.view(()).to(scale_internal_dtype),
+            -offset.to(torch.int32).view(()),
+            qmin,
+            qmax,
+        ).to(tensor.dtype)
 
-    scale = scale.view(*(1 for _ in range(tensor.dim() - scale.dim())),
-                       *scale.shape)
-    offset = offset.view(*(1 for _ in range(tensor.dim() - offset.dim())),
-                         *offset.shape)
+    scale = scale.view(*(1 for _ in range(tensor.dim() - scale.dim())), *scale.shape)
+    offset = offset.view(
+        *(1 for _ in range(tensor.dim() - offset.dim())), *offset.shape
+    )
 
     is_per_channel = scale.shape == offset.shape and all(
         scale_dim in (1, tensor_dim)
-        for scale_dim, tensor_dim
-        in zip(scale.shape, tensor.shape)
+        for scale_dim, tensor_dim in zip(scale.shape, tensor.shape)
     )
 
     if is_per_channel:
-        axes = [
-            axis for axis, scale_dim in enumerate(scale.shape) if scale_dim != 1
-        ]
+        axes = [axis for axis, scale_dim in enumerate(scale.shape) if scale_dim != 1]
         assert axes
 
         if len(axes) == 1:
-            axis, = axes
+            (axis,) = axes
             try:
-                return torch.fake_quantize_per_channel_affine(tensor.to(tensor_internal_dtype),
-                                                              scale.flatten().to(scale_internal_dtype),
-                                                              -offset.to(torch.int32).flatten(),
-                                                              axis, qmin, qmax).to(tensor.dtype)
+                return torch.fake_quantize_per_channel_affine(
+                    tensor.to(tensor_internal_dtype),
+                    scale.flatten().to(scale_internal_dtype),
+                    -offset.to(torch.int32).flatten(),
+                    axis,
+                    qmin,
+                    qmax,
+                ).to(tensor.dtype)
             except RuntimeError:
                 # NOTE: torch.fake_quantize_per_channel_affine throws runtime error
                 # if zero_point is not in [qmin, qmax]. In practice, this error will
@@ -283,8 +327,12 @@ def _torch_fake_quantize(tensor: torch.Tensor,
 
 
 @_onnx.register_symbolic(_onnx.dequantize_symbolic)
-def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, block_size: Optional[List] = None) \
-        -> torch.Tensor:
+def dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    block_size: Optional[List] = None,
+) -> torch.Tensor:
     """
     Performs differentiable dequantize operation given scale and offset.
 
@@ -302,18 +350,24 @@ def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, 
     tensor = reshape_tensor_for_blocks(tensor, scale.shape, block_size)
     scale = scale.view(get_encoding_shape_with_blocks(scale.shape, block_size))
     offset = offset.view(get_encoding_shape_with_blocks(offset.shape, block_size))
-    return DequantizeFunc.apply(tensor,
-                                scale.to(internal_dtype),
-                                offset.to(internal_dtype)).to(output_dtype).view(orig_tensor_shape)
+    return (
+        DequantizeFunc.apply(
+            tensor, scale.to(internal_dtype), offset.to(internal_dtype)
+        )
+        .to(output_dtype)
+        .view(orig_tensor_shape)
+    )
 
 
 _round_fn = torch.round
 _round_fn_inplace = torch.round_
 
 
-def _set_round_fn(round_fn: Callable[[torch.Tensor], torch.Tensor],
-                  round_fn_inplace: Callable[[torch.Tensor], torch.Tensor]):
-    global _round_fn, _round_fn_inplace # pylint: disable=global-statement
+def _set_round_fn(
+    round_fn: Callable[[torch.Tensor], torch.Tensor],
+    round_fn_inplace: Callable[[torch.Tensor], torch.Tensor],
+):
+    global _round_fn, _round_fn_inplace  # pylint: disable=global-statement
     _round_fn = round_fn
     _round_fn_inplace = round_fn_inplace
 
@@ -323,9 +377,17 @@ class QuantizeFunc(torch.autograd.Function):
     """
     Custom gradient function for quantization
     """
+
     # pylint: disable=arguments-differ, protected-access
     @staticmethod
-    def forward(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
+    def forward(
+        ctx,
+        tensor: torch.Tensor,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        qmin: int,
+        qmax: int,
+    ):
         if _USE_COMPILED_IMPL:
             impl = __class__._compiled_forward_impl
         else:
@@ -333,7 +395,14 @@ class QuantizeFunc(torch.autograd.Function):
         return impl(ctx, tensor, scale, offset, qmin, qmax)
 
     @staticmethod
-    def _forward_impl(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
+    def _forward_impl(
+        ctx,
+        tensor: torch.Tensor,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        qmin: int,
+        qmax: int,
+    ):
         x_round = _round_fn_inplace(tensor.to(scale.dtype) / scale).sub_(offset)
 
         if tensor.requires_grad or scale.requires_grad or offset.requires_grad:
@@ -343,9 +412,11 @@ class QuantizeFunc(torch.autograd.Function):
         ctx.tensor_requires_grad = tensor.requires_grad
         ctx.scale_requires_grad = scale.requires_grad
         ctx.offset_requires_grad = offset.requires_grad
-        ctx.save_for_backward(tensor if scale.requires_grad else None,
-                              scale if tensor.requires_grad or scale.requires_grad else None,
-                              mask)
+        ctx.save_for_backward(
+            tensor if scale.requires_grad else None,
+            scale if tensor.requires_grad or scale.requires_grad else None,
+            mask,
+        )
         return x_round.clamp_(qmin, qmax)
 
     _compiled_forward_impl = staticmethod(_compile(_forward_impl.__func__))
@@ -354,10 +425,18 @@ class QuantizeFunc(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad):
         tensor, scale, mask = ctx.saved_tensors
-        if ctx.tensor_requires_grad or ctx.scale_requires_grad or ctx.offset_requires_grad:
+        if (
+            ctx.tensor_requires_grad
+            or ctx.scale_requires_grad
+            or ctx.offset_requires_grad
+        ):
             masked_grad = grad * mask
         tensor_grad = masked_grad / scale if ctx.tensor_requires_grad else None
-        scale_grad = -(masked_grad / scale) * (tensor / scale) if ctx.scale_requires_grad else None
+        scale_grad = (
+            -(masked_grad / scale) * (tensor / scale)
+            if ctx.scale_requires_grad
+            else None
+        )
         offset_grad = -masked_grad if ctx.offset_requires_grad else None
         return tensor_grad, scale_grad, offset_grad, None, None
 
@@ -367,6 +446,7 @@ class DequantizeFunc(torch.autograd.Function):
     """
     Custom gradient function for dequantization
     """
+
     # pylint: disable=arguments-differ, protected-access
     @staticmethod
     def forward(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor):
@@ -377,14 +457,18 @@ class DequantizeFunc(torch.autograd.Function):
         return impl(ctx, tensor, scale, offset)
 
     @staticmethod
-    def _forward_impl(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor):
+    def _forward_impl(
+        ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor
+    ):
         x_dequant = (tensor + offset).mul_(scale)
         ctx.tensor_requires_grad = tensor.requires_grad
         ctx.scale_requires_grad = scale.requires_grad
         ctx.offset_requires_grad = offset.requires_grad
-        ctx.save_for_backward(tensor if scale.requires_grad else None,
-                              scale if tensor.requires_grad or offset.requires_grad else None,
-                              offset if scale.requires_grad else None)
+        ctx.save_for_backward(
+            tensor if scale.requires_grad else None,
+            scale if tensor.requires_grad or offset.requires_grad else None,
+            offset if scale.requires_grad else None,
+        )
         return x_dequant
 
     _compiled_forward_impl = staticmethod(_compile(_forward_impl.__func__))
@@ -406,9 +490,17 @@ class QuantDequantFunc(torch.autograd.Function):
     """
     Custom gradient function for quant-dequant
     """
+
     # pylint: disable=arguments-differ, protected-access
     @staticmethod
-    def forward(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
+    def forward(
+        ctx,
+        tensor: torch.Tensor,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        qmin: int,
+        qmax: int,
+    ):
         if _USE_COMPILED_IMPL:
             impl = __class__._compiled_forward_impl
         else:
@@ -416,7 +508,14 @@ class QuantDequantFunc(torch.autograd.Function):
         return impl(ctx, tensor, scale, offset, qmin, qmax)
 
     @staticmethod
-    def _forward_impl(ctx, tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int):
+    def _forward_impl(
+        ctx,
+        tensor: torch.Tensor,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        qmin: int,
+        qmax: int,
+    ):
         x_round = _round_fn_inplace(tensor.to(scale.dtype) / scale).sub_(offset)
 
         if tensor.requires_grad or scale.requires_grad or offset.requires_grad:
@@ -432,10 +531,12 @@ class QuantDequantFunc(torch.autograd.Function):
         ctx.offset_requires_grad = offset.requires_grad
         ctx.qmin = qmin
         ctx.qmax = qmax
-        ctx.save_for_backward(tensor if scale.requires_grad else None,
-                              scale if scale.requires_grad or offset.requires_grad else None,
-                              offset if scale.requires_grad else None,
-                              mask)
+        ctx.save_for_backward(
+            tensor if scale.requires_grad else None,
+            scale if scale.requires_grad or offset.requires_grad else None,
+            offset if scale.requires_grad else None,
+            mask,
+        )
         return x_dequant
 
     _compiled_forward_impl = staticmethod(_compile(_forward_impl.__func__))
@@ -448,7 +549,9 @@ class QuantDequantFunc(torch.autograd.Function):
 
         if ctx.scale_requires_grad:
             tensor = tensor.to(scale.dtype) / scale
-            scale_grad = grad * (_round_fn(tensor).clamp(offset + qmin, offset + qmax) - (tensor * mask))
+            scale_grad = grad * (
+                _round_fn(tensor).clamp(offset + qmin, offset + qmax) - (tensor * mask)
+            )
         else:
             scale_grad = None
 
@@ -459,7 +562,9 @@ class QuantDequantFunc(torch.autograd.Function):
         return tensor_grad, scale_grad, offset_grad, None, None
 
 
-def get_encoding_shape_with_blocks(original_encoding_shape: torch.Size, block_size: List[int]):
+def get_encoding_shape_with_blocks(
+    original_encoding_shape: torch.Size, block_size: List[int]
+):
     """
     Get new encoding param shape to account for block sizes. If block_size is not None, the original shape is
     interleaved with '1' in between each dimension. Otherwise, the original shape is returned.
@@ -479,8 +584,10 @@ def get_encoding_shape_with_blocks(original_encoding_shape: torch.Size, block_si
 
     return new_encoding_shape
 
-def reshape_tensor_for_blocks(tensor: torch.Tensor, encoding_shape: torch.Size, block_size: Optional[List]) -> \
-        torch.Tensor:
+
+def reshape_tensor_for_blocks(
+    tensor: torch.Tensor, encoding_shape: torch.Size, block_size: Optional[List]
+) -> torch.Tensor:
     """
     Reshape tensor to account for block sizes. The new shape separates each dimension into num blocks and block size.
     The resulting tensor shape has twice as many dimensions as the starting shape.
@@ -513,22 +620,23 @@ def reshape_tensor_for_blocks(tensor: torch.Tensor, encoding_shape: torch.Size, 
             input_reshape.insert(0, block_size[-i])
             input_reshape.insert(0, encoding_shape[-i])
 
-    input_reshape = list(tensor.shape[:-len(block_size)]) + input_reshape
+    input_reshape = list(tensor.shape[: -len(block_size)]) + input_reshape
 
     return tensor.view(input_reshape)
 
 
 _USE_COMPILED_IMPL = False
 
+
 def _use_compiled_impl(flag: bool = True):
     orig = _USE_COMPILED_IMPL
 
     def action():
-        global _USE_COMPILED_IMPL # pylint: disable=global-statement
+        global _USE_COMPILED_IMPL  # pylint: disable=global-statement
         _USE_COMPILED_IMPL = flag
 
     def cleanup():
-        global _USE_COMPILED_IMPL # pylint: disable=global-statement
+        global _USE_COMPILED_IMPL  # pylint: disable=global-statement
         _USE_COMPILED_IMPL = orig
 
     return _ContextManager(action, cleanup)

@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Module for testing quantsim config feature """
+"""Module for testing quantsim config feature"""
+
 import tempfile
 
 import pytest
@@ -43,9 +44,19 @@ import os
 import torch
 import numpy as np
 from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
-from aimet_common.defs import QuantScheme, QuantizationDataType, QuantDtypeBwInfo, SupportedKernelsAction
-from ..models.test_models import SingleResidual, QuantSimTinyModel, MultiInput, SingleResidualWithModuleAdd, \
-    SingleResidualWithAvgPool
+from aimet_common.defs import (
+    QuantScheme,
+    QuantizationDataType,
+    QuantDtypeBwInfo,
+    SupportedKernelsAction,
+)
+from ..models.test_models import (
+    SingleResidual,
+    QuantSimTinyModel,
+    MultiInput,
+    SingleResidualWithModuleAdd,
+    SingleResidualWithAvgPool,
+)
 from aimet_torch.v1.quantsim import QuantizationSimModel
 import aimet_torch._base.quantsim
 from aimet_torch.quantsim_config import quantsim_config as qsim_config
@@ -53,13 +64,17 @@ from aimet_torch.quantsim_config.quantsim_config import get_all_ops_in_neighborh
 from aimet_torch.v1.qc_quantize_op import QcQuantizeWrapper
 from aimet_torch import utils
 from aimet_torch.meta.connectedgraph import ConnectedGraph
-from aimet_torch.v1.tensor_quantizer import StaticGridPerTensorQuantizer, StaticGridPerChannelQuantizer
+from aimet_torch.v1.tensor_quantizer import (
+    StaticGridPerTensorQuantizer,
+    StaticGridPerChannelQuantizer,
+)
 from aimet_torch._base.nn.modules.custom import Add
 from ..models import test_models
 from .._utils import per_tensor_config
 
+
 class ModelWithBertCustomLayerNormGelu(torch.nn.Module):
-    """ Model with PyTorch LayerNorm and gelu """
+    """Model with PyTorch LayerNorm and gelu"""
 
     def __init__(self):
         super(ModelWithBertCustomLayerNormGelu, self).__init__()
@@ -78,42 +93,40 @@ class ModelWithBertCustomLayerNormGelu(torch.nn.Module):
 
 
 class TestQuantsimConfig:
-    """ Class containing unit tests for quantsim config feature """
+    """Class containing unit tests for quantsim config feature"""
 
     def test_parse_config_file_defaults(self):
-        """ Test that default quantization parameters are set correctly when using json config file """
+        """Test that default quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "per_channel_quantization": "True",
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), in_place=True)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                in_place=True,
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     # Output of add op is input quantized
-                    if name == 'relu3':
+                    if name == "relu3":
                         assert module.input_quantizers[0].enabled
                     else:
                         assert not module.input_quantizers[0].enabled
@@ -130,7 +143,6 @@ class TestQuantsimConfig:
                     assert not module.output_quantizers[0].use_strict_symmetric
                     assert not module.output_quantizers[0].use_unsigned_symmetric
 
-
                     for _, param_quantizer in module.param_quantizers.items():
                         assert not param_quantizer.enabled
                         assert param_quantizer.use_symmetric_encodings
@@ -139,42 +151,34 @@ class TestQuantsimConfig:
                         assert len(param_quantizer._cppOp) > 1
 
     def test_parse_config_file_params(self):
-        """ Test that param specific quantization parameters are set correctly when using json config file """
+        """Test that param specific quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "False"}},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for _, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     for param_name, param_quantizer in module.param_quantizers.items():
-                        if param_name == 'weight':
+                        if param_name == "weight":
                             if module in (sim.model.bn1, sim.model.bn2):
                                 assert not param_quantizer.enabled
                             else:
@@ -194,97 +198,59 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
-                "supported_kernels":[
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
+                "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 8, "dtype": "int"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
+                    },
+                ],
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "False"}},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         expected_supported_kernels = [
-                    {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": QuantizationDataType.int
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": QuantizationDataType.int
-                        }
-                    },
-                    {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": QuantizationDataType.float
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": QuantizationDataType.float
-                        }
-                    }
-                ]
+            {
+                "activation": {"bitwidth": 16, "dtype": QuantizationDataType.int},
+                "param": {"bitwidth": 8, "dtype": QuantizationDataType.int},
+            },
+            {
+                "activation": {"bitwidth": 16, "dtype": QuantizationDataType.float},
+                "param": {"bitwidth": 16, "dtype": QuantizationDataType.float},
+            },
+        ]
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
             supported_kernels_in_defaults = sim.get_supported_kernels()["defaults"]
             assert len(supported_kernels_in_defaults) == 2
             assert supported_kernels_in_defaults == expected_supported_kernels
 
     def test_parse_config_file_op_type(self):
-        """ Test that op specific quantization parameters are set correctly when using json config file """
+        """Test that op specific quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
@@ -292,23 +258,23 @@ class TestQuantsimConfig:
                     "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
-                        "bias": {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        }
+                        "bias": {"is_quantized": "True", "is_symmetric": "False"}
                     },
                 }
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     if isinstance(module._module_to_wrap, torch.nn.Conv2d):
@@ -319,7 +285,7 @@ class TestQuantsimConfig:
                             assert module.output_quantizers[0].enabled
                     else:
                         # Output of add op is input quantized
-                        if name == 'relu3':
+                        if name == "relu3":
                             assert module.input_quantizers[0].enabled
                         else:
                             assert not module.input_quantizers[0].enabled
@@ -329,7 +295,10 @@ class TestQuantsimConfig:
                     assert not module.output_quantizers[0].use_symmetric_encodings
 
                     for param_name, param_quantizer in module.param_quantizers.items():
-                        if isinstance(module._module_to_wrap, torch.nn.Conv2d) and param_name == 'bias':
+                        if (
+                            isinstance(module._module_to_wrap, torch.nn.Conv2d)
+                            and param_name == "bias"
+                        ):
                             assert param_quantizer.enabled
                             assert not param_quantizer.use_symmetric_encodings
                         else:
@@ -337,101 +306,118 @@ class TestQuantsimConfig:
                             assert param_quantizer.use_symmetric_encodings
 
     def _test_parse_config_file_op_type_per_channel_helper(self, per_channel_fields):
-        """ helper function to test out per_channel_quantization"""
-        for k in ['defaults', 'Conv', 'Gemm']:
+        """helper function to test out per_channel_quantization"""
+        for k in ["defaults", "Conv", "Gemm"]:
             assert k in per_channel_fields.keys()
 
         model = MultiInput()
         model.eval()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "True",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
                 "per_channel_quantization": per_channel_fields["defaults"],
             },
             "params": {
-                "bias": {
-                    "is_quantized": "False"
-                },
+                "bias": {"is_quantized": "False"},
             },
             "op_type": {
-                "Conv": {
-                    "per_channel_quantization": per_channel_fields["Conv"]
-                },
-                "Gemm": {
-                    "per_channel_quantization": per_channel_fields["Gemm"]
-                }
+                "Conv": {"per_channel_quantization": per_channel_fields["Conv"]},
+                "Gemm": {"per_channel_quantization": per_channel_fields["Gemm"]},
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)),
+            )
 
             return sim
 
     def test_parse_config_file_op_type_per_channel(self):
-        """ Test that op specific quantization parameters are set correctly when using json config file """
+        """Test that op specific quantization parameters are set correctly when using json config file"""
 
         # test 1: expect all to be StaticGridPerChannelQuantizer
         per_channel_fields = {"defaults": "True", "Conv": "True", "Gemm": "True"}
-        sim = self._test_parse_config_file_op_type_per_channel_helper(per_channel_fields)
+        sim = self._test_parse_config_file_op_type_per_channel_helper(
+            per_channel_fields
+        )
 
         for name, module in sim.model.named_modules():
             if isinstance(module, QcQuantizeWrapper):
-                if 'weight' in module.param_quantizers:
-                    assert isinstance(module.param_quantizers['weight'], StaticGridPerChannelQuantizer)
-
+                if "weight" in module.param_quantizers:
+                    assert isinstance(
+                        module.param_quantizers["weight"], StaticGridPerChannelQuantizer
+                    )
 
         # test 2: expect all but Conv to be StaticGridPerChannelQuantizer
         per_channel_fields = {"defaults": "True", "Conv": "False", "Gemm": "True"}
-        sim = self._test_parse_config_file_op_type_per_channel_helper(per_channel_fields)
+        sim = self._test_parse_config_file_op_type_per_channel_helper(
+            per_channel_fields
+        )
 
         for name, module in sim.model.named_modules():
             if isinstance(module, QcQuantizeWrapper):
-                if 'weight' in module.param_quantizers:
+                if "weight" in module.param_quantizers:
                     if isinstance(module._module_to_wrap, torch.nn.Conv2d):
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerTensorQuantizer)
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerTensorQuantizer,
+                        )
                     else:
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerChannelQuantizer)
-
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerChannelQuantizer,
+                        )
 
         # test 3: expect all but Conv and Gemm to be StaticGridPerChannelQuantizer
         per_channel_fields = {"defaults": "True", "Conv": "False", "Gemm": "False"}
-        sim = self._test_parse_config_file_op_type_per_channel_helper(per_channel_fields)
+        sim = self._test_parse_config_file_op_type_per_channel_helper(
+            per_channel_fields
+        )
 
         for name, module in sim.model.named_modules():
             if isinstance(module, QcQuantizeWrapper):
-                if 'weight' in module.param_quantizers:
-                    if isinstance(module._module_to_wrap, torch.nn.Conv2d) or isinstance(module._module_to_wrap,
-                                                                                         torch.nn.Linear):
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerTensorQuantizer)
+                if "weight" in module.param_quantizers:
+                    if isinstance(
+                        module._module_to_wrap, torch.nn.Conv2d
+                    ) or isinstance(module._module_to_wrap, torch.nn.Linear):
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerTensorQuantizer,
+                        )
                     else:
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerChannelQuantizer)
-
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerChannelQuantizer,
+                        )
 
         # test 4: expect all in StaticGridPerTensorQuantizer except Conv which will be in StaticGridPerChannelQuantizer
         per_channel_fields = {"defaults": "False", "Conv": "True", "Gemm": "False"}
-        sim = self._test_parse_config_file_op_type_per_channel_helper(per_channel_fields)
+        sim = self._test_parse_config_file_op_type_per_channel_helper(
+            per_channel_fields
+        )
 
         for name, module in sim.model.named_modules():
             if isinstance(module, QcQuantizeWrapper):
-                if 'weight' in module.param_quantizers:
+                if "weight" in module.param_quantizers:
                     if isinstance(module._module_to_wrap, torch.nn.Conv2d):
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerChannelQuantizer)
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerChannelQuantizer,
+                        )
                     else:
-                        assert isinstance(module.param_quantizers['weight'], StaticGridPerTensorQuantizer)
+                        assert isinstance(
+                            module.param_quantizers["weight"],
+                            StaticGridPerTensorQuantizer,
+                        )
 
         random_input = (torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20))
 
@@ -440,22 +426,32 @@ class TestQuantsimConfig:
             with torch.no_grad():
                 model(*random_input)
 
-
         # test 5: test to make sure only Conv has param encodings of length greater than 1(per-channel),
         # others have only one entry
         sim.compute_encodings(forward_pass, None)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            sim.export(tmp_dir, 'test_parse_config_file_op_type_per_channel',
-                       dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)))
+            sim.export(
+                tmp_dir,
+                "test_parse_config_file_op_type_per_channel",
+                dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)),
+            )
 
-            with open(os.path.join(tmp_dir, "test_parse_config_file_op_type_per_channel.encodings"), "r") as encodings_file:
+            with open(
+                os.path.join(
+                    tmp_dir, "test_parse_config_file_op_type_per_channel.encodings"
+                ),
+                "r",
+            ) as encodings_file:
                 encodings = json.load(encodings_file)
-                param_encodings = {encoding['name']: encoding for encoding in encodings['param_encodings']}
-                assert len(param_encodings["bn1.weight"]['scale']) == 1
-                assert len(param_encodings["fc.weight"]['scale']) == 1
-                assert len(param_encodings["conv1.weight"]['scale']) == 16
-                assert len(param_encodings["conv2.weight"]['scale']) == 8
-                assert len(param_encodings["conv3.weight"]['scale']) == 8
+                param_encodings = {
+                    encoding["name"]: encoding
+                    for encoding in encodings["param_encodings"]
+                }
+                assert len(param_encodings["bn1.weight"]["scale"]) == 1
+                assert len(param_encodings["fc.weight"]["scale"]) == 1
+                assert len(param_encodings["conv1.weight"]["scale"]) == 16
+                assert len(param_encodings["conv2.weight"]["scale"]) == 8
+                assert len(param_encodings["conv3.weight"]["scale"]) == 8
 
     def test_hw_version(self):
         """
@@ -464,105 +460,87 @@ class TestQuantsimConfig:
         model = SingleResidual()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
-                "hw_version": "V01"
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
+                "hw_version": "V01",
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            config_file = os.path.join(tmp_dir, 'quantsim_config.json')
-            with open(config_file, 'w') as f:
+            config_file = os.path.join(tmp_dir, "quantsim_config.json")
+            with open(config_file, "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=config_file,
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=config_file,
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
-            version = sim.configure_quantization_ops(config_file, 8, 8, QuantizationDataType.int).\
-                          _get_hw_version()
+            version = sim.configure_quantization_ops(
+                config_file, 8, 8, QuantizationDataType.int
+            )._get_hw_version()
             assert version == "V01"
 
             quantsim_config = {
                 "defaults": {
-                    "ops": {
-                        "is_output_quantized": "True",
-                        "is_symmetric": "False"
-                    },
-                    "params": {
-                        "is_quantized": "False",
-                        "is_symmetric": "True"
-                    },
+                    "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                    "params": {"is_quantized": "False", "is_symmetric": "True"},
                 },
                 "params": {},
                 "op_type": {},
                 "supergroups": [],
                 "model_input": {},
-                "model_output": {}
+                "model_output": {},
             }
 
-            with open(config_file, 'w') as f:
+            with open(config_file, "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=config_file,
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=config_file,
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
-            version = sim.configure_quantization_ops(config_file, 8, 8, QuantizationDataType.int).\
-                          _get_hw_version()
+            version = sim.configure_quantization_ops(
+                config_file, 8, 8, QuantizationDataType.int
+            )._get_hw_version()
             assert version is None
 
     def test_op_instance_config_1(self):
         """
         Tests the generated supported_kernels and pcq fields for all the ops
         """
-        for model in [SingleResidual(), SingleResidualWithAvgPool(), SingleResidualWithModuleAdd()]:
+        for model in [
+            SingleResidual(),
+            SingleResidualWithAvgPool(),
+            SingleResidualWithModuleAdd(),
+        ]:
             quantsim_config = {
                 "defaults": {
-                    "ops": {
-                        "is_output_quantized": "True",
-                        "is_symmetric": "False"
-                    },
-                    "params": {
-                        "is_quantized": "False",
-                        "is_symmetric": "True"
-                    },
+                    "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                    "params": {"is_quantized": "False", "is_symmetric": "True"},
                     "hw_version": "V01",
                     "supported_kernels": [
                         {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            },
-                            "param": {
-                                "bitwidth": 16,
-                                "dtype": "float"
-                            }
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
                         }
                     ],
                     "per_channel_quantization": "True",
                 },
                 "params": {},
                 "op_type": {
-                    'Conv':{
+                    "Conv": {
                         "supported_kernels": [
                             {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "int"
-                                },
-                                "param": {
-                                    "bitwidth": 8,
-                                    "dtype": "int"
-                                }
+                                "activation": {"bitwidth": 16, "dtype": "int"},
+                                "param": {"bitwidth": 8, "dtype": "int"},
                             }
                         ],
                         "per_channel_quantization": "False",
@@ -570,26 +548,45 @@ class TestQuantsimConfig:
                 },
                 "supergroups": [],
                 "model_input": {},
-                "model_output": {}
+                "model_output": {},
             }
 
             with tempfile.TemporaryDirectory() as tmp_dir:
-                with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+                with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                     json.dump(quantsim_config, f)
-                sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                           config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                           dummy_input=torch.rand(1, 3, 32, 32))
+                sim = QuantizationSimModel(
+                    model,
+                    quant_scheme=QuantScheme.post_training_tf_enhanced,
+                    config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                    dummy_input=torch.rand(1, 3, 32, 32),
+                )
                 for _, module in sim.model.named_modules():
                     if isinstance(module, QcQuantizeWrapper):
                         assert len(module.supported_kernels) == 1
-                        if module._module_to_wrap._get_name() == 'Conv2d':
-                            assert isinstance(module.param_quantizers['weight'], StaticGridPerTensorQuantizer)
-                            assert module.supported_kernels == [((16, QuantizationDataType.int), (8, QuantizationDataType.int))]
+                        if module._module_to_wrap._get_name() == "Conv2d":
+                            assert isinstance(
+                                module.param_quantizers["weight"],
+                                StaticGridPerTensorQuantizer,
+                            )
+                            assert module.supported_kernels == [
+                                (
+                                    (16, QuantizationDataType.int),
+                                    (8, QuantizationDataType.int),
+                                )
+                            ]
                         else:
                             if module.param_quantizers:
-                                assert isinstance(module.param_quantizers['weight'], StaticGridPerChannelQuantizer)
+                                assert isinstance(
+                                    module.param_quantizers["weight"],
+                                    StaticGridPerChannelQuantizer,
+                                )
                             if module.supported_kernels:
-                                assert module.supported_kernels == [((16, QuantizationDataType.float), (16, QuantizationDataType.float))]
+                                assert module.supported_kernels == [
+                                    (
+                                        (16, QuantizationDataType.float),
+                                        (16, QuantizationDataType.float),
+                                    )
+                                ]
                 del sim
 
     def test_parse_config_file_op_type_supported_kernels(self):
@@ -602,73 +599,47 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
                     }
-                ]
+                ],
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "False"}},
             "op_type": {
                 "Conv": {
                     "supported_kernels": [
                         {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "int"
-                            },
-                            "param": {
-                                "bitwidth": 8,
-                                "dtype": "int"
-                            }
+                            "activation": {"bitwidth": 16, "dtype": "int"},
+                            "param": {"bitwidth": 8, "dtype": "int"},
                         }
                     ]
                 }
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         expected_supported_kernels = [
-                    {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": QuantizationDataType.int
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": QuantizationDataType.int
-                        }
-                    }
-                ]
+            {
+                "activation": {"bitwidth": 16, "dtype": QuantizationDataType.int},
+                "param": {"bitwidth": 8, "dtype": QuantizationDataType.int},
+            }
+        ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
             supported_kernels_in_defaults = sim.get_supported_kernels()["Conv"]
             assert len(supported_kernels_in_defaults) == 1
@@ -683,69 +654,60 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
                     }
-                ]
+                ],
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "True"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "True"}},
             "op_type": {
                 "Conv": {
                     "supported_kernels": [
                         {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "int"
-                            },
-                            "param": {
-                                "bitwidth": 8,
-                                "dtype": "int"
-                            }
+                            "activation": {"bitwidth": 16, "dtype": "int"},
+                            "param": {"bitwidth": 8, "dtype": "int"},
                         }
                     ]
                 }
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), default_param_bw=16, default_output_bw=16,
-                                       default_data_type=QuantizationDataType.int)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                default_param_bw=16,
+                default_output_bw=16,
+                default_data_type=QuantizationDataType.int,
+            )
 
             for _, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
-                    if module._module_to_wrap._get_name() == 'Conv2d':
-                        assert module.supported_kernels == [((16, QuantizationDataType.int), (8, QuantizationDataType.int))]
+                    if module._module_to_wrap._get_name() == "Conv2d":
+                        assert module.supported_kernels == [
+                            (
+                                (16, QuantizationDataType.int),
+                                (8, QuantizationDataType.int),
+                            )
+                        ]
                     else:
-                        assert module.supported_kernels == [((16, QuantizationDataType.int),(16, QuantizationDataType.int))]
-
+                        assert module.supported_kernels == [
+                            (
+                                (16, QuantizationDataType.int),
+                                (16, QuantizationDataType.int),
+                            )
+                        ]
 
     def test_parse_config_file_supported_kernels_2(self):
         """
@@ -756,94 +718,76 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
                     }
-                ]
+                ],
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "True"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "True"}},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             try:
-                aimet_torch._base.quantsim.SUPPORTED_KERNELS_ACTION = SupportedKernelsAction.assert_on_error
+                aimet_torch._base.quantsim.SUPPORTED_KERNELS_ACTION = (
+                    SupportedKernelsAction.assert_on_error
+                )
                 with pytest.raises(RuntimeError):
-                    QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                           config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                           dummy_input=torch.rand(1, 3, 32, 32), default_param_bw=16, default_output_bw=8,
-                                           default_data_type=QuantizationDataType.int)
+                    QuantizationSimModel(
+                        model,
+                        quant_scheme=QuantScheme.post_training_tf_enhanced,
+                        config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                        dummy_input=torch.rand(1, 3, 32, 32),
+                        default_param_bw=16,
+                        default_output_bw=8,
+                        default_data_type=QuantizationDataType.int,
+                    )
             finally:
-                aimet_torch._base.quantsim.SUPPORTED_KERNELS_ACTION = SupportedKernelsAction.warn_on_error
+                aimet_torch._base.quantsim.SUPPORTED_KERNELS_ACTION = (
+                    SupportedKernelsAction.warn_on_error
+                )
 
     def test_parse_config_file_supergroups(self):
-        """ Test that supergroup quantization parameters are set correctly when using json config file """
+        """Test that supergroup quantization parameters are set correctly when using json config file"""
         model = QuantSimTinyModel()
         model.eval()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "False"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [
-                {
-                    "op_list": ["Conv", "Relu"]
-                },
-                {
-                    "op_list": ["Relu", "MaxPool"]
-                },
-                {
-                    "op_list": ["Conv", "Relu", "AveragePool"]
-                },
-                {
-                    "op_list": ["Conv", "Clip"]
-                },
+                {"op_list": ["Conv", "Relu"]},
+                {"op_list": ["Relu", "MaxPool"]},
+                {"op_list": ["Conv", "Relu", "AveragePool"]},
+                {"op_list": ["Conv", "Clip"]},
             ],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
             # Use in_place=True here for easy access to modules through model instance variables
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       in_place=True, dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                in_place=True,
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
             # Expected supergroups: (square bracket indicates a supergroup)
             # in -> [conv1->bn1->relu1->maxpool] -> [conv2->bn2->relu2] -> [conv3->relu3->avgpool] -> [conv4] -> [fc] -> out
@@ -874,34 +818,30 @@ class TestQuantsimConfig:
             assert model.fc.output_quantizers[0].enabled
 
     def test_parse_config_file_elementwise_ops(self):
-        """ Test that elementwise op quantizers are set as expected """
+        """Test that elementwise op quantizers are set as expected"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
-            "op_type": {
-                "Add": {
-                    "is_input_quantized": "True"
-                }
-            },
+            "op_type": {"Add": {"is_input_quantized": "True"}},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
-                    if name in ['conv3', 'ada']:
+                    if name in ["conv3", "ada"]:
                         # model.conv3 and model.ada are inputs to add
                         assert module.output_quantizers[0].enabled
                     else:
@@ -909,15 +849,17 @@ class TestQuantsimConfig:
                     assert not module.input_quantizers[0].enabled
 
     def test_parse_config_file_model_inputs(self):
-        """ Test that model input quantization parameters are set correctly when using json config file """
+        """Test that model input quantization parameters are set correctly when using json config file"""
 
         class MultiInputWithConstant(torch.nn.Module):
-            """ A model with multiple inputs.
-                Use this model for unit testing purposes. """
+            """A model with multiple inputs.
+            Use this model for unit testing purposes."""
 
             def __init__(self, num_classes=3):
                 super(MultiInputWithConstant, self).__init__()
-                self.conv1 = torch.nn.Conv2d(3, 16, kernel_size=2, stride=2, padding=3, bias=False)
+                self.conv1 = torch.nn.Conv2d(
+                    3, 16, kernel_size=2, stride=2, padding=3, bias=False
+                )
                 self.conv2 = torch.nn.Conv2d(16, 8, kernel_size=3, stride=2, padding=2)
                 self.conv3 = torch.nn.Conv2d(3, 8, kernel_size=3, stride=2, padding=2)
                 self.add1 = Add()
@@ -935,30 +877,29 @@ class TestQuantsimConfig:
         model.eval()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)), in_place=True)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=(torch.rand(1, 3, 32, 32), torch.rand(1, 3, 20, 20)),
+                in_place=True,
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
-                    if name in ('conv1', 'conv3'):
+                    if name in ("conv1", "conv3"):
                         assert module.input_quantizers[0].enabled
-                    elif name == 'add2':
+                    elif name == "add2":
                         assert not module.input_quantizers[0].enabled
                         assert module.input_quantizers[1].enabled
                     else:
@@ -968,32 +909,30 @@ class TestQuantsimConfig:
                     assert not module.output_quantizers[0].use_symmetric_encodings
 
     def test_parse_config_file_model_outputs(self):
-        """ Test that model output quantization parameters are set correctly when using json config file """
+        """Test that model output quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_output": {"is_output_quantized": "True"},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
-                    if name == 'fc':
+                    if name == "fc":
                         # model.conv3 and model.ada are inputs to add
                         assert module.output_quantizers[0].enabled
                     else:
@@ -1001,34 +940,29 @@ class TestQuantsimConfig:
                     assert not module.input_quantizers[0].enabled
 
     def test_supergroups_with_functional_add(self):
-        """ Test supergroup with functional add """
+        """Test supergroup with functional add"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {}
-            },
+            "defaults": {"ops": {"is_output_quantized": "True"}, "params": {}},
             "params": {},
             "op_type": {},
-            "supergroups": [
-                {
-                    "op_list": ["Add", "Relu"]
-                }
-            ],
+            "supergroups": [{"op_list": ["Add", "Relu"]}],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
             # Use in_place=True here for easy access to modules through model instance variables
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       in_place=True, dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                in_place=True,
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
 
             # Expected supergroups: (square bracket indicates a supergroup)
             # in -> [conv1] -> [bn1]-> ... -> [conv3] -----> [(+)->relu3->avgpool] -> [fc] -> out
@@ -1039,34 +973,29 @@ class TestQuantsimConfig:
             assert not sim.model.relu3.input_quantizers[0].enabled
 
     def test_supergroups_with_module_add(self):
-        """ Test supergroup with add module """
+        """Test supergroup with add module"""
         model = SingleResidualWithModuleAdd()
         model.eval()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {}
-            },
+            "defaults": {"ops": {"is_output_quantized": "True"}, "params": {}},
             "params": {},
             "op_type": {},
-            "supergroups": [
-                {
-                    "op_list": ["Add", "Relu"]
-                }
-            ],
+            "supergroups": [{"op_list": ["Add", "Relu"]}],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
             # Use in_place=True here for easy access to modules through model instance variables
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       in_place=True, dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                in_place=True,
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for _, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     # Check configs for starts of supergroups
@@ -1078,35 +1007,33 @@ class TestQuantsimConfig:
                     assert not module.input_quantizers[0].enabled
 
     def test_parse_config_file_symmetric_modes(self):
-        """ Test that model output quantization parameters are set correctly when using json config file """
+        """Test that model output quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
 
         quantsim_config = {
-            "defaults":
-            {
+            "defaults": {
                 "ops": {},
-                "params":
-                {
-                    "is_symmetric": "True"
-                },
+                "params": {"is_symmetric": "True"},
                 "per_channel_quantization": "True",
                 "strict_symmetric": "True",
-                "unsigned_symmetric": "False"
+                "unsigned_symmetric": "False",
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-            }
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     for q in module.input_quantizers:
@@ -1120,55 +1047,57 @@ class TestQuantsimConfig:
                         assert not q.use_unsigned_symmetric
 
     def test_get_all_ops_in_neighborhood(self):
-        """ Test that default quantization parameters are set correctly when using json config file """
+        """Test that default quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
         input_shapes = (1, 3, 32, 32)
 
-        random_inputs = utils.create_rand_tensors_given_shapes(input_shapes, utils.get_device(model))
+        random_inputs = utils.create_rand_tensors_given_shapes(
+            input_shapes, utils.get_device(model)
+        )
         conn_graph = ConnectedGraph(model, random_inputs)
-        starting_op = conn_graph.get_op_from_module_name('SingleResidual.conv3')
-        add_op = [op for op in conn_graph.get_all_ops().values() if op.type == 'Add'][0]
-        neighborhood = get_all_ops_in_neighborhood(starting_op, 'output', split_type=CG_SPLIT)
+        starting_op = conn_graph.get_op_from_module_name("SingleResidual.conv3")
+        add_op = [op for op in conn_graph.get_all_ops().values() if op.type == "Add"][0]
+        neighborhood = get_all_ops_in_neighborhood(
+            starting_op, "output", split_type=CG_SPLIT
+        )
         assert len(neighborhood) == 2
         assert starting_op in neighborhood
         assert add_op in neighborhood
 
     @pytest.mark.cuda
     def test_parse_config_file_defaults_gpu(self):
-        """ Test that default quantization parameters are set correctly when using json config file """
+        """Test that default quantization parameters are set correctly when using json config file"""
         model = SingleResidual()
         model.eval()
         model.cuda()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32).cuda(), in_place=True)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32).cuda(),
+                in_place=True,
+            )
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     # Output of add op is input quantized
-                    if name == 'relu3':
+                    if name == "relu3":
                         assert module.input_quantizers[0].enabled
                     else:
                         assert not module.input_quantizers[0].enabled
@@ -1219,36 +1148,28 @@ class TestQuantsimConfig:
         # create custom config to override LayerNorm and GELU
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
                 "LayerNormalization": {
                     "is_input_quantized": "True",
                     "params": {
-                        "bias": {
-                            "is_quantized": "True"
-                        },
+                        "bias": {"is_quantized": "True"},
                     },
                 },
                 "Gelu": {
                     "is_input_quantized": "True",
-                }
+                },
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             model = ModelWithGeluLayerNorm()
@@ -1261,38 +1182,52 @@ class TestQuantsimConfig:
                     model(*random_input)
 
             # QuantSim for model
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=random_input)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=random_input,
+            )
 
             sim.compute_encodings(forward_pass, None)
 
             #  check quantizer added to parameters of LayerNorm
             from aimet_torch.v1.qc_quantize_op import StaticGridPerTensorQuantizer
-            assert(isinstance(sim.model.ln1.param_quantizers['weight'], StaticGridPerTensorQuantizer))
-            assert(isinstance(sim.model.ln1.param_quantizers['bias'], StaticGridPerTensorQuantizer))
 
+            assert isinstance(
+                sim.model.ln1.param_quantizers["weight"], StaticGridPerTensorQuantizer
+            )
+            assert isinstance(
+                sim.model.ln1.param_quantizers["bias"], StaticGridPerTensorQuantizer
+            )
 
             # LayerNorm input quantization is disabled by default
             # override with custom config file, this needs appropriate entry in onnx node name mapping
-            assert(isinstance(sim.model.ln1.input_quantizers[0], StaticGridPerTensorQuantizer))
-            assert(sim.model.ln1.input_quantizers[0].encoding)
+            assert isinstance(
+                sim.model.ln1.input_quantizers[0], StaticGridPerTensorQuantizer
+            )
+            assert sim.model.ln1.input_quantizers[0].encoding
             in_quantizer = sim.model.ln1.input_quantizers[0]
-            assert(in_quantizer.enabled)  # disabled by default, override with config file
-            assert(in_quantizer.round_mode == libpymo.RoundingMode.ROUND_NEAREST)
-            assert(in_quantizer.quant_scheme == QuantScheme.post_training_tf)
-            assert(in_quantizer.bitwidth == 8)
-
+            assert (
+                in_quantizer.enabled
+            )  # disabled by default, override with config file
+            assert in_quantizer.round_mode == libpymo.RoundingMode.ROUND_NEAREST
+            assert in_quantizer.quant_scheme == QuantScheme.post_training_tf
+            assert in_quantizer.bitwidth == 8
 
             # GELU input quantization is disabled by default
             # override with custom config file, this needs appropriate entry in onnx node name mapping
-            assert(isinstance(sim.model.gelu1.input_quantizers[0], StaticGridPerTensorQuantizer))
-            assert(sim.model.gelu1.input_quantizers[0].encoding)
+            assert isinstance(
+                sim.model.gelu1.input_quantizers[0], StaticGridPerTensorQuantizer
+            )
+            assert sim.model.gelu1.input_quantizers[0].encoding
             in_quantizer = sim.model.gelu1.input_quantizers[0]
-            assert(in_quantizer.enabled)  # disabled by default, override with config file
-            assert(in_quantizer.round_mode == libpymo.RoundingMode.ROUND_NEAREST)
-            assert(in_quantizer.quant_scheme == QuantScheme.post_training_tf)
-            assert(in_quantizer.bitwidth == 8)
+            assert (
+                in_quantizer.enabled
+            )  # disabled by default, override with config file
+            assert in_quantizer.round_mode == libpymo.RoundingMode.ROUND_NEAREST
+            assert in_quantizer.quant_scheme == QuantScheme.post_training_tf
+            assert in_quantizer.bitwidth == 8
 
     def test_default_quantsim_config_not_in_default_config_file_enforce_false(self):
         """
@@ -1308,88 +1243,91 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
                     }
-                ]
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
-                    }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
+                    },
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             INPUT_SHAPE = (1, 3, 32, 32)
+
             def forward_fn(model, _):
                 torch.manual_seed(10)
                 model.eval()
                 with torch.no_grad():
                     _ = model(torch.randn(INPUT_SHAPE))
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), in_place=True,
-                                       default_param_bw=8, default_output_bw=8, default_data_type=QuantizationDataType.int)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                in_place=True,
+                default_param_bw=8,
+                default_output_bw=8,
+                default_data_type=QuantizationDataType.int,
+            )
             sim.compute_encodings(forward_fn, forward_pass_callback_args=None)
 
             # all quantizers should be quantsim default quantsim dtype and bw  (int 8)
-            assert(sim.model.conv1.param_quantizers['weight'].enabled == True)
-            assert(sim.model.conv1.param_quantizers['weight'].bitwidth == 8)
-            assert(sim.model.conv1.param_quantizers['weight'].data_type == QuantizationDataType.int)
+            assert sim.model.conv1.param_quantizers["weight"].enabled == True
+            assert sim.model.conv1.param_quantizers["weight"].bitwidth == 8
+            assert (
+                sim.model.conv1.param_quantizers["weight"].data_type
+                == QuantizationDataType.int
+            )
 
-            assert(sim.model.conv1.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.conv1.output_quantizers[0].data_type == QuantizationDataType.int)
+            assert sim.model.conv1.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.conv1.output_quantizers[0].data_type
+                == QuantizationDataType.int
+            )
 
             # all quantizers should be quantsim default quantsim dtype and bw  (int 8)
             # that is  QUANTSIM DEFAULT bw / dtype (int 8).
-            assert(sim.model.fc.param_quantizers['weight'].enabled)
-            assert(sim.model.fc.param_quantizers['bias'].enabled == False)
-            assert(sim.model.fc.param_quantizers['weight'].bitwidth == 8)
-            assert(sim.model.fc.param_quantizers['weight'].data_type == QuantizationDataType.int)
-            assert(sim.model.fc.param_quantizers['bias'].bitwidth == 8)
-            assert(sim.model.fc.param_quantizers['bias'].data_type == QuantizationDataType.int)
-            assert(sim.model.fc.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.int)
-            assert(sim.model.relu1.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.relu1.output_quantizers[0].data_type == QuantizationDataType.int)
+            assert sim.model.fc.param_quantizers["weight"].enabled
+            assert sim.model.fc.param_quantizers["bias"].enabled == False
+            assert sim.model.fc.param_quantizers["weight"].bitwidth == 8
+            assert (
+                sim.model.fc.param_quantizers["weight"].data_type
+                == QuantizationDataType.int
+            )
+            assert sim.model.fc.param_quantizers["bias"].bitwidth == 8
+            assert (
+                sim.model.fc.param_quantizers["bias"].data_type
+                == QuantizationDataType.int
+            )
+            assert sim.model.fc.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.int
+            )
+            assert sim.model.relu1.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.relu1.output_quantizers[0].data_type
+                == QuantizationDataType.int
+            )
 
             # remove test config created
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
@@ -1408,121 +1346,106 @@ class TestQuantsimConfig:
         model.eval()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 8, "dtype": "int"},
+                        "param": {"bitwidth": 8, "dtype": "int"},
+                    },
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                            {
-                                "activation": {
-                                    "bitwidth": 8,
-                                    "dtype": "int"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "int"
-                                }
-                            },
-                        ],
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                        {
+                            "activation": {"bitwidth": 8, "dtype": "int"},
+                            "param": {"bitwidth": 16, "dtype": "int"},
+                        },
+                    ],
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
-                    }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
+                    },
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             INPUT_SHAPE = (1, 3, 32, 32)
+
             def forward_fn(model, _):
                 torch.manual_seed(10)
                 model.eval()
                 with torch.no_grad():
                     _ = model(torch.randn(INPUT_SHAPE))
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), in_place=True,
-                                       default_data_type=QuantizationDataType.int, default_output_bw=8, default_param_bw=8)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                in_place=True,
+                default_data_type=QuantizationDataType.int,
+                default_output_bw=8,
+                default_param_bw=8,
+            )
             sim.compute_encodings(forward_fn, forward_pass_callback_args=None)
 
             # enforce is true, however default quantsim bw / dtype (fp16) is not the config file supported kernels override at index 0.
             # apply override 0 # activation : bw = 16, float # param : bw = 16, float
-            assert(sim.model.conv1.param_quantizers['weight'].enabled == True)
-            assert(sim.model.conv1.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.conv1.param_quantizers['weight'].data_type == QuantizationDataType.float)
+            assert sim.model.conv1.param_quantizers["weight"].enabled == True
+            assert sim.model.conv1.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.conv1.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
 
-            assert(sim.model.conv1.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.conv1.output_quantizers[0].data_type == QuantizationDataType.float)
+            assert sim.model.conv1.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.conv1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
 
-            assert(sim.model.fc.param_quantizers['weight'].enabled)
-            assert(sim.model.fc.param_quantizers['bias'].enabled == False)
-            assert(sim.model.fc.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.fc.param_quantizers['weight'].data_type == QuantizationDataType.float)
-            assert(sim.model.fc.param_quantizers['bias'].bitwidth == 16)
-            assert(sim.model.fc.param_quantizers['bias'].data_type == QuantizationDataType.float)
-            assert(sim.model.fc.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.float)
-            assert(sim.model.relu1.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.relu1.output_quantizers[0].data_type == QuantizationDataType.float)
+            assert sim.model.fc.param_quantizers["weight"].enabled
+            assert sim.model.fc.param_quantizers["bias"].enabled == False
+            assert sim.model.fc.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.fc.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.fc.param_quantizers["bias"].bitwidth == 16
+            assert (
+                sim.model.fc.param_quantizers["bias"].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.fc.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.fc.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.relu1.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.relu1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
 
             # remove test config created
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
@@ -1541,99 +1464,97 @@ class TestQuantsimConfig:
         model.eval()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
+                    },
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
-                    }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
+                    },
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             INPUT_SHAPE = (1, 3, 32, 32)
+
             def forward_fn(model, _):
                 torch.manual_seed(10)
                 model.eval()
                 with torch.no_grad():
                     _ = model(torch.randn(INPUT_SHAPE))
 
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), in_place=True,
-                                       default_data_type=QuantizationDataType.int, default_output_bw=8, default_param_bw=8)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                in_place=True,
+                default_data_type=QuantizationDataType.int,
+                default_output_bw=8,
+                default_param_bw=8,
+            )
             sim.compute_encodings(forward_fn, forward_pass_callback_args=None)
 
             # enforce is true, however default quantsim bw / dtype (int 8) is NOT IN the config file supported kernels
             # should be configured with config file default supported kernel [0]
             # activation : bw = 16 , float
             # param : bw = 16, float
-            assert(sim.model.conv1.param_quantizers['weight'].enabled == True)
-            assert(sim.model.conv1.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.conv1.param_quantizers['weight'].data_type == QuantizationDataType.float)
+            assert sim.model.conv1.param_quantizers["weight"].enabled == True
+            assert sim.model.conv1.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.conv1.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
 
-            assert(sim.model.conv1.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.conv1.output_quantizers[0].data_type == QuantizationDataType.float)
+            assert sim.model.conv1.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.conv1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
 
-            assert(sim.model.fc.param_quantizers['weight'].enabled)
-            assert(sim.model.fc.param_quantizers['bias'].enabled == False)
-            assert(sim.model.fc.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.fc.param_quantizers['weight'].data_type == QuantizationDataType.float)
-            assert(sim.model.fc.param_quantizers['bias'].bitwidth == 16)
-            assert(sim.model.fc.param_quantizers['bias'].data_type == QuantizationDataType.float)
-            assert(sim.model.fc.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.float)
-            assert(sim.model.relu1.output_quantizers[0].bitwidth == 16)
-            assert(sim.model.relu1.output_quantizers[0].data_type == QuantizationDataType.float)
+            assert sim.model.fc.param_quantizers["weight"].enabled
+            assert sim.model.fc.param_quantizers["bias"].enabled == False
+            assert sim.model.fc.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.fc.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.fc.param_quantizers["bias"].bitwidth == 16
+            assert (
+                sim.model.fc.param_quantizers["bias"].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.fc.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.fc.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.relu1.output_quantizers[0].bitwidth == 16
+            assert (
+                sim.model.relu1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
 
             # remove test config created
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
@@ -1648,95 +1569,73 @@ class TestQuantsimConfig:
         model.eval()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "int"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 8, "dtype": "int"},
+                        "param": {"bitwidth": 16, "dtype": "int"},
+                    },
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ],
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ],
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
-                    }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
+                    },
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            config_file = os.path.join(tmp_dir, 'quantsim_config.json')
-            with open(config_file, 'w') as f:
+            config_file = os.path.join(tmp_dir, "quantsim_config.json")
+            with open(config_file, "w") as f:
                 json.dump(quantsim_config, f)
 
             INPUT_SHAPE = (1, 3, 32, 32)
+
             def forward_fn(model, _):
                 torch.manual_seed(10)
                 model.eval()
                 with torch.no_grad():
                     _ = model(torch.randn(INPUT_SHAPE))
+
             from aimet_torch.quantsim_config.quantsim_config import QuantSimConfigurator
+
             dummy_input = torch.randn(INPUT_SHAPE)
             connected_graph = ConnectedGraph(model, dummy_input)
 
-            qsim_config = QuantSimConfigurator(model, connected_graph, config_file,
-                                               quantsim_output_bw=8, quantsim_param_bw=8,
-                                               quantsim_data_type=QuantizationDataType.int)
+            qsim_config = QuantSimConfigurator(
+                model,
+                connected_graph,
+                config_file,
+                quantsim_output_bw=8,
+                quantsim_param_bw=8,
+                quantsim_data_type=QuantizationDataType.int,
+            )
 
-            qsim_dtype_bw = QuantDtypeBwInfo(act_dtype=QuantizationDataType.int, act_bw=8,
-                                             param_dtype=QuantizationDataType.int, param_bw=8)
+            qsim_dtype_bw = QuantDtypeBwInfo(
+                act_dtype=QuantizationDataType.int,
+                act_bw=8,
+                param_dtype=QuantizationDataType.int,
+                param_bw=8,
+            )
 
             assert qsim_config.check_correctness_of_dtype_bw_rules(qsim_dtype_bw)
 
@@ -1764,79 +1663,46 @@ class TestQuantsimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": "int"
-                        }
+                        "activation": {"bitwidth": 8, "dtype": "int"},
+                        "param": {"bitwidth": 8, "dtype": "int"},
                     },
                     {
-                        "activation": {
-                            "bitwidth": 4,
-                            "dtype": "int"
-                        },
-                        "param": {
-                            "bitwidth": 4,
-                            "dtype": "int"
-                        }
-                    }
-                ]
+                        "activation": {"bitwidth": 4, "dtype": "int"},
+                        "param": {"bitwidth": 4, "dtype": "int"},
+                    },
+                ],
             },
-            "params": {
-                "bias": {
-                    "is_quantized": "False"
-                }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
                     "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True"
-                        },
-                        "bias": {
-                            "is_quantized": "False"
-                        }
+                        "weight": {"is_quantized": "True"},
+                        "bias": {"is_quantized": "False"},
                     },
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ]
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ],
                 }
             },
-            "supergroups": [
-            ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             INPUT_SHAPE = (1, 3, 32, 32)
+
             def forward_fn(model, _):
                 torch.manual_seed(10)
                 model.eval()
@@ -1845,34 +1711,57 @@ class TestQuantsimConfig:
 
             # set enforce to true for this test
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = True
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'),
-                                       dummy_input=torch.rand(1, 3, 32, 32), in_place=True,
-                                       default_data_type=QuantizationDataType.int, default_output_bw=4, default_param_bw=4)
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+                dummy_input=torch.rand(1, 3, 32, 32),
+                in_place=True,
+                default_data_type=QuantizationDataType.int,
+                default_output_bw=4,
+                default_param_bw=4,
+            )
             sim.compute_encodings(forward_fn, forward_pass_callback_args=None)
 
             # enforce is set to true
             # default supported kernels at index DEFAULT_OVERRIDE_SUPPORTED_KERNEL_INDEX (=0 in this case)
             # is not same as default quantsim bw and dtype(int 4/int4), apply default overrides (int8/ int8).
 
-            assert(sim.model.fc.param_quantizers['weight'].enabled)
-            assert(sim.model.fc.param_quantizers['bias'].enabled == False)
-            assert(sim.model.fc.param_quantizers['weight'].bitwidth == 8)
-            assert(sim.model.fc.param_quantizers['weight'].data_type == QuantizationDataType.int)
-            assert(sim.model.fc.param_quantizers['bias'].bitwidth == 8)
-            assert(sim.model.fc.param_quantizers['bias'].data_type == QuantizationDataType.int)
-            assert(sim.model.fc.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.int)
-            assert(sim.model.relu1.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.relu1.output_quantizers[0].data_type == QuantizationDataType.int)
+            assert sim.model.fc.param_quantizers["weight"].enabled
+            assert sim.model.fc.param_quantizers["bias"].enabled == False
+            assert sim.model.fc.param_quantizers["weight"].bitwidth == 8
+            assert (
+                sim.model.fc.param_quantizers["weight"].data_type
+                == QuantizationDataType.int
+            )
+            assert sim.model.fc.param_quantizers["bias"].bitwidth == 8
+            assert (
+                sim.model.fc.param_quantizers["bias"].data_type
+                == QuantizationDataType.int
+            )
+            assert sim.model.fc.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.fc.output_quantizers[0].data_type == QuantizationDataType.int
+            )
+            assert sim.model.relu1.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.relu1.output_quantizers[0].data_type
+                == QuantizationDataType.int
+            )
 
             # at op level (for Conv) check param quantizers are updated to fp16 while output is still retained at int8
-            assert(sim.model.conv1.param_quantizers['weight'].enabled == True)
-            assert(sim.model.conv1.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.conv1.param_quantizers['weight'].data_type == QuantizationDataType.float)
+            assert sim.model.conv1.param_quantizers["weight"].enabled == True
+            assert sim.model.conv1.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.conv1.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
 
-            assert(sim.model.conv1.output_quantizers[0].bitwidth == 8)
-            assert(sim.model.conv1.output_quantizers[0].data_type == QuantizationDataType.int)
+            assert sim.model.conv1.output_quantizers[0].bitwidth == 8
+            assert (
+                sim.model.conv1.output_quantizers[0].data_type
+                == QuantizationDataType.int
+            )
 
             # remove test config created
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
@@ -1892,54 +1781,36 @@ class TestQuantsimConfig:
         # aic100, no default supported kernels, op level for layernorm and gelu
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                }
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
             },
             "params": {},
             "op_type": {
                 "LayerNormalization": {
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ]
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ]
                 },
                 "Gelu": {
                     "is_output_quantized": "True",
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ]
-                }
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ],
+                },
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             torch.manual_seed(10)
@@ -1954,22 +1825,35 @@ class TestQuantsimConfig:
                     model(*random_input)
 
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = True
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                       dummy_input=random_input, default_data_type=QuantizationDataType.int,
-                                       default_output_bw=8, default_param_bw=8,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'))
-
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf,
+                dummy_input=random_input,
+                default_data_type=QuantizationDataType.int,
+                default_output_bw=8,
+                default_param_bw=8,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+            )
 
             # enforce is set to true
             # LayerNorm params should be set to FP 16, and activations as well since it is back to back with GeLU
-            assert(sim.model.customln1.param_quantizers['weight'].data_type == QuantizationDataType.float)
-            assert(sim.model.customln1.param_quantizers['weight'].bitwidth == 16)
-            assert(sim.model.customln1.output_quantizers[0].data_type == QuantizationDataType.float)
-            assert(sim.model.customln1.output_quantizers[0].bitwidth == 16)
+            assert (
+                sim.model.customln1.param_quantizers["weight"].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.customln1.param_quantizers["weight"].bitwidth == 16
+            assert (
+                sim.model.customln1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.customln1.output_quantizers[0].bitwidth == 16
 
             # gelu output should be set to fp16 as it has no output ops following it
-            assert(sim.model.gelu1.output_quantizers[0].data_type == QuantizationDataType.float)
-            assert(sim.model.gelu1.output_quantizers[0].bitwidth == 16)
+            assert (
+                sim.model.gelu1.output_quantizers[0].data_type
+                == QuantizationDataType.float
+            )
+            assert sim.model.gelu1.output_quantizers[0].bitwidth == 16
 
             # remove test config created
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
@@ -1978,9 +1862,15 @@ class TestQuantsimConfig:
         """
         Test QuantDtypeBwInfo __eq__
         """
-        q1 = QuantDtypeBwInfo(QuantizationDataType.int, 8, QuantizationDataType.float, 16)
-        q2 = QuantDtypeBwInfo(QuantizationDataType.int, 16, QuantizationDataType.float, 16)
-        q3 = QuantDtypeBwInfo(QuantizationDataType.int, 8, QuantizationDataType.float, 16)
+        q1 = QuantDtypeBwInfo(
+            QuantizationDataType.int, 8, QuantizationDataType.float, 16
+        )
+        q2 = QuantDtypeBwInfo(
+            QuantizationDataType.int, 16, QuantizationDataType.float, 16
+        )
+        q3 = QuantDtypeBwInfo(
+            QuantizationDataType.int, 8, QuantizationDataType.float, 16
+        )
 
         assert q1 != q2
         assert q1 == q3
@@ -1991,53 +1881,35 @@ class TestQuantsimConfig:
         """
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True"
-                },
-                "params": {
-                    "is_quantized": "True"
-                }
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
             },
             "params": {},
             "op_type": {
                 "PRelu": {
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ]
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ]
                 },
                 "Add": {
                     "is_output_quantized": "True",
-                    "supported_kernels":
-                        [
-                            {
-                                "activation": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                },
-                                "param": {
-                                    "bitwidth": 16,
-                                    "dtype": "float"
-                                }
-                            },
-                        ]
-                }
+                    "supported_kernels": [
+                        {
+                            "activation": {"bitwidth": 16, "dtype": "float"},
+                            "param": {"bitwidth": 16, "dtype": "float"},
+                        },
+                    ],
+                },
             },
             "supergroups": [],
             "model_input": {"is_input_quantized": "True"},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             class ModelForFP16Override(torch.nn.Module):
@@ -2090,28 +1962,51 @@ class TestQuantsimConfig:
             random_input = (torch.rand(1, 2), torch.rand(1, 2), torch.rand(1, 2))
 
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = True
-            sim = QuantizationSimModel(model, quant_scheme=QuantScheme.post_training_tf,
-                                       dummy_input=random_input, default_data_type=QuantizationDataType.int,
-                                       default_output_bw=8, default_param_bw=8,
-                                       config_file=os.path.join(tmp_dir, 'quantsim_config.json'))
+            sim = QuantizationSimModel(
+                model,
+                quant_scheme=QuantScheme.post_training_tf,
+                dummy_input=random_input,
+                default_data_type=QuantizationDataType.int,
+                default_output_bw=8,
+                default_param_bw=8,
+                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
+            )
             for name, module in sim.quant_wrappers():
-                if name == 'prelu2':
+                if name == "prelu2":
                     assert module.input_quantizers[0].bitwidth == 16
-                    assert module.input_quantizers[0].data_type == QuantizationDataType.float
+                    assert (
+                        module.input_quantizers[0].data_type
+                        == QuantizationDataType.float
+                    )
                     assert module.output_quantizers[0].bitwidth == 8
-                    assert module.output_quantizers[0].data_type == QuantizationDataType.int
-                elif name == 'relu1':
+                    assert (
+                        module.output_quantizers[0].data_type
+                        == QuantizationDataType.int
+                    )
+                elif name == "relu1":
                     assert module.input_quantizers[0].bitwidth == 8
-                    assert module.input_quantizers[0].data_type == QuantizationDataType.int
+                    assert (
+                        module.input_quantizers[0].data_type == QuantizationDataType.int
+                    )
                     assert module.output_quantizers[0].bitwidth == 8
-                    assert module.output_quantizers[0].data_type == QuantizationDataType.int
-                elif name == 'add1':
+                    assert (
+                        module.output_quantizers[0].data_type
+                        == QuantizationDataType.int
+                    )
+                elif name == "add1":
                     assert module.input_quantizers[0].bitwidth == 8
-                    assert module.input_quantizers[0].data_type == QuantizationDataType.int
+                    assert (
+                        module.input_quantizers[0].data_type == QuantizationDataType.int
+                    )
                     assert module.input_quantizers[1].bitwidth == 8
-                    assert module.input_quantizers[1].data_type == QuantizationDataType.int
+                    assert (
+                        module.input_quantizers[1].data_type == QuantizationDataType.int
+                    )
                     assert module.output_quantizers[0].bitwidth == 16
-                    assert module.output_quantizers[0].data_type == QuantizationDataType.float
+                    assert (
+                        module.output_quantizers[0].data_type
+                        == QuantizationDataType.float
+                    )
                 else:
                     for input_q in module.input_quantizers:
                         assert input_q.bitwidth == 16
@@ -2127,34 +2022,25 @@ class TestQuantsimConfig:
             qsim_config.ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG = False
 
     def test_encoding_constraints(self):
-        """ Test encoding constraints setting """
+        """Test encoding constraints setting"""
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
                 "Softmax": {
-                    "encoding_constraints": {
-                        "min": -5.0,
-                        "max": 5.0
-                    },
+                    "encoding_constraints": {"min": -5.0, "max": 5.0},
                 }
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, 'quantsim_config.json'), 'w') as f:
+            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
                 json.dump(quantsim_config, f)
 
             class SoftmaxModel(torch.nn.Module):
@@ -2168,47 +2054,110 @@ class TestQuantsimConfig:
 
             model = SoftmaxModel()
             dummy_input = torch.tensor([0.5, 0.5])
-            for config_file in [None, os.path.join(tmp_dir, 'quantsim_config.json')]:
-                qsim = QuantizationSimModel(model, dummy_input, quant_scheme=QuantScheme.post_training_tf_enhanced,
-                                            config_file=config_file)
+            for config_file in [None, os.path.join(tmp_dir, "quantsim_config.json")]:
+                qsim = QuantizationSimModel(
+                    model,
+                    dummy_input,
+                    quant_scheme=QuantScheme.post_training_tf_enhanced,
+                    config_file=config_file,
+                )
                 qsim.compute_encodings(lambda m, _: m(dummy_input), None)
                 if not config_file:
-                    assert qsim.model.softmax.output_quantizers[0].quant_scheme == QuantScheme.post_training_tf_enhanced
+                    assert (
+                        qsim.model.softmax.output_quantizers[0].quant_scheme
+                        == QuantScheme.post_training_tf_enhanced
+                    )
                     assert qsim.model.softmax.output_quantizers[0].encoding.min == 0.0
-                    assert np.allclose(qsim.model.softmax.output_quantizers[0].encoding.max, 0.5, atol=1e-2)
+                    assert np.allclose(
+                        qsim.model.softmax.output_quantizers[0].encoding.max,
+                        0.5,
+                        atol=1e-2,
+                    )
                 else:
-                    assert qsim.model.softmax.output_quantizers[0].quant_scheme == QuantScheme.post_training_tf
-                    assert np.allclose(qsim.model.softmax.output_quantizers[0].encoding.min, -5.0, atol=1e-1)
-                    assert np.allclose(qsim.model.softmax.output_quantizers[0].encoding.max, 5.0, atol=1e-1)
+                    assert (
+                        qsim.model.softmax.output_quantizers[0].quant_scheme
+                        == QuantScheme.post_training_tf
+                    )
+                    assert np.allclose(
+                        qsim.model.softmax.output_quantizers[0].encoding.min,
+                        -5.0,
+                        atol=1e-1,
+                    )
+                    assert np.allclose(
+                        qsim.model.softmax.output_quantizers[0].encoding.max,
+                        5.0,
+                        atol=1e-1,
+                    )
 
-    @pytest.mark.parametrize('sample_enc', [{"min": -4, "max": 4, "bitwidth": 8, "dtype": "int", "is_symmetric": "True"},
-                                            {"min": -4, "max": 4, "bitwidth": 8, "dtype": "int", "is_symmetric": "False"},
-                                            {"scale": 0.03, "offset": 8, "bitwidth": 8,
-                                             "is_symmetric": "False", "dtype": "int"},
-                                            {"scale": 0.03, "offset": 8, "bitwidth": 8,
-                                             "is_symmetric": "True", "dtype": "int"}])
+    @pytest.mark.parametrize(
+        "sample_enc",
+        [
+            {
+                "min": -4,
+                "max": 4,
+                "bitwidth": 8,
+                "dtype": "int",
+                "is_symmetric": "True",
+            },
+            {
+                "min": -4,
+                "max": 4,
+                "bitwidth": 8,
+                "dtype": "int",
+                "is_symmetric": "False",
+            },
+            {
+                "scale": 0.03,
+                "offset": 8,
+                "bitwidth": 8,
+                "is_symmetric": "False",
+                "dtype": "int",
+            },
+            {
+                "scale": 0.03,
+                "offset": 8,
+                "bitwidth": 8,
+                "is_symmetric": "True",
+                "dtype": "int",
+            },
+        ],
+    )
     def test_load_and_freeze_with_partial_encodings(self, sample_enc):
-        """ Test load_and_freeze encoding API with partial_encodings """
+        """Test load_and_freeze encoding API with partial_encodings"""
         model = test_models.TinyModelWithNoMathInvariantOps()
         dummy_input = torch.randn([1, 3, 24, 24])
 
-        sample_partial_encodings_list = [{"activation_encodings": {"conv1": {"input": {"0": sample_enc}},
-                                                                   "mul1": {"output": {"0": sample_enc}}},
-                                          "param_encodings": {}},
-                                         {"activation_encodings": {"add1": {"output": {"0": sample_enc}}},
-                                          "param_encodings": {}},
-                                         {"activation_encodings": {"mul1": {"output": {"0": sample_enc}}},
-                                          "param_encodings": {"conv1.weight": [sample_enc]}}]
+        sample_partial_encodings_list = [
+            {
+                "activation_encodings": {
+                    "conv1": {"input": {"0": sample_enc}},
+                    "mul1": {"output": {"0": sample_enc}},
+                },
+                "param_encodings": {},
+            },
+            {
+                "activation_encodings": {"add1": {"output": {"0": sample_enc}}},
+                "param_encodings": {},
+            },
+            {
+                "activation_encodings": {"mul1": {"output": {"0": sample_enc}}},
+                "param_encodings": {"conv1.weight": [sample_enc]},
+            },
+        ]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             for partial_encodings in sample_partial_encodings_list:
-                with open(os.path.join(tmp_dir, 'partial_encoding.json'), 'w') as f:
+                with open(os.path.join(tmp_dir, "partial_encoding.json"), "w") as f:
                     json.dump(partial_encodings, f)
 
-                sim = QuantizationSimModel(model, dummy_input, quant_scheme=QuantScheme.post_training_tf)
+                sim = QuantizationSimModel(
+                    model, dummy_input, quant_scheme=QuantScheme.post_training_tf
+                )
 
-                sim.load_and_freeze_encodings(os.path.join(tmp_dir, 'partial_encoding.json'),
-                                              ignore_when_quantizer_disabled=True)
+                sim.load_and_freeze_encodings(
+                    os.path.join(tmp_dir, "partial_encoding.json"),
+                    ignore_when_quantizer_disabled=True,
+                )
 
                 # all output quantizers and model input quantizer need to enabled (no op specific config)
                 assert sim.model.mul1.output_quantizers[0].enabled
@@ -2218,24 +2167,44 @@ class TestQuantsimConfig:
                 assert sim.model.conv1.input_quantizers[0].enabled
 
                 # conv param quantizer needs to be enabled
-                assert sim.model.conv1.param_quantizers['weight'].enabled
-                if partial_encodings['param_encodings']:
-                    if sample_enc['is_symmetric'] == 'True':
-                        assert sim.model.conv1.param_quantizers['weight'].use_symmetric_encodings
+                assert sim.model.conv1.param_quantizers["weight"].enabled
+                if partial_encodings["param_encodings"]:
+                    if sample_enc["is_symmetric"] == "True":
+                        assert sim.model.conv1.param_quantizers[
+                            "weight"
+                        ].use_symmetric_encodings
                     else:
-                        assert not sim.model.conv1.param_quantizers['weight'].use_symmetric_encodings
+                        assert not sim.model.conv1.param_quantizers[
+                            "weight"
+                        ].use_symmetric_encodings
 
     def test_load_encodings_to_allow_modifying_quantizer_type(self):
-        """ Test load encodings API to allow modifying quantizer type based on encoding """
+        """Test load encodings API to allow modifying quantizer type based on encoding"""
         model = test_models.TinyModelWithNoMathInvariantOps()
         dummy_input = torch.randn([1, 3, 24, 24])
 
-        sample_act_enc = {"min": -4, "max": 4, "bitwidth": 8, "dtype": "int", "is_symmetric": "False"}
-        sample_param_enc = {"min": -4, "max": 4, "bitwidth": 8, "dtype": "int", "is_symmetric": "True"}
+        sample_act_enc = {
+            "min": -4,
+            "max": 4,
+            "bitwidth": 8,
+            "dtype": "int",
+            "is_symmetric": "False",
+        }
+        sample_param_enc = {
+            "min": -4,
+            "max": 4,
+            "bitwidth": 8,
+            "dtype": "int",
+            "is_symmetric": "True",
+        }
 
-        encodings = {"activation_encodings": {"conv1": {"input": {"0": sample_act_enc}},
-                                              "mul1": {"output": {"0": sample_act_enc}}},
-                     "param_encodings": {}}
+        encodings = {
+            "activation_encodings": {
+                "conv1": {"input": {"0": sample_act_enc}},
+                "mul1": {"output": {"0": sample_act_enc}},
+            },
+            "param_encodings": {},
+        }
 
         ptq_config = per_tensor_config()
 
@@ -2243,33 +2212,56 @@ class TestQuantsimConfig:
             for config_file in [None, ptq_config]:
                 if config_file is not None:
                     # PTQ to PCQ case, initial quantizer is PTQ, but the encodings are of PCQ
-                    encodings['param_encodings']['conv1.weight'] = [sample_param_enc for i in range(16)]
+                    encodings["param_encodings"]["conv1.weight"] = [
+                        sample_param_enc for i in range(16)
+                    ]
                 else:
                     # PCQ to PTQ case, initial quantizer is PCQ, but the encodings are of PTQ
-                    encodings['param_encodings']['conv1.weight'] = [sample_param_enc]
+                    encodings["param_encodings"]["conv1.weight"] = [sample_param_enc]
 
                 with tempfile.TemporaryDirectory() as tmp_dir:
-                    with open(os.path.join(tmp_dir, 'replace_quantizer_with_enc.json'), 'w') as f:
+                    with open(
+                        os.path.join(tmp_dir, "replace_quantizer_with_enc.json"), "w"
+                    ) as f:
                         json.dump(encodings, f)
 
-                    sim = QuantizationSimModel(model, dummy_input, quant_scheme=QuantScheme.post_training_tf, config_file=config_file)
+                    sim = QuantizationSimModel(
+                        model,
+                        dummy_input,
+                        quant_scheme=QuantScheme.post_training_tf,
+                        config_file=config_file,
+                    )
 
                     # Checking Quantizer type before loading encodings to Quantsim
                     if config_file is not None:
-                        assert isinstance(sim.model.conv1.param_quantizers['weight'], StaticGridPerTensorQuantizer)
+                        assert isinstance(
+                            sim.model.conv1.param_quantizers["weight"],
+                            StaticGridPerTensorQuantizer,
+                        )
                     else:
-                        assert isinstance(sim.model.conv1.param_quantizers['weight'], StaticGridPerChannelQuantizer)
+                        assert isinstance(
+                            sim.model.conv1.param_quantizers["weight"],
+                            StaticGridPerChannelQuantizer,
+                        )
 
-                    sim.load_and_freeze_encodings(os.path.join(tmp_dir, 'replace_quantizer_with_enc.json'),
-                                                  ignore_when_quantizer_disabled=True)
+                    sim.load_and_freeze_encodings(
+                        os.path.join(tmp_dir, "replace_quantizer_with_enc.json"),
+                        ignore_when_quantizer_disabled=True,
+                    )
 
                     sim.compute_encodings(lambda m, _: m(dummy_input), None)
 
                     # Checking whether the quantizer is modifed to required type after laoding encodings
                     if config_file is not None:
-                        assert isinstance(sim.model.conv1.param_quantizers['weight'], StaticGridPerChannelQuantizer)
+                        assert isinstance(
+                            sim.model.conv1.param_quantizers["weight"],
+                            StaticGridPerChannelQuantizer,
+                        )
                     else:
-                        assert isinstance(sim.model.conv1.param_quantizers['weight'], StaticGridPerTensorQuantizer)
+                        assert isinstance(
+                            sim.model.conv1.param_quantizers["weight"],
+                            StaticGridPerTensorQuantizer,
+                        )
 
     def test_input_order_exception_for_multi_input_ops_in_connected_graph(self):
         model = test_models.ModelWithMultiInputOps()
@@ -2280,16 +2272,24 @@ class TestQuantsimConfig:
         # input order for the following ops must be preserved within
         # connected graph for the quantizers to be properly enabled/disabled
         # aimet_modules.Matmul
-        assert (not sim.model.matmul.input_quantizers[0].enabled
-                and sim.model.matmul.input_quantizers[1].enabled)
+        assert (
+            not sim.model.matmul.input_quantizers[0].enabled
+            and sim.model.matmul.input_quantizers[1].enabled
+        )
         # aimet_modules.Minimum
-        assert (sim.model.min.input_quantizers[0].enabled
-                and not sim.model.min.input_quantizers[1].enabled)
+        assert (
+            sim.model.min.input_quantizers[0].enabled
+            and not sim.model.min.input_quantizers[1].enabled
+        )
         # aimet_modules.Concat
-        assert (not sim.model.concat.input_quantizers[0].enabled
-                and sim.model.concat.input_quantizers[1].enabled
-                and not sim.model.concat.input_quantizers[2].enabled)
+        assert (
+            not sim.model.concat.input_quantizers[0].enabled
+            and sim.model.concat.input_quantizers[1].enabled
+            and not sim.model.concat.input_quantizers[2].enabled
+        )
         # aimet_modules.DynamicConv2d
-        assert (not sim.model.dynamic_conv.input_quantizers[0].enabled
-                and sim.model.dynamic_conv.input_quantizers[1].enabled
-                and sim.model.dynamic_conv.input_quantizers[2].enabled)
+        assert (
+            not sim.model.dynamic_conv.input_quantizers[0].enabled
+            and sim.model.dynamic_conv.input_quantizers[1].enabled
+            and sim.model.dynamic_conv.input_quantizers[2].enabled
+        )

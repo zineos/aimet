@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for importing and validating json configuration file """
+"""Utilities for importing and validating json configuration file"""
 
 import json
 from typing import Dict, List, Union
@@ -52,10 +52,14 @@ OpType = Dict[str, Union[str, bool, ParamType]]
 OpTypeType = Dict[str, OpType]
 SupergroupType = Dict[str, List[str]]
 DefaultsType = Dict[str, ConfigType]
-ConfigDictType = Dict[str, Union[DefaultsType, ParamType, OpType, List[SupergroupType], ConfigType]]
+ConfigDictType = Dict[
+    str, Union[DefaultsType, ParamType, OpType, List[SupergroupType], ConfigType]
+]
+
 
 class ConfigDictKeys:
-    """ Class holding variables mapping to strings used in quantsim config dictionary keys """
+    """Class holding variables mapping to strings used in quantsim config dictionary keys"""
+
     DEFAULTS = "defaults"
     PARAMS = "params"
     OP_TYPE = "op_type"
@@ -84,7 +88,7 @@ class ConfigDictKeys:
 
 
 class JsonConfigImporter:
-    """ Class for importing and validating json configuration file """
+    """Class for importing and validating json configuration file"""
 
     @classmethod
     def import_json_config_file(cls, config_file: str) -> ConfigDictType:
@@ -118,16 +122,29 @@ def _validate_supported_kernels(supported_kernels: List):
     """
     if supported_kernels:
         for supported_kernel in supported_kernels:
-            if supported_kernel["activation"]["dtype"] == QuantizationDataType.float and \
-                    supported_kernel["activation"]["bitwidth"] not in [16, 32]:
-                logger.error('Activation dtype:float is only supported with bitwidth:16')
-                raise NotImplementedError('Activation dtype:float is only supported with bitwidth:16')
+            if supported_kernel["activation"][
+                "dtype"
+            ] == QuantizationDataType.float and supported_kernel["activation"][
+                "bitwidth"
+            ] not in [16, 32]:
+                logger.error(
+                    "Activation dtype:float is only supported with bitwidth:16"
+                )
+                raise NotImplementedError(
+                    "Activation dtype:float is only supported with bitwidth:16"
+                )
 
             if "param" in supported_kernel:
-                if supported_kernel["param"]["dtype"] == QuantizationDataType.float and \
-                        supported_kernel["param"]["bitwidth"] not in [16, 32]:
-                    logger.error('Param dtype:float is only supported with bitwidth:16')
-                    raise NotImplementedError('Param dtype:float is only supported with bitwidth:16')
+                if supported_kernel["param"][
+                    "dtype"
+                ] == QuantizationDataType.float and supported_kernel["param"][
+                    "bitwidth"
+                ] not in [16, 32]:
+                    logger.error("Param dtype:float is only supported with bitwidth:16")
+                    raise NotImplementedError(
+                        "Param dtype:float is only supported with bitwidth:16"
+                    )
+
 
 def _validate_semantics(quantsim_config: ConfigDictType):
     """
@@ -138,25 +155,43 @@ def _validate_semantics(quantsim_config: ConfigDictType):
     # Currently, for default configs, only IS_OUTPUT_QUANTIZED = True is supported
     default_op_configs = quantsim_config[ConfigDictKeys.DEFAULTS][ConfigDictKeys.OPS]
     if ConfigDictKeys.IS_INPUT_QUANTIZED in default_op_configs:
-        logger.error('Currently IS_INPUT_QUANTIZED setting in default configs is not supported')
-        raise NotImplementedError('Currently IS_INPUT_QUANTIZED setting in default configs is not supported')
-    if ConfigDictKeys.IS_OUTPUT_QUANTIZED in default_op_configs and not \
-            default_op_configs[ConfigDictKeys.IS_OUTPUT_QUANTIZED]:
-        logger.error('Currently IS_OUTPUT_QUANTIZED false setting in default configs is not supported')
-        raise NotImplementedError('Currently IS_OUTPUT_QUANTIZED false setting in default configs is not supported')
+        logger.error(
+            "Currently IS_INPUT_QUANTIZED setting in default configs is not supported"
+        )
+        raise NotImplementedError(
+            "Currently IS_INPUT_QUANTIZED setting in default configs is not supported"
+        )
+    if (
+        ConfigDictKeys.IS_OUTPUT_QUANTIZED in default_op_configs
+        and not default_op_configs[ConfigDictKeys.IS_OUTPUT_QUANTIZED]
+    ):
+        logger.error(
+            "Currently IS_OUTPUT_QUANTIZED false setting in default configs is not supported"
+        )
+        raise NotImplementedError(
+            "Currently IS_OUTPUT_QUANTIZED false setting in default configs is not supported"
+        )
 
-    #validate "supported_kernels" in the default configs if present
+    # validate "supported_kernels" in the default configs if present
     if ConfigDictKeys.SUPPORTED_KERNELS in quantsim_config[ConfigDictKeys.DEFAULTS]:
-        default_supported_kernels = quantsim_config[ConfigDictKeys.DEFAULTS][ConfigDictKeys.SUPPORTED_KERNELS]
+        default_supported_kernels = quantsim_config[ConfigDictKeys.DEFAULTS][
+            ConfigDictKeys.SUPPORTED_KERNELS
+        ]
         _validate_supported_kernels(default_supported_kernels)
 
     # Currently, for op_type configs, only IS_INPUT_QUANTIZED = True is supported
     op_type_configs = quantsim_config[ConfigDictKeys.OP_TYPE]
     for op_type_config in op_type_configs.values():
-        if ConfigDictKeys.IS_INPUT_QUANTIZED in op_type_config and not \
-                op_type_config[ConfigDictKeys.IS_INPUT_QUANTIZED]:
-            logger.error('IS_INPUT_QUANTIZED false in op configs is currently unsupported.')
-            raise NotImplementedError('IS_INPUT_QUANTIZED false in op configs is currently unsupported.')
+        if (
+            ConfigDictKeys.IS_INPUT_QUANTIZED in op_type_config
+            and not op_type_config[ConfigDictKeys.IS_INPUT_QUANTIZED]
+        ):
+            logger.error(
+                "IS_INPUT_QUANTIZED false in op configs is currently unsupported."
+            )
+            raise NotImplementedError(
+                "IS_INPUT_QUANTIZED false in op configs is currently unsupported."
+            )
 
         # validate "supported_kernels" in the specialized op_type configs if present
         if ConfigDictKeys.SUPPORTED_KERNELS in op_type_config:
@@ -167,15 +202,19 @@ def _validate_semantics(quantsim_config: ConfigDictType):
     model_input_configs = quantsim_config[ConfigDictKeys.MODEL_INPUT]
     if ConfigDictKeys.IS_INPUT_QUANTIZED in model_input_configs:
         if not model_input_configs[ConfigDictKeys.IS_INPUT_QUANTIZED]:
-            logger.error('IS_INPUT_QUANTIZED for model input can only be set to True')
-            raise NotImplementedError('IS_INPUT_QUANTIZED for model input can only be set to True')
+            logger.error("IS_INPUT_QUANTIZED for model input can only be set to True")
+            raise NotImplementedError(
+                "IS_INPUT_QUANTIZED for model input can only be set to True"
+            )
 
     # For model output configs, only IS_OUTPUT_QUANTIZED = True is supported
     model_output_configs = quantsim_config[ConfigDictKeys.MODEL_OUTPUT]
     if ConfigDictKeys.IS_OUTPUT_QUANTIZED in model_output_configs:
         if not model_output_configs[ConfigDictKeys.IS_OUTPUT_QUANTIZED]:
-            logger.error('IS_OUTPUT_QUANTIZED for model output can only be set to True')
-            raise NotImplementedError('IS_OUTPUT_QUANTIZED for model output can only be set to True')
+            logger.error("IS_OUTPUT_QUANTIZED for model output can only be set to True")
+            raise NotImplementedError(
+                "IS_OUTPUT_QUANTIZED for model output can only be set to True"
+            )
 
 
 def _convert_str_to_quantization_data_type_helper(supported_kernels: List):
@@ -202,8 +241,13 @@ def _convert_dtype_to_quantization_data_type(quantsim_config: ConfigDictType):
     Modify dtype variable present in supported kernels with equivalent enum value from QuantizationDataType
     :param quantsim_config: Configuration dictionary
     """
-    if ConfigDictKeys.SUPPORTED_KERNELS in quantsim_config[ConfigDictKeys.DEFAULTS].keys():
-        default_supported_kernels = quantsim_config[ConfigDictKeys.DEFAULTS][ConfigDictKeys.SUPPORTED_KERNELS]
+    if (
+        ConfigDictKeys.SUPPORTED_KERNELS
+        in quantsim_config[ConfigDictKeys.DEFAULTS].keys()
+    ):
+        default_supported_kernels = quantsim_config[ConfigDictKeys.DEFAULTS][
+            ConfigDictKeys.SUPPORTED_KERNELS
+        ]
         _convert_str_to_quantization_data_type_helper(default_supported_kernels)
 
     op_type_configs = quantsim_config[ConfigDictKeys.OP_TYPE]

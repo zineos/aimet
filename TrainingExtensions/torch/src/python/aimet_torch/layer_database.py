@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Stores and updates Layer Attributes"""
+
 import copy
 from typing import Tuple, Union, List
 import torch
@@ -49,16 +50,22 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
 
 class Layer(aimet_common.layer_database.Layer):
-    """ Holds attributes for a given layer """
+    """Holds attributes for a given layer"""
 
     def _set_type_specific_params(self, module):
-
         if isinstance(module, torch.nn.Conv2d):
-            params = aimet_common.layer_database.Conv2dTypeSpecificParams(module.stride, module.padding, module.groups)
+            params = aimet_common.layer_database.Conv2dTypeSpecificParams(
+                module.stride, module.padding, module.groups
+            )
             self.type_specific_params = params
 
-    def __init__(self, module: torch.nn.Module, name, output_shape: Union[List, Tuple],
-                 input_shape: Union[List, Tuple] = None):
+    def __init__(
+        self,
+        module: torch.nn.Module,
+        name,
+        output_shape: Union[List, Tuple],
+        input_shape: Union[List, Tuple] = None,
+    ):
         """
         Constructor
         :param module: Reference to the layer
@@ -68,23 +75,45 @@ class Layer(aimet_common.layer_database.Layer):
         """
         if isinstance(module, torch.nn.Conv2d):
             if module.groups > 1:
-                if module.in_channels == module.groups: # Depthwise convolution
+                if module.in_channels == module.groups:  # Depthwise convolution
                     assert module.in_channels == module.out_channels
-                    weight_shape = (module.out_channels, 1, module.kernel_size[0], module.kernel_size[1])
-                elif module.in_channels % module.groups == 0: # Grouped convolution
-                    weight_shape = (module.out_channels, module.in_channels // module.groups, module.kernel_size[0], module.kernel_size[1])
+                    weight_shape = (
+                        module.out_channels,
+                        1,
+                        module.kernel_size[0],
+                        module.kernel_size[1],
+                    )
+                elif module.in_channels % module.groups == 0:  # Grouped convolution
+                    weight_shape = (
+                        module.out_channels,
+                        module.in_channels // module.groups,
+                        module.kernel_size[0],
+                        module.kernel_size[1],
+                    )
                 else:
-                    raise AssertionError("Conv2d with invalid in_channels and groups values")
+                    raise AssertionError(
+                        "Conv2d with invalid in_channels and groups values"
+                    )
             else:
-                weight_shape = (module.out_channels, module.in_channels, module.kernel_size[0], module.kernel_size[1])
+                weight_shape = (
+                    module.out_channels,
+                    module.in_channels,
+                    module.kernel_size[0],
+                    module.kernel_size[1],
+                )
 
         elif isinstance(module, torch.nn.Linear):
             weight_shape = (module.out_features, module.in_features, 1, 1)
         else:
-            logger.info("Module:%s does not have any weight associated. Using default weight dim", name)
+            logger.info(
+                "Module:%s does not have any weight associated. Using default weight dim",
+                name,
+            )
             weight_shape = (1,)
 
-        aimet_common.layer_database.Layer.__init__(self, module, name, weight_shape, output_shape, input_shape)
+        aimet_common.layer_database.Layer.__init__(
+            self, module, name, weight_shape, output_shape, input_shape
+        )
 
         self.var_name_of_module_in_parent = None
         self.parent_module = None
@@ -95,6 +124,7 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
     Stores, creates and updates the Layer database
     Also stores compressible layers to model optimization
     """
+
     _SUPPORTED_MODULE_TYPES = (
         torch.nn.Conv2d,
         torch.nn.Linear,
@@ -102,7 +132,6 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         torch.nn.AvgPool2d,
         aimet_modules.Multiply,
     )
-
 
     def __init__(self, model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]):
         """
@@ -115,7 +144,6 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         self._create_database(model, dummy_input)
 
     def __deepcopy__(self, memodict):
-
         # pylint: disable=protected-access
 
         # Allocate a new LayerDatabase
@@ -132,17 +160,21 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
 
         # For all modules in the current model
         for index, module in enumerate(self._model.modules()):
-
             # If this module is in the current layer database
             if id(module) in self._compressible_layers:
                 existing_layer = self._compressible_layers[id(module)]
-                new_layer = Layer(modules_in_copy[index], existing_layer.name,
-                                  existing_layer.output_shape)
+                new_layer = Layer(
+                    modules_in_copy[index],
+                    existing_layer.name,
+                    existing_layer.output_shape,
+                )
                 new_layer.picked_for_compression = existing_layer.picked_for_compression
                 layer_db._compressible_layers[id(modules_in_copy[index])] = new_layer
 
         # Now we need to set parent references
-        layer_db.set_reference_to_parent_module(layer_db._model, layer_db._compressible_layers)
+        layer_db.set_reference_to_parent_module(
+            layer_db._model, layer_db._compressible_layers
+        )
         return layer_db
 
     def replace_layer(self, old_layer: Layer, new_layer: Layer):
@@ -160,8 +192,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
 
         self._compressible_layers[id(new_layer.module)] = new_layer
 
-    def replace_layer_with_sequential_of_two_layers(self, layer_to_replace: Layer,
-                                                    layer_a: Layer, layer_b: Layer):
+    def replace_layer_with_sequential_of_two_layers(
+        self, layer_to_replace: Layer, layer_a: Layer, layer_b: Layer
+    ):
         """
         Replaces a layer with a sequential of layer in the database
 
@@ -174,14 +207,18 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         seq = torch.nn.Sequential(layer_a.module, layer_b.module)
 
         # Replace the original layer_to_replace in the model with this sequential
-        setattr(layer_to_replace.parent_module, layer_to_replace.var_name_of_module_in_parent, seq)
+        setattr(
+            layer_to_replace.parent_module,
+            layer_to_replace.var_name_of_module_in_parent,
+            seq,
+        )
 
         # Set parent correctly
         layer_a.parent_module = seq
-        layer_a.var_name_of_module_in_parent = '0'
+        layer_a.var_name_of_module_in_parent = "0"
 
         layer_b.parent_module = seq
-        layer_b.var_name_of_module_in_parent = '1'
+        layer_b.var_name_of_module_in_parent = "1"
 
         # Add the new layer to the database
         self._compressible_layers[id(layer_a.module)] = layer_a
@@ -190,7 +227,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         # Remove the the layer being replaced from the database
         del self._compressible_layers[id(layer_to_replace.module)]
 
-    def update_layer_with_module_in_sequential(self, layer_to_update: Layer, seq: torch.nn.Sequential):
+    def update_layer_with_module_in_sequential(
+        self, layer_to_update: Layer, seq: torch.nn.Sequential
+    ):
         """
         Update layer attributes with sequential in database
 
@@ -201,13 +240,20 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         del self._compressible_layers[id(layer_to_update.module)]
 
         # Find the first conv2d within the sequential
-        index, new_module = next((index, module) for (index, module) in enumerate(seq)
-                                 if isinstance(module, torch.nn.Conv2d))
+        index, new_module = next(
+            (index, module)
+            for (index, module) in enumerate(seq)
+            if isinstance(module, torch.nn.Conv2d)
+        )
 
         # Determine new output shape
-        new_output_shape = [new_module.in_channels, new_module.out_channels,
-                            layer_to_update.output_shape[2], layer_to_update.output_shape[3]]
-        new_module_name = layer_to_update.name + '.' + str(index)
+        new_output_shape = [
+            new_module.in_channels,
+            new_module.out_channels,
+            layer_to_update.output_shape[2],
+            layer_to_update.output_shape[3],
+        ]
+        new_module_name = layer_to_update.name + "." + str(index)
 
         # Create a new layer
         new_layer = Layer(new_module, new_module_name, new_output_shape)
@@ -219,12 +265,15 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         # Add the updated layer to the database
         self._compressible_layers[id(new_layer.module)] = new_layer
 
-    def _custom_hook_to_collect_layer_attributes(self, module, input_tensor, output_tensor):
+    def _custom_hook_to_collect_layer_attributes(
+        self, module, input_tensor, output_tensor
+    ):
         """
         Custom hook function which will be applied to all the layers in the model and store following
         information :
         model name (which will be removed), model reference, input shape and output shape
         """
+
         def _shape(x):
             if isinstance(x, torch.Tensor):
                 return list(x.size())
@@ -245,8 +294,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
             if module is module_ref:
                 module_name = name
 
-        self._compressible_layers[id(module)] = Layer(module, module_name, output_activation_shape,
-                                                      input_activation_shape)
+        self._compressible_layers[id(module)] = Layer(
+            module, module_name, output_activation_shape, input_activation_shape
+        )
 
     @classmethod
     def set_reference_to_parent_module(cls, module, layers):
@@ -269,7 +319,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
             else:
                 cls.set_reference_to_parent_module(module_ref, layers)
 
-    def _create_database(self, model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]):
+    def _create_database(
+        self, model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]
+    ):
         """
         Register custom hook for the model with run_graph provided by user
         if the user wants to experiment with custom hook, we can support that option by
@@ -279,10 +331,13 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
                             pass a tuple.
         """
 
-        utils.run_hook_for_layers_with_given_input(model, dummy_input,
-                                                   hook=self._custom_hook_to_collect_layer_attributes,
-                                                   module_type_for_attaching_hook=self._SUPPORTED_MODULE_TYPES,
-                                                   leaf_node_only=False)
+        utils.run_hook_for_layers_with_given_input(
+            model,
+            dummy_input,
+            hook=self._custom_hook_to_collect_layer_attributes,
+            module_type_for_attaching_hook=self._SUPPORTED_MODULE_TYPES,
+            leaf_node_only=False,
+        )
 
         # set the parent_class reference
         self.set_reference_to_parent_module(self._model, self._compressible_layers)

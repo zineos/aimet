@@ -55,7 +55,6 @@ from aimet_torch.layer_selector import ConvNoDepthwiseLayerSelector
 
 
 class ModelWithTwoInputs(nn.Module):
-
     def __init__(self):
         super(ModelWithTwoInputs, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -78,43 +77,100 @@ class ModelWithTwoInputs(nn.Module):
 
 
 class TestTrainingExtensionsCompressionAlgo(unittest.TestCase):
-
     def testSpatialSvd(self):
-
         torch.manual_seed(1)
 
         model = mnist_torch_model.Net()
 
         rounding_algo = unittest.mock.MagicMock()
-        rounding_algo.round.side_effect = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
-                                           0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        rounding_algo.round.side_effect = [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+        ]
 
         mock_eval = unittest.mock.MagicMock()
-        mock_eval.side_effect = [100,
-                                 90, 80, 70, 60, 50, 40, 30, 20, 10,
-                                 90, 80, 70, 60, 50, 40, 30, 20, 10,
-                                 50]
+        mock_eval.side_effect = [
+            100,
+            90,
+            80,
+            70,
+            60,
+            50,
+            40,
+            30,
+            20,
+            10,
+            90,
+            80,
+            70,
+            60,
+            50,
+            40,
+            30,
+            20,
+            10,
+            50,
+        ]
 
         input_shape = (1, 1, 28, 28)
         dummy_input = create_rand_tensors_given_shapes(input_shape, get_device(model))
         layer_db = LayerDatabase(model, dummy_input)
 
         pruner = SpatialSvdPruner()
-        comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db, pruner, SpatialSvdCostCalculator(),
-                                                           mock_eval, 20, CostMetric.mac, Decimal(0.5),
-                                                           10, True, None, rounding_algo, True, bokeh_session=None)
+        comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+            layer_db,
+            pruner,
+            SpatialSvdCostCalculator(),
+            mock_eval,
+            20,
+            CostMetric.mac,
+            Decimal(0.5),
+            10,
+            True,
+            None,
+            rounding_algo,
+            True,
+            bokeh_session=None,
+        )
 
         layer_selector = ConvNoDepthwiseLayerSelector()
-        spatial_svd_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner,
-                                           mock_eval,
-                                           layer_selector, modules_to_ignore=[],
-                                           cost_calculator=SpatialSvdCostCalculator(),
-                                           use_cuda=next(model.parameters()).is_cuda)
+        spatial_svd_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            mock_eval,
+            layer_selector,
+            modules_to_ignore=[],
+            cost_calculator=SpatialSvdCostCalculator(),
+            use_cuda=next(model.parameters()).is_cuda,
+        )
 
-        compressed_layer_db, stats = spatial_svd_algo.compress_model(CostMetric.mac, trainer=None)
+        compressed_layer_db, stats = spatial_svd_algo.compress_model(
+            CostMetric.mac, trainer=None
+        )
 
-        self.assertTrue(isinstance(compressed_layer_db.model.conv1, torch.nn.Sequential))
-        self.assertTrue(isinstance(compressed_layer_db.model.conv2, torch.nn.Sequential))
+        self.assertTrue(
+            isinstance(compressed_layer_db.model.conv1, torch.nn.Sequential)
+        )
+        self.assertTrue(
+            isinstance(compressed_layer_db.model.conv2, torch.nn.Sequential)
+        )
         self.assertTrue(stats.per_layer_stats[0].compression_ratio <= 0.5)
         self.assertEqual(0.3, stats.per_layer_stats[1].compression_ratio)
 
@@ -124,43 +180,117 @@ class TestTrainingExtensionsCompressionAlgo(unittest.TestCase):
         print(stats)
 
     def testSpatialSvdMultiInputModel(self):
-
         torch.manual_seed(1)
 
         model = ModelWithTwoInputs()
 
         rounding_algo = unittest.mock.MagicMock()
-        rounding_algo.round.side_effect = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
-                                           0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
-                                           0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        rounding_algo.round.side_effect = [
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+        ]
 
         mock_eval = unittest.mock.MagicMock()
-        mock_eval.side_effect = [100,
-                                 90, 80, 70, 60, 50, 40, 30, 20, 10,
-                                 90, 80, 70, 60, 50, 40, 30, 20, 10,
-                                 90, 80, 70, 60, 50, 40, 30, 20, 10,
-                                 50]
+        mock_eval.side_effect = [
+            100,
+            90,
+            80,
+            70,
+            60,
+            50,
+            40,
+            30,
+            20,
+            10,
+            90,
+            80,
+            70,
+            60,
+            50,
+            40,
+            30,
+            20,
+            10,
+            90,
+            80,
+            70,
+            60,
+            50,
+            40,
+            30,
+            20,
+            10,
+            50,
+        ]
 
-        input_shape=[(1, 1, 28, 28), (1, 1, 28, 28)]
+        input_shape = [(1, 1, 28, 28), (1, 1, 28, 28)]
         dummy_input = create_rand_tensors_given_shapes(input_shape, get_device(model))
         layer_db = LayerDatabase(model, dummy_input)
 
         pruner = SpatialSvdPruner()
-        comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db, pruner, SpatialSvdCostCalculator(),
-                                                           mock_eval, 20, CostMetric.mac, Decimal(0.5),
-                                                           10, True, None, rounding_algo, True, bokeh_session=None)
+        comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+            layer_db,
+            pruner,
+            SpatialSvdCostCalculator(),
+            mock_eval,
+            20,
+            CostMetric.mac,
+            Decimal(0.5),
+            10,
+            True,
+            None,
+            rounding_algo,
+            True,
+            bokeh_session=None,
+        )
 
         layer_selector = ConvNoDepthwiseLayerSelector()
-        spatial_svd_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner,
-                                           mock_eval,
-                                           layer_selector, modules_to_ignore=[],
-                                           cost_calculator=SpatialSvdCostCalculator(),
-                                           use_cuda=next(model.parameters()).is_cuda)
+        spatial_svd_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            mock_eval,
+            layer_selector,
+            modules_to_ignore=[],
+            cost_calculator=SpatialSvdCostCalculator(),
+            use_cuda=next(model.parameters()).is_cuda,
+        )
 
-        compressed_layer_db, stats = spatial_svd_algo.compress_model(CostMetric.mac, trainer=None)
+        compressed_layer_db, stats = spatial_svd_algo.compress_model(
+            CostMetric.mac, trainer=None
+        )
 
-        self.assertTrue(isinstance(compressed_layer_db.model.conv1_a, torch.nn.Sequential))
-        self.assertTrue(isinstance(compressed_layer_db.model.conv2, torch.nn.Sequential))
+        self.assertTrue(
+            isinstance(compressed_layer_db.model.conv1_a, torch.nn.Sequential)
+        )
+        self.assertTrue(
+            isinstance(compressed_layer_db.model.conv2, torch.nn.Sequential)
+        )
         self.assertTrue(stats.per_layer_stats[0].compression_ratio <= 0.5)
 
         print("Compressed model:")

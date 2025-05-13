@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Selects layers for compression based on different criteria """
+"""Selects layers for compression based on different criteria"""
 
 import abc
 from typing import List

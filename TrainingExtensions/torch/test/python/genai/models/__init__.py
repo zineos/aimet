@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" GenAI models """
+"""GenAI models"""
 
 from .genai_model import GenAIModel
 from .llama import Llama_32

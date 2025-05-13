@@ -43,18 +43,29 @@ import pytest
 from ..models.test_models import rmsnorm_model
 from .utils import assert_on_const_quantizers, assert_on_output_quantizers
 
+
 @pytest.mark.parametrize("elementwise_affine", [True, False])
 @pytest.mark.parametrize("mul_for_pow", [True, False])
 @pytest.mark.parametrize("separate_mul_div", [True, False])
 def test_rmsnorm(elementwise_affine, mul_for_pow, separate_mul_div):
-
     dim = 32
-    model = rmsnorm_model(dim=dim, elementwise_affine=elementwise_affine, mul_for_pow=mul_for_pow, separate_mul_div=separate_mul_div)
+    model = rmsnorm_model(
+        dim=dim,
+        elementwise_affine=elementwise_affine,
+        mul_for_pow=mul_for_pow,
+        separate_mul_div=separate_mul_div,
+    )
     graph = ConnectedGraph(model)
 
-    input_data = { "x" : np.random.rand(1, 3, dim, dim).astype(np.float32) }
-    sim = QuantizationSimModel(model, input_data, quant_scheme=QuantScheme.post_training_tf, default_param_bw=8,
-                            default_activation_bw=8, config_file="htp_v81")
+    input_data = {"x": np.random.rand(1, 3, dim, dim).astype(np.float32)}
+    sim = QuantizationSimModel(
+        model,
+        input_data,
+        quant_scheme=QuantScheme.post_training_tf,
+        default_param_bw=8,
+        default_activation_bw=8,
+        config_file="htp_v81",
+    )
 
     all_ops = graph.ordered_ops
     # Check if quantization is disabled for RMSNormalization intermediate op outputs
@@ -66,6 +77,8 @@ def test_rmsnorm(elementwise_affine, mul_for_pow, separate_mul_div):
     if elementwise_affine:
         layernorm_weight = all_ops[-1]
         all_ops.remove(layernorm_weight)
-        assert_on_const_quantizers([layernorm_weight], sim.qc_quantize_op_dict, enabled=True)
+        assert_on_const_quantizers(
+            [layernorm_weight], sim.qc_quantize_op_dict, enabled=True
+        )
 
     assert_on_const_quantizers(all_ops, sim.qc_quantize_op_dict)

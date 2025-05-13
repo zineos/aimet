@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utilities for ONNX Connected Graph """
+"""Utilities for ONNX Connected Graph"""
+
 from typing import Dict, List
 import onnx
 from packaging import version
@@ -48,7 +49,7 @@ else:
     from onnx.onnx_pb import ModelProto
 
 
-ActivationTypes = ['Relu', 'Clip', 'Sigmoid', 'Tanh', 'PRelu', 'Softmax']
+ActivationTypes = ["Relu", "Clip", "Sigmoid", "Tanh", "PRelu", "Softmax"]
 
 
 def get_op_given_param_name(connected_graph: ConnectedGraph, param_name: str):
@@ -67,7 +68,9 @@ def get_op_given_param_name(connected_graph: ConnectedGraph, param_name: str):
     return None
 
 
-def get_param_shape_using_connected_graph(connected_graph: ConnectedGraph, param_name: str):
+def get_param_shape_using_connected_graph(
+    connected_graph: ConnectedGraph, param_name: str
+):
     """
     Gets param shape given param name
 
@@ -81,6 +84,7 @@ def get_param_shape_using_connected_graph(connected_graph: ConnectedGraph, param
                 if param.name == param_name:
                     return param.shape
     return None
+
 
 def get_module_act_func_pair(model: ModelProto) -> Dict[str, str]:
     """
@@ -102,7 +106,6 @@ def get_module_act_func_pair(model: ModelProto) -> Dict[str, str]:
     all_ops = graph.get_all_ops()
 
     for op in all_ops.values():
-
         module_act_func_pair[op.name] = None
 
         if op.output_ops:

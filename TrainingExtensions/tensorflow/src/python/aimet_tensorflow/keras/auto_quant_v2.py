@@ -38,6 +38,7 @@
 # pylint: disable=too-many-lines
 
 """Automatic Post-Training Quantization"""
+
 import contextlib
 import itertools
 import math
@@ -63,7 +64,12 @@ from aimet_common.defs import QuantScheme, QuantizationDataType, CallbackFunc
 from aimet_common.quantsim import validate_quantsim_inputs
 from aimet_common.utils import AimetLogger, Spinner
 from aimet_common.auto_quant import Diagnostics
-from aimet_common.amp.utils import CANDIDATE_WITH_DTYPE, create_sensitivity_plot, create_pareto_curve, AmpCandidate
+from aimet_common.amp.utils import (
+    CANDIDATE_WITH_DTYPE,
+    create_sensitivity_plot,
+    create_pareto_curve,
+    AmpCandidate,
+)
 from aimet_tensorflow.keras.adaround_weight import AdaroundParameters
 from aimet_tensorflow.keras.adaround_weight import Adaround
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms
@@ -71,16 +77,21 @@ from aimet_tensorflow.keras.cache import KerasModelSerializationProtocol
 from aimet_tensorflow.keras.cross_layer_equalization import equalize_model
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 from aimet_tensorflow.keras.amp.quantizer_groups import QuantizerGroup
-from aimet_tensorflow.keras.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo, EvalCallbackFactory, _default_forward_fn
+from aimet_tensorflow.keras.amp.mixed_precision_algo import (
+    GreedyMixedPrecisionAlgo,
+    EvalCallbackFactory,
+    _default_forward_fn,
+)
 
 
-_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.AutoQuant) # pylint: disable=invalid-name
+_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.AutoQuant)  # pylint: disable=invalid-name
 
-cache = Cache() # pylint: disable=invalid-name
+cache = Cache()  # pylint: disable=invalid-name
 
 # The number of samples to be used for performance evaluation.
 # NOTE: None means "all".
 NUM_SAMPLES_FOR_PERFORMANCE_EVALUATION = None
+
 
 @dataclass(frozen=True)
 class _QuantSchemePair:
@@ -93,11 +104,15 @@ class _QuantSchemePair:
         def scheme_to_str(quant_scheme, percentile):
             if quant_scheme == QuantScheme.post_training_percentile:
                 return f"{percentile}%ile"
-            if quant_scheme in (QuantScheme.post_training_tf,
-                                QuantScheme.training_range_learning_with_tf_init):
+            if quant_scheme in (
+                QuantScheme.post_training_tf,
+                QuantScheme.training_range_learning_with_tf_init,
+            ):
                 return "tf"
-            if quant_scheme in (QuantScheme.post_training_tf_enhanced,
-                                QuantScheme.training_range_learning_with_tf_enhanced_init):
+            if quant_scheme in (
+                QuantScheme.post_training_tf_enhanced,
+                QuantScheme.training_range_learning_with_tf_enhanced_init,
+            ):
                 return "tf-enhanced"
             raise ValueError
 
@@ -109,41 +124,45 @@ class _QuantSchemePair:
 _QUANT_SCHEME_CANDIDATES = (
     # Weight:     tf
     # Activation: tf
-    _QuantSchemePair(QuantScheme.post_training_tf,
-                     QuantScheme.post_training_tf),
-
+    _QuantSchemePair(QuantScheme.post_training_tf, QuantScheme.post_training_tf),
     # Weight:     tf_enhanced
     # Activation: tf
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_tf),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced, QuantScheme.post_training_tf
+    ),
     # Weight:     tf_enhanced
     # Activation: tf_enhanced
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_tf_enhanced),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced, QuantScheme.post_training_tf_enhanced
+    ),
     # Weight:     tf_enhanced
     # Activation: percentile(99.9)
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_percentile,
-                     output_percentile=99.9),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced,
+        QuantScheme.post_training_percentile,
+        output_percentile=99.9,
+    ),
     # Weight:     tf_enhanced
     # Activation: percentile(99.99)
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_percentile,
-                     output_percentile=99.99),
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced,
+        QuantScheme.post_training_percentile,
+        output_percentile=99.99,
+    ),
 )
 
-def _validate_inputs(model: tf.keras.Model, # pylint: disable=too-many-arguments
-                     dataset: tf.data.Dataset,
-                     eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
-                     results_dir: str,
-                     strict_validation: bool,
-                     quant_scheme: QuantScheme,
-                     param_bw: int,
-                     output_bw: int,
-                     rounding_mode: str):
+
+def _validate_inputs(
+    model: tf.keras.Model,  # pylint: disable=too-many-arguments
+    dataset: tf.data.Dataset,
+    eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
+    results_dir: str,
+    strict_validation: bool,
+    quant_scheme: QuantScheme,
+    param_bw: int,
+    output_bw: int,
+    rounding_mode: str,
+):
     """
     Confirms inputs are of the correct type
     :param model: Model to be quantized
@@ -161,32 +180,40 @@ def _validate_inputs(model: tf.keras.Model, # pylint: disable=too-many-arguments
     :param rounding_mode: Rounding mode
     """
     if not isinstance(model, tf.keras.Model):
-        raise ValueError('Model must be of type tf.keras.Model, not ' + str(type(model).__name__))
+        raise ValueError(
+            "Model must be of type tf.keras.Model, not " + str(type(model).__name__)
+        )
 
     if not isinstance(dataset, tf.data.Dataset):
-        raise ValueError('dataset must be of type tf.data.Dataset, not ' + str(
-            type(dataset).__name__))
+        raise ValueError(
+            "dataset must be of type tf.data.Dataset, not "
+            + str(type(dataset).__name__)
+        )
 
     if not isinstance(eval_callback, Callable):  # pylint: disable=isinstance-second-argument-not-valid-type
-        raise ValueError('eval_callback must be of type Callable, not ' +
-                         str(type(eval_callback).__name__))
+        raise ValueError(
+            "eval_callback must be of type Callable, not "
+            + str(type(eval_callback).__name__)
+        )
 
     if not isinstance(results_dir, str):
-        raise ValueError('results_dir must be of type str, not ' +
-                         str(type(results_dir).__name__))
+        raise ValueError(
+            "results_dir must be of type str, not " + str(type(results_dir).__name__)
+        )
 
     results_dir = os.path.abspath(results_dir)
     os.makedirs(results_dir, exist_ok=True)
 
     if not isinstance(strict_validation, bool):
-        raise ValueError('strict_validation must be of type bool, not ' +
-                         str(type(strict_validation).__name__))
+        raise ValueError(
+            "strict_validation must be of type bool, not "
+            + str(type(strict_validation).__name__)
+        )
 
     validate_quantsim_inputs(quant_scheme, rounding_mode, output_bw, param_bw)
 
 
-
-class AutoQuant: # pylint: disable=too-many-instance-attributes
+class AutoQuant:  # pylint: disable=too-many-instance-attributes
     """
     Integrate and apply post-training quantization techniques.
 
@@ -197,19 +224,21 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self, # pylint: disable=too-many-arguments, too-many-locals
-                 model: tf.keras.Model,
-                 eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
-                 dataset: tf.data.Dataset,
-                 param_bw: int = 8,
-                 output_bw: int = 8,
-                 quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-                 rounding_mode: str = "nearest",
-                 config_file: str = None,
-                 results_dir: str = "/tmp",
-                 cache_id: str = None,
-                 strict_validation: bool = True) -> None:
-        '''
+    def __init__(
+        self,  # pylint: disable=too-many-arguments, too-many-locals
+        model: tf.keras.Model,
+        eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
+        dataset: tf.data.Dataset,
+        param_bw: int = 8,
+        output_bw: int = 8,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        config_file: str = None,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        strict_validation: bool = True,
+    ) -> None:
+        """
         :param model: Model to be quantized. Assumes model is on the correct device
         :param eval_callback: Function that calculates the evaluation score
         :param dataset: A collection that iterates over an unlabeled dataset,
@@ -225,10 +254,19 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
             When False, AutoQuant will proceed with execution and
             handle errors internally if possible.
             This may produce unideal or unintuitive results.
-        '''
+        """
 
-        _validate_inputs(model, dataset, eval_callback, results_dir, strict_validation, \
-                         quant_scheme, param_bw, output_bw, rounding_mode)
+        _validate_inputs(
+            model,
+            dataset,
+            eval_callback,
+            results_dir,
+            strict_validation,
+            quant_scheme,
+            param_bw,
+            output_bw,
+            rounding_mode,
+        )
         model.trainable = False
         self.fp32_model = model
         self._fp32_acc = None
@@ -265,13 +303,12 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         num_batches = math.ceil(2000 / batch_size)
         num_batches = min(num_batches, len(self.dataset))
 
-        self.adaround_params = AdaroundParameters(self.dataset,
-                                                  num_batches)
+        self.adaround_params = AdaroundParameters(self.dataset, num_batches)
         self.eval_manager = _EvalManager(
             quantsim_factory=self._create_quantsim_and_encodings,
             eval_func=self._evaluate_model_performance,
             results_dir=self.results_dir,
-            strict_validation=strict_validation
+            strict_validation=strict_validation,
         )
         self._quant_scheme_candidates = _QUANT_SCHEME_CANDIDATES
 
@@ -285,19 +322,21 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         return self.eval_callback(model, NUM_SAMPLES_FOR_PERFORMANCE_EVALUATION)
 
     def run_inference(self) -> Tuple[QuantizationSimModel, float]:
-
-        '''
+        """
         Creates a quantization model and performs inference
 
         :return: QuantizationSimModel, model accuracy as float
-        '''
+        """
 
         model = self.fp32_model
 
         with self.eval_manager.session("Batchnorm Folding", ptq=True) as sess:
             model, _ = self._apply_batchnorm_folding(model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(applied_techniques=["batchnorm_folding"], model=model,)
+                sess.set_ptq_result(
+                    applied_techniques=["batchnorm_folding"],
+                    model=model,
+                )
 
         sim = self._create_quantsim_and_encodings(model)
 
@@ -310,7 +349,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         return sim, acc
 
-    def optimize(self, allowed_accuracy_drop: float = 0.0) -> Tuple[tf.keras.Model, float, str]:
+    def optimize(
+        self, allowed_accuracy_drop: float = 0.0
+    ) -> Tuple[tf.keras.Model, float, str]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -318,9 +359,7 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         :return: Tuple of (best model, eval score, encoding path)
         """
         result = self._optimize_helper(self._optimize_main, allowed_accuracy_drop)
-        return result["model"], \
-            result["accuracy"], \
-            result["encoding_path"]
+        return result["model"], result["accuracy"], result["encoding_path"]
 
     def set_adaround_params(self, adaround_params: AdaroundParameters):
         """
@@ -332,18 +371,19 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         """
         self.adaround_params = adaround_params
 
-
-    def _create_quantsim_and_encodings(self, # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
-                                       model: tf.keras.Model,
-                                       rounding_mode: str = None,
-                                       output_bw: int = None,
-                                       output_quant_scheme: QuantScheme = None,
-                                       output_percentile: float = None,
-                                       param_bw: int = None,
-                                       param_quant_scheme: QuantScheme = None,
-                                       param_percentile: float = None,
-                                       config_file: str = None,
-                                       encoding_path: str = None) -> QuantizationSimModel:
+    def _create_quantsim_and_encodings(
+        self,  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+        model: tf.keras.Model,
+        rounding_mode: str = None,
+        output_bw: int = None,
+        output_quant_scheme: QuantScheme = None,
+        output_percentile: float = None,
+        param_bw: int = None,
+        param_quant_scheme: QuantScheme = None,
+        param_percentile: float = None,
+        config_file: str = None,
+        encoding_path: str = None,
+    ) -> QuantizationSimModel:
         """
 
         :param rounding_mode: Rounding mode. Defaults to self._quantsim_params["rounding_mode"].
@@ -380,36 +420,50 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
             "config_file": (config_file or self._quantsim_params["config_file"]),
         }
         sim = QuantizationSimModel(model, **kwargs)
-        input_quantizers, param_quantizers, output_quantizers = sim._get_quantizer_list() # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        input_quantizers, param_quantizers, output_quantizers = (
+            sim._get_quantizer_list()
+        )
 
         default_quant_scheme = self._quantsim_params.get("quant_scheme")
 
         if default_quant_scheme is not None:
-            output_quant_scheme = output_quant_scheme or \
-                                  default_quant_scheme.output_quant_scheme
-            output_percentile = output_percentile or default_quant_scheme.output_percentile
-            param_quant_scheme = param_quant_scheme or \
-                                 default_quant_scheme.param_quant_scheme
+            output_quant_scheme = (
+                output_quant_scheme or default_quant_scheme.output_quant_scheme
+            )
+            output_percentile = (
+                output_percentile or default_quant_scheme.output_percentile
+            )
+            param_quant_scheme = (
+                param_quant_scheme or default_quant_scheme.param_quant_scheme
+            )
             param_percentile = param_percentile or default_quant_scheme.param_percentile
 
         # Set input/output quantizers' quant schemes
         for quantizer in itertools.chain(input_quantizers, output_quantizers):
             quantizer.quant_scheme = output_quant_scheme
-            if quantizer.quant_scheme == QuantScheme.post_training_percentile and \
-                    output_percentile is not None:
+            if (
+                quantizer.quant_scheme == QuantScheme.post_training_percentile
+                and output_percentile is not None
+            ):
                 quantizer.set_percentile_value(output_percentile)
 
         # Set param quantizers' quant schemes
         for quantizer in param_quantizers:
             quantizer.quant_scheme = param_quant_scheme
-            if quantizer.quant_scheme == QuantScheme.post_training_percentile and \
-                    param_percentile is not None:
+            if (
+                quantizer.quant_scheme == QuantScheme.post_training_percentile
+                and param_percentile is not None
+            ):
                 quantizer.set_percentile_value(param_percentile)
 
         if encoding_path:
             sim.set_and_freeze_param_encodings(encoding_path)
 
-        input_quantizers, param_quantizers, output_quantizers = sim._get_quantizer_list() # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        input_quantizers, param_quantizers, output_quantizers = (
+            sim._get_quantizer_list()
+        )
 
         # Disable input/output quantizers, using fp32 to simulate int32.
         if output_bw == 32:
@@ -421,13 +475,16 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
                 quantizer.disable()
 
         # Skip encoding computation if none of the quantizers are enabled
-        if any(quantizer.is_enabled() for quantizer in param_quantizers + \
-                                                  input_quantizers + \
-                                                  output_quantizers):
+        if any(
+            quantizer.is_enabled()
+            for quantizer in param_quantizers + input_quantizers + output_quantizers
+        ):
             sim.compute_encodings(self.forward_pass_callback, None)
         return sim
 
-    def _apply_batchnorm_folding(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[Tuple]]:
+    def _apply_batchnorm_folding(
+        self, model: tf.keras.Model
+    ) -> Tuple[tf.keras.Model, List[Tuple]]:
         """
         Apply batchnorm folding
         Note: Input model is not mutated
@@ -453,8 +510,7 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         model.set_weights(original_weight)
         return equalize_model(model)
 
-    def _apply_adaround(self,
-                        model: tf.keras.Model) -> Tuple[tf.keras.Model, str]:
+    def _apply_adaround(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, str]:
         """
         Apply adaround
 
@@ -464,28 +520,34 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         :return: Output model and the path to the parameter encoding file
         """
         filename_prefix = "adaround"
-        adaround_encoding_path = os.path.join(self.results_dir,
-                                              f"{filename_prefix}.encodings")
+        adaround_encoding_path = os.path.join(
+            self.results_dir, f"{filename_prefix}.encodings"
+        )
         if self._quantsim_params["param_bw"] == 4:
             self.adaround_params.num_iterations = 15000
 
-        _apply_adaround_cached = cache.mark("adaround", KerasModelSerializationProtocol()) \
-            (Adaround.apply_adaround)
+        _apply_adaround_cached = cache.mark(
+            "adaround", KerasModelSerializationProtocol()
+        )(Adaround.apply_adaround)
 
-        model = _apply_adaround_cached(model, # pylint: disable=protected-access
-                                       self.adaround_params,
-                                       path=self.results_dir,
-                                       filename_prefix=filename_prefix,
-                                       default_param_bw=self._quantsim_params["param_bw"],
-                                       default_quant_scheme=self._quantsim_params.get("quant_scheme").param_quant_scheme,
-                                       config_file=self._quantsim_params["config_file"])
+        # pylint: disable=protected-access
+        model = _apply_adaround_cached(
+            model,
+            self.adaround_params,
+            path=self.results_dir,
+            filename_prefix=filename_prefix,
+            default_param_bw=self._quantsim_params["param_bw"],
+            default_quant_scheme=self._quantsim_params.get(
+                "quant_scheme"
+            ).param_quant_scheme,
+            config_file=self._quantsim_params["config_file"],
+        )
 
         return model, adaround_encoding_path
 
     def _optimize_helper(
-            self,
-            optimize_fn: Callable,
-            allowed_accuracy_drop: float) -> Tuple[tf.keras.Model, float, str]:
+        self, optimize_fn: Callable, allowed_accuracy_drop: float
+    ) -> Tuple[tf.keras.Model, float, str]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -495,8 +557,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         allowed_accuracy_drop = float(allowed_accuracy_drop)
         if allowed_accuracy_drop < 0:
             raise ValueError(
-                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}"
-                .format(allowed_accuracy_drop)
+                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}".format(
+                    allowed_accuracy_drop
+                )
             )
 
         self.eval_manager.clear()
@@ -547,7 +610,7 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         :param candidates: Candidates for quant scheme search
         """
-        self._quant_scheme_candidates = copy.copy(candidates) # pylint: disable=E1101
+        self._quant_scheme_candidates = copy.copy(candidates)  # pylint: disable=E1101
 
     def _choose_default_quant_scheme(self):
         def eval_fn(pair: _QuantSchemePair):
@@ -569,7 +632,8 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         # always use tf scheme
         if param_bw >= 16:
             candidates = [
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if candidate.param_quant_scheme == QuantScheme.post_training_tf
             ]
 
@@ -577,7 +641,8 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         # always use tf scheme
         if output_bw >= 16:
             candidates = [
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if candidate.output_quant_scheme == QuantScheme.post_training_tf
             ]
 
@@ -590,7 +655,6 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         # Find the quant scheme that yields the best eval score
         return max(candidates, key=eval_fn)
-
 
     def _optimize_main(self, fp32_model: tf.keras.Model, target_acc: float):
         """
@@ -610,8 +674,11 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         with self.eval_manager.session("W32 Evaluation") as sess:
             w32_eval_score = sess.eval(model=fp32_model, param_bw=32)
-            _logger.info("Evaluation finished: W32A%d (eval score: %f)",
-                         self._quantsim_params["output_bw"], w32_eval_score)
+            _logger.info(
+                "Evaluation finished: W32A%d (eval score: %f)",
+                self._quantsim_params["output_bw"],
+                w32_eval_score,
+            )
 
             # Early exit
             if w32_eval_score < target_acc:
@@ -620,7 +687,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
                     "than the target eval score (%f). This means it is unlikely that "
                     "the target eval score can be met using PTQ techniques. "
                     "Please consider finetuning the model using range learning.",
-                    self._quantsim_params["output_bw"], w32_eval_score, target_acc
+                    self._quantsim_params["output_bw"],
+                    w32_eval_score,
+                    target_acc,
                 )
 
                 # Since AutoQuant pipeline exited early, all the return values are set to None
@@ -637,8 +706,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("Batchnorm Folding", ptq=True) as sess:
             model, _ = self._apply_batchnorm_folding(fp32_model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    applied_techniques=["batchnorm_folding"])
+                sess.set_ptq_result(
+                    model=model, applied_techniques=["batchnorm_folding"]
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result and best_result.accuracy >= target_acc:
@@ -649,8 +719,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("Cross-Layer Equalization", ptq=True) as sess:
             model = self._apply_cross_layer_equalization(fp32_model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    applied_techniques=["cross_layer_equalization"])
+                sess.set_ptq_result(
+                    model=model, applied_techniques=["cross_layer_equalization"]
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result and best_result.accuracy >= target_acc:
@@ -670,9 +741,11 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("AdaRound", ptq=True) as sess:
             model, encoding_path = self._apply_adaround(model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    encoding_path=encoding_path,
-                                    applied_techniques=[*applied_techniques, "adaround"])
+                sess.set_ptq_result(
+                    model=model,
+                    encoding_path=encoding_path,
+                    applied_techniques=[*applied_techniques, "adaround"],
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result:
@@ -682,8 +755,10 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
                 sess.result["target_satisfied"] = True
             return best_result.as_dict()
 
-        raise RuntimeError("None of batchnorm folding, CLE, or Adaround "
-                           "has been finished successfully.")
+        raise RuntimeError(
+            "None of batchnorm folding, CLE, or Adaround "
+            "has been finished successfully."
+        )
 
 
 @dataclass
@@ -695,6 +770,7 @@ class PtqResult:
     :param accuracy: Accuracy of the model.
     :param applied_techniques: Applied ptq techniques.
     """
+
     model_path: str
     encoding_path: str
     accuracy: float
@@ -706,12 +782,17 @@ class PtqResult:
         :return: Loaded model
         """
         return tf.keras.models.load_model(self.model_path)
+
     def save_result_as(self, prefix: str = "best_model"):
         """
         Creates the copy of the PTQ result files with the given prefix.
         :param prefix: prefix to be added to the file's basename
         """
-        src_files = [self.model_path+".h5", self.model_path+"_converted.pb", self.encoding_path]
+        src_files = [
+            self.model_path + ".h5",
+            self.model_path + "_converted.pb",
+            self.encoding_path,
+        ]
         for file in src_files:
             name = os.path.basename(file)
             dirname = os.path.dirname(file)
@@ -720,6 +801,7 @@ class PtqResult:
                 if os.path.exists(dest):
                     os.remove(dest)
                 shutil.copyfile(file, dest)
+
     def as_dict(self):
         """Convert to dictionary"""
         return {
@@ -735,11 +817,13 @@ class _EvalManager:
     Evaluation manager for AutoQuant.
     """
 
-    def __init__(self,
-                 quantsim_factory: Callable,
-                 eval_func: Callable[[tf.keras.Model], float],
-                 results_dir: str,
-                 strict_validation: bool):
+    def __init__(
+        self,
+        quantsim_factory: Callable,
+        eval_func: Callable[[tf.keras.Model], float],
+        results_dir: str,
+        strict_validation: bool,
+    ):
         """
         :param quantsim_factory: A factory function that returns QuantizationSimModel.
         :param eval_func: Evaluation function.
@@ -769,8 +853,11 @@ class _EvalManager:
         Get the results with the highest evaluation score among the ptq results evaluated so far.
         :return: The best evaluation result so far.
         """
-        ptq_results = [sess.ptq_result for sess in self._all_sessions.values()
-                       if sess.ptq_result is not None]
+        ptq_results = [
+            sess.ptq_result
+            for sess in self._all_sessions.values()
+            if sess.ptq_result is not None
+        ]
         if not ptq_results:
             return None
 
@@ -784,12 +871,14 @@ class _EvalManager:
         :return: Session object.
         """
         if title not in self._all_sessions:
-            session = _EvalSession(title,
-                                   self._quantsim_factory,
-                                   self._eval_func,
-                                   results_dir=os.path.join(self._results_dir, ".trace"),
-                                   strict_validation=self._strict_validation,
-                                   ptq=ptq)
+            session = _EvalSession(
+                title,
+                self._quantsim_factory,
+                self._eval_func,
+                results_dir=os.path.join(self._results_dir, ".trace"),
+                strict_validation=self._strict_validation,
+                ptq=ptq,
+            )
             self._all_sessions[title] = session
         return self._all_sessions[title]
 
@@ -803,11 +892,15 @@ class _EvalManager:
         Export diagnostics in html format.
         :return: Diagnostics string in html format.
         """
-        loader = jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(self.HTML_TEMPLATE_FILE)))
+        loader = jinja2.FileSystemLoader(
+            os.path.dirname(os.path.abspath(self.HTML_TEMPLATE_FILE))
+        )
         env = jinja2.Environment(loader=loader)
         template = env.get_template(os.path.basename(self.HTML_TEMPLATE_FILE))
 
-        if any(sess.diagnostics.contains_bokeh() for sess in self._all_sessions.values()):
+        if any(
+            sess.diagnostics.contains_bokeh() for sess in self._all_sessions.values()
+        ):
             head = CDN.render()
         else:
             head = ""
@@ -816,12 +909,8 @@ class _EvalManager:
         for sess in self._all_sessions.values():
             if sess.diagnostics.is_empty():
                 continue
-            log.write(
-                f"<h1> {sess.title} </h1>\n"
-            )
-            content = "\n".join(
-                line.get_html_elem() for line in sess.diagnostics
-            )
+            log.write(f"<h1> {sess.title} </h1>\n")
+            content = "\n".join(line.get_html_elem() for line in sess.diagnostics)
             log.write(f"{content}\n")
 
         result = OrderedDict()
@@ -843,20 +932,23 @@ class _EvalManager:
         return html
 
 
-class _EvalSession: # pylint: disable=too-many-instance-attributes
+class _EvalSession:  # pylint: disable=too-many-instance-attributes
     """
     Evaluation session for AutoQuant.
 
     Each session object contains a title and diagnostics produced during the session.
     The collected diagnostics will be exported into a html file by _EvalManager.
     """
-    def __init__(self, # pylint: disable=too-many-arguments
-                 title: str,
-                 quantsim_factory: Callable,
-                 eval_func: Callable[[tf.keras.Model], float],
-                 results_dir: str,
-                 strict_validation: bool,
-                 ptq: bool,):
+
+    def __init__(
+        self,  # pylint: disable=too-many-arguments
+        title: str,
+        quantsim_factory: Callable,
+        eval_func: Callable[[tf.keras.Model], float],
+        results_dir: str,
+        strict_validation: bool,
+        ptq: bool,
+    ):
         """
         :param title: Title of the session.
         :param quantsim_factory: A factory function that returns QuantizationSimModel.
@@ -940,8 +1032,11 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._ptq_result is not None:
-            _logger.info("Session finished: %s. (eval score: %f)",
-                         self.title, self._ptq_result.accuracy)
+            _logger.info(
+                "Session finished: %s. (eval score: %f)",
+                self.title,
+                self._ptq_result.accuracy,
+            )
         self._spinner.__exit__(exc_type, exc_val, exc_tb)
 
         if exc_val:
@@ -977,17 +1072,20 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
             # Return True so that the error doesn't propagate further
             return True
         return None
+
     @property
     def ptq_result(self) -> PtqResult:
         """Getter of self._ptq_result."""
         return self._ptq_result
 
-    def set_ptq_result(self,
-                       applied_techniques: List[str],
-                       model: tf.keras.Model = None,
-                       sim: QuantizationSimModel = None,
-                       acc: float = None,
-                       **kwargs):
+    def set_ptq_result(
+        self,
+        applied_techniques: List[str],
+        model: tf.keras.Model = None,
+        sim: QuantizationSimModel = None,
+        acc: float = None,
+        **kwargs,
+    ):
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block
 
@@ -1012,10 +1110,9 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
 
         self._set_ptq_result(sim, acc, applied_techniques)
 
-    def _set_ptq_result(self,
-                        sim: QuantizationSimModel,
-                        acc: float,
-                        applied_techniques: List[str]) -> PtqResult:
+    def _set_ptq_result(
+        self, sim: QuantizationSimModel, acc: float, applied_techniques: List[str]
+    ) -> PtqResult:
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block
         :param sim: Result of PTQ. The quantization encoding (compute_encodings()) is
@@ -1029,10 +1126,12 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
                 "sess.eval() can be called only once per each _EvalSession instance."
             )
         model_path, encoding_path = self._export(sim)
-        self._ptq_result = PtqResult(model_path=model_path,
-                                     encoding_path=encoding_path,
-                                     accuracy=acc,
-                                     applied_techniques=applied_techniques)
+        self._ptq_result = PtqResult(
+            model_path=model_path,
+            encoding_path=encoding_path,
+            accuracy=acc,
+            applied_techniques=applied_techniques,
+        )
         _logger.info(self._ptq_result)
         return self._ptq_result
 
@@ -1044,9 +1143,15 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
         """
         sim.export(path=self._results_dir, filename_prefix=self.title_lowercase)
         model_path = os.path.join(self._results_dir, f"{self.title_lowercase}")
-        encoding_path = os.path.join(self._results_dir, f"{self.title_lowercase}.encodings")
-        _logger.info("The results of %s is saved in %s and %s.",
-                     self.title, model_path, encoding_path)
+        encoding_path = os.path.join(
+            self._results_dir, f"{self.title_lowercase}.encodings"
+        )
+        _logger.info(
+            "The results of %s is saved in %s and %s.",
+            self.title,
+            model_path,
+            encoding_path,
+        )
         return model_path, encoding_path
 
 
@@ -1083,8 +1188,11 @@ def spy_auto_quant(auto_quant: AutoQuant):
             """Return handles to the results of AutoQuant"""
             if self._eval_manager is None:
                 return []
-            return [sess.ptq_result for sess in self._eval_manager._all_sessions.values()
-                    if sess.ptq_result is not None]
+            return [
+                sess.ptq_result
+                for sess in self._eval_manager._all_sessions.values()
+                if sess.ptq_result is not None
+            ]
 
     spy = Spy(auto_quant.eval_manager)
 
@@ -1100,7 +1208,7 @@ def spy_auto_quant(auto_quant: AutoQuant):
         setattr(auto_quant, "_optimize_main", _optimize_main)
 
 
-def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-many-return-statements
+def _build_flowchart_metadata(result: Mapping) -> Dict:  # pylint: disable=too-many-return-statements
     """
     Build flowchart metadata for the html template of summary report
 
@@ -1134,12 +1242,12 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
         edge_quant_scheme_selection_in='data-visited="true"',
     )
     if "quantscheme_selection" in result:
-        status = result['quantscheme_selection']['status']
+        status = result["quantscheme_selection"]["status"]
         metadata.update(
             node_quant_scheme_selection=f'data-visited="true" data-stage-result="{status}"',
         )
 
-        if status == 'error-failed':
+        if status == "error-failed":
             return metadata
 
     metadata.update(
@@ -1158,34 +1266,41 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
         edge_test_w32_eval_score_if_true='data-visited="true"',
     )
 
-
     for ptq_name, ptq_result in result["ptq_techniques"].items():
-        status = ptq_result['status']
-        effective = ptq_result['effective']
+        status = ptq_result["status"]
+        effective = ptq_result["effective"]
         if status == "success" and not effective:
             status = "discarded"
-        metadata.update({
-            f"node_{ptq_name}": f'data-visited="true" data-stage-result="{status}"',
-        })
+        metadata.update(
+            {
+                f"node_{ptq_name}": f'data-visited="true" data-stage-result="{status}"',
+            }
+        )
 
-        if status == 'error-failed':
+        if status == "error-failed":
             return metadata
 
-        metadata.update({
-            f'edge_{ptq_name}_out': 'data-visited="true"',
-            f'node_test_{ptq_name}': 'data-visited="true"',
-        })
+        metadata.update(
+            {
+                f"edge_{ptq_name}_out": 'data-visited="true"',
+                f"node_test_{ptq_name}": 'data-visited="true"',
+            }
+        )
 
-        if ptq_result['target_satisfied']:
-            metadata.update({
-                f'edge_test_{ptq_name}_if_true': 'data-visited="true"',
-                'node_result_success': 'data-visited="true"',
-            })
+        if ptq_result["target_satisfied"]:
+            metadata.update(
+                {
+                    f"edge_test_{ptq_name}_if_true": 'data-visited="true"',
+                    "node_result_success": 'data-visited="true"',
+                }
+            )
             return metadata
 
-        metadata.update({
-            f'edge_test_{ptq_name}_if_false': 'data-visited="true"',
-        })
+        metadata.update(
+            {
+                f"edge_test_{ptq_name}_if_false": 'data-visited="true"',
+            }
+        )
 
     metadata.update(
         node_result_fail='data-visited="true"',
@@ -1196,21 +1311,25 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
 
 ParetoFrontType = List[Tuple[int, float, QuantizerGroup, Tuple]]
 
+
 @dataclass
 class _MixedPrecisionArgs:
     """
     Mixed-precision specific arguments.
     """
+
     candidates: List[AmpCandidate]
     forward_pass_callback: CallbackFunc
     eval_callback_for_phase1: CallbackFunc
     eval_callback_for_phase2: CallbackFunc
+
 
 @dataclass
 class _MixedPrecisionResult:
     """
     Mixed precision result
     """
+
     pareto_list: ParetoFrontType
     sim: QuantizationSimModel
     final_eval_score: float
@@ -1220,8 +1339,10 @@ class _MixedPrecisionResult:
 
 # The number of samples to be used for performance evaluation and AMP.
 # NOTE: None means "all".
-DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1 = EvalCallbackFactory._DEFAULT_SQNR_NUM_SAMPLES # pylint: disable=protected-access
+# pylint: disable=protected-access
+DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1 = EvalCallbackFactory._DEFAULT_SQNR_NUM_SAMPLES
 DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_2 = None
+
 
 class AutoQuantWithAutoMixedPrecision:
     """
@@ -1234,18 +1355,20 @@ class AutoQuantWithAutoMixedPrecision:
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 model: tf.keras.Model,
-                 eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
-                 dataset: tf.data.Dataset,
-                 param_bw: int = 8,
-                 output_bw: int = 8,
-                 quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-                 rounding_mode: str = "nearest",
-                 config_file: str = None,
-                 results_dir: str = "/tmp",
-                 cache_id: str = None,
-                 strict_validation: bool = True):
+    def __init__(
+        self,
+        model: tf.keras.Model,
+        eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
+        dataset: tf.data.Dataset,
+        param_bw: int = 8,
+        output_bw: int = 8,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        config_file: str = None,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        strict_validation: bool = True,
+    ):
         """
         :param model: Model to be quantized. Assumes model is on the correct device
         :param eval_callback:  A function that maps model and the number samples
@@ -1267,30 +1390,33 @@ class AutoQuantWithAutoMixedPrecision:
         :param cache_id: ID associated with cache results
         :param strict_validation: Flag set to True by default.hen False, AutoQuant will proceed with execution and handle errors internally if possible. This may produce unideal or unintuitive results.
         """
-        self._auto_quant_base = AutoQuant(model,
-                                          eval_callback,
-                                          dataset,
-                                          param_bw,
-                                          output_bw,
-                                          quant_scheme,
-                                          rounding_mode,
-                                          config_file,
-                                          results_dir,
-                                          cache_id,
-                                          strict_validation)
+        self._auto_quant_base = AutoQuant(
+            model,
+            eval_callback,
+            dataset,
+            param_bw,
+            output_bw,
+            quant_scheme,
+            rounding_mode,
+            config_file,
+            results_dir,
+            cache_id,
+            strict_validation,
+        )
         self.dataset = dataset
         self._amp_args = None
 
     def run_inference(self) -> Tuple[QuantizationSimModel, float]:
-        '''
+        """
         Creates a quantization model and performs inference
 
         :return: QuantizationSimModel, model accuracy as float
-        '''
+        """
         return self._auto_quant_base.run_inference()
 
-    def optimize(self, allowed_accuracy_drop: float = 0.0) \
-            -> Tuple[tf.keras.Model, float, str, ParetoFrontType]:
+    def optimize(
+        self, allowed_accuracy_drop: float = 0.0
+    ) -> Tuple[tf.keras.Model, float, str, ParetoFrontType]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -1304,12 +1430,16 @@ class AutoQuantWithAutoMixedPrecision:
             "auto_quant_v2_diagnostics_template_with_amp.html",
         )
         with patch.object(_EvalManager, "HTML_TEMPLATE_FILE", html_template_file):
-            result = self._auto_quant_base._optimize_helper(self._optimize_main, # pylint: disable=protected-access
-                                                            allowed_accuracy_drop)
-            return result["model"], \
-                result["accuracy"], \
-                result["encoding_path"], \
-                result["pareto_list"]
+            # pylint: disable=protected-access
+            result = self._auto_quant_base._optimize_helper(
+                self._optimize_main, allowed_accuracy_drop
+            )
+            return (
+                result["model"],
+                result["accuracy"],
+                result["encoding_path"],
+                result["pareto_list"],
+            )
 
     def set_adaround_params(self, adaround_params: AdaroundParameters):
         """
@@ -1321,11 +1451,13 @@ class AutoQuantWithAutoMixedPrecision:
         """
         return self._auto_quant_base.set_adaround_params(adaround_params)
 
-    def set_mixed_precision_params(self, # pylint: disable=too-many-locals
-                                   candidates: List[CANDIDATE_WITH_DTYPE],
-                                   num_samples_for_phase_1: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1,
-                                   forward_fn: Callable = _default_forward_fn,
-                                   num_samples_for_phase_2: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_2):
+    def set_mixed_precision_params(
+        self,  # pylint: disable=too-many-locals
+        candidates: List[CANDIDATE_WITH_DTYPE],
+        num_samples_for_phase_1: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_1,
+        forward_fn: Callable = _default_forward_fn,
+        num_samples_for_phase_2: Optional[int] = DEFAULT_NUM_SAMPLES_FOR_AMP_PHASE_2,
+    ):
         """
         Set mixed precision parameters.
         NOTE: Automatic mixed precision will NOT be enabled unless this method
@@ -1343,10 +1475,14 @@ class AutoQuantWithAutoMixedPrecision:
                 evaluation in AMP phase 2.
         """
         if len(candidates) < 2:
-            raise ValueError(f"AMP requires at least two candidates. Got {len(candidates)}.")
+            raise ValueError(
+                f"AMP requires at least two candidates. Got {len(candidates)}."
+            )
 
-        baseline_param_bw = self._auto_quant_base._quantsim_params["param_bw"] # pylint: disable=protected-access
-        baseline_output_bw = self._auto_quant_base._quantsim_params["output_bw"] # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        baseline_param_bw = self._auto_quant_base._quantsim_params["param_bw"]
+        # pylint: disable=protected-access
+        baseline_output_bw = self._auto_quant_base._quantsim_params["output_bw"]
         baseline_candidate = (
             (baseline_output_bw, QuantizationDataType.int),
             (baseline_param_bw, QuantizationDataType.int),
@@ -1381,7 +1517,6 @@ class AutoQuantWithAutoMixedPrecision:
                 )
 
         def dataloader_wrapper():
-
             return self.dataset
 
         factory = EvalCallbackFactory(dataloader_wrapper, forward_fn=forward_fn)
@@ -1391,11 +1526,15 @@ class AutoQuantWithAutoMixedPrecision:
 
         self._amp_args = _MixedPrecisionArgs(
             candidates=candidates,
-            forward_pass_callback=CallbackFunc(self._auto_quant_base.forward_pass_callback, None),
+            forward_pass_callback=CallbackFunc(
+                self._auto_quant_base.forward_pass_callback, None
+            ),
             eval_callback_for_phase1=sqnr_eval_callback,
-            eval_callback_for_phase2=CallbackFunc(self._auto_quant_base.eval_callback,
-                                                  num_samples_for_phase_2)
+            eval_callback_for_phase2=CallbackFunc(
+                self._auto_quant_base.eval_callback, num_samples_for_phase_2
+            ),
         )
+
     def get_quant_scheme_candidates(self) -> Tuple[_QuantSchemePair, ...]:
         """
         Return the candidates for quant scheme search.
@@ -1416,12 +1555,14 @@ class AutoQuantWithAutoMixedPrecision:
         """
         return self._auto_quant_base.set_quant_scheme_candidates(candidates)
 
-    def _apply_mixed_precision(self,
-                               model: tf.keras.Model,
-                               target_acc: float,
-                               amp_args: _MixedPrecisionArgs,
-                               results_dir: str,
-                               encoding_path: str = None) -> _MixedPrecisionResult:
+    def _apply_mixed_precision(
+        self,
+        model: tf.keras.Model,
+        target_acc: float,
+        amp_args: _MixedPrecisionArgs,
+        results_dir: str,
+        encoding_path: str = None,
+    ) -> _MixedPrecisionResult:
         """
         Apply mixed-precision and return the highest accuracy.
 
@@ -1437,19 +1578,24 @@ class AutoQuantWithAutoMixedPrecision:
         if not amp_args:
             raise RuntimeError
 
-        sim = self._auto_quant_base._create_quantsim_and_encodings(model, # pylint: disable=protected-access
-                                                                   encoding_path=encoding_path)
+        # pylint: disable=protected-access
+        sim = self._auto_quant_base._create_quantsim_and_encodings(
+            model, encoding_path=encoding_path
+        )
 
-        algo = GreedyMixedPrecisionAlgo(sim,
-                                        amp_args.candidates,
-                                        amp_args.eval_callback_for_phase1,
-                                        amp_args.eval_callback_for_phase2,
-                                        results_dir=results_dir,
-                                        clean_start=True,
-                                        forward_pass_callback=amp_args.forward_pass_callback)
+        algo = GreedyMixedPrecisionAlgo(
+            sim,
+            amp_args.candidates,
+            amp_args.eval_callback_for_phase1,
+            amp_args.eval_callback_for_phase2,
+            results_dir=results_dir,
+            clean_start=True,
+            forward_pass_callback=amp_args.forward_pass_callback,
+        )
 
         # Find baseline accuracy and bw corresponding to baseline accuracy
-        algo.set_baseline(fp32_accuracy=self._auto_quant_base._fp32_acc) # pylint: disable=protected-access
+        # pylint: disable=protected-access
+        algo.set_baseline(fp32_accuracy=self._auto_quant_base._fp32_acc)
         allowed_accuracy_drop = algo.fp32_accuracy - target_acc
 
         algo.run(allowed_accuracy_drop)
@@ -1457,21 +1603,25 @@ class AutoQuantWithAutoMixedPrecision:
         sensitivity_plot = None
         if algo.accuracy_list is not None:
             # Visualize quantizer group sensitivity
-            sensitivity_plot = create_sensitivity_plot(algo.accuracy_list,
-                                                       algo.baseline_candidate,
-                                                       algo.fp32_accuracy)
+            sensitivity_plot = create_sensitivity_plot(
+                algo.accuracy_list, algo.baseline_candidate, algo.fp32_accuracy
+            )
         pareto_plot = None
         if algo.pareto_list is not None:
             # Create pareto list curve
             pareto_plot = create_pareto_curve(algo.pareto_list)
 
-        return _MixedPrecisionResult(algo.pareto_list,
-                                     algo._sim, # pylint: disable=protected-access
-                                     algo._final_eval_score, # pylint: disable=protected-access
-                                     sensitivity_plot,
-                                     pareto_plot)
+        return _MixedPrecisionResult(
+            algo.pareto_list,
+            algo._sim,  # pylint: disable=protected-access
+            algo._final_eval_score,  # pylint: disable=protected-access
+            sensitivity_plot,
+            pareto_plot,
+        )
 
-    def _optimize_main(self, fp32_model: tf.keras.Model, target_acc: float) -> Dict[str, Any]:
+    def _optimize_main(
+        self, fp32_model: tf.keras.Model, target_acc: float
+    ) -> Dict[str, Any]:
         """
         Helper function of apply().
 
@@ -1488,31 +1638,45 @@ class AutoQuantWithAutoMixedPrecision:
 
         eval_manager = self._auto_quant_base.eval_manager
         results_dir = self._auto_quant_base.results_dir
-        strict_validation = eval_manager._strict_validation # pylint: disable=protected-access
+        strict_validation = eval_manager._strict_validation  # pylint: disable=protected-access
 
         sess = eval_manager.session("")
-        _multiconfig_adaround_fn = _adaround_wrapper(self._auto_quant_base._apply_adaround, # pylint: disable=protected-access
-                                                     self._auto_quant_base,
-                                                     candidates,
-                                                     target_acc,
-                                                     sess.eval)
+        _multiconfig_adaround_fn = _adaround_wrapper(
+            self._auto_quant_base._apply_adaround,  # pylint: disable=protected-access
+            self._auto_quant_base,
+            candidates,
+            target_acc,
+            sess.eval,
+        )
         sess_eval_fn = _EvalSession.eval
+
         def eval_fn(_, model, param_bw=None, output_bw=None, **kwargs):
             if param_bw == 32:
                 # For W32 evaluation, use the highest output bitwidth
                 # among all the AMP candidates
                 output_bitwidths = [
-                    output_bw for (output_bw, output_dtype), _ in candidates
+                    output_bw
+                    for (output_bw, output_dtype), _ in candidates
                     if output_dtype == QuantizationDataType.int
                 ]
-                output_bitwidths.append(self._auto_quant_base._quantsim_params["output_bw"]) # pylint: disable=protected-access
+                # pylint: disable=protected-access
+                output_bitwidths.append(
+                    self._auto_quant_base._quantsim_params["output_bw"]
+                )
                 output_bw = max(output_bitwidths)
-            return sess_eval_fn(_, model, param_bw=param_bw, output_bw=output_bw, **kwargs)
+            return sess_eval_fn(
+                _, model, param_bw=param_bw, output_bw=output_bw, **kwargs
+            )
 
-        with patch.object(self._auto_quant_base, "_apply_adaround", _multiconfig_adaround_fn), \
-                patch.object(_EvalSession, "eval", eval_fn):
+        with (
+            patch.object(
+                self._auto_quant_base, "_apply_adaround", _multiconfig_adaround_fn
+            ),
+            patch.object(_EvalSession, "eval", eval_fn),
+        ):
             try:
-                result = self._auto_quant_base._optimize_main(fp32_model, target_acc) # pylint: disable=protected-access
+                # pylint: disable=protected-access
+                result = self._auto_quant_base._optimize_main(fp32_model, target_acc)
 
                 # Automatic Mixed Precision
                 result["pareto_list"] = None
@@ -1520,10 +1684,12 @@ class AutoQuantWithAutoMixedPrecision:
                 # An empty `result` dict means AutoQuant early-exited
                 # because W32 eval score didn't meet the target accuracy.
                 # In this case, do not proceed to AMP and exit immediately.
-                if result["model"] is None and \
-                        result["accuracy"] is None and \
-                        result["encoding_path"] is None and \
-                        result["applied_techniques"] is None:
+                if (
+                    result["model"] is None
+                    and result["accuracy"] is None
+                    and result["encoding_path"] is None
+                    and result["applied_techniques"] is None
+                ):
                     return result
 
                 if result["accuracy"] >= target_acc or not self._amp_args:
@@ -1532,14 +1698,20 @@ class AutoQuantWithAutoMixedPrecision:
                 if len(candidates) < 2:
                     _logger.info(
                         "After Adaround, we have only one Adarond-compatible candidate left for AMP (W%dA%d). "
-                        "Return without proceeding to AMP", candidates[0].param_bw, candidates[0].output_bw
+                        "Return without proceeding to AMP",
+                        candidates[0].param_bw,
+                        candidates[0].output_bw,
                     )
                     return result
 
                 model = result["model"]
                 applied_techniques = result["applied_techniques"]
                 # Freeze weight encoding to adaround weight encoding
-                encoding_path = result["encoding_path"] if "adaround" in applied_techniques else None
+                encoding_path = (
+                    result["encoding_path"]
+                    if "adaround" in applied_techniques
+                    else None
+                )
             except Exception:
                 if strict_validation:
                     raise
@@ -1564,8 +1736,11 @@ class AutoQuantWithAutoMixedPrecision:
             if amp_result.pareto_plot is not None:
                 sess.diagnostics.add(amp_result.pareto_plot)
 
-            sess.set_ptq_result(sim=amp_result.sim, acc=amp_result.final_eval_score,
-                                applied_techniques=[*applied_techniques, "automatic_mixed_precision"])
+            sess.set_ptq_result(
+                sim=amp_result.sim,
+                acc=amp_result.final_eval_score,
+                applied_techniques=[*applied_techniques, "automatic_mixed_precision"],
+            )
 
         best_result = eval_manager.get_best_ptq_result()
         if best_result:
@@ -1576,16 +1751,21 @@ class AutoQuantWithAutoMixedPrecision:
             result.update(best_result.as_dict())
             return result
 
-        raise RuntimeError("None of batchnorm folding, CLE, or Adaround "
-                           "has been finished successfully.")
+        raise RuntimeError(
+            "None of batchnorm folding, CLE, or Adaround "
+            "has been finished successfully."
+        )
 
-def _adaround_wrapper(apply_adaround_fn: Callable,
-                      auto_quant: AutoQuant,
-                      amp_candidates: List[AmpCandidate],
-                      target_acc: float,
-                      eval_fn: Callable):
+
+def _adaround_wrapper(
+    apply_adaround_fn: Callable,
+    auto_quant: AutoQuant,
+    amp_candidates: List[AmpCandidate],
+    target_acc: float,
+    eval_fn: Callable,
+):
     @functools.wraps(apply_adaround_fn)
-    def _apply_adaround_wrapper(*args, **kwargs): # pylint: disable=too-many-locals
+    def _apply_adaround_wrapper(*args, **kwargs):  # pylint: disable=too-many-locals
         # If AMP candidates are empty (i.e. AMP is disabled),
         # perform normal (single-round) adaround.
         original_model = args[0]
@@ -1598,40 +1778,47 @@ def _adaround_wrapper(apply_adaround_fn: Callable,
         def apply_adaround(param_bw: int):
             _logger.info("Running Adaround with W%d", param_bw)
 
-            orig_param_bw = auto_quant._quantsim_params["param_bw"] # pylint: disable=protected-access
+            orig_param_bw = auto_quant._quantsim_params["param_bw"]  # pylint: disable=protected-access
             try:
-                auto_quant._quantsim_params["param_bw"] = param_bw # pylint: disable=protected-access
+                auto_quant._quantsim_params["param_bw"] = param_bw  # pylint: disable=protected-access
                 input_model = tf.keras.models.clone_model(original_model)
                 input_model.set_weights(original_model.get_weights())
                 new_args = (input_model,) + args[1:]
                 return apply_adaround_fn(*new_args, **kwargs)
             finally:
-                auto_quant._quantsim_params["param_bw"] = orig_param_bw # pylint: disable=protected-access
+                auto_quant._quantsim_params["param_bw"] = orig_param_bw  # pylint: disable=protected-access
 
         int_candidates = [
-            candidate for candidate in amp_candidates
+            candidate
+            for candidate in amp_candidates
             if candidate.param_dtype == QuantizationDataType.int
         ]
-        sorted_int_candidates = sorted(int_candidates,
-                                       key=lambda candidate: (candidate.param_bw, candidate.output_bw))
+        sorted_int_candidates = sorted(
+            int_candidates,
+            key=lambda candidate: (candidate.param_bw, candidate.output_bw),
+        )
         # Run Adaround with the lowest-bitwidth candidate
         lowest_candidate = sorted_int_candidates[0]
         model, encoding_path = apply_adaround(param_bw=lowest_candidate.param_bw)
 
-        #If the lowest candidate is the only INT candidate, return immediately
+        # If the lowest candidate is the only INT candidate, return immediately
         if len(sorted_int_candidates) == 1:
             return model, encoding_path
 
-        eval_score = eval_fn(model,
-                             param_bw=lowest_candidate.param_bw,
-                             output_bw=lowest_candidate.output_bw,
-                             encoding_path=encoding_path)
-        _logger.info("W%dA%d eval score after Adaround: %f",
-                     lowest_candidate.param_bw,
-                     lowest_candidate.output_bw,
-                     eval_score)
+        eval_score = eval_fn(
+            model,
+            param_bw=lowest_candidate.param_bw,
+            output_bw=lowest_candidate.output_bw,
+            encoding_path=encoding_path,
+        )
+        _logger.info(
+            "W%dA%d eval score after Adaround: %f",
+            lowest_candidate.param_bw,
+            lowest_candidate.output_bw,
+            eval_score,
+        )
 
-        #If the lowest candidate satisfy the target accuracy, return immediately
+        # If the lowest candidate satisfy the target accuracy, return immediately
         if eval_score >= target_acc:
             return model, encoding_path
 
@@ -1642,21 +1829,28 @@ def _adaround_wrapper(apply_adaround_fn: Callable,
 
         if second_lowest_candidate.param_bw != lowest_candidate.param_bw:
             model = None
-            model, encoding_path = apply_adaround(param_bw=second_lowest_candidate.param_bw)
-            eval_score = eval_fn(model,
-                                 param_bw=second_lowest_candidate.param_bw,
-                                 output_bw=second_lowest_candidate.output_bw,
-                                 encoding_path=encoding_path)
-            _logger.info("W%dA%d eval score after Adaround: %f",
-                         second_lowest_candidate.param_bw,
-                         second_lowest_candidate.output_bw,
-                         eval_score)
+            model, encoding_path = apply_adaround(
+                param_bw=second_lowest_candidate.param_bw
+            )
+            eval_score = eval_fn(
+                model,
+                param_bw=second_lowest_candidate.param_bw,
+                output_bw=second_lowest_candidate.output_bw,
+                encoding_path=encoding_path,
+            )
+            _logger.info(
+                "W%dA%d eval score after Adaround: %f",
+                second_lowest_candidate.param_bw,
+                second_lowest_candidate.output_bw,
+                eval_score,
+            )
 
         # Only the candidates that are compatible with adaround can be used for AMP
         adaround_compatible_amp_candidates = [
-            candidate for candidate in amp_candidates
-            if candidate.param_bw == second_lowest_candidate.param_bw or \
-               candidate.param_dtype == QuantizationDataType.float
+            candidate
+            for candidate in amp_candidates
+            if candidate.param_bw == second_lowest_candidate.param_bw
+            or candidate.param_dtype == QuantizationDataType.float
         ]
 
         # Fill in AMP candidates with Adaround-compatible candidates only

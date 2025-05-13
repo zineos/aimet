@@ -43,10 +43,9 @@ from aimet_common.utils import AimetLogger
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
+
 class UseLogger(unittest.TestCase):
-
     def test_log_areas(self):
-
         logger.info("            ")
         logger.info("Testing test_log_areas()")
 
@@ -78,12 +77,13 @@ class UseLogger(unittest.TestCase):
         svd_logger.critical("**************************************** \n")
 
     def test_setting_log_level(self):
-
         logger.info("*** Testing test_setting_log_level() *** \n")
         svd_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
         # The default logging level for SVD defined in default_logging_config.json is used.
-        logger.info("Log at the default log level for SVD defined in default_logging_config.json")
+        logger.info(
+            "Log at the default log level for SVD defined in default_logging_config.json"
+        )
         svd_logger.debug("Testing Debug")
         svd_logger.info("Testing Info")
         svd_logger.warning("Testing Warning")
@@ -113,10 +113,7 @@ class UseLogger(unittest.TestCase):
         svd_logger.critical("Testing Critical")
         svd_logger.critical("****************************************\n")
 
-
-
     def test_setting_log_level_for_all_areas(self):
-
         logger.info("*** test_setting_log_level_for_all_areas() ***\n")
 
         svd_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
@@ -125,7 +122,9 @@ class UseLogger(unittest.TestCase):
         test_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
         # The default logging level for all Log Areas defined in default_logging_config.json is used.
-        logger.info("Log at the default log level for  all Log Areas defined in default_logging_config.json")
+        logger.info(
+            "Log at the default log level for  all Log Areas defined in default_logging_config.json"
+        )
         svd_logger.debug("Testing Debug")
         svd_logger.info("Testing Info")
 
@@ -154,4 +153,3 @@ class UseLogger(unittest.TestCase):
 
         test_logger.critical("Testing Critical")
         test_logger.critical("****************************************\n")
-

@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Mixed precision inference """
-from aimet_torch._base.mixed_precision import choose_mixed_precision # pylint: disable=unused-import
+"""Mixed precision inference"""
+
+from aimet_torch._base.mixed_precision import choose_mixed_precision  # pylint: disable=unused-import

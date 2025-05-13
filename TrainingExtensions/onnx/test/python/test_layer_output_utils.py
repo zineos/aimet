@@ -50,9 +50,9 @@ from .models.models_for_tests import build_dummy_model_with_dynamic_input
 
 
 # Fetch appropriate execution providers depending on availability
-providers = ['CPUExecutionProvider']
-if 'CUDAExecutionProvider' in ort.get_available_providers():
-    providers = [('CUDAExecutionProvider', {'device_id': 0}), 'CPUExecutionProvider']
+providers = ["CPUExecutionProvider"]
+if "CUDAExecutionProvider" in ort.get_available_providers():
+    providers = [("CUDAExecutionProvider", {"device_id": 0}), "CPUExecutionProvider"]
 
 
 def get_original_model_artifacts():
@@ -61,7 +61,9 @@ def get_original_model_artifacts():
     for node in model.graph.node:
         output_names.extend(node.output)
     input_dict = make_dummy_input(model)
-    output_names = [name.replace('/', '_').replace('.', '_') for name in output_names]  # sanitization to get valid file names
+    output_names = [
+        name.replace("/", "_").replace(".", "_") for name in output_names
+    ]  # sanitization to get valid file names
     return model, output_names, input_dict
 
 
@@ -71,27 +73,33 @@ def get_quantsim_artifacts():
     def callback(session, input_dict):
         session.run(None, input_dict)
 
-    quantsim = QuantizationSimModel(model=model, dummy_input=input_dict, providers=["CPUExecutionProvider"])
+    quantsim = QuantizationSimModel(
+        model=model, dummy_input=input_dict, providers=["CPUExecutionProvider"]
+    )
     quantsim.compute_encodings(callback, input_dict)
 
     output_names = [node.name for node in quantsim.model.model.graph.input]
     for node in quantsim.model.model.graph.node:
         output_names.extend(node.output)
-    output_names = [name[:-len('_updated')] for name in output_names if name.endswith('_updated')]
-    output_names = [name.replace('/', '_').replace('.', '_') for name in output_names]  # sanitization to get valid file names
+    output_names = [
+        name[: -len("_updated")] for name in output_names if name.endswith("_updated")
+    ]
+    output_names = [
+        name.replace("/", "_").replace(".", "_") for name in output_names
+    ]  # sanitization to get valid file names
 
     return quantsim, output_names, input_dict
 
 
 class TestLayerOutput:
     def test_get_original_model_outputs(self):
-        """ Test whether outputs are generated for all the layers of an original model """
+        """Test whether outputs are generated for all the layers of an original model"""
 
         # Get original model artifacts
         model, output_names, input_dict = get_original_model_artifacts()
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-outputs of original model
         layer_output = LayerOutput(model, providers, temp_dir_path)
@@ -99,24 +107,27 @@ class TestLayerOutput:
 
         # Verify whether all outputs are generated and have sanitized names
         for name in output_names:
-            assert name in output_name_to_output_val_dict, \
+            assert name in output_name_to_output_val_dict, (
                 "Output not generated: " + name
+            )
 
         # Verify whether captured outputs are correct. This can only be checked for final output of the model
         session = QuantizationSimModel.build_session(model, providers)
-        assert np.array_equal(session.run(None, input_dict)[0], output_name_to_output_val_dict['output'])
+        assert np.array_equal(
+            session.run(None, input_dict)[0], output_name_to_output_val_dict["output"]
+        )
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
     def test_get_quantsim_model_outputs(self):
-        """ Test whether outputs are generated for all the layers of a quantsim model """
+        """Test whether outputs are generated for all the layers of a quantsim model"""
 
         # Get quantsim artifacts
         quantsim, output_names, input_dict = get_quantsim_artifacts()
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-outputs of quantsim model
         layer_output = LayerOutput(quantsim.model.model, providers, temp_dir_path)
@@ -124,12 +135,15 @@ class TestLayerOutput:
 
         # Verify whether all outputs are generated and have sanitized names
         for name in output_names:
-            assert name in output_name_to_output_val_dict, \
+            assert name in output_name_to_output_val_dict, (
                 "Output not generated: " + name
+            )
 
         # Verify whether captured outputs are correct. This can only be checked for final output of the model
         session = QuantizationSimModel.build_session(quantsim.model.model, providers)
-        assert np.array_equal(session.run(None, input_dict)[0], output_name_to_output_val_dict['output'])
+        assert np.array_equal(
+            session.run(None, input_dict)[0], output_name_to_output_val_dict["output"]
+        )
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
@@ -160,7 +174,7 @@ def get_dataset_artifacts():
 
 class TestLayerOutputUtil:
     def test_generate_layer_outputs(self):
-        """ Test whether input files and corresponding layer-output files are generated """
+        """Test whether input files and corresponding layer-output files are generated"""
 
         # Get quantsim artifacts
         quantsim, output_names, input_dict = get_quantsim_artifacts()
@@ -169,41 +183,64 @@ class TestLayerOutputUtil:
         dummy_dataset, dummy_data_loader, data_count = get_dataset_artifacts()
 
         temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, 'temp_dir')
+        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Generate layer-outputs
         layer_out_dict_list = []
-        layer_output_util = LayerOutputUtil(model=quantsim.model.model, dir_path=temp_dir_path)
+        layer_output_util = LayerOutputUtil(
+            model=quantsim.model.model, dir_path=temp_dir_path
+        )
         for input_batch in dummy_data_loader:
             for single_input in input_batch:
-                layer_output_util.generate_layer_outputs(single_input.unsqueeze(0).numpy())
-                layer_out_dict_list.append(copy.deepcopy(layer_output_util.layer_output.get_outputs(
-                    {"input": single_input.unsqueeze(0).numpy()})))
+                layer_output_util.generate_layer_outputs(
+                    single_input.unsqueeze(0).numpy()
+                )
+                layer_out_dict_list.append(
+                    copy.deepcopy(
+                        layer_output_util.layer_output.get_outputs(
+                            {"input": single_input.unsqueeze(0).numpy()}
+                        )
+                    )
+                )
 
         # Verify number of inputs
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, 'inputs')))
+        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "inputs")))
 
         # Verify number of layer-output folders
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, 'outputs')))
+        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "outputs")))
 
         # Verify number of layer-outputs
-        saved_layer_outputs = os.listdir(os.path.join(temp_dir_path, 'outputs', 'layer_outputs_0'))
-        saved_layer_outputs = [i[:-len('.raw')] for i in saved_layer_outputs]
+        saved_layer_outputs = os.listdir(
+            os.path.join(temp_dir_path, "outputs", "layer_outputs_0")
+        )
+        saved_layer_outputs = [i[: -len(".raw")] for i in saved_layer_outputs]
         for name in output_names:
             assert name in saved_layer_outputs
 
         # Ensure generated layer-outputs can be correctly loaded for layer-output comparison
-        saved_last_layer_output = np.fromfile(os.path.join(temp_dir_path, 'outputs', 'layer_outputs_0', 'output.raw'), dtype=np.float32).reshape((1, 10))
+        saved_last_layer_output = np.fromfile(
+            os.path.join(temp_dir_path, "outputs", "layer_outputs_0", "output.raw"),
+            dtype=np.float32,
+        ).reshape((1, 10))
         session = QuantizationSimModel.build_session(quantsim.model.model, providers)
-        input_dict = {'input': np.expand_dims(dummy_dataset.__getitem__(0).numpy(), axis=0)}
+        input_dict = {
+            "input": np.expand_dims(dummy_dataset.__getitem__(0).numpy(), axis=0)
+        }
         assert np.array_equal(session.run(None, input_dict)[0], saved_last_layer_output)
 
         # Ensure the saved outputs are with axis-transform
         for idx, layer_out_dict in enumerate(layer_out_dict_list):
-            layer_out = layer_out_dict['conv_output_3']
+            layer_out = layer_out_dict["conv_output_3"]
 
-            saved_conv_output = np.fromfile(os.path.join(temp_dir_path, 'outputs', f'layer_outputs_{idx}',
-                                                         'conv_output_3.raw'), dtype=np.float32).reshape(layer_out.shape)
+            saved_conv_output = np.fromfile(
+                os.path.join(
+                    temp_dir_path,
+                    "outputs",
+                    f"layer_outputs_{idx}",
+                    "conv_output_3.raw",
+                ),
+                dtype=np.float32,
+            ).reshape(layer_out.shape)
             np.testing.assert_array_equal(layer_out, saved_conv_output)
 
         # Delete temp_dir

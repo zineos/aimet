@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Utilities for working with ModelOptimization C++ library """
+"""Utilities for working with ModelOptimization C++ library"""
+
 from typing import List
 import torch
 
@@ -48,10 +49,12 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
 
 class PymoSvdUtils:
-    """ Utilities for working with SVD ModelOptimization C++ library """
+    """Utilities for working with SVD ModelOptimization C++ library"""
 
     @classmethod
-    def configure_layers_in_pymo_svd(cls, layers: List[Layer], cost_metric: CostMetric, svd_lib_ref):
+    def configure_layers_in_pymo_svd(
+        cls, layers: List[Layer], cost_metric: CostMetric, svd_lib_ref
+    ):
         """
         Configure layers with the pymo svd library
         :param layers: List of layers to configure
@@ -103,22 +106,22 @@ class PymoSvdUtils:
 
     @staticmethod
     def _get_pymo_layer_type(module: torch.nn.Module):
-
         if isinstance(module, torch.nn.Conv2d):
             return pymo.LAYER_TYPE_CONV
 
         if isinstance(module, torch.nn.Linear):
             return pymo.LAYER_TYPE_FC
 
-        raise AssertionError("Unsupported layer_type. Only Linear and Conv2D layers are currently supported")
+        raise AssertionError(
+            "Unsupported layer_type. Only Linear and Conv2D layers are currently supported"
+        )
 
     @staticmethod
     def _get_pymo_cost_metric(metric: CostMetric):
-
         if metric == CostMetric.memory:
             return pymo.COST_TYPE_MEMORY
 
         if metric == CostMetric.mac:
             return pymo.COST_TYPE_MAC
 
-        raise AssertionError('Unknown cost metric')
+        raise AssertionError("Unknown cost metric")

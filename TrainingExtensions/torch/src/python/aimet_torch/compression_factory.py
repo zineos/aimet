@@ -35,32 +35,63 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Provides a factory to construct various AIMET model compression classes based on a scheme """
+"""Provides a factory to construct various AIMET model compression classes based on a scheme"""
 
 from typing import Tuple, List
 import torch
 
-from aimet_common.defs import CostMetric, RankSelectScheme, EvalFunction, LayerCompRatioPair
-from aimet_common.cost_calculator import SpatialSvdCostCalculator, WeightSvdCostCalculator
-from aimet_common.comp_ratio_select import GreedyCompRatioSelectAlgo, ManualCompRatioSelectAlgo
+from aimet_common.defs import (
+    CostMetric,
+    RankSelectScheme,
+    EvalFunction,
+    LayerCompRatioPair,
+)
+from aimet_common.cost_calculator import (
+    SpatialSvdCostCalculator,
+    WeightSvdCostCalculator,
+)
+from aimet_common.comp_ratio_select import (
+    GreedyCompRatioSelectAlgo,
+    ManualCompRatioSelectAlgo,
+)
 from aimet_common.comp_ratio_rounder import RankRounder, ChannelRounder
 from aimet_common.compression_algo import CompressionAlgo
 from aimet_common.bokeh_plots import BokehServerSession
 
 from aimet_torch.utils import create_rand_tensors_given_shapes, get_device
-from aimet_torch.defs import SpatialSvdParameters, WeightSvdParameters, ChannelPruningParameters, ModuleCompRatioPair
-from aimet_torch.layer_selector import ConvFcLayerSelector, ConvNoDepthwiseLayerSelector, ManualLayerSelector
+from aimet_torch.defs import (
+    SpatialSvdParameters,
+    WeightSvdParameters,
+    ChannelPruningParameters,
+    ModuleCompRatioPair,
+)
+from aimet_torch.layer_selector import (
+    ConvFcLayerSelector,
+    ConvNoDepthwiseLayerSelector,
+    ManualLayerSelector,
+)
 from aimet_torch.layer_database import LayerDatabase
 from aimet_torch.svd.svd_pruner import SpatialSvdPruner, PyWeightSvdPruner
-from aimet_torch.channel_pruning.channel_pruner import InputChannelPruner, ChannelPruningCostCalculator
+from aimet_torch.channel_pruning.channel_pruner import (
+    InputChannelPruner,
+    ChannelPruningCostCalculator,
+)
+
 
 class CompressionFactory:
-    """ Factory to construct various AIMET model compression classes based on a scheme """
+    """Factory to construct various AIMET model compression classes based on a scheme"""
 
     @classmethod
-    def create_spatial_svd_algo(cls, model: torch.nn.Module, eval_callback: EvalFunction, eval_iterations,
-                                input_shape: Tuple, cost_metric: CostMetric,
-                                params: SpatialSvdParameters, bokeh_session: BokehServerSession) -> CompressionAlgo:
+    def create_spatial_svd_algo(
+        cls,
+        model: torch.nn.Module,
+        eval_callback: EvalFunction,
+        eval_iterations,
+        input_shape: Tuple,
+        cost_metric: CostMetric,
+        params: SpatialSvdParameters,
+        bokeh_session: BokehServerSession,
+    ) -> CompressionAlgo:
         """
         Factory method to construct SpatialSvdCompressionAlgo
 
@@ -92,37 +123,64 @@ class CompressionFactory:
         # Create a comp-ratio selection algorithm
         if params.mode == SpatialSvdParameters.Mode.auto:
             greedy_params = params.mode_params.greedy_params
-            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db, pruner, cost_calculator, eval_callback,
-                                                               eval_iterations, cost_metric,
-                                                               greedy_params.target_comp_ratio,
-                                                               greedy_params.num_comp_ratio_candidates,
-                                                               greedy_params.use_monotonic_fit,
-                                                               greedy_params.saved_eval_scores_dict,
-                                                               comp_ratio_rounding_algo, use_cuda,
-                                                               bokeh_session=bokeh_session)
+            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+                layer_db,
+                pruner,
+                cost_calculator,
+                eval_callback,
+                eval_iterations,
+                cost_metric,
+                greedy_params.target_comp_ratio,
+                greedy_params.num_comp_ratio_candidates,
+                greedy_params.use_monotonic_fit,
+                greedy_params.saved_eval_scores_dict,
+                comp_ratio_rounding_algo,
+                use_cuda,
+                bokeh_session=bokeh_session,
+            )
             layer_selector = ConvNoDepthwiseLayerSelector()
             modules_to_ignore = params.mode_params.modules_to_ignore
         else:
             # Convert (module,comp-ratio) pairs to (layer,comp-ratio) pairs
-            layer_comp_ratio_pairs = cls._get_layer_pairs(layer_db, params.mode_params.list_of_module_comp_ratio_pairs)
+            layer_comp_ratio_pairs = cls._get_layer_pairs(
+                layer_db, params.mode_params.list_of_module_comp_ratio_pairs
+            )
 
-            comp_ratio_select_algo = ManualCompRatioSelectAlgo(layer_db,
-                                                               layer_comp_ratio_pairs,
-                                                               comp_ratio_rounding_algo, cost_metric=cost_metric)
+            comp_ratio_select_algo = ManualCompRatioSelectAlgo(
+                layer_db,
+                layer_comp_ratio_pairs,
+                comp_ratio_rounding_algo,
+                cost_metric=cost_metric,
+            )
 
             layer_selector = ManualLayerSelector(layer_comp_ratio_pairs)
             modules_to_ignore = []
 
         # Create the overall Spatial SVD compression algorithm
-        spatial_svd_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner, eval_callback,
-                                           layer_selector, modules_to_ignore, cost_calculator, use_cuda)
+        spatial_svd_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            eval_callback,
+            layer_selector,
+            modules_to_ignore,
+            cost_calculator,
+            use_cuda,
+        )
 
         return spatial_svd_algo
 
     @classmethod
-    def create_channel_pruning_algo(cls, model: torch.nn.Module, eval_callback: EvalFunction, eval_iterations,
-                                    input_shape: Tuple, cost_metric: CostMetric,
-                                    params: ChannelPruningParameters, bokeh_session: BokehServerSession) -> CompressionAlgo:
+    def create_channel_pruning_algo(
+        cls,
+        model: torch.nn.Module,
+        eval_callback: EvalFunction,
+        eval_iterations,
+        input_shape: Tuple,
+        cost_metric: CostMetric,
+        params: ChannelPruningParameters,
+        bokeh_session: BokehServerSession,
+    ) -> CompressionAlgo:
         """
         Factory method to construct ChannelPruningCompressionAlgo
 
@@ -147,9 +205,12 @@ class CompressionFactory:
         use_cuda = next(model.parameters()).is_cuda
 
         # Create a pruner
-        pruner = InputChannelPruner(data_loader=params.data_loader, input_shape=input_shape,
-                                    num_reconstruction_samples=params.num_reconstruction_samples,
-                                    allow_custom_downsample_ops=params.allow_custom_downsample_ops)
+        pruner = InputChannelPruner(
+            data_loader=params.data_loader,
+            input_shape=input_shape,
+            num_reconstruction_samples=params.num_reconstruction_samples,
+            allow_custom_downsample_ops=params.allow_custom_downsample_ops,
+        )
         comp_ratio_rounding_algo = ChannelRounder(params.multiplicity)
 
         # Create a comp-ratio selection algorithm
@@ -157,38 +218,65 @@ class CompressionFactory:
 
         if params.mode == ChannelPruningParameters.Mode.auto:
             greedy_params = params.mode_params.greedy_params
-            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db, pruner, cost_calculator, eval_callback,
-                                                               eval_iterations, cost_metric,
-                                                               greedy_params.target_comp_ratio,
-                                                               greedy_params.num_comp_ratio_candidates,
-                                                               greedy_params.use_monotonic_fit,
-                                                               greedy_params.saved_eval_scores_dict,
-                                                               comp_ratio_rounding_algo, use_cuda,
-                                                               bokeh_session=bokeh_session)
+            comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+                layer_db,
+                pruner,
+                cost_calculator,
+                eval_callback,
+                eval_iterations,
+                cost_metric,
+                greedy_params.target_comp_ratio,
+                greedy_params.num_comp_ratio_candidates,
+                greedy_params.use_monotonic_fit,
+                greedy_params.saved_eval_scores_dict,
+                comp_ratio_rounding_algo,
+                use_cuda,
+                bokeh_session=bokeh_session,
+            )
             layer_selector = ConvNoDepthwiseLayerSelector()
             modules_to_ignore = params.mode_params.modules_to_ignore
 
         else:
             # Convert (module,comp-ratio) pairs to (layer,comp-ratio) pairs
-            layer_comp_ratio_pairs = cls._get_layer_pairs(layer_db, params.mode_params.list_of_module_comp_ratio_pairs)
+            layer_comp_ratio_pairs = cls._get_layer_pairs(
+                layer_db, params.mode_params.list_of_module_comp_ratio_pairs
+            )
 
-            comp_ratio_select_algo = ManualCompRatioSelectAlgo(layer_db,
-                                                               layer_comp_ratio_pairs,
-                                                               comp_ratio_rounding_algo, cost_metric=cost_metric)
+            comp_ratio_select_algo = ManualCompRatioSelectAlgo(
+                layer_db,
+                layer_comp_ratio_pairs,
+                comp_ratio_rounding_algo,
+                cost_metric=cost_metric,
+            )
 
             layer_selector = ManualLayerSelector(layer_comp_ratio_pairs)
             modules_to_ignore = []
 
         # Create the overall Channel Pruning compression algorithm
-        channel_pruning_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner, eval_callback,
-                                               layer_selector, modules_to_ignore, cost_calculator, use_cuda)
+        channel_pruning_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            eval_callback,
+            layer_selector,
+            modules_to_ignore,
+            cost_calculator,
+            use_cuda,
+        )
 
         return channel_pruning_algo
 
     @classmethod
-    def create_weight_svd_algo(cls, model: torch.nn.Module, eval_callback: EvalFunction, eval_iterations,
-                               input_shape: Tuple, cost_metric: CostMetric,
-                               params: WeightSvdParameters, bokeh_session) -> CompressionAlgo:
+    def create_weight_svd_algo(
+        cls,
+        model: torch.nn.Module,
+        eval_callback: EvalFunction,
+        eval_iterations,
+        input_shape: Tuple,
+        cost_metric: CostMetric,
+        params: WeightSvdParameters,
+        bokeh_session,
+    ) -> CompressionAlgo:
         """
         Factory method to construct WeightSvdCompressionAlgo
 
@@ -222,49 +310,71 @@ class CompressionFactory:
             # greedy
             if params.mode_params.rank_select_scheme is RankSelectScheme.greedy:
                 greedy_params = params.mode_params.select_params
-                comp_ratio_select_algo = GreedyCompRatioSelectAlgo(layer_db=layer_db,
-                                                                   pruner=pruner,
-                                                                   cost_calculator=cost_calculator,
-                                                                   eval_func=eval_callback,
-                                                                   eval_iterations=eval_iterations,
-                                                                   cost_metric=cost_metric,
-                                                                   target_comp_ratio=greedy_params.target_comp_ratio,
-                                                                   num_candidates=greedy_params.num_comp_ratio_candidates,
-                                                                   use_monotonic_fit=greedy_params.use_monotonic_fit,
-                                                                   saved_eval_scores_dict=greedy_params.saved_eval_scores_dict,
-                                                                   comp_ratio_rounding_algo=comp_ratio_rounding_algo,
-                                                                   use_cuda=use_cuda,
-                                                                   bokeh_session=bokeh_session)
+                comp_ratio_select_algo = GreedyCompRatioSelectAlgo(
+                    layer_db=layer_db,
+                    pruner=pruner,
+                    cost_calculator=cost_calculator,
+                    eval_func=eval_callback,
+                    eval_iterations=eval_iterations,
+                    cost_metric=cost_metric,
+                    target_comp_ratio=greedy_params.target_comp_ratio,
+                    num_candidates=greedy_params.num_comp_ratio_candidates,
+                    use_monotonic_fit=greedy_params.use_monotonic_fit,
+                    saved_eval_scores_dict=greedy_params.saved_eval_scores_dict,
+                    comp_ratio_rounding_algo=comp_ratio_rounding_algo,
+                    use_cuda=use_cuda,
+                    bokeh_session=bokeh_session,
+                )
             else:
-                raise ValueError("Unknown Rank selection scheme: {}".format(params.AutoModeParams.rank_select_scheme))
+                raise ValueError(
+                    "Unknown Rank selection scheme: {}".format(
+                        params.AutoModeParams.rank_select_scheme
+                    )
+                )
 
             layer_selector = ConvFcLayerSelector()
             modules_to_ignore = params.mode_params.modules_to_ignore
 
         else:
             # Convert (module,comp-ratio) pairs to (layer,comp-ratio) pairs
-            layer_comp_ratio_pairs = cls._get_layer_pairs(layer_db, params.mode_params.list_of_module_comp_ratio_pairs)
+            layer_comp_ratio_pairs = cls._get_layer_pairs(
+                layer_db, params.mode_params.list_of_module_comp_ratio_pairs
+            )
 
-            comp_ratio_select_algo = ManualCompRatioSelectAlgo(layer_db,
-                                                               layer_comp_ratio_pairs,
-                                                               comp_ratio_rounding_algo, cost_metric=cost_metric)
+            comp_ratio_select_algo = ManualCompRatioSelectAlgo(
+                layer_db,
+                layer_comp_ratio_pairs,
+                comp_ratio_rounding_algo,
+                cost_metric=cost_metric,
+            )
 
             layer_selector = ManualLayerSelector(layer_comp_ratio_pairs)
             modules_to_ignore = []
 
         # Create the overall Weight SVD compression algorithm
-        weight_svd_algo = CompressionAlgo(layer_db, comp_ratio_select_algo, pruner, eval_callback,
-                                          layer_selector, modules_to_ignore, cost_calculator, use_cuda)
+        weight_svd_algo = CompressionAlgo(
+            layer_db,
+            comp_ratio_select_algo,
+            pruner,
+            eval_callback,
+            layer_selector,
+            modules_to_ignore,
+            cost_calculator,
+            use_cuda,
+        )
 
         return weight_svd_algo
 
     @staticmethod
-    def _get_layer_pairs(layer_db: LayerDatabase, module_comp_ratio_pairs: List[ModuleCompRatioPair]):
+    def _get_layer_pairs(
+        layer_db: LayerDatabase, module_comp_ratio_pairs: List[ModuleCompRatioPair]
+    ):
         layer_comp_ratio_pairs = []
 
         for pair in module_comp_ratio_pairs:
-            layer_comp_ratio_pair = LayerCompRatioPair(layer_db.find_layer_by_module(pair.module),
-                                                       pair.comp_ratio)
+            layer_comp_ratio_pair = LayerCompRatioPair(
+                layer_db.find_layer_by_module(pair.module), pair.comp_ratio
+            )
             layer_comp_ratio_pairs.append(layer_comp_ratio_pair)
 
         return layer_comp_ratio_pairs

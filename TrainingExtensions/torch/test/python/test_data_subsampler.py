@@ -66,16 +66,25 @@ class TestNet(nn.Module):
 
 
 class TestDataSubSampler(unittest.TestCase):
-
-    @unittest.mock.patch('numpy.random.choice')
+    @unittest.mock.patch("numpy.random.choice")
     def test_subsampled_output_data(self, np_choice_function):
-
-        """ Test to collect activations (input from model_copy and output from model for conv2 layer) and compare
-            with sub sampled output data
+        """Test to collect activations (input from model_copy and output from model for conv2 layer) and compare
+        with sub sampled output data
         """
         # hardcoded mocked 10 sample locations
         # (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (6, 6), (5, 5)
-        np_choice_function.return_value = heights = widths = [0, 1, 2, 3, 4, 5, 6, 7, 6, 5]
+        np_choice_function.return_value = heights = widths = [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            6,
+            5,
+        ]
 
         orig_model = TestNet()
         comp_model = copy.deepcopy(orig_model)
@@ -85,39 +94,59 @@ class TestDataSubSampler(unittest.TestCase):
         num_reconstruction_samples = 10
 
         # create fake data loader with image size (1, 28, 28)
-        data_loader = create_fake_data_loader(dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28))
+        data_loader = create_fake_data_loader(
+            dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28)
+        )
 
-        _, conv2_output_data = DataSubSampler.get_sub_sampled_data(orig_layer=orig_model.conv2,
-                                                                   pruned_layer=comp_model.conv2,
-                                                                   orig_model=orig_model,
-                                                                   comp_model=comp_model,
-                                                                   data_loader=data_loader,
-                                                                   num_reconstruction_samples=
-                                                                   num_reconstruction_samples)
+        _, conv2_output_data = DataSubSampler.get_sub_sampled_data(
+            orig_layer=orig_model.conv2,
+            pruned_layer=comp_model.conv2,
+            orig_model=orig_model,
+            comp_model=comp_model,
+            data_loader=data_loader,
+            num_reconstruction_samples=num_reconstruction_samples,
+        )
 
         # collect the output data of conv2 from original model using same data loader
         iterator = data_loader.__iter__()
         images_in_one_batch, _ = iterator.__next__()
         conv1_output = orig_model.conv1(images_in_one_batch)
         conv2_input = conv1_output
-        conv2_output = orig_model.conv2(functional.relu(functional.max_pool2d(conv2_input, 2))).\
-            detach().cpu().numpy()
+        conv2_output = (
+            orig_model.conv2(functional.relu(functional.max_pool2d(conv2_input, 2)))
+            .detach()
+            .cpu()
+            .numpy()
+        )
 
         # compare output data with sub sampled output data
         for sample in range(num_reconstruction_samples):
+            self.assertTrue(
+                np.array_equal(
+                    conv2_output_data[sample, :],
+                    conv2_output[0, :, heights[sample], widths[sample]],
+                )
+            )
 
-            self.assertTrue(np.array_equal(conv2_output_data[sample, :],
-                                           conv2_output[0, :, heights[sample], widths[sample]]))
-
-    @unittest.mock.patch('numpy.random.choice')
+    @unittest.mock.patch("numpy.random.choice")
     def test_subsampled_input_data(self, np_choice_function):
-
-        """ Test to collect activations (input from model_copy and output from model for conv2 layer) and compare
-            with sub sampled input data
+        """Test to collect activations (input from model_copy and output from model for conv2 layer) and compare
+        with sub sampled input data
         """
         # hardcoded mocked 10 sample locations
         # (0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (6, 6), (5, 5)
-        np_choice_function.return_value = heights = widths = [0, 1, 2, 3, 4, 5, 6, 7, 6, 5]
+        np_choice_function.return_value = heights = widths = [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            6,
+            5,
+        ]
 
         orig_model = TestNet()
         comp_model = copy.deepcopy(orig_model)
@@ -127,14 +156,18 @@ class TestDataSubSampler(unittest.TestCase):
         num_reconstruction_samples = 10
 
         # create fake data loader with image size (1, 28, 28)
-        data_loader = create_fake_data_loader(dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28))
+        data_loader = create_fake_data_loader(
+            dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28)
+        )
 
-        conv2_input_data, _ = DataSubSampler.get_sub_sampled_data(orig_layer=orig_model.conv2,
-                                                                  pruned_layer=comp_model.conv2,
-                                                                  orig_model=orig_model,
-                                                                  comp_model=comp_model,
-                                                                  data_loader=data_loader,
-                                                                  num_reconstruction_samples=num_reconstruction_samples)
+        conv2_input_data, _ = DataSubSampler.get_sub_sampled_data(
+            orig_layer=orig_model.conv2,
+            pruned_layer=comp_model.conv2,
+            orig_model=orig_model,
+            comp_model=comp_model,
+            data_loader=data_loader,
+            num_reconstruction_samples=num_reconstruction_samples,
+        )
 
         # collect the input data of conv2 from compressed model using same data loader
 
@@ -146,15 +179,24 @@ class TestDataSubSampler(unittest.TestCase):
         kernel_size_h, kernel_size_w = comp_model.conv2.kernel_size
 
         for sample in range(num_reconstruction_samples):
-
-            self.assertTrue(np.array_equal(conv2_input_data[sample, :, :, :],
-                                           conv2_input[0, :, heights[sample]:heights[sample] + kernel_size_h,
-                                           widths[sample]:widths[sample] + kernel_size_w].detach().cpu().numpy()))
+            self.assertTrue(
+                np.array_equal(
+                    conv2_input_data[sample, :, :, :],
+                    conv2_input[
+                        0,
+                        :,
+                        heights[sample] : heights[sample] + kernel_size_h,
+                        widths[sample] : widths[sample] + kernel_size_w,
+                    ]
+                    .detach()
+                    .cpu()
+                    .numpy(),
+                )
+            )
 
     def test_subsampled_output_data_fc(self):
-
-        """ Test to collect activations (input from model_copy and output from model for fc1 layer) and compare
-            with sub sampled output data
+        """Test to collect activations (input from model_copy and output from model for fc1 layer) and compare
+        with sub sampled output data
         """
         orig_model = TestNet()
         comp_model = copy.deepcopy(orig_model)
@@ -164,17 +206,23 @@ class TestDataSubSampler(unittest.TestCase):
         num_reconstruction_samples = 5000
 
         # create fake data loader with image size (1, 28, 28)
-        data_loader = create_fake_data_loader(dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28))
+        data_loader = create_fake_data_loader(
+            dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28)
+        )
 
-        _, fc1_output_data = DataSubSampler.get_sub_sampled_data(orig_layer=orig_model.fc1,
-                                                                 pruned_layer=comp_model.fc1,
-                                                                 orig_model=orig_model,
-                                                                 comp_model=comp_model,
-                                                                 data_loader=data_loader,
-                                                                 num_reconstruction_samples=
-                                                                 num_reconstruction_samples)
+        _, fc1_output_data = DataSubSampler.get_sub_sampled_data(
+            orig_layer=orig_model.fc1,
+            pruned_layer=comp_model.fc1,
+            orig_model=orig_model,
+            comp_model=comp_model,
+            data_loader=data_loader,
+            num_reconstruction_samples=num_reconstruction_samples,
+        )
 
-        self.assertTrue(fc1_output_data.shape[0] * fc1_output_data.shape[1] > num_reconstruction_samples)
+        self.assertTrue(
+            fc1_output_data.shape[0] * fc1_output_data.shape[1]
+            > num_reconstruction_samples
+        )
 
         # collect the output data of fc1 from original model using same data loader
         iterator = data_loader.__iter__()
@@ -182,7 +230,9 @@ class TestDataSubSampler(unittest.TestCase):
 
         conv1_output = orig_model.conv1(images_in_one_batch)
         conv2_input = conv1_output
-        conv2_output = orig_model.conv2(functional.relu(functional.max_pool2d(conv2_input, 2)))
+        conv2_output = orig_model.conv2(
+            functional.relu(functional.max_pool2d(conv2_input, 2))
+        )
         fc1_input = conv2_output
         fc1_input = functional.relu(functional.max_pool2d(fc1_input, 2))
         fc1_input = fc1_input.view(fc1_input.size(0), -1)
@@ -192,9 +242,8 @@ class TestDataSubSampler(unittest.TestCase):
         self.assertTrue(np.array_equal(fc1_output_data[0:10], fc1_output))
 
     def test_subsampled_input_data_fc(self):
-
-        """ Test to collect activations (input from model_copy and output from model for fc1 layer) and compare
-            with sub sampled output data
+        """Test to collect activations (input from model_copy and output from model for fc1 layer) and compare
+        with sub sampled output data
         """
         orig_model = TestNet()
         comp_model = copy.deepcopy(orig_model)
@@ -204,17 +253,23 @@ class TestDataSubSampler(unittest.TestCase):
         num_reconstruction_samples = 5000
 
         # create fake data loader with image size (1, 28, 28)
-        data_loader = create_fake_data_loader(dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28))
+        data_loader = create_fake_data_loader(
+            dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 28, 28)
+        )
 
-        fc1_input_data, _ = DataSubSampler.get_sub_sampled_data(orig_layer=orig_model.fc1,
-                                                                pruned_layer=comp_model.fc1,
-                                                                orig_model=orig_model,
-                                                                comp_model=comp_model,
-                                                                data_loader=data_loader,
-                                                                num_reconstruction_samples=
-                                                                num_reconstruction_samples)
+        fc1_input_data, _ = DataSubSampler.get_sub_sampled_data(
+            orig_layer=orig_model.fc1,
+            pruned_layer=comp_model.fc1,
+            orig_model=orig_model,
+            comp_model=comp_model,
+            data_loader=data_loader,
+            num_reconstruction_samples=num_reconstruction_samples,
+        )
 
-        self.assertTrue(fc1_input_data.shape[0] * fc1_input_data.shape[1] > num_reconstruction_samples)
+        self.assertTrue(
+            fc1_input_data.shape[0] * fc1_input_data.shape[1]
+            > num_reconstruction_samples
+        )
 
         # collect the output data of fc1 from original model using same data loader
         iterator = data_loader.__iter__()
@@ -222,7 +277,9 @@ class TestDataSubSampler(unittest.TestCase):
 
         conv1_output = orig_model.conv1(images_in_one_batch)
         conv2_input = conv1_output
-        conv2_output = orig_model.conv2(functional.relu(functional.max_pool2d(conv2_input, 2)))
+        conv2_output = orig_model.conv2(
+            functional.relu(functional.max_pool2d(conv2_input, 2))
+        )
         fc1_input = conv2_output
         fc1_input = functional.relu(functional.max_pool2d(fc1_input, 2))
         fc1_input = fc1_input.view(fc1_input.size(0), -1).detach().cpu().numpy()
@@ -236,7 +293,7 @@ class TestDataSubSampler(unittest.TestCase):
         test _forward_pass of DataSubsampler with single input
         """
         model = TestNet()
-        model_on_gpu = TestNet().to(device=torch.device('cuda:0'))
+        model_on_gpu = TestNet().to(device=torch.device("cuda:0"))
 
         # 1) input on cpu
         data = torch.rand(1, 1, 28, 28)
@@ -245,19 +302,19 @@ class TestDataSubSampler(unittest.TestCase):
         _ = DataSubSampler._forward_pass(model_on_gpu, data)
 
         # 2) input on gpu
-        data = torch.rand(1, 1, 28, 28).to(device=torch.device('cuda:0'))
+        data = torch.rand(1, 1, 28, 28).to(device=torch.device("cuda:0"))
 
         _ = DataSubSampler._forward_pass(model, data)
         _ = DataSubSampler._forward_pass(model_on_gpu, data)
 
         # 3) input on gpu - list
-        data = [torch.rand(1, 1, 28, 28).to(device=torch.device('cuda:0'))]
+        data = [torch.rand(1, 1, 28, 28).to(device=torch.device("cuda:0"))]
 
         _ = DataSubSampler._forward_pass(model, data)
         _ = DataSubSampler._forward_pass(model_on_gpu, data)
 
         # 1) input on cpu - tuple
-        data = (torch.rand(1, 1, 28, 28))
+        data = torch.rand(1, 1, 28, 28)
 
         _ = DataSubSampler._forward_pass(model, data)
         _ = DataSubSampler._forward_pass(model_on_gpu, data)
@@ -272,15 +329,20 @@ class TestDataSubSampler(unittest.TestCase):
         data = [[torch.rand(1, 3, 28, 28), torch.rand(1, 3, 18, 18)] for i in range(2)]
 
         model = MultiInput()
-        model_on_gpu = MultiInput().to(device=torch.device('cuda:0'))
+        model_on_gpu = MultiInput().to(device=torch.device("cuda:0"))
 
         _ = DataSubSampler._forward_pass(model, data[0])
 
         _ = DataSubSampler._forward_pass(model_on_gpu, data[1])
 
         # 2) one input on CPU another on GPU, model CPU and GPU both
-        data = [[torch.rand(1, 3, 28, 28).to(device=torch.device('cuda:0')),
-                 torch.rand(1, 3, 18, 18)] for i in range(2)]
+        data = [
+            [
+                torch.rand(1, 3, 28, 28).to(device=torch.device("cuda:0")),
+                torch.rand(1, 3, 18, 18),
+            ]
+            for i in range(2)
+        ]
 
         _ = DataSubSampler._forward_pass(model, data[0])
 
@@ -288,8 +350,13 @@ class TestDataSubSampler(unittest.TestCase):
 
         # 3) both inputs on GPU, model CPU and GPU both - using list
 
-        data = [[torch.rand(1, 3, 28, 28).to(device=torch.device('cuda:0')),
-                 torch.rand(1, 3, 18, 18).to(device=torch.device('cuda:0'))] for i in range(2)]
+        data = [
+            [
+                torch.rand(1, 3, 28, 28).to(device=torch.device("cuda:0")),
+                torch.rand(1, 3, 18, 18).to(device=torch.device("cuda:0")),
+            ]
+            for i in range(2)
+        ]
 
         _ = DataSubSampler._forward_pass(model, data[0])
 
@@ -297,8 +364,13 @@ class TestDataSubSampler(unittest.TestCase):
 
         # 4) both inputs on GPU, model CPU and GPU both - using tuple
 
-        data = ([torch.rand(1, 3, 28, 28).to(device=torch.device('cuda:0')),
-                 torch.rand(1, 3, 18, 18).to(device=torch.device('cuda:0'))] for i in range(2))
+        data = (
+            [
+                torch.rand(1, 3, 28, 28).to(device=torch.device("cuda:0")),
+                torch.rand(1, 3, 18, 18).to(device=torch.device("cuda:0")),
+            ]
+            for i in range(2)
+        )
 
         _ = DataSubSampler._forward_pass(model, next(data))
 

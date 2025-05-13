@@ -37,7 +37,7 @@
 # =============================================================================
 # pylint: skip-file
 
-""" Quantized LoRA layers """
+"""Quantized LoRA layers"""
 
 __all__ = ["QuantizedLinear"]
 
@@ -52,8 +52,7 @@ else:
     from .true_quant import QuantizationMixin, _dispatch
     from .modules.custom import QuantizedAdd, QuantizedMultiply
 
-
-    class _TensorDict(torch.nn.ParameterDict): # pylint: disable=abstract-method
+    class _TensorDict(torch.nn.ParameterDict):  # pylint: disable=abstract-method
         def __setitem__(self, key, value):
             if not isinstance(value, torch.Tensor):
                 value = torch.tensor(value)
@@ -62,9 +61,8 @@ else:
 
         def __getitem__(self, key) -> torch.Tensor:
             ret = super().__getitem__(key).detach()
-            setattr(ret, '_consumer', key)
+            setattr(ret, "_consumer", key)
             return ret
-
 
     class QuantizedLora(QuantizationMixin):
         """
@@ -85,12 +83,15 @@ else:
             # pylint: disable=no-member
             self.scaling = _TensorDict(self.scaling)
 
-            self.mul = nn.ModuleDict({
-                adapter_name: QuantizedMultiply() for adapter_name in self.lora_A.keys()
-            })
-            self.add = nn.ModuleDict({
-                adapter_name: QuantizedAdd() for adapter_name in self.lora_A.keys()
-            })
+            self.mul = nn.ModuleDict(
+                {
+                    adapter_name: QuantizedMultiply()
+                    for adapter_name in self.lora_A.keys()
+                }
+            )
+            self.add = nn.ModuleDict(
+                {adapter_name: QuantizedAdd() for adapter_name in self.lora_A.keys()}
+            )
 
         def _mul(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
             """
@@ -101,17 +102,17 @@ else:
             is an entry of self.scaling.
             Otherwise, it will fall back to normal torch.Tensor.mul.
             """
-            adapter_name = getattr(x, '_consumer', None)
+            adapter_name = getattr(x, "_consumer", None)
 
             if adapter_name is None:
-                adapter_name = getattr(y, '_consumer', None)
+                adapter_name = getattr(y, "_consumer", None)
 
             if adapter_name is not None:
                 # `x` or `y` is a scaling factor for adapter `adapter_name`.
                 # Dispatch self.mul[adapter_name] in place of regular torch.Tensor.mul
                 # so the scaling factor can be observed and quantzied properly
                 out = self.mul[adapter_name](x, y)
-                setattr(out, '_producer', adapter_name)
+                setattr(out, "_producer", adapter_name)
             else:
                 # `x` or `y` is NOT a scaling factor.
                 # Fall back to normal torch.Tensor.mul
@@ -128,10 +129,10 @@ else:
             is the output of a lora adapter scaled by self.scaling.
             Otherwise, it will fall back to normal torch.Tensor.add.
             """
-            adapter_name = getattr(x, '_producer', None)
+            adapter_name = getattr(x, "_producer", None)
 
             if adapter_name is None:
-                adapter_name = getattr(y, '_producer', None)
+                adapter_name = getattr(y, "_producer", None)
 
             if adapter_name is not None:
                 # `x` or `y` is an output of adapter `adapter_name`.
@@ -146,11 +147,24 @@ else:
             return out
 
         def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:  # pylint: disable=arguments-differ
-            with _dispatch(torch.Tensor.mul, self._mul), _dispatch(torch.mul, self._mul), \
-                    _dispatch(torch.Tensor.add, self._add), _dispatch(torch.add, self._add):
+            with (
+                _dispatch(torch.Tensor.mul, self._mul),
+                _dispatch(torch.mul, self._mul),
+                _dispatch(torch.Tensor.add, self._add),
+                _dispatch(torch.add, self._add),
+            ):
                 return super().forward(x, *args, **kwargs)
 
-        def update_layer(self, adapter_name, r, lora_alpha, lora_dropout, init_lora_weights, use_rslora, use_dora: bool = False): # pylint:disable=arguments-differ
+        def update_layer(
+            self,
+            adapter_name,
+            r,
+            lora_alpha,
+            lora_dropout,
+            init_lora_weights,
+            use_rslora,
+            use_dora: bool = False,
+        ):  # pylint:disable=arguments-differ
             raise NotImplementedError
 
         def set_scale(self, adapter, scale):
@@ -171,9 +185,8 @@ else:
         def get_delta_weight(self, adapter) -> torch.Tensor:
             raise NotImplementedError
 
-
     @QuantizationMixin.implements(lora.Linear)
-    class QuantizedLinear(QuantizedLora, lora.Linear): # pylint: disable=too-many-ancestors
+    class QuantizedLinear(QuantizedLora, lora.Linear):  # pylint: disable=too-many-ancestors
         """
         Quantized lora.Linear.
         """
@@ -181,7 +194,6 @@ else:
         # NOTE: The implementation of this class is tightly dependent on below assumptions
         #   1) LoRA scale (``self.scaling``) will be multiplied with the output of lora adapters.
         #   2) The scaled output of LoRA adapters will be added to  the output of the base layer.
-
 
     @QuantizationMixin.implements(lora.Conv2d)
     class QuantizedConv(QuantizedLora, lora.Conv2d):  # pylint: disable=too-many-ancestors

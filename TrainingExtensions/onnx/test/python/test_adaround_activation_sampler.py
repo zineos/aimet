@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Unit tests for Adaround Activation Sampler """
+"""Unit tests for Adaround Activation Sampler"""
 
 import numpy as np
 
@@ -44,19 +44,23 @@ from aimet_onnx.adaround.activation_sampler import ActivationSampler
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.utils import CachedDataset
 
+
 class TestAdaroundActivationSampler:
     """
-     AdaRound Activation Sampler Unit Test Cases
+    AdaRound Activation Sampler Unit Test Cases
     """
+
     def test_activation_sampler_conv(self, tmp_path):
         model = simple_relu_model()
         sim = QuantizationSimModel(model)
-        activation_sampler = ActivationSampler('input', 'output', model, sim.model, True)
-        data_loader = [
-            np.random.rand(1, 3, 32, 32).astype(np.float32)
-        ]
+        activation_sampler = ActivationSampler(
+            "input", "output", model, sim.model, True
+        )
+        data_loader = [np.random.rand(1, 3, 32, 32).astype(np.float32)]
         cached_dataset = CachedDataset(data_loader, 1, tmp_path)
-        all_inp_data, all_out_data = activation_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
+        all_inp_data, all_out_data = (
+            activation_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
+        )
 
         # NOTE: Since all inputs are positive, the input and output of relu
         #       should be exactly equal to each other

@@ -34,12 +34,13 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Defs for dataclass """
+"""Defs for dataclass"""
 
 from dataclasses import dataclass
 from typing import List
 
 import torch
+
 
 @dataclass
 class _LetPair:
@@ -48,12 +49,10 @@ class _LetPair:
     prev: previous module in LET pair.
     follow: following module in LET pair.
     """
+
     prev: List[torch.nn.Module]
     follow: List[torch.nn.Module]
 
     def __str__(self):
         # Print LetPair info
-        return f"LetPair(\n" \
-               f"    prev: '{self.prev}',\n" \
-               f"    follow: '{self.follow}',\n" \
-               f")"
+        return f"LetPair(\n    prev: '{self.prev}',\n    follow: '{self.follow}',\n)"

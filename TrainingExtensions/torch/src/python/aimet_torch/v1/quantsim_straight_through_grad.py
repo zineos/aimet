@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Implements straight through gradient computation for Quant op"""
+"""Implements straight through gradient computation for Quant op"""
+
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple
@@ -53,6 +54,7 @@ class IntermediateResult:
     """
     Data carrier containing intermediate result for learned grid backward computation
     """
+
     x_quant: torch.Tensor
     encoding_min: torch.nn.Parameter
     encoding_max: torch.nn.Parameter
@@ -74,9 +76,11 @@ def broadcast_to_tensor(tensor, encoding, ch_axis):
     :return: Broad-casted tensor
     """
     if not isinstance(encoding, torch.Tensor):
-        encoding = torch.tensor(encoding).to(tensor.device)  # convert encoding to a tensor
+        encoding = torch.tensor(encoding).to(
+            tensor.device
+        )  # convert encoding to a tensor
 
-    assert len(encoding.shape) <= 1 # Should be 1-dimensional tensor
+    assert len(encoding.shape) <= 1  # Should be 1-dimensional tensor
 
     if encoding.numel() == 1:
         return encoding
@@ -84,8 +88,9 @@ def broadcast_to_tensor(tensor, encoding, ch_axis):
     # Shape of encoding should match the channel dimension of the input
     assert encoding.numel() == tensor.shape[ch_axis]
 
-    shape = tuple(dim if axis == ch_axis else 1
-                  for axis, dim in enumerate(tensor.shape))
+    shape = tuple(
+        dim if axis == ch_axis else 1 for axis, dim in enumerate(tensor.shape)
+    )
     return encoding.view(shape)
 
 
@@ -119,12 +124,14 @@ def compute_dloss_by_dx(x, grad, encoding_min, encoding_max, ch_axis=0):
     return grad * mask
 
 
-def get_computed_encodings(bitwidth: int,
-                           encoding_min: torch.nn.Parameter,
-                           encoding_max: torch.nn.Parameter,
-                           use_symmetric_encodings: bool,
-                           use_strict_symmetric: bool,
-                           is_unsigned_symmetric: bool) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def get_computed_encodings(
+    bitwidth: int,
+    encoding_min: torch.nn.Parameter,
+    encoding_max: torch.nn.Parameter,
+    use_symmetric_encodings: bool,
+    use_strict_symmetric: bool,
+    is_unsigned_symmetric: bool,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute delta and offset, and number of steps given quantization parameters
     Followed the flow of C++ compute encoding function (quantization_utils::getComputedEncodings)
@@ -136,7 +143,7 @@ def get_computed_encodings(bitwidth: int,
     :param is_unsigned_symmetric: Whether to use signed/unsigned in symmetric case
     :return: Tuple of delta and offset and num_steps
     """
-    num_steps = 2 ** bitwidth - 1
+    num_steps = 2**bitwidth - 1
     if use_symmetric_encodings and use_strict_symmetric:
         num_steps -= 1
     half_num_steps = num_steps / 2
@@ -153,7 +160,7 @@ def get_computed_encodings(bitwidth: int,
             offset = encoding_min / delta
         else:
             # asymmetric
-            zero_tensor = constant_like(0., encoding_min)
+            zero_tensor = constant_like(0.0, encoding_min)
             b_zero = torch.round(-encoding_min / delta)
             b_zero = torch.min(num_steps_tensor, torch.max(zero_tensor, b_zero))
             offset = -b_zero
@@ -161,14 +168,16 @@ def get_computed_encodings(bitwidth: int,
     return delta, offset, num_steps_tensor
 
 
-def _compute_variables_for_range_learning(tensor: torch.Tensor,
-                                          bitwidth: int,
-                                          encoding_min: torch.nn.Parameter,
-                                          encoding_max: torch.nn.Parameter,
-                                          channel_axis: int,
-                                          use_symmetric_encodings: bool,
-                                          use_strict_symmetric: bool,
-                                          is_unsigned_symmetric: bool) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def _compute_variables_for_range_learning(
+    tensor: torch.Tensor,
+    bitwidth: int,
+    encoding_min: torch.nn.Parameter,
+    encoding_max: torch.nn.Parameter,
+    channel_axis: int,
+    use_symmetric_encodings: bool,
+    use_strict_symmetric: bool,
+    is_unsigned_symmetric: bool,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Calculate required variables for range learning
     :param tensor: torch Tensor
@@ -180,8 +189,14 @@ def _compute_variables_for_range_learning(tensor: torch.Tensor,
     :param use_strict_symmetric: True if strict symmetric encoding is used. False otherwise
     :param is_unsigned_symmetric: Whether to use signed/unsigned in symmetric case
     """
-    delta, offset, num_steps = get_computed_encodings(bitwidth, encoding_min, encoding_max,
-                                                      use_symmetric_encodings, use_strict_symmetric, is_unsigned_symmetric)
+    delta, offset, num_steps = get_computed_encodings(
+        bitwidth,
+        encoding_min,
+        encoding_max,
+        use_symmetric_encodings,
+        use_strict_symmetric,
+        is_unsigned_symmetric,
+    )
     delta = broadcast_to_tensor(tensor, delta, channel_axis)
     offset = broadcast_to_tensor(tensor, offset, channel_axis)
 
@@ -189,10 +204,12 @@ def _compute_variables_for_range_learning(tensor: torch.Tensor,
 
 
 # pylint:disable=too-many-locals
-def calculate_forward_pass(tensor: torch.Tensor,
-                           tensor_quantizer: "LearnedGridTensorQuantizer",
-                           encoding_min: torch.nn.Parameter,
-                           encoding_max: torch.nn.Parameter) -> Tuple[torch.Tensor, IntermediateResult]:
+def calculate_forward_pass(
+    tensor: torch.Tensor,
+    tensor_quantizer: "LearnedGridTensorQuantizer",
+    encoding_min: torch.nn.Parameter,
+    encoding_max: torch.nn.Parameter,
+) -> Tuple[torch.Tensor, IntermediateResult]:
     """
     Calculate forward pass logic of range learning
     :param tensor: Target tensor to compute
@@ -202,33 +219,42 @@ def calculate_forward_pass(tensor: torch.Tensor,
     :return: QuantizeDequantize out and intermediate result tuple
     """
     if tensor.dtype not in (torch.float32, torch.float16, torch.bfloat16):
-        raise RuntimeError("Invalid input data type. Expected torch.float32 or torch.float16. "
-                           f"Got {tensor.dtype}.")
+        raise RuntimeError(
+            "Invalid input data type. Expected torch.float32 or torch.float16. "
+            f"Got {tensor.dtype}."
+        )
 
-    if not (tensor.dtype == encoding_min.dtype == encoding_max.dtype): # pylint: disable=superfluous-parens
-        raise RuntimeError("Data type mismatch. Expected the input and encoding min & max to be of same dtype."
-                           f"Got {tensor.dtype} input, {encoding_min.dtype} encoding_min, "
-                           f"and {encoding_max.dtype} encoding_max")
+    if not (tensor.dtype == encoding_min.dtype == encoding_max.dtype):  # pylint: disable=superfluous-parens
+        raise RuntimeError(
+            "Data type mismatch. Expected the input and encoding min & max to be of same dtype."
+            f"Got {tensor.dtype} input, {encoding_min.dtype} encoding_min, "
+            f"and {encoding_max.dtype} encoding_max"
+        )
 
     if tensor_quantizer.bitwidth >= 32:
-        raise RuntimeError(f'Invalid bitwidth: {tensor_quantizer.bitwidth}')
+        raise RuntimeError(f"Invalid bitwidth: {tensor_quantizer.bitwidth}")
 
     orig_dtype = tensor.dtype
-    if tensor.dtype in (torch.float16, torch.bfloat16) and tensor_quantizer.bitwidth >= 16:
+    if (
+        tensor.dtype in (torch.float16, torch.bfloat16)
+        and tensor_quantizer.bitwidth >= 16
+    ):
         tensor = tensor.float()
         encoding_min = encoding_min.float()
         encoding_max = encoding_max.float()
 
     use_symmetric_encodings = tensor_quantizer.use_symmetric_encodings
     is_unsigned_symmetric = tensor_quantizer.is_unsigned_symmetric
-    delta, offset, num_steps = _compute_variables_for_range_learning(tensor,
-                                                                     tensor_quantizer.bitwidth,
-                                                                     encoding_min,
-                                                                     encoding_max,
-                                                                     tensor_quantizer.channel_axis,
-                                                                     use_symmetric_encodings,
-                                                                     tensor_quantizer.use_strict_symmetric,
-                                                                     is_unsigned_symmetric)
+    delta, offset, num_steps = _compute_variables_for_range_learning(
+        tensor,
+        tensor_quantizer.bitwidth,
+        encoding_min,
+        encoding_max,
+        tensor_quantizer.channel_axis,
+        use_symmetric_encodings,
+        tensor_quantizer.use_strict_symmetric,
+        is_unsigned_symmetric,
+    )
 
     zero = torch.zeros_like(num_steps)
 
@@ -242,18 +268,27 @@ def calculate_forward_pass(tensor: torch.Tensor,
     if tensor_quantizer.bitwidth <= 8:
         x_quant = x_quant.to(dtype=torch.uint8)
 
-    intermediate_result = IntermediateResult(x_quant,
-                                             encoding_min, encoding_max,
-                                             delta, offset, mask_tensor, num_steps,
-                                             use_symmetric_encodings, is_unsigned_symmetric)
+    intermediate_result = IntermediateResult(
+        x_quant,
+        encoding_min,
+        encoding_max,
+        delta,
+        offset,
+        mask_tensor,
+        num_steps,
+        use_symmetric_encodings,
+        is_unsigned_symmetric,
+    )
     return x_dequant.to(orig_dtype), intermediate_result
 
 
 # pylint:disable=too-many-locals
-def asymmetric_gradients(tensor: torch.Tensor,
-                         grad: torch.Tensor,
-                         intermediate_result: IntermediateResult,
-                         channel_axis: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def asymmetric_gradients(
+    tensor: torch.Tensor,
+    grad: torch.Tensor,
+    intermediate_result: IntermediateResult,
+    channel_axis: int,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Calculate asymmetric gradients with respect to tensor, gradients of encoding min and max
     :param tensor: Input tensor of quant-dequant forward pass
@@ -277,14 +312,18 @@ def asymmetric_gradients(tensor: torch.Tensor,
     if delta.numel() > 1 and len(tensor.shape) == 1:
         # NOTE: Handle when applying per-channel quant to 1-D Tensor case such as bias tensor in Conv or beta/gamma in BatchNorm
         intermediate_term1 = grad_scale / num_steps
-        intermediate_term2 = num_steps / (encoding_max - encoding_min) ** 2 * grad_offset
+        intermediate_term2 = (
+            num_steps / (encoding_max - encoding_min) ** 2 * grad_offset
+        )
     else:
         # Per-channel quant to k-D Tensor (k >= 2) or per-tensor case
         dim = list(range(len(tensor.shape)))
         if delta.numel() > 1 and len(tensor.shape) > 1:
             dim.pop(channel_axis)
         intermediate_term1 = grad_scale.sum(dim=dim) / num_steps
-        intermediate_term2 = num_steps / (encoding_max - encoding_min) ** 2 * grad_offset.sum(dim=dim)
+        intermediate_term2 = (
+            num_steps / (encoding_max - encoding_min) ** 2 * grad_offset.sum(dim=dim)
+        )
 
     grad_encoding_min = -intermediate_term1 + encoding_max * intermediate_term2
     grad_encoding_min = grad_encoding_min.view_as(encoding_min)
@@ -295,10 +334,12 @@ def asymmetric_gradients(tensor: torch.Tensor,
 
 
 # pylint:disable=too-many-locals
-def symmetric_gradients(tensor: torch.Tensor,
-                        grad: torch.Tensor,
-                        intermediate_result: IntermediateResult,
-                        channel_axis: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def symmetric_gradients(
+    tensor: torch.Tensor,
+    grad: torch.Tensor,
+    intermediate_result: IntermediateResult,
+    channel_axis: int,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Calculate signed symmetric gradients with respect to tensor, gradients of encoding min and max
     :param tensor: Input tensor of quant-dequant forward pass
@@ -315,24 +356,32 @@ def symmetric_gradients(tensor: torch.Tensor,
 
     if delta.numel() > 1 and len(tensor.shape) == 1:
         # NOTE: Handle when applying per-channel quant to 1-D Tensor case such as bias tensor in Conv or beta/gamma in BatchNorm
-        grad_encoding_max = ((x_quant + offset) * grad) - (mask_tensor * (tensor / delta) * grad)
+        grad_encoding_max = ((x_quant + offset) * grad) - (
+            mask_tensor * (tensor / delta) * grad
+        )
     else:
         # Per-channel quant to k-D Tensor (k >= 2) or per-tensor case
         dim = list(range(len(tensor.shape)))
         if delta.numel() > 1 and len(tensor.shape) > 1:
             dim.pop(channel_axis)
-        grad_encoding_max = ((x_quant + offset) * grad).sum(dim=dim) - (mask_tensor * (tensor / delta) * grad).sum(dim=dim)
+        grad_encoding_max = ((x_quant + offset) * grad).sum(dim=dim) - (
+            mask_tensor * (tensor / delta) * grad
+        ).sum(dim=dim)
 
-    grad_encoding_max = grad_encoding_max / torch.div(num_steps, 2, rounding_mode="floor")
+    grad_encoding_max = grad_encoding_max / torch.div(
+        num_steps, 2, rounding_mode="floor"
+    )
     grad_encoding_max = grad_encoding_max.view_as(intermediate_result.encoding_max)
 
     return -grad_encoding_max, grad_encoding_max
 
 
-def calculate_gradients(tensor: torch.Tensor,
-                        grad: torch.Tensor,
-                        intermediate_result: IntermediateResult,
-                        channel_axis: int) -> Tuple[torch.Tensor, torch.Tensor]:
+def calculate_gradients(
+    tensor: torch.Tensor,
+    grad: torch.Tensor,
+    intermediate_result: IntermediateResult,
+    channel_axis: int,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Calculate gradients with respect to tensor, gradients of encoding min and max
     :param tensor: Input tensor of quant-dequant forward pass
@@ -354,7 +403,7 @@ class RoundStraightThrough(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, *x): # pylint:disable=arguments-differ, unused-argument
+    def forward(ctx, *x):  # pylint:disable=arguments-differ, unused-argument
         return torch.round(*x)
 
     @staticmethod

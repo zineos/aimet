@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantization recipes for GenAI models """
+"""Quantization recipes for GenAI models"""
 
 from abc import ABC, abstractmethod
 import itertools
@@ -47,43 +47,50 @@ from torch.utils.data import DataLoader
 
 from aimet_torch.experimental.adascale.adascale_optimizer import apply_adascale
 from aimet_torch.v2.nn.true_quant import QuantizedConv2d, QuantizedLinear
-from aimet_torch.v2.quantsim.config_utils import set_grouped_blockwise_quantization_for_weights
+from aimet_torch.v2.quantsim.config_utils import (
+    set_grouped_blockwise_quantization_for_weights,
+)
 from aimet_torch.v2.utils import remove_all_quantizers
 from aimet_torch import QuantizationSimModel
 from aimet_torch.utils import place_model
 from aimet_torch.v2.seq_mse import apply_seq_mse, SeqMseParams
 
 
-def _compute_encodings(quantsim: QuantizationSimModel, dataloader: DataLoader, num_iterations:int = None):
-    """ Internal helper function to compute encodings on quantsim model """
+def _compute_encodings(
+    quantsim: QuantizationSimModel, dataloader: DataLoader, num_iterations: int = None
+):
+    """Internal helper function to compute encodings on quantsim model"""
     if num_iterations is None:
         num_iterations = len(dataloader)
 
     def callback(model: torch.nn.Module):
         sliced_dataloader = itertools.islice(dataloader, num_iterations)
         for batch in tqdm(sliced_dataloader, total=num_iterations, desc="Calibrating"):
-            model(input_ids=batch['input_ids'].to(device=model.device))
+            model(input_ids=batch["input_ids"].to(device=model.device))
 
     quantsim.compute_encodings(callback)
 
 
 class QuantizationTechnique(ABC):
-    """ Generic GenAI quantization technique """
+    """Generic GenAI quantization technique"""
+
     @staticmethod
     @abstractmethod
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
-        """ Apply quantization technique """
+        """Apply quantization technique"""
 
 
 class RemoveQuantization(QuantizationTechnique):
-    """ Remove all quantization nodes from quantsim model """
+    """Remove all quantization nodes from quantsim model"""
+
     @staticmethod
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
         remove_all_quantizers(quantsim.model)
 
 
 class PCQ(QuantizationTechnique):
-    """ Apply vanilla PCQ to model """
+    """Apply vanilla PCQ to model"""
+
     @staticmethod
     @torch.no_grad()
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
@@ -91,52 +98,67 @@ class PCQ(QuantizationTechnique):
 
 
 class LPBQ(QuantizationTechnique):
-    """ Apply LPBQ to model """
+    """Apply LPBQ to model"""
+
     @staticmethod
     @torch.no_grad()
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
         arg = lambda module: (
-                isinstance(module, (QuantizedConv2d, QuantizedLinear))
-                and module.param_quantizers['weight']
-                and module.param_quantizers['weight'].bitwidth == 4
+            isinstance(module, (QuantizedConv2d, QuantizedLinear))
+            and module.param_quantizers["weight"]
+            and module.param_quantizers["weight"].bitwidth == 4
         )
         BLOCK_QUANT_SIZE = 64
         BITWIDTH = 4
         DECOMPRESSED_BITWIDTH = 8
 
-        set_grouped_blockwise_quantization_for_weights(sim=quantsim,
-                                                       arg=arg,
-                                                       bitwidth=BITWIDTH,
-                                                       symmetric=True,
-                                                       decompressed_bw=DECOMPRESSED_BITWIDTH,
-                                                       block_size=BLOCK_QUANT_SIZE,
-                                                       block_grouping=-1)
+        set_grouped_blockwise_quantization_for_weights(
+            sim=quantsim,
+            arg=arg,
+            bitwidth=BITWIDTH,
+            symmetric=True,
+            decompressed_bw=DECOMPRESSED_BITWIDTH,
+            block_size=BLOCK_QUANT_SIZE,
+            block_grouping=-1,
+        )
 
         _compute_encodings(quantsim, dataloader, num_iterations=20)
 
 
 class SeqMSE(QuantizationTechnique):
-    """ Apply SeqMSE to model """
+    """Apply SeqMSE to model"""
+
     @staticmethod
     @torch.no_grad()
     def apply(quantsim: QuantizationSimModel, dataloader: DataLoader):
         def copy_model_with_shared_weights(source_model):
             target_model = deepcopy(source_model)
             for name, source_parameter in source_model.named_parameters():
-                pre, _, post = name.rpartition('.')
-                pre_obj = functools.reduce(getattr, [target_model] + pre.split('.')) if pre else target_model
+                pre, _, post = name.rpartition(".")
+                pre_obj = (
+                    functools.reduce(getattr, [target_model] + pre.split("."))
+                    if pre
+                    else target_model
+                )
                 setattr(pre_obj, post, source_parameter)
-            QuantizationSimModel._remove_quantization_wrappers(target_model, list(target_model.modules()))
+            QuantizationSimModel._remove_quantization_wrappers(
+                target_model, list(target_model.modules())
+            )
             return target_model
 
-        with place_model(quantsim.model, torch.device("cpu")), remove_all_quantizers(quantsim.model):
+        with (
+            place_model(quantsim.model, torch.device("cpu")),
+            remove_all_quantizers(quantsim.model),
+        ):
             weight_shared_fp_model = copy_model_with_shared_weights(quantsim.model)
 
-        params = SeqMseParams(num_batches=20,
-                              inp_symmetry='symqt',
-                              num_candidates=20,
-                              loss_fn='mse',
-                              forward_fn=lambda model, inputs: model(**inputs))
+        params = SeqMseParams(
+            num_batches=20,
+            inp_symmetry="symqt",
+            num_candidates=20,
+            loss_fn="mse",
+            forward_fn=lambda model, inputs: model(**inputs),
+        )
         with place_model(weight_shared_fp_model, quantsim.model.device):
             apply_seq_mse(weight_shared_fp_model, quantsim, dataloader, params)
 
@@ -144,12 +166,19 @@ class SeqMSE(QuantizationTechnique):
 
 
 class AdaScale(QuantizationTechnique):
-    """ Apply AdaScale to model """
+    """Apply AdaScale to model"""
+
     @staticmethod
     @torch.no_grad()
-    def apply(quantsim: QuantizationSimModel, dataloader: DataLoader, num_batches: int = 20, num_epochs: int = 5):
+    def apply(
+        quantsim: QuantizationSimModel,
+        dataloader: DataLoader,
+        num_batches: int = 20,
+        num_epochs: int = 5,
+    ):
         class LimitedBatchDataLoader:
-            """ Internal helper class to reduce number of accessible batches in Dataloader """
+            """Internal helper class to reduce number of accessible batches in Dataloader"""
+
             def __init__(self, dataloader, num_batches):
                 self.dataloader = dataloader
                 self.num_batches = num_batches
@@ -173,7 +202,9 @@ class AdaScale(QuantizationTechnique):
         apply_adascale(
             quantsim,
             LimitedBatchDataLoader(dataloader, num_batches=num_batches),
-            lambda model, inputs: model(inputs['input_ids'].to(device=model.device), use_cache=False),
+            lambda model, inputs: model(
+                inputs["input_ids"].to(device=model.device), use_cache=False
+            ),
             num_epochs,
         )
 

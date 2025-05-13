@@ -37,6 +37,7 @@
 """
 Unit test about ReLU6 replacement
 """
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -65,7 +66,7 @@ def _simple_conv_model(model_type="functional"):
                 layers.Activation(tf.nn.relu6),
                 layers.Flatten(),
                 layers.Dense(units=10, activation=tf.nn.relu6),
-                layers.Dense(units=2, activation=tf.nn.softmax)
+                layers.Dense(units=2, activation=tf.nn.softmax),
             ]
         )
 
@@ -109,7 +110,9 @@ class TestReluReplacement:
         assert dense2.activation != tf.keras.activations.linear
 
         # Even If the layer of the model changes, the weights should not change
-        for original_layer, transformed_layer in zip(model.layers, transformed_model.layers):
+        for original_layer, transformed_layer in zip(
+            model.layers, transformed_model.layers
+        ):
             if isinstance(original_layer, (layers.Conv2D, layers.Dense)):
                 original_weight, original_bias = original_layer.get_weights()
                 transformed_weight, transformed_bias = transformed_layer.get_weights()
@@ -129,8 +132,8 @@ class TestReluReplacement:
         assert len(model.layers) + 2 == len(transformed_model.layers)
 
         # relu1 is newly added from fused Conv2D
-        conv1, activation1, conv2, relu1, activation2, _, dense1, relu2, dense2 = _get_layers(
-            transformed_model, model_type
+        conv1, activation1, conv2, relu1, activation2, _, dense1, relu2, dense2 = (
+            _get_layers(transformed_model, model_type)
         )
         assert conv1.activation == tf.keras.activations.linear
 
@@ -161,12 +164,23 @@ class TestReluReplacement:
         origin_conv2_layer = original_model_layers[2]
         transformed_conv2_layer = transformed_model_layers[2]
 
-        assert np.array_equal(origin_conv2_layer.get_weights()[0], transformed_conv2_layer.get_weights()[0])
-        assert np.array_equal(origin_conv2_layer.get_weights()[1], transformed_conv2_layer.get_weights()[1])
+        assert np.array_equal(
+            origin_conv2_layer.get_weights()[0],
+            transformed_conv2_layer.get_weights()[0],
+        )
+        assert np.array_equal(
+            origin_conv2_layer.get_weights()[1],
+            transformed_conv2_layer.get_weights()[1],
+        )
 
         origin_dense1_layer = original_model_layers[5]
         transformed_dense1_layer = transformed_model_layers[6]
 
-        assert np.array_equal(origin_dense1_layer.get_weights()[0], transformed_dense1_layer.get_weights()[0])
-        assert np.array_equal(origin_dense1_layer.get_weights()[1], transformed_dense1_layer.get_weights()[1])
-
+        assert np.array_equal(
+            origin_dense1_layer.get_weights()[0],
+            transformed_dense1_layer.get_weights()[0],
+        )
+        assert np.array_equal(
+            origin_dense1_layer.get_weights()[1],
+            transformed_dense1_layer.get_weights()[1],
+        )

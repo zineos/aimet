@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top level API for Adaptive Rounding - Post-Training Quantization (PTQ) """
+"""Top level API for Adaptive Rounding - Post-Training Quantization (PTQ)"""
 
 import contextlib
 import itertools
@@ -56,9 +56,9 @@ from aimet_torch._base.adaround.adaround_weight import (
 
 
 __all__ = [
-    'Adaround',
-    'AdaroundParameters',
-    'AdaroundSupportedModules',
+    "Adaround",
+    "AdaroundParameters",
+    "AdaroundSupportedModules",
 ]
 
 
@@ -67,12 +67,22 @@ class Adaround(AdaroundBase):
     Weight-rounding mechanism for Post Training Quantization (PTQ)
     Subclass for AIMET v2 compatibility
     """
+
     @staticmethod
-    def _get_quantsim(model: torch.nn.Module, dummy_input: torch.Tensor,
-                      quant_scheme: QuantScheme, default_param_bw: int, config_file: str):
-        return QuantizationSimModel(model, dummy_input=dummy_input, quant_scheme=quant_scheme,
-                                    default_param_bw=default_param_bw,
-                                    config_file=config_file)
+    def _get_quantsim(
+        model: torch.nn.Module,
+        dummy_input: torch.Tensor,
+        quant_scheme: QuantScheme,
+        default_param_bw: int,
+        config_file: str,
+    ):
+        return QuantizationSimModel(
+            model,
+            dummy_input=dummy_input,
+            quant_scheme=quant_scheme,
+            default_param_bw=default_param_bw,
+            config_file=config_file,
+        )
 
     @staticmethod
     def _get_adaround_wrapper(quant_module: BaseQuantizationMixin):
@@ -87,7 +97,9 @@ class Adaround(AdaroundBase):
                 cls._remove_quantization_wrappers(module_ref)
 
     @staticmethod
-    def _get_quant_wrapper(quant_sim_model: torch.nn.Module, module_name: str) -> Union[BaseQuantizationMixin, None]:
+    def _get_quant_wrapper(
+        quant_sim_model: torch.nn.Module, module_name: str
+    ) -> Union[BaseQuantizationMixin, None]:
         """
         For given module name, get the quantized module from the QuantSim model
         :param quant_sim_model: Model with simulation ops
@@ -112,8 +124,12 @@ class Adaround(AdaroundBase):
         for quant_module in quant_sim.model.modules():
             if isinstance(quant_module, BaseQuantizationMixin):
                 # Adaround requires input and output quantizers to be disabled
-                quant_module.input_quantizers = nn.ModuleList([None for _ in quant_module.input_quantizers])
-                quant_module.output_quantizers = nn.ModuleList([None for _ in quant_module.output_quantizers])
+                quant_module.input_quantizers = nn.ModuleList(
+                    [None for _ in quant_module.input_quantizers]
+                )
+                quant_module.output_quantizers = nn.ModuleList(
+                    [None for _ in quant_module.output_quantizers]
+                )
 
                 for name, param_quantizer in quant_module.param_quantizers.items():
                     if not param_quantizer:
@@ -125,14 +141,20 @@ class Adaround(AdaroundBase):
 
     @staticmethod
     def _validate_quant_module_for_adaround(quant_module: BaseQuantizationMixin):
-        assert quant_module.param_quantizers['weight'], '%s does not have weight parameter.' % quant_module
-        assert quant_module.param_quantizers['weight'].is_initialized(), '%s encoding needs to be set.' % quant_module
+        assert quant_module.param_quantizers["weight"], (
+            "%s does not have weight parameter." % quant_module
+        )
+        assert quant_module.param_quantizers["weight"].is_initialized(), (
+            "%s encoding needs to be set." % quant_module
+        )
 
     @staticmethod
     def _check_input_output_quantizers_for_adaround(quant_model: torch.nn.Module):
         for module in quant_model.modules():
             if isinstance(module, BaseQuantizationMixin):
-                for quantizer in itertools.chain(module.input_quantizers, module.output_quantizers):
+                for quantizer in itertools.chain(
+                    module.input_quantizers, module.output_quantizers
+                ):
                     assert quantizer is None
 
     @staticmethod
@@ -144,15 +166,14 @@ class Adaround(AdaroundBase):
                     if isinstance(quantizer, AffineQuantizerBase):
                         param_quantizers.append(quantizer)
 
-        return min(
-            quantizer.bitwidth for quantizer in param_quantizers
-        )
+        return min(quantizer.bitwidth for quantizer in param_quantizers)
 
 
 class AdaroundWrapper(AdaroundWrapperBase):
     """
     Basic adaround wrapper class for AIMET v2
     """
+
     @contextlib.contextmanager
     def _disable_weight_quantizer(self):
         """
@@ -186,16 +207,20 @@ class AdaroundWrapper(AdaroundWrapperBase):
                 return idx
         return 0
 
-    def _get_weight_quantizer_delta_and_offset(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_weight_quantizer_delta_and_offset(
+        self,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Returns delta and offset of the weight quantizer
         """
         quantizer = self.module_to_wrap.param_quantizers[self.weight_name]
-        return quantizer.get_scale().expand_as(self.weight), quantizer.get_offset().expand_as(self.weight)
+        return quantizer.get_scale().expand_as(
+            self.weight
+        ), quantizer.get_offset().expand_as(self.weight)
 
     def _init_param(self):
         super()._init_param()
         quantizer = self.module_to_wrap.param_quantizers[self.weight_name]
         if quantizer.signed:
             self.clip_max = 2 ** (self.bitwidth - 1) - 1
-            self.clip_min = - 2 ** (self.bitwidth - 1)
+            self.clip_min = -(2 ** (self.bitwidth - 1))

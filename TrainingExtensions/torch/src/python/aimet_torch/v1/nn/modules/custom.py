@@ -35,6 +35,6 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Alias to _base.nn.custom """
+"""Alias to _base.nn.custom"""
 
-from aimet_torch._base.nn.modules.custom import * # pylint: disable=wildcard-import, unused-wildcard-import
+from aimet_torch._base.nn.modules.custom import *  # pylint: disable=wildcard-import, unused-wildcard-import

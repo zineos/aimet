@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantized Llama modules """
+"""Quantized Llama modules"""
 
 import torch
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
@@ -43,12 +43,16 @@ from aimet_torch.v2.nn.true_quant import QuantizationMixin
 try:
     from transformers.models.llama import modeling_llama
 except ImportError as exc:
-    raise ImportError("aimet_torch.v2.nn.transformers.models.llama.modeling_llama cannot be imported. Please make sure "
-                      "that you have transformers installed in your environment.") from exc
+    raise ImportError(
+        "aimet_torch.v2.nn.transformers.models.llama.modeling_llama cannot be imported. Please make sure "
+        "that you have transformers installed in your environment."
+    ) from exc
+
 
 @QuantizationMixin.implements(modeling_llama.LlamaRMSNorm)
 class QuantizedLlamaRMSNorm(QuantizationMixin, modeling_llama.LlamaRMSNorm):
-    """ Implement Quantized LLama RMS Norm """
+    """Implement Quantized LLama RMS Norm"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()
@@ -72,8 +76,11 @@ class QuantizedLlamaRMSNorm(QuantizationMixin, modeling_llama.LlamaRMSNorm):
 
 
 @QuantizationMixin.implements(modeling_llama.LlamaRotaryEmbedding)
-class QuantizedLlamaRotaryEmbedding(QuantizationMixin, modeling_llama.LlamaRotaryEmbedding):
-    """ Implement Quantized LLama Rotary Embedding """
+class QuantizedLlamaRotaryEmbedding(
+    QuantizationMixin, modeling_llama.LlamaRotaryEmbedding
+):
+    """Implement Quantized LLama Rotary Embedding"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()

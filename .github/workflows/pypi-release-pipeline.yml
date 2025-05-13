@@ -66,7 +66,7 @@ jobs:
                  "VER_CUDA":        "12.1.1",
                  "ENABLE_TESTS":    "ON",
                  "BUILD_TARGETS":   "all",
-                 "PIP_INDEX":       "pypi"    
+                 "PIP_INDEX":       "pypi"
               }
             ]')
           elif [ "${{ inputs.variant-id }}" == "onnx-cpu" ] ; then
@@ -83,7 +83,7 @@ jobs:
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       "pypi"
               }
-            ]')  
+            ]')
           fi
           echo "VALUE=$VALUE" >> $GITHUB_ENV
       - name: (Last step) Generate few extra properties for each variant
@@ -189,7 +189,7 @@ jobs:
           ;;
           esac
       - name: Push to pypi
-        run: |          
+        run: |
           # PyPI release does NOT have +cpu or +cu suffix
           export whl_file=$(\
               find downloads \

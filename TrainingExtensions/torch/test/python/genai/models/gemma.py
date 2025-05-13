@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Qwen model class """
+"""Qwen model class"""
 
 import types
 import torch
@@ -47,10 +47,13 @@ from transformers.cache_utils import HybridCache
 from aimet_common.defs import QuantScheme
 from aimet_torch import QuantizationSimModel
 from aimet_torch.v2.utils import remove_param_quantizers
-from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import QuantizedGemma3RMSNorm
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
+    QuantizedGemma3RMSNorm,
+)
 
 from .genai_model import GenAIModel
 from .utils.model_utils import TorchExportableModuleWithCache
+
 
 class TorchExportableModuleWithHybridCache(TorchExportableModuleWithCache):
     def __init__(self, model: PreTrainedModel, cache_length: int):
@@ -64,33 +67,59 @@ class TorchExportableModuleWithHybridCache(TorchExportableModuleWithCache):
         position_ids: torch.Tensor = None,
         past_key_values: tuple[tuple[torch.Tensor, torch.Tensor]] = None,
         *args,
-        **kwargs
+        **kwargs,
     ):
-        """ Redefine model forward to convert to/from Huggingface HybridCache objects """
-        cache = HybridCache(config=self.model.config, batch_size=1, max_cache_len=self.cache_length, device=self.model.device, dtype=self.model.dtype)
+        """Redefine model forward to convert to/from Huggingface HybridCache objects"""
+        cache = HybridCache(
+            config=self.model.config,
+            batch_size=1,
+            max_cache_len=self.cache_length,
+            device=self.model.device,
+            dtype=self.model.dtype,
+        )
         if past_key_values is not None:
             for layer_idx in range(len(past_key_values)):
                 key_states, value_states = past_key_values[layer_idx]
-                print(key_states.shape, value_states.shape, layer_idx, cache.key_cache[layer_idx].shape, cache.value_cache[layer_idx].shape)
-                cache.update(key_states, value_states, layer_idx, {"cache_position": torch.arange(self.cache_length), "sliding_window": self.model.config.sliding_window})
+                print(
+                    key_states.shape,
+                    value_states.shape,
+                    layer_idx,
+                    cache.key_cache[layer_idx].shape,
+                    cache.value_cache[layer_idx].shape,
+                )
+                cache.update(
+                    key_states,
+                    value_states,
+                    layer_idx,
+                    {
+                        "cache_position": torch.arange(self.cache_length),
+                        "sliding_window": self.model.config.sliding_window,
+                    },
+                )
 
-        lm_logits, new_past_key_values = self.model(input_ids=input_ids,
-                                                    attention_mask=attention_mask,
-                                                    position_ids=position_ids,
-                                                    past_key_values=cache,
-                                                    num_logits_to_return=0,
-                                                    return_dict=False,
-                                                    *args, **kwargs)
+        lm_logits, new_past_key_values = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=cache,
+            num_logits_to_return=0,
+            return_dict=False,
+            *args,
+            **kwargs,
+        )
 
         legacy_cache = ()
         for layer_idx in range(len(past_key_values)):
-            legacy_cache += ((cache.key_cache[layer_idx], cache.value_cache[layer_idx]),)
+            legacy_cache += (
+                (cache.key_cache[layer_idx], cache.value_cache[layer_idx]),
+            )
 
         return lm_logits, legacy_cache
 
 
 class Gemma_3(GenAIModel):
-    """ Generic quantized Gemma 3 """
+    """Generic quantized Gemma 3"""
+
     DEFAULT_MODEL_ID = "google/gemma-3-1b-it"
 
     @classmethod
@@ -102,7 +131,9 @@ class Gemma_3(GenAIModel):
         if small_model:
             llm_config.num_hidden_layers = 2
 
-        model = modeling_gemma3.Gemma3ForCausalLM.from_pretrained(model_id, config=llm_config)
+        model = modeling_gemma3.Gemma3ForCausalLM.from_pretrained(
+            model_id, config=llm_config
+        )
 
         return model
 
@@ -111,14 +142,24 @@ class Gemma_3(GenAIModel):
         if model_id is None:
             model_id = cls.DEFAULT_MODEL_ID
 
-        return AutoTokenizer.from_pretrained(model_id, use_fast=True, trust_remote_code=True)
+        return AutoTokenizer.from_pretrained(
+            model_id, use_fast=True, trust_remote_code=True
+        )
 
     @classmethod
-    def instantiate_quantsim(cls, model_id: str, context_length: int, sequence_length: int, small_model: bool = False) -> QuantizationSimModel:
+    def instantiate_quantsim(
+        cls,
+        model_id: str,
+        context_length: int,
+        sequence_length: int,
+        small_model: bool = False,
+    ) -> QuantizationSimModel:
         model = cls._instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
-        traceable_model = TorchExportableModuleWithHybridCache(model, context_length-sequence_length)
+        traceable_model = TorchExportableModuleWithHybridCache(
+            model, context_length - sequence_length
+        )
 
         dummy_input_ids = torch.zeros((1, sequence_length), dtype=torch.int)
         dummy_attention_mask = torch.ones((1, sequence_length), dtype=torch.int)
@@ -129,7 +170,7 @@ class Gemma_3(GenAIModel):
             dummy_attention_mask,
             {"past_key_values": None},
             context_length,
-            sequence_length
+            sequence_length,
         )
 
         quantsim = QuantizationSimModel(
@@ -139,17 +180,16 @@ class Gemma_3(GenAIModel):
             default_output_bw=16,
             default_param_bw=4,
             in_place=True,
-            config_file=cls.get_quantsim_config()
+            config_file=cls.get_quantsim_config(),
         )
 
         quantsim.model.orig_forward = quantsim.model.forward
         quantsim.model.forward = types.MethodType(
             cls.create_static_graph_forward(context_length, sequence_length),
-            quantsim.model
+            quantsim.model,
         )
         quantsim.model.prepare_inputs_for_generation = types.MethodType(
-            cls.static_graph_prepare_inputs_for_generation,
-            quantsim.model
+            cls.static_graph_prepare_inputs_for_generation, quantsim.model
         )
 
         remove_param_quantizers(quantsim.model.model.model.embed_tokens)

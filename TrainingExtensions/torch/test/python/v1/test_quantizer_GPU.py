@@ -56,7 +56,6 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
 
 class ModelWithTwoInputsOneToAdd(nn.Module):
-
     def __init__(self):
         super(ModelWithTwoInputsOneToAdd, self).__init__()
         self.conv1_a = nn.Conv2d(1, 10, kernel_size=5)
@@ -103,10 +102,8 @@ def forward_pass(model, args):
 
 
 class QuantizerCpuGpu(unittest.TestCase):
-
     @pytest.mark.cuda
     def test_and_compare_quantizer_no_fine_tuning_CPU_and_GPU(self):
-
         torch.manual_seed(1)
         torch.backends.cudnn.deterministic = True
         dummy_input = torch.rand(1, 1, 28, 28)
@@ -115,11 +112,12 @@ class QuantizerCpuGpu(unittest.TestCase):
         start_time = time.time()
 
         # create model on CPU
-        model_cpu = mnist_torch_model.Net().to('cpu').eval()
+        model_cpu = mnist_torch_model.Net().to("cpu").eval()
 
-        model_gpu = copy.deepcopy(model_cpu).to('cuda')
-        cpu_sim_model = QuantizationSimModel(model_cpu, quant_scheme='tf', in_place=True,
-                                             dummy_input=dummy_input)
+        model_gpu = copy.deepcopy(model_cpu).to("cuda")
+        cpu_sim_model = QuantizationSimModel(
+            model_cpu, quant_scheme="tf", in_place=True, dummy_input=dummy_input
+        )
         # Quantize
         cpu_sim_model.compute_encodings(forward_pass, None)
 
@@ -128,8 +126,9 @@ class QuantizerCpuGpu(unittest.TestCase):
         start_time = time.time()
 
         # create model on GPU
-        gpu_sim_model = QuantizationSimModel(model_gpu, quant_scheme='tf', in_place=True,
-                                             dummy_input=dummy_input_cuda)
+        gpu_sim_model = QuantizationSimModel(
+            model_gpu, quant_scheme="tf", in_place=True, dummy_input=dummy_input_cuda
+        )
         # Quantize
         gpu_sim_model.compute_encodings(forward_pass, None)
 
@@ -144,27 +143,45 @@ class QuantizerCpuGpu(unittest.TestCase):
         # (i.e. like the round() function) and not significant digits
         # excluding fc1 since it is part of Matmul->Relu supergroup
         # can't use assertEqual for FC2, so using assertAlmostEquals for FC2
-        self.assertAlmostEqual(model_gpu.conv1.output_quantizers[0].encoding.min,
-                               model_cpu.conv1.output_quantizers[0].encoding.min, delta=0.001)
-        self.assertAlmostEqual(model_gpu.conv1.output_quantizers[0].encoding.max,
-                               model_cpu.conv1.output_quantizers[0].encoding.max, delta=0.001)
+        self.assertAlmostEqual(
+            model_gpu.conv1.output_quantizers[0].encoding.min,
+            model_cpu.conv1.output_quantizers[0].encoding.min,
+            delta=0.001,
+        )
+        self.assertAlmostEqual(
+            model_gpu.conv1.output_quantizers[0].encoding.max,
+            model_cpu.conv1.output_quantizers[0].encoding.max,
+            delta=0.001,
+        )
 
-        self.assertAlmostEqual(model_gpu.conv2.output_quantizers[0].encoding.min,
-                               model_cpu.conv2.output_quantizers[0].encoding.min, delta=0.001)
-        self.assertAlmostEqual(model_gpu.conv2.output_quantizers[0].encoding.max,
-                               model_cpu.conv2.output_quantizers[0].encoding.max, delta=0.001)
+        self.assertAlmostEqual(
+            model_gpu.conv2.output_quantizers[0].encoding.min,
+            model_cpu.conv2.output_quantizers[0].encoding.min,
+            delta=0.001,
+        )
+        self.assertAlmostEqual(
+            model_gpu.conv2.output_quantizers[0].encoding.max,
+            model_cpu.conv2.output_quantizers[0].encoding.max,
+            delta=0.001,
+        )
 
-        self.assertAlmostEqual(model_gpu.fc2.output_quantizers[0].encoding.min,
-                               model_cpu.fc2.output_quantizers[0].encoding.min, delta=0.001)
-        self.assertAlmostEqual(model_gpu.fc2.output_quantizers[0].encoding.max,
-                               model_cpu.fc2.output_quantizers[0].encoding.max, delta=0.001)
+        self.assertAlmostEqual(
+            model_gpu.fc2.output_quantizers[0].encoding.min,
+            model_cpu.fc2.output_quantizers[0].encoding.min,
+            delta=0.001,
+        )
+        self.assertAlmostEqual(
+            model_gpu.fc2.output_quantizers[0].encoding.max,
+            model_cpu.fc2.output_quantizers[0].encoding.max,
+            delta=0.001,
+        )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             gpu_sim_model.export(tmp_dir, "quantizer_no_fine_tuning__GPU", dummy_input)
             cpu_sim_model.export(tmp_dir, "quantizer_no_fine_tuning__CPU", dummy_input)
 
-        self.assertEqual(torch.device('cuda:0'), next(model_gpu.parameters()).device)
-        self.assertEqual(torch.device('cpu'), next(model_cpu.parameters()).device)
+        self.assertEqual(torch.device("cuda:0"), next(model_gpu.parameters()).device)
+        self.assertEqual(torch.device("cpu"), next(model_cpu.parameters()).device)
 
     @pytest.mark.cuda
     def test_qc_trainable_wrapper_for_model_with_multiple_inputs_with_one_add(self):
@@ -174,23 +191,23 @@ class QuantizerCpuGpu(unittest.TestCase):
                 "ops": {
                     "is_output_quantized": "True",
                 },
-                "params": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_file_path = Path(tmp_dir, "quantsim_config.json")
             with open(config_file_path, "w") as f:
                 json.dump(quantsim_config, f)
 
-            dummy_input = (torch.rand(32, 1, 100, 100).cuda(), torch.rand(32, 10, 22, 22).cuda())
+            dummy_input = (
+                torch.rand(32, 1, 100, 100).cuda(),
+                torch.rand(32, 10, 22, 22).cuda(),
+            )
 
             def forward_pass(sim_model, _):
                 sim_model.eval()
@@ -199,9 +216,12 @@ class QuantizerCpuGpu(unittest.TestCase):
 
             model = ModelWithTwoInputsOneToAdd().cuda()
 
-            sim = QuantizationSimModel(model, dummy_input=dummy_input,
-                                    quant_scheme=QuantScheme.training_range_learning_with_tf_init,
-                                    config_file=config_file_path)
+            sim = QuantizationSimModel(
+                model,
+                dummy_input=dummy_input,
+                quant_scheme=QuantScheme.training_range_learning_with_tf_init,
+                config_file=config_file_path,
+            )
             # Enable input parameters to add (multiple input parameter exist)
             sim.model.add.input_quantizers[0].enabled = True
             sim.model.add.input_quantizers[1].enabled = True

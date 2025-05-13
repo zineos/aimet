@@ -35,29 +35,44 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top-level API for aimet compression library """
+"""Top-level API for aimet compression library"""
 
 from typing import Union, Tuple, Callable
 import tensorflow as tf
 
-from aimet_common.defs import CostMetric, CompressionScheme, EvalFunction, CompressionStats
+from aimet_common.defs import (
+    CostMetric,
+    CompressionScheme,
+    EvalFunction,
+    CompressionStats,
+)
 from aimet_common.bokeh_plots import BokehServerSession
 
-from aimet_tensorflow.keras.utils.graph_saver import keras_wrapper_func, keras_save_and_load_graph, keras_remove_hanging_nodes
+from aimet_tensorflow.keras.utils.graph_saver import (
+    keras_wrapper_func,
+    keras_save_and_load_graph,
+    keras_remove_hanging_nodes,
+)
 from aimet_tensorflow.keras.defs import SpatialSvdParameters
 from aimet_tensorflow.keras.compression_factory import CompressionFactory
 
 
 class ModelCompressor:
-    """ aimet model compressor: Enables model compression using various schemes """
+    """aimet model compressor: Enables model compression using various schemes"""
 
     # pylint: disable=too-many-arguments
 
     @staticmethod
-    def compress_model(model: tf.keras.Model, eval_callback: EvalFunction, eval_iterations,
-                       compress_scheme: CompressionScheme, cost_metric: CostMetric,
-                       parameters: Union[SpatialSvdParameters],
-                       trainer: Callable = None, visualization_url: str = None) -> Tuple[tf.keras.Model, CompressionStats]:
+    def compress_model(
+        model: tf.keras.Model,
+        eval_callback: EvalFunction,
+        eval_iterations,
+        compress_scheme: CompressionScheme,
+        cost_metric: CostMetric,
+        parameters: Union[SpatialSvdParameters],
+        trainer: Callable = None,
+        visualization_url: str = None,
+    ) -> Tuple[tf.keras.Model, CompressionStats]:
         """
         Compress a given model using the specified parameters
 
@@ -79,29 +94,43 @@ class ModelCompressor:
             bokeh_session = None
         else:
             # create a bokeh session to publish visualizations to the server document for compression
-            bokeh_session = BokehServerSession(url=visualization_url, session_id="compression")
+            bokeh_session = BokehServerSession(
+                url=visualization_url, session_id="compression"
+            )
 
         if parameters.multiplicity < 1:
-            raise ValueError('Rounding Multiplicity should be greater than 1')
+            raise ValueError("Rounding Multiplicity should be greater than 1")
 
         # wrapper_func saves and reloads the graph before evaluation
         # In Keras after making changes to the graph you must save and reload, then evaluate
         eval_callback = keras_wrapper_func(eval_callback)
 
         if compress_scheme == CompressionScheme.spatial_svd:
-            algo = CompressionFactory.create_spatial_svd_algo(model, eval_callback, eval_iterations,
-                                                              cost_metric, parameters, bokeh_session)
+            algo = CompressionFactory.create_spatial_svd_algo(
+                model,
+                eval_callback,
+                eval_iterations,
+                cost_metric,
+                parameters,
+                bokeh_session,
+            )
         elif compress_scheme == CompressionScheme.weight_svd:
-            raise NotImplementedError("Not yet implemented for: {}".format(compress_scheme))
+            raise NotImplementedError(
+                "Not yet implemented for: {}".format(compress_scheme)
+            )
         elif compress_scheme == CompressionScheme.channel_pruning:
-            raise NotImplementedError("Not yet implemented for: {}".format(compress_scheme))
+            raise NotImplementedError(
+                "Not yet implemented for: {}".format(compress_scheme)
+            )
         else:
-            raise ValueError("Compression scheme not supported: {}".format(compress_scheme))
+            raise ValueError(
+                "Compression scheme not supported: {}".format(compress_scheme)
+            )
 
         compressed_layer_db, stats = algo.compress_model(cost_metric, trainer)
 
         # In keras after making changes to the model you must save and reload, then evaluate
-        tmp_dir = './data/saved_model'
+        tmp_dir = "./data/saved_model"
         updated_model = keras_save_and_load_graph(tmp_dir, compressed_layer_db.model)
 
         # Remove the hanging nodes

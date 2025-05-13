@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Selects layers for compression based on different criteria """
+"""Selects layers for compression based on different criteria"""
 
 from typing import List
 
@@ -51,13 +51,17 @@ class ConvFcLayerSelector(LayerSelector):
     Selects conv and fc layers
     """
 
-    def select(self, layer_db: LayerDatabase, modules_to_ignore: List[tf.keras.layers.Layer]):
+    def select(
+        self, layer_db: LayerDatabase, modules_to_ignore: List[tf.keras.layers.Layer]
+    ):
         selected_layers = []
         for layer in layer_db:
             if layer.module in modules_to_ignore:
                 continue
 
-            if isinstance(layer.module, tf.keras.layers.Conv2D) and not isinstance(layer.module, tf.keras.layers.DepthwiseConv2D):
+            if isinstance(layer.module, tf.keras.layers.Conv2D) and not isinstance(
+                layer.module, tf.keras.layers.DepthwiseConv2D
+            ):
                 selected_layers.append(layer)
 
             elif isinstance(layer.module, tf.keras.layers.Dense):
@@ -71,13 +75,17 @@ class ConvNoDepthwiseLayerSelector(LayerSelector):
     Selects conv layers (non-depthwise) for compression
     """
 
-    def select(self, layer_db: LayerDatabase, modules_to_ignore: List[tf.keras.layers.Layer]):
+    def select(
+        self, layer_db: LayerDatabase, modules_to_ignore: List[tf.keras.layers.Layer]
+    ):
         selected_layers = []
         for layer in layer_db:
             if layer.module in modules_to_ignore:
                 continue
 
-            if isinstance(layer.module, tf.keras.layers.Conv2D) and not isinstance(layer.module, tf.keras.layers.DepthwiseConv2D):
+            if isinstance(layer.module, tf.keras.layers.Conv2D) and not isinstance(
+                layer.module, tf.keras.layers.DepthwiseConv2D
+            ):
                 selected_layers.append(layer)
 
         layer_db.mark_picked_layers(selected_layers)
@@ -92,6 +100,5 @@ class ManualLayerSelector(LayerSelector):
         self._layer_comp_ratio_pairs = layer_comp_ratio_pairs
 
     def select(self, layer_db: LayerDatabase, _modules_to_ignore):
-
         selected_layers = [pair.layer for pair in self._layer_comp_ratio_pairs]
         layer_db.mark_picked_layers(selected_layers)

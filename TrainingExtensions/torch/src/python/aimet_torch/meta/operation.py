@@ -1,4 +1,3 @@
-
 #  =============================================================================
 #
 #  @@-COPYRIGHT-START-@@
@@ -36,17 +35,26 @@
 #  @@-COPYRIGHT-END-@@
 #
 #  =============================================================================
-""" Pytorch Operation class and utilities """
+"""Pytorch Operation class and utilities"""
+
 from typing import Union
 import torch
 
 import aimet_common.connected_graph.operation
 
-class Op(aimet_common.connected_graph.operation.Op):
-    """ Subclass Op inherited from aimet_common.connected_graph.operation.Op """
 
-    def __init__(self, name: str, dotted_name: str, output_shape,
-                 is_anonymous: bool, op_type: str, residing_module: Union[torch.nn.Module, None]):
+class Op(aimet_common.connected_graph.operation.Op):
+    """Subclass Op inherited from aimet_common.connected_graph.operation.Op"""
+
+    def __init__(
+        self,
+        name: str,
+        dotted_name: str,
+        output_shape,
+        is_anonymous: bool,
+        op_type: str,
+        residing_module: Union[torch.nn.Module, None],
+    ):
         """
         Initializer for Op
         :param name: name of the operation

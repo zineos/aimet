@@ -34,8 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Schema used to validate json configuration file. Docs: https://json-schema.org/learn/ """
-
+"""Schema used to validate json configuration file. Docs: https://json-schema.org/learn/"""
 
 QUANTSIM_CONFIG_SCHEMA = {
     "type": "object",
@@ -48,44 +47,29 @@ QUANTSIM_CONFIG_SCHEMA = {
                     "properties": {
                         "is_input_quantized": {
                             "type": "string",
-                            "pattern": "^True$|^False$"
+                            "pattern": "^True$|^False$",
                         },
                         "is_output_quantized": {
                             "type": "string",
-                            "pattern": "^True$|^False$"
+                            "pattern": "^True$|^False$",
                         },
-                        "is_symmetric": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        }
+                        "is_symmetric": {"type": "string", "pattern": "^True$|^False$"},
                     },
-                    "additionalProperties": False
+                    "additionalProperties": False,
                 },
                 "params": {
                     "type": "object",
                     "properties": {
-                        "is_quantized": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        },
-                        "is_symmetric": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        }
+                        "is_quantized": {"type": "string", "pattern": "^True$|^False$"},
+                        "is_symmetric": {"type": "string", "pattern": "^True$|^False$"},
                     },
-                    "additionalProperties": False
+                    "additionalProperties": False,
                 },
-                "strict_symmetric": {
-                    "type": "string",
-                    "pattern": "^True$|^False$"
-                },
-                "unsigned_symmetric": {
-                    "type": "string",
-                    "pattern": "^True$|^False$"
-                },
+                "strict_symmetric": {"type": "string", "pattern": "^True$|^False$"},
+                "unsigned_symmetric": {"type": "string", "pattern": "^True$|^False$"},
                 "per_channel_quantization": {
                     "type": "string",
-                    "pattern": "^True$|^False$"
+                    "pattern": "^True$|^False$",
                 },
                 "supported_kernels": {
                     "type": "array",
@@ -97,44 +81,42 @@ QUANTSIM_CONFIG_SCHEMA = {
                                 "properties": {
                                     "bitwidth": {
                                         "type": "integer",
-                                        "enum" : [4, 8, 16, 32]
+                                        "enum": [4, 8, 16, 32],
                                     },
                                     "dtype": {
                                         "type": "string",
-                                        "pattern": "^int$|^float$"
+                                        "pattern": "^int$|^float$",
                                     },
                                 },
                                 "required": ["bitwidth", "dtype"],
-                                "additionalProperties": False
+                                "additionalProperties": False,
                             },
                             "param": {
                                 "type": "object",
                                 "properties": {
                                     "bitwidth": {
                                         "type": "integer",
-                                        "enum" : [4, 8, 16, 32]
+                                        "enum": [4, 8, 16, 32],
                                     },
                                     "dtype": {
                                         "type": "string",
-                                        "pattern": "^int$|^float$"
-                                    }
+                                        "pattern": "^int$|^float$",
+                                    },
                                 },
                                 "required": ["bitwidth", "dtype"],
-                                "additionalProperties": False
+                                "additionalProperties": False,
                             },
                         },
                         "required": ["activation", "param"],
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     },
                     "minItems": 1,
-                    "additionalItems": False
+                    "additionalItems": False,
                 },
-                "hw_version": {
-                    "type": "string"
-                }
+                "hw_version": {"type": "string"},
             },
             "required": ["ops", "params"],
-            "additionalProperties": False
+            "additionalProperties": False,
         },
         "params": {
             "type": "object",
@@ -142,18 +124,12 @@ QUANTSIM_CONFIG_SCHEMA = {
                 ".*": {
                     "type": "object",
                     "properties": {
-                        "is_quantized": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        },
-                        "is_symmetric": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        }
+                        "is_quantized": {"type": "string", "pattern": "^True$|^False$"},
+                        "is_symmetric": {"type": "string", "pattern": "^True$|^False$"},
                     },
-                    "additionalProperties": False
+                    "additionalProperties": False,
                 }
-            }
+            },
         },
         "op_type": {
             "type": "object",
@@ -163,16 +139,13 @@ QUANTSIM_CONFIG_SCHEMA = {
                     "properties": {
                         "is_input_quantized": {
                             "type": "string",
-                            "pattern": "^True$|^False$"
+                            "pattern": "^True$|^False$",
                         },
                         "is_output_quantized": {
                             "type": "string",
-                            "pattern": "^True$|^False$"
+                            "pattern": "^True$|^False$",
                         },
-                        "is_symmetric": {
-                            "type": "string",
-                            "pattern": "^True$|^False$"
-                        },
+                        "is_symmetric": {"type": "string", "pattern": "^True$|^False$"},
                         "params": {
                             "type": "object",
                             "patternProperties": {
@@ -181,16 +154,16 @@ QUANTSIM_CONFIG_SCHEMA = {
                                     "properties": {
                                         "is_quantized": {
                                             "type": "string",
-                                            "pattern": "^True$|^False$"
+                                            "pattern": "^True$|^False$",
                                         },
                                         "is_symmetric": {
                                             "type": "string",
-                                            "pattern": "^True$|^False$"
-                                        }
+                                            "pattern": "^True$|^False$",
+                                        },
                                     },
-                                    "additionalProperties": False
+                                    "additionalProperties": False,
                                 }
-                            }
+                            },
                         },
                         "supported_kernels": {
                             "type": "array",
@@ -202,58 +175,54 @@ QUANTSIM_CONFIG_SCHEMA = {
                                         "properties": {
                                             "bitwidth": {
                                                 "type": "integer",
-                                                "enum" : [4, 8, 16, 32]
+                                                "enum": [4, 8, 16, 32],
                                             },
                                             "dtype": {
                                                 "type": "string",
-                                                "pattern": "^int$|^float$"
-                                            }
+                                                "pattern": "^int$|^float$",
+                                            },
                                         },
                                         "required": ["bitwidth", "dtype"],
-                                        "additionalProperties": False
+                                        "additionalProperties": False,
                                     },
                                     "param": {
                                         "type": "object",
                                         "properties": {
                                             "bitwidth": {
                                                 "type": "integer",
-                                                "enum" : [4, 8, 16, 32]
+                                                "enum": [4, 8, 16, 32],
                                             },
                                             "dtype": {
                                                 "type": "string",
-                                                "pattern": "^int$|^float$"
-                                            }
+                                                "pattern": "^int$|^float$",
+                                            },
                                         },
                                         "required": ["bitwidth", "dtype"],
-                                        "additionalProperties": False
+                                        "additionalProperties": False,
                                     },
                                 },
                                 "required": ["activation"],
-                                "additionalProperties": False
+                                "additionalProperties": False,
                             },
                             "minItems": 1,
-                            "additionalItems": False
+                            "additionalItems": False,
                         },
                         "per_channel_quantization": {
                             "type": "string",
-                            "pattern": "^True$|^False$"
+                            "pattern": "^True$|^False$",
                         },
                         "encoding_constraints": {
                             "type": "object",
                             "properties": {
-                                "min": {
-                                    "type": "number"
-                                },
-                                "max": {
-                                    "type": "number"
-                                }
+                                "min": {"type": "number"},
+                                "max": {"type": "number"},
                             },
-                            "required": ["min", "max"]
+                            "required": ["min", "max"],
                         },
                     },
-                    "additionalProperties": False
+                    "additionalProperties": False,
                 }
-            }
+            },
         },
         "supergroups": {
             "type": "array",
@@ -262,45 +231,42 @@ QUANTSIM_CONFIG_SCHEMA = {
                 "properties": {
                     "op_list": {
                         "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "minItems": 2
+                        "items": {"type": "string"},
+                        "minItems": 2,
                     }
                 },
                 "required": ["op_list"],
-                "additionalProperties": False
+                "additionalProperties": False,
             },
-            "additionalItems": False
+            "additionalItems": False,
         },
         "supergroup_pass_list": {
             "type": "array",
-            "items": {
-                "type": "string"
-            },
-            "minItems": 0
+            "items": {"type": "string"},
+            "minItems": 0,
         },
         "model_input": {
             "type": "object",
             "properties": {
-                "is_input_quantized": {
-                    "type": "string",
-                    "pattern": "^True$|^False$"
-                }
+                "is_input_quantized": {"type": "string", "pattern": "^True$|^False$"}
             },
-            "additionalProperties": False
+            "additionalProperties": False,
         },
         "model_output": {
             "type": "object",
             "properties": {
-                "is_output_quantized": {
-                    "type": "string",
-                    "pattern": "^True$|^False$"
-                }
+                "is_output_quantized": {"type": "string", "pattern": "^True$|^False$"}
             },
-            "additionalProperties": False
-        }
+            "additionalProperties": False,
+        },
     },
-    "required": ["defaults", "params", "op_type", "supergroups", "model_input", "model_output"],
-    "additionalProperties": False
+    "required": [
+        "defaults",
+        "params",
+        "op_type",
+        "supergroups",
+        "model_input",
+        "model_output",
+    ],
+    "additionalProperties": False,
 }

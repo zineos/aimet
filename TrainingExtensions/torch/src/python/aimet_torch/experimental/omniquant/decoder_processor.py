@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Process transformer models to get decoder list and LET pair modules for supporting models only """
+"""Process transformer models to get decoder list and LET pair modules for supporting models only"""
+
 from abc import ABC, abstractmethod
 from transformers import LlamaModel, LlamaForCausalLM
 from typing import List
@@ -44,42 +45,47 @@ from .defs import _LetPair
 
 LlamaModelGroup = (LlamaModel, LlamaForCausalLM)
 
+
 def get_transformer_processor(model):
-    """ Return transformer_processor based on model class family. """
+    """Return transformer_processor based on model class family."""
     if isinstance(model, LlamaModelGroup):
         return LlamaProcessor
 
     def _get_supporting_model_class():
-        """ Helping function to pretty print supporting model classes. """
+        """Helping function to pretty print supporting model classes."""
         model_class_str = ""
         for model_class in LlamaModelGroup:
             model_class_str += model_class.__name__
             model_class_str += ", "
         return model_class_str[:-2]
 
-    raise ValueError(f"AIMET Omniquant only support class: {_get_supporting_model_class()} from transformer package,\
-but got class {model.__class__}")
+    raise ValueError(
+        f"AIMET Omniquant only support class: {_get_supporting_model_class()} from transformer package,\
+but got class {model.__class__}"
+    )
+
 
 # pylint: disable=unnecessary-pass
 class TransformerProcessor(ABC):
-    """ Abstract class for transformer processors. """
+    """Abstract class for transformer processors."""
+
     transformer_block_list_path = ""
 
     @classmethod
     @abstractmethod
     def get_decoder_list(cls, model):
-        """ Method to get decoder module list. """
+        """Method to get decoder module list."""
         pass
 
     @classmethod
     @abstractmethod
     def get_let_module_pair(cls, decoder_block):
-        """ Method to get a list of let module pairs in a decoder_block. """
+        """Method to get a list of let module pairs in a decoder_block."""
         pass
 
     @classmethod
     def init_let_params(cls, let_pair_list: List[_LetPair], num_repeats):
-        """ Register let params to LET pairs. """
+        """Register let params to LET pairs."""
         for _let_pair in let_pair_list:
             prev_modules, foll_modules = _let_pair.prev, _let_pair.follow
             prev_out_ch = prev_modules[0].weight.shape[0]
@@ -91,12 +97,11 @@ class TransformerProcessor(ABC):
                 # foll_scale has the correct shape in let_modules. We will repeat the prev_scale num_repeats times to match the dimension.
                 # Ex pair:  self_attn.v_proj and self_attn.o_prj  for llama in gqa
                 if prev_out_ch != foll_in_ch:
-                    assert foll_in_ch//prev_out_ch == num_repeats
+                    assert foll_in_ch // prev_out_ch == num_repeats
                     nr = num_repeats
                 else:
                     nr = 1
-                module.register_let_params(foll_scale = prev_scale, num_repeats= nr)
-
+                module.register_let_params(foll_scale=prev_scale, num_repeats=nr)
 
             # Currently only one module is expected in prev_list
             assert len(prev_modules) == 1
@@ -109,24 +114,26 @@ class LlamaProcessor(TransformerProcessor):
     LlamaModel has transformer_block_list_path = "layers"
     LlamaForCausalLM has transformer_block_list_path = "model.layers"
     """
-    transformer_block_list_path = "layers" # Used for get_block_inputs
+
+    transformer_block_list_path = "layers"  # Used for get_block_inputs
 
     @classmethod
-    def get_decoder_list(cls, model)->torch.nn.ModuleList:
-        """ Method to get decoder module list. """
+    def get_decoder_list(cls, model) -> torch.nn.ModuleList:
+        """Method to get decoder module list."""
         if isinstance(model, LlamaForCausalLM):
             model = getattr(model, "model", model)
             cls.transformer_block_list_path = "model.layers"
 
         transformer_block_list = model.get_submodule("layers")
 
-        assert isinstance(transformer_block_list, torch.nn.ModuleList), \
+        assert isinstance(transformer_block_list, torch.nn.ModuleList), (
             f"transformer_block_list: {transformer_block_list} is not a ModuleList"
+        )
         return transformer_block_list
 
     @classmethod
     def get_let_module_pair(cls, decoder_block) -> List:
-        """ Method to get a list of let module pairs in a decoder_block. """
+        """Method to get a list of let module pairs in a decoder_block."""
         input_layernorm = decoder_block.get_submodule("input_layernorm")
         q_proj = decoder_block.get_submodule("self_attn.q_proj")
         k_proj = decoder_block.get_submodule("self_attn.k_proj")
@@ -141,5 +148,5 @@ class LlamaProcessor(TransformerProcessor):
             _LetPair([input_layernorm], [q_proj, k_proj, v_proj]),
             _LetPair([v_proj], [o_proj]),
             _LetPair([output_layernorm], [gate_proj, up_proj]),
-            _LetPair([up_proj], [down_proj])
-            ]
+            _LetPair([up_proj], [down_proj]),
+        ]

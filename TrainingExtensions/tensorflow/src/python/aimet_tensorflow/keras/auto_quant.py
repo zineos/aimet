@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Automatic Post-Training Quantization"""
+
 import os
 from dataclasses import dataclass
 from typing import List, Callable, Dict, Any, Tuple, Optional
@@ -67,7 +68,7 @@ cache = Cache()
 NUM_SAMPLES_FOR_PERFORMANCE_EVALUATION = None
 
 
-class AutoQuant: # pylint: disable=too-many-instance-attributes
+class AutoQuant:  # pylint: disable=too-many-instance-attributes
     """
     Integrate and apply post-training quantization techniques.
 
@@ -78,15 +79,17 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 allowed_accuracy_drop: float,
-                 eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
-                 unlabeled_dataset: tf.data.Dataset,
-                 default_param_bw: int = 8,
-                 default_output_bw: int = 8,
-                 default_quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-                 default_rounding_mode: str = "nearest",
-                 default_config_file: str = None):
+    def __init__(
+        self,
+        allowed_accuracy_drop: float,
+        eval_callback: Callable[[tf.keras.Model, Optional[int]], float],
+        unlabeled_dataset: tf.data.Dataset,
+        default_param_bw: int = 8,
+        default_output_bw: int = 8,
+        default_quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        default_rounding_mode: str = "nearest",
+        default_config_file: str = None,
+    ):
         """
         :param allowed_accuracy_drop: Maximum allowed accuracy drop.
         :param unlabeled_dataset: An unlabeled dataset for encoding computation.
@@ -108,14 +111,17 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         """
         if allowed_accuracy_drop < 0:
             raise ValueError(
-                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}"
-                .format(allowed_accuracy_drop)
+                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}".format(
+                    allowed_accuracy_drop
+                )
             )
 
-        validate_quantsim_inputs(default_quant_scheme,
-                                 default_rounding_mode,
-                                 default_output_bw,
-                                 default_param_bw)
+        validate_quantsim_inputs(
+            default_quant_scheme,
+            default_rounding_mode,
+            default_output_bw,
+            default_param_bw,
+        )
 
         self.allowed_accuracy_drop = allowed_accuracy_drop
         self.eval_callback = eval_callback
@@ -132,14 +138,17 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         self.forward_pass_callback = forward_pass_callback
         self._unlabeled_dataset = unlabeled_dataset
-        self.adaround_params = AdaroundParameters(unlabeled_dataset,
-                                                  len(unlabeled_dataset))
+        self.adaround_params = AdaroundParameters(
+            unlabeled_dataset, len(unlabeled_dataset)
+        )
 
-    def apply(self,
-              fp32_model: tf.keras.Model,
-              results_dir: str = "/tmp",
-              cache_id: str = None,
-              custom_objects: Dict = None) -> Tuple[tf.keras.Model, float, str]:
+    def apply(
+        self,
+        fp32_model: tf.keras.Model,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        custom_objects: Dict = None,
+    ) -> Tuple[tf.keras.Model, float, str]:
         """
         Apply post-training quantization techniques.
 
@@ -151,19 +160,20 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         :param custom_objects: Custom objects of model.
         :return: Tuple of (best model, eval score, encoding path).
         """
-        result = self._apply_helper(self._auto_quant_main,
-                                    fp32_model,
-                                    results_dir,
-                                    cache_id, custom_objects)
+        result = self._apply_helper(
+            self._auto_quant_main, fp32_model, results_dir, cache_id, custom_objects
+        )
 
         return result["model"], result["accuracy"], result["encoding_path"]
 
-    def _apply_helper(self,
-                      auto_quant_main_fn: Callable,
-                      fp32_model: tf.keras.Model,
-                      results_dir: str = "/tmp",
-                      cache_id: str = None,
-                      custom_objects: Dict = None) -> Dict[str, Any]:
+    def _apply_helper(
+        self,
+        auto_quant_main_fn: Callable,
+        fp32_model: tf.keras.Model,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        custom_objects: Dict = None,
+    ) -> Dict[str, Any]:
         """
 
         :param auto_quant_main_fn: Function that implements the main logic of AutoQuant.
@@ -195,17 +205,22 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
             eval_manager = _EvalManager(
                 quantsim_factory=self._create_quantsim_and_encodings,
                 eval_func=self._evaluate_model_performance,
-                results_dir=results_dir
+                results_dir=results_dir,
             )
 
-            ret = auto_quant_main_fn(fp32_model, target_acc,
-                                     eval_manager, results_dir, custom_objects)
+            ret = auto_quant_main_fn(
+                fp32_model, target_acc, eval_manager, results_dir, custom_objects
+            )
 
             acc = ret["accuracy"]
             encoding_path = ret["encoding_path"]
             applied_techniques = ", ".join(ret["applied_techniques"])
-            _logger.info("Best eval score: %f. Encoding path: %s. Applied techniques %s",
-                         acc, encoding_path, applied_techniques)
+            _logger.info(
+                "Best eval score: %f. Encoding path: %s. Applied techniques %s",
+                acc,
+                encoding_path,
+                applied_techniques,
+            )
 
             if acc < target_acc:
                 _logger.info(
@@ -236,14 +251,16 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         """
         self.adaround_params = adaround_params
 
-    def _create_quantsim_and_encodings(self,
-                                       model: tf.keras.Model,
-                                       quant_scheme: QuantScheme = None,
-                                       rounding_mode: str = None,
-                                       default_output_bw: int = None,
-                                       default_param_bw: int = None,
-                                       config_file: str = None,
-                                       encoding_path: str = None) -> QuantizationSimModel:
+    def _create_quantsim_and_encodings(
+        self,
+        model: tf.keras.Model,
+        quant_scheme: QuantScheme = None,
+        rounding_mode: str = None,
+        default_output_bw: int = None,
+        default_param_bw: int = None,
+        config_file: str = None,
+        encoding_path: str = None,
+    ) -> QuantizationSimModel:
         """
 
         :param model: Model to quantize
@@ -274,7 +291,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         return sim
 
-    def _apply_batchnorm_folding(self, model: tf.keras.Model) -> Tuple[tf.keras.Model, List[Tuple]]:
+    def _apply_batchnorm_folding(
+        self, model: tf.keras.Model
+    ) -> Tuple[tf.keras.Model, List[Tuple]]:
         """
         Apply batchnorm folding
         Note: Input model is not mutated
@@ -297,9 +316,9 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         """
         return equalize_model(model)
 
-    def _apply_adaround(self,
-                        model: tf.keras.Model,
-                        results_dir: str) -> Tuple[tf.keras.Model, str]:
+    def _apply_adaround(
+        self, model: tf.keras.Model, results_dir: str
+    ) -> Tuple[tf.keras.Model, str]:
         """
         Apply adaround
 
@@ -309,28 +328,34 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         :return: Output model and the path to the parameter encoding file
         """
         filename_prefix = "adaround"
-        adaround_encoding_path = os.path.join(results_dir,
-                                              f"{filename_prefix}.encodings")
+        adaround_encoding_path = os.path.join(
+            results_dir, f"{filename_prefix}.encodings"
+        )
 
-        _apply_adaround_cached = cache.mark("adaround", KerasModelSerializationProtocol())\
-            (Adaround.apply_adaround)
+        _apply_adaround_cached = cache.mark(
+            "adaround", KerasModelSerializationProtocol()
+        )(Adaround.apply_adaround)
 
-        model = _apply_adaround_cached(model,
-                                       self.adaround_params,
-                                       path=results_dir,
-                                       filename_prefix=filename_prefix,
-                                       default_param_bw=self.default_param_bw,
-                                       default_quant_scheme=self.default_quant_scheme,
-                                       config_file=self.default_config_file)
+        model = _apply_adaround_cached(
+            model,
+            self.adaround_params,
+            path=results_dir,
+            filename_prefix=filename_prefix,
+            default_param_bw=self.default_param_bw,
+            default_quant_scheme=self.default_quant_scheme,
+            config_file=self.default_config_file,
+        )
 
         return model, adaround_encoding_path
 
-    def _auto_quant_main(self,
-                         fp32_model: tf.keras.Model,
-                         target_acc: float,
-                         eval_manager: "_EvalManager",
-                         results_dir: str = "/tmp",
-                         custom_objects: Dict = None) -> Dict[str, Any]:
+    def _auto_quant_main(
+        self,
+        fp32_model: tf.keras.Model,
+        target_acc: float,
+        eval_manager: "_EvalManager",
+        results_dir: str = "/tmp",
+        custom_objects: Dict = None,
+    ) -> Dict[str, Any]:
         """
         Helper function of apply().
 
@@ -346,21 +371,33 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
             sess.diagnostics.add(
                 f"Weight-quantized eval score (W{self.default_param_bw}A32): {acc:f}"
             )
-            _logger.info("Weight-quantized eval score (W%dA32): %f", self.default_param_bw, acc)
+            _logger.info(
+                "Weight-quantized eval score (W%dA32): %f", self.default_param_bw, acc
+            )
 
-        with eval_manager.analysis_session("Activation Quantization Sensitivity") as sess:
+        with eval_manager.analysis_session(
+            "Activation Quantization Sensitivity"
+        ) as sess:
             acc = sess.eval(fp32_model, default_param_bw=32)
             sess.diagnostics.add(
                 f"Activation-quantized eval score (W32A{self.default_output_bw}): {acc:f}"
             )
-            _logger.info("Activation-quantized eval score (W32A%d): %f", self.default_output_bw, acc)
+            _logger.info(
+                "Activation-quantized eval score (W32A%d): %f",
+                self.default_output_bw,
+                acc,
+            )
 
         # Batchnorm Folding
         with eval_manager.ptq_session("Batchnorm Folding") as sess:
             model, folded_pairs = self._apply_batchnorm_folding(fp32_model)
             for conv, bn in folded_pairs:
                 sess.diagnostics.add(f"{conv} was merged with {bn}.")
-            sess.set_ptq_result(model=model, applied_techniques=["batchnorm_folding"], custom_objects=custom_objects)
+            sess.set_ptq_result(
+                model=model,
+                applied_techniques=["batchnorm_folding"],
+                custom_objects=custom_objects,
+            )
 
         best_result = eval_manager.get_best_ptq_result()
         if best_result.accuracy >= target_acc:
@@ -369,7 +406,11 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
         # Cross-Layer Equalization
         with eval_manager.ptq_session("Cross-Layer Equalization") as sess:
             model = self._apply_cross_layer_equalization(fp32_model)
-            sess.set_ptq_result(model=model, applied_techniques=["cross_layer_equalization"], custom_objects=custom_objects)
+            sess.set_ptq_result(
+                model=model,
+                applied_techniques=["cross_layer_equalization"],
+                custom_objects=custom_objects,
+            )
 
         best_result = eval_manager.get_best_ptq_result()
         if best_result.accuracy >= target_acc:
@@ -377,12 +418,15 @@ class AutoQuant: # pylint: disable=too-many-instance-attributes
 
         # Adaround
         with eval_manager.ptq_session("AdaRound") as sess:
-            model, encoding_path = self._apply_adaround(best_result.load_model(custom_objects=custom_objects),
-                                                        results_dir)
-            sess.set_ptq_result(model=model,
-                                encoding_path=encoding_path,
-                                applied_techniques=[*best_result.applied_techniques, "adaround"],
-                                custom_objects=custom_objects)
+            model, encoding_path = self._apply_adaround(
+                best_result.load_model(custom_objects=custom_objects), results_dir
+            )
+            sess.set_ptq_result(
+                model=model,
+                encoding_path=encoding_path,
+                applied_techniques=[*best_result.applied_techniques, "adaround"],
+                custom_objects=custom_objects,
+            )
 
         return eval_manager.get_best_ptq_result().as_dict()
 
@@ -396,6 +440,7 @@ class PtqResult:
     :param accuracy: Accuracy of the model.
     :param applied_techniques: Applied ptq techniques.
     """
+
     model_path: str
     encoding_path: str
     accuracy: float
@@ -407,7 +452,9 @@ class PtqResult:
         :param custom_objects: Custom objects of model.
         :return: Loaded model
         """
-        return tf.keras.models.load_model(self.model_path, custom_objects=custom_objects)
+        return tf.keras.models.load_model(
+            self.model_path, custom_objects=custom_objects
+        )
 
     def as_dict(self, custom_objects: Dict = None):
         """
@@ -427,10 +474,12 @@ class _EvalManager:
     Evaluation manager for AutoQuant.
     """
 
-    def __init__(self,
-                 quantsim_factory: Callable,
-                 eval_func: Callable[[tf.keras.Model], float],
-                 results_dir: str):
+    def __init__(
+        self,
+        quantsim_factory: Callable,
+        eval_func: Callable[[tf.keras.Model], float],
+        results_dir: str,
+    ):
         self._quantsim_factory = quantsim_factory
         self._eval_func = eval_func
         self._results_dir = results_dir
@@ -476,10 +525,12 @@ class _EvalManager:
         :session_cls: Class of the session.
         :return: Session object.
         """
-        session = session_cls(title,
-                              self._quantsim_factory,
-                              self._eval_func,
-                              results_dir=os.path.join(self._results_dir, ".trace"))
+        session = session_cls(
+            title,
+            self._quantsim_factory,
+            self._eval_func,
+            results_dir=os.path.join(self._results_dir, ".trace"),
+        )
         self._all_sessions.append(session)
         return session
 
@@ -517,11 +568,14 @@ class _EvalSession:
     Each session object contains a title and diagnostics produced during the session.
     The collected diagnostics will be exported into a html file by _EvalManager.
     """
-    def __init__(self,
-                 title: str,
-                 quantsim_factory: Callable,
-                 eval_func: Callable[[tf.keras.Model], float],
-                 results_dir: str):
+
+    def __init__(
+        self,
+        title: str,
+        quantsim_factory: Callable,
+        eval_func: Callable[[tf.keras.Model], float],
+        results_dir: str,
+    ):
         """
         :param title:
         :param quantsim_factory:
@@ -581,6 +635,7 @@ class _PtqSession(_EvalSession):
     Each PTQ session object should call `set_ptq_result` exactly once
     inside a with-as block.
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._ptq_result = None
@@ -592,13 +647,15 @@ class _PtqSession(_EvalSession):
             raise RuntimeError
         return self._ptq_result
 
-    def set_ptq_result(self,
-                       applied_techniques: List[str],
-                       model: tf.keras.Model = None,
-                       sim: QuantizationSimModel = None,
-                       acc: float = None,
-                       custom_objects: Dict = None,
-                       **kwargs):
+    def set_ptq_result(
+        self,
+        applied_techniques: List[str],
+        model: tf.keras.Model = None,
+        sim: QuantizationSimModel = None,
+        acc: float = None,
+        custom_objects: Dict = None,
+        **kwargs,
+    ):
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block
 
@@ -624,11 +681,13 @@ class _PtqSession(_EvalSession):
 
         self._set_ptq_result(sim, acc, applied_techniques, custom_objects)
 
-    def _set_ptq_result(self,
-                        sim: QuantizationSimModel,
-                        acc: float,
-                        applied_techniques: List[str],
-                        custom_objects: Dict = None) -> PtqResult:
+    def _set_ptq_result(
+        self,
+        sim: QuantizationSimModel,
+        acc: float,
+        applied_techniques: List[str],
+        custom_objects: Dict = None,
+    ) -> PtqResult:
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block
         :param sim: Result of PTQ. The quantization encoding (compute_encodings()) is
@@ -643,22 +702,34 @@ class _PtqSession(_EvalSession):
                 "sess.eval() can be called only once per each _EvalSession instance."
             )
         model_path, encoding_path = self._export(sim, custom_objects)
-        self._ptq_result = PtqResult(model_path=model_path,
-                                     encoding_path=encoding_path,
-                                     accuracy=acc,
-                                     applied_techniques=applied_techniques)
+        self._ptq_result = PtqResult(
+            model_path=model_path,
+            encoding_path=encoding_path,
+            accuracy=acc,
+            applied_techniques=applied_techniques,
+        )
         _logger.info(self._ptq_result)
         return self._ptq_result
 
-    def _export(self, sim: QuantizationSimModel, custom_objects: Dict = None) -> Tuple[str, str]:
+    def _export(
+        self, sim: QuantizationSimModel, custom_objects: Dict = None
+    ) -> Tuple[str, str]:
         """
         Export quantsim
         :param sim: QuantizationSimModel object to export
         :return: The paths where model and encoding are saved
         """
-        sim.export(path=self._results_dir, filename_prefix=self._filename, custom_objects=custom_objects)
+        sim.export(
+            path=self._results_dir,
+            filename_prefix=self._filename,
+            custom_objects=custom_objects,
+        )
         model_path = os.path.join(self._results_dir, f"{self._filename}")
         encoding_path = os.path.join(self._results_dir, f"{self._filename}.encodings")
-        _logger.info("The results of %s is saved in %s and %s.",
-                     self._title, model_path, encoding_path)
+        _logger.info(
+            "The results of %s is saved in %s and %s.",
+            self._title,
+            model_path,
+            encoding_path,
+        )
         return model_path, encoding_path

@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Loss function for Adaround """
+"""Loss function for Adaround"""
 
 from typing import Tuple
 import numpy as np
@@ -49,7 +49,14 @@ class AdaroundHyperParameters:
     """
     Hyper parameters for Adaround
     """
-    def __init__(self, num_iterations: int, reg_param: float, beta_range: Tuple, warm_start: float):
+
+    def __init__(
+        self,
+        num_iterations: int,
+        reg_param: float,
+        beta_range: Tuple,
+        warm_start: float,
+    ):
         """
         :param num_iterations: Number of maximum iterations to adaround layer
         :param reg_param: Regularization parameter, trading off between rounding loss vs reconstruction loss
@@ -67,21 +74,27 @@ class AdaroundLoss:
     Calculates the Reconstruction loss and Rounding loss - needed for Adaround optimization to
     learn weight rounding
     """
+
     @staticmethod
-    def compute_recon_loss(ada_quantized_output: torch.Tensor, orig_output: torch.Tensor) -> torch.Tensor:
+    def compute_recon_loss(
+        ada_quantized_output: torch.Tensor, orig_output: torch.Tensor
+    ) -> torch.Tensor:
         """
         Compute Reconstruction Loss using Squared Frobenius Norm - first part of Combined Loss
         :param ada_quantized_output: Activation output from quantized wrapper module
         :param orig_output: Activation output from original module
         :return: reconstruction loss
         """
-        recon_loss = (torch.norm(ada_quantized_output - orig_output, p="fro", dim=1) ** 2).mean()
+        recon_loss = (
+            torch.norm(ada_quantized_output - orig_output, p="fro", dim=1) ** 2
+        ).mean()
 
         return recon_loss
 
     @classmethod
-    def compute_round_loss(cls, alpha: torch.Tensor, opt_params: AdaroundHyperParameters,
-                           cur_iter: int) -> torch.Tensor:
+    def compute_round_loss(
+        cls, alpha: torch.Tensor, opt_params: AdaroundHyperParameters, cur_iter: int
+    ) -> torch.Tensor:
         """
         Compute Rounding Loss - second part of Combined Loss
         :param alpha: parameter 'alpha' to be optimized, float32 tensor same shape as weight tensor
@@ -95,11 +108,21 @@ class AdaroundLoss:
 
         else:
             # compute rectified sigmoid of parameter 'alpha' which maps it between zero and one
-            h_alpha = torch.clamp(torch.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) +
-                                  AdaroundConstants.GAMMA, 0, 1)
+            h_alpha = torch.clamp(
+                torch.sigmoid(alpha)
+                * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)
+                + AdaroundConstants.GAMMA,
+                0,
+                1,
+            )
 
             # compute beta parameter to anneal the rounding loss
-            beta = cls._compute_beta(opt_params.num_iterations, cur_iter, opt_params.beta_range, opt_params.warm_start)
+            beta = cls._compute_beta(
+                opt_params.num_iterations,
+                cur_iter,
+                opt_params.beta_range,
+                opt_params.warm_start,
+            )
 
             # calculate regularization term - which ensures parameter to converge to exactly zeros and ones
             # at the end of optimization
@@ -111,7 +134,9 @@ class AdaroundLoss:
         return round_loss
 
     @staticmethod
-    def _compute_beta(max_iter: int, cur_iter: int, beta_range: Tuple, warm_start: float) -> float:
+    def _compute_beta(
+        max_iter: int, cur_iter: int, beta_range: Tuple, warm_start: float
+    ) -> float:
         """
         Compute beta parameter used in regularization function using cosine decay
         :param max_iter: total maximum number of iterations
@@ -120,7 +145,9 @@ class AdaroundLoss:
         :param warm_start: warm up period, during which rounding loss has zero effect
         :return: parameter beta
         """
-        assert cur_iter < max_iter, 'Current iteration should be less than total maximum number of iterations.'
+        assert cur_iter < max_iter, (
+            "Current iteration should be less than total maximum number of iterations."
+        )
 
         #  Start and stop beta for annealing of rounding loss (start_beta, end_beta)
         start_beta, end_beta = beta_range

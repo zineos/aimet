@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Evaluator class for mixed precision """
+"""Evaluator class for mixed precision"""
+
 import os
 from collections import defaultdict, OrderedDict
 import pickle
@@ -45,7 +46,9 @@ import torch
 from torch.utils.data import DataLoader
 from aimet_common.utils import AimetLogger
 from aimet_common.defs import CallbackFunc
-from aimet_common.amp.mixed_precision_algo import GreedyMixedPrecisionAlgo as MixedPrecisionAlgo
+from aimet_common.amp.mixed_precision_algo import (
+    GreedyMixedPrecisionAlgo as MixedPrecisionAlgo,
+)
 from aimet_common.amp.quantizer_groups import reformat_supported_kernels
 from aimet_common.amp.utils import (
     sort_accuracy_list,
@@ -58,7 +61,12 @@ from aimet_common.amp.convert_ops_reduction import SamplingStrategy
 from aimet_torch import utils
 from aimet_torch._base.amp import utils as mixed_precision_utils
 from aimet_torch._base.amp.convert_ops_reduction import ReduceConvertOps
-from aimet_torch._base.amp.quantizer_groups import find_quantizer_group, QuantizerGroup, get_module_name_to_module_dict, find_supported_candidates
+from aimet_torch._base.amp.quantizer_groups import (
+    find_quantizer_group,
+    QuantizerGroup,
+    get_module_name_to_module_dict,
+    find_supported_candidates,
+)
 from aimet_torch._base.quantsim import _QuantizationSimModelInterface
 
 
@@ -69,9 +77,12 @@ class EvalCallbackFactory:
     """
     Factory class for various built-in eval callbacks
     """
-    def __init__(self,
-                 data_loader: DataLoader,
-                 forward_fn: Callable[[torch.nn.Module, Any], torch.Tensor] = None):
+
+    def __init__(
+        self,
+        data_loader: DataLoader,
+        forward_fn: Callable[[torch.nn.Module, Any], torch.Tensor] = None,
+    ):
         """
 
         :param data_loader: Data loader to be used for evaluation
@@ -101,8 +112,7 @@ class EvalCallbackFactory:
     _DEFAULT_SQNR_NUM_SAMPLES = 128
 
     def sqnr(
-        self,
-        num_samples: int = _DEFAULT_SQNR_NUM_SAMPLES
+        self, num_samples: int = _DEFAULT_SQNR_NUM_SAMPLES
     ) -> Callable[[torch.nn.Module], float]:
         """
         Returns SQNR eval callback.
@@ -111,11 +121,13 @@ class EvalCallbackFactory:
         :return: A callback function that evaluates the input model's SQNR
                  between fp32 outputs and fake-quantized outputs
         """
-        evaluate_sqnr = functools.partial(_evaluate_sqnr,
-                                          data_loader=self._data_loader,
-                                          forward_fn=self._forward_fn_wrapper,
-                                          num_samples=num_samples,
-                                          batchwise_fp32_outputs_list=self._batchwise_fp32_outputs_list)
+        evaluate_sqnr = functools.partial(
+            _evaluate_sqnr,
+            data_loader=self._data_loader,
+            forward_fn=self._forward_fn_wrapper,
+            num_samples=num_samples,
+            batchwise_fp32_outputs_list=self._batchwise_fp32_outputs_list,
+        )
         return CallbackFunc(evaluate_sqnr)
 
 
@@ -127,11 +139,14 @@ def _default_forward_fn(model, inputs):
     return model(*inputs)
 
 
-def _evaluate_sqnr(model: torch.nn.Module, _: Any,
-                   data_loader: DataLoader,
-                   forward_fn: Callable[[torch.nn.Module, Any], torch.Tensor],
-                   num_samples: int,
-                   batchwise_fp32_outputs_list: list) -> float:
+def _evaluate_sqnr(
+    model: torch.nn.Module,
+    _: Any,
+    data_loader: DataLoader,
+    forward_fn: Callable[[torch.nn.Module, Any], torch.Tensor],
+    num_samples: int,
+    batchwise_fp32_outputs_list: list,
+) -> float:
     """
     Compute SQNR given a model and a data loader.
 
@@ -179,9 +194,9 @@ def _evaluate_sqnr(model: torch.nn.Module, _: Any,
     return sqnr_db
 
 
-def _compute_sqnr(orig_tensor: torch.Tensor,
-                  noisy_tensor: torch.Tensor,
-                  in_place: bool = False) -> float:
+def _compute_sqnr(
+    orig_tensor: torch.Tensor, noisy_tensor: torch.Tensor, in_place: bool = False
+) -> float:
     """
     Compute SQNR between two tensors.
 
@@ -209,22 +224,26 @@ def _compute_sqnr(orig_tensor: torch.Tensor,
 
 
 class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
-    """ Naive Greedy MixedPrecisionAlgo class """
+    """Naive Greedy MixedPrecisionAlgo class"""
 
-    ENABLE_MP_PROFILE_OPTIMIZE = False # Enables op_graph.optimize() during Phase-2
-    ENABLE_CONVERT_OP_REDUCTION = False # Run phase-3
+    ENABLE_MP_PROFILE_OPTIMIZE = False  # Enables op_graph.optimize() during Phase-2
+    ENABLE_CONVERT_OP_REDUCTION = False  # Run phase-3
 
     # pylint: disable=too-many-arguments
-    def __init__(self, sim: _QuantizationSimModelInterface,
-                 dummy_input: Union[torch.Tensor, Tuple],
-                 candidates: List[CANDIDATE_WITH_DTYPE],
-                 eval_callback_for_phase1: Callable[[torch.nn.Module], float],
-                 eval_callback_for_phase2: Callable[[torch.nn.Module], float],
-                 results_dir: str, clean_start: bool,
-                 forward_pass_callback: Callable[[torch.nn.Module], Any],
-                 use_all_amp_candidates: bool = False,
-                 phase2_reverse: bool = False,
-                 phase1_optimize: bool = False):
+    def __init__(
+        self,
+        sim: _QuantizationSimModelInterface,
+        dummy_input: Union[torch.Tensor, Tuple],
+        candidates: List[CANDIDATE_WITH_DTYPE],
+        eval_callback_for_phase1: Callable[[torch.nn.Module], float],
+        eval_callback_for_phase2: Callable[[torch.nn.Module], float],
+        results_dir: str,
+        clean_start: bool,
+        forward_pass_callback: Callable[[torch.nn.Module], Any],
+        use_all_amp_candidates: bool = False,
+        phase2_reverse: bool = False,
+        phase1_optimize: bool = False,
+    ):
         """
 
         :param sim: Quantized sim model
@@ -257,30 +276,37 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         self.phase1_optimize = phase1_optimize
         self.dummy_input = dummy_input
 
-        super().__init__(sim,
-                         candidates,
-                         eval_callback_for_phase1,
-                         eval_callback_for_phase2,
-                         forward_pass_callback,
-                         mac_dict,
-                         results_dir,
-                         clean_start,
-                         phase2_reverse)
+        super().__init__(
+            sim,
+            candidates,
+            eval_callback_for_phase1,
+            eval_callback_for_phase2,
+            forward_pass_callback,
+            mac_dict,
+            results_dir,
+            clean_start,
+            phase2_reverse,
+        )
 
         supported_kernels = reformat_supported_kernels(sim.get_supported_kernels())
 
         # Find 1. candidates for each of the quantizers by using supported_kernels, candidates and
         # use_all_amp_candidates (flag)
         # 2. max_candidate_options based on the candidates which are present in all the quantizers
-        self._supported_candidates_per_quantizer_group, self._baseline_candidate_options = find_supported_candidates(
+        (
+            self._supported_candidates_per_quantizer_group,
+            self._baseline_candidate_options,
+        ) = find_supported_candidates(
             self.quantizer_groups,
             candidates,
             supported_kernels,
             get_module_name_to_module_dict(sim),
-            use_all_amp_candidates)
+            use_all_amp_candidates,
+        )
 
-
-    def _create_and_save_accuracy_list_optimized(self, baseline_candidate) -> ACCURACY_LIST:
+    def _create_and_save_accuracy_list_optimized(
+        self, baseline_candidate
+    ) -> ACCURACY_LIST:
         """
         Create a list of tuples of (quantizer_group, bitwidth, accuracy score)
 
@@ -294,7 +320,7 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
 
         accuracy_list: ACCURACY_LIST = []
 
-        file = os.path.join(self._results_dir, '.cache', 'accuracy_list.pkl')
+        file = os.path.join(self._results_dir, ".cache", "accuracy_list.pkl")
         combinations_already_computed = set()
 
         if os.path.isfile(file):
@@ -302,7 +328,7 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
                 os.remove(file)
                 logger.info("Removed old cached files and restarting computation")
             else:
-                with open(file, 'rb') as f:
+                with open(file, "rb") as f:
                     accuracy_list = pickle.load(f)
 
                 combinations_already_computed.update(
@@ -315,7 +341,9 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         try:
             # Disable all quantizers
             for quantizer_group in self.quantizer_groups:
-                quantizers = quantizer_group.get_active_quantizers(self._module_name_dict)
+                quantizers = quantizer_group.get_active_quantizers(
+                    self._module_name_dict
+                )
                 disable_quantizers(quantizers)
                 disabled_quantizers[quantizer_group] = quantizers
 
@@ -323,7 +351,10 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
             # quantizer_groups_per_candidate is the dictionary with keys as candidates and values as quantizer groups that supports the corresponding candidate
             # quantizer_groups_per_candidate is like reverse mapping to self._supported_candidates_per_quantizer_group
             quantizer_groups_per_candidate = defaultdict(list)
-            for quantizer_group, candidates in self._supported_candidates_per_quantizer_group.items():
+            for (
+                quantizer_group,
+                candidates,
+            ) in self._supported_candidates_per_quantizer_group.items():
                 for candidate in candidates:
                     quantizer_groups_per_candidate[candidate].append(quantizer_group)
 
@@ -333,15 +364,20 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
                 if candidate == baseline_candidate:
                     continue
 
-                 # configure the sim model with the candidate by enabling the quantizers and set quantizers to corresponding candidate
+                # configure the sim model with the candidate by enabling the quantizers and set quantizers to corresponding candidate
                 for quantizer_group in quantizer_groups:
                     quantizers = disabled_quantizers[quantizer_group]
                     try:
                         enable_quantizers(quantizers)
                         # Set quantizer bitwidth to candidate (bitwidth)
-                        quantizer_group.set_quantizers_to_candidate(self._module_name_dict, candidate)
+                        quantizer_group.set_quantizers_to_candidate(
+                            self._module_name_dict, candidate
+                        )
                     except RuntimeError as e:
-                        logger.info("Exception occured while setting Quantizers to Candidate: %s", e)
+                        logger.info(
+                            "Exception occured while setting Quantizers to Candidate: %s",
+                            e,
+                        )
 
                 # list to store all the param quantizers
                 param_quantizers = []
@@ -354,18 +390,20 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
                 # disable the parameter quantization
                 disable_quantizers(param_quantizers)
 
-
                 # compute encodings with out parameter quantization
-                self._sim.compute_encodings(self.algo_params.forward_pass_callback,
-                                            self.algo_params.forward_pass_callback_args)
+                self._sim.compute_encodings(
+                    self.algo_params.forward_pass_callback,
+                    self.algo_params.forward_pass_callback_args,
+                )
 
                 # enable the parameter quantization
                 enable_quantizers(param_quantizers)
 
-
                 # Disable all the quantizers
                 for quantizer_group in quantizer_groups:
-                    quantizers = quantizer_group.get_active_quantizers(self._module_name_dict)
+                    quantizers = quantizer_group.get_active_quantizers(
+                        self._module_name_dict
+                    )
                     disable_quantizers(quantizers)
                     disabled_quantizers[quantizer_group] = quantizers
 
@@ -378,44 +416,65 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
 
                         # If starting the computation from an already existing state, then check if that combination
                         # has already been executed
-                        if (quantizer_group, candidate) in combinations_already_computed:
+                        if (
+                            quantizer_group,
+                            candidate,
+                        ) in combinations_already_computed:
                             continue
                         # Compute accuracy of model with new candidate (bitwidth)
-                        eval_score = self.evaluate_model(self.algo_params.eval_callback_for_phase1)
+                        eval_score = self.evaluate_model(
+                            self.algo_params.eval_callback_for_phase1
+                        )
 
-                        bit_ops_reduction = self._find_bit_ops_reduction_for_acc_list(quantizer_group,
-                                                                                      baseline_candidate,
-                                                                                      candidate)
-                        accuracy_list.append((quantizer_group, candidate, eval_score, bit_ops_reduction))
+                        bit_ops_reduction = self._find_bit_ops_reduction_for_acc_list(
+                            quantizer_group, baseline_candidate, candidate
+                        )
+                        accuracy_list.append(
+                            (quantizer_group, candidate, eval_score, bit_ops_reduction)
+                        )
                         # Sort accuracy list, first by descending accuracy score, then by descending order of addition of bitwidths if accuracy
                         # scores are identical, if that is also identical we sort by relative bit ops change in descending order
                         # If bit ops reduction is also the same, then we sort in ascending order based on occurence of
                         # quantizer group in the model
-                        accuracy_list = sort_accuracy_list(accuracy_list, index_of_quantizer_group)
+                        accuracy_list = sort_accuracy_list(
+                            accuracy_list, index_of_quantizer_group
+                        )
                         self._export_accuracy_list(accuracy_list, self._results_dir)
-                        logger.info('\n Quantizer: %s candidate: %s eval_score: %f \n', quantizer_group,
-                                    candidate, eval_score)
+                        logger.info(
+                            "\n Quantizer: %s candidate: %s eval_score: %f \n",
+                            quantizer_group,
+                            candidate,
+                            eval_score,
+                        )
                     finally:
                         # Disable the quantizer
                         disable_quantizers(quantizers)
         finally:
-
             # set all quantizers to baseline candidate
             for quantizer_group in self.quantizer_groups:
                 quantizers = disabled_quantizers[quantizer_group]
                 try:
                     # Enable the disabled quantizers
                     enable_quantizers(quantizers)
-                    quantizer_group.set_quantizers_to_candidate(self._module_name_dict, baseline_candidate)
+                    quantizer_group.set_quantizers_to_candidate(
+                        self._module_name_dict, baseline_candidate
+                    )
                 except RuntimeError as e:
-                    logger.info("Exception occured while setting Quantizers to Candidate: %s", e)
+                    logger.info(
+                        "Exception occured while setting Quantizers to Candidate: %s", e
+                    )
 
-        logger.info('Completed Accuracy list computation')
+        logger.info("Completed Accuracy list computation")
         # Recompute encodings after quantizer's bitwidth is set back to self._max_bitwidth
-        self._sim.compute_encodings(self.algo_params.forward_pass_callback, self.algo_params.forward_pass_callback_args)
+        self._sim.compute_encodings(
+            self.algo_params.forward_pass_callback,
+            self.algo_params.forward_pass_callback_args,
+        )
         return accuracy_list
 
-    def _evaluate_model(self, eval_callback: Callable[[torch.nn.Module], float]) -> float:
+    def _evaluate_model(
+        self, eval_callback: Callable[[torch.nn.Module], float]
+    ) -> float:
         """
         Evaluates a model
 
@@ -443,10 +502,10 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         return self._baseline_candidate_options
 
     def _find_bit_ops_reduction_for_acc_list(
-            self,
-            quantizer_group: QuantizerGroup,
-            max_candidate: CANDIDATE_WITH_DTYPE,
-            candidate: CANDIDATE_WITH_DTYPE,
+        self,
+        quantizer_group: QuantizerGroup,
+        max_candidate: CANDIDATE_WITH_DTYPE,
+        candidate: CANDIDATE_WITH_DTYPE,
     ) -> int:
         """
         Finds reduction in bit ops from max candidate to new candidate
@@ -456,16 +515,17 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         :param candidate: Activation bitwidth, parameter bitwidth
         :return: Bit ops reduction
         """
-        return mixed_precision_utils.find_bit_ops_reduction(quantizer_group, self._mac_dict,
-                                                            max_candidate, candidate)
+        return mixed_precision_utils.find_bit_ops_reduction(
+            quantizer_group, self._mac_dict, max_candidate, candidate
+        )
 
     def calculate_running_bit_ops(
-            self,
-            quantizer_group: QuantizerGroup,
-            module_bitwidth_dict: Dict,
-            max_candidate: CANDIDATE_WITH_DTYPE,
-            candidate: CANDIDATE_WITH_DTYPE,
-            running_bit_ops: int,
+        self,
+        quantizer_group: QuantizerGroup,
+        module_bitwidth_dict: Dict,
+        max_candidate: CANDIDATE_WITH_DTYPE,
+        candidate: CANDIDATE_WITH_DTYPE,
+        running_bit_ops: int,
     ) -> int:
         """
         Calculates running bit ops value for every quantizer group
@@ -477,11 +537,14 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         :param running_bit_ops: Running bit ops value calculated uptil the quantizer group
         :return: Running bit ops value
         """
-        running_bit_ops = mixed_precision_utils.calculate_running_bit_ops(self._mac_dict, quantizer_group,
-                                                                          module_bitwidth_dict,
-                                                                          max_candidate,
-                                                                          candidate,
-                                                                          running_bit_ops)
+        running_bit_ops = mixed_precision_utils.calculate_running_bit_ops(
+            self._mac_dict,
+            quantizer_group,
+            module_bitwidth_dict,
+            max_candidate,
+            candidate,
+            running_bit_ops,
+        )
         return running_bit_ops
 
     def _create_and_save_accuracy_list(self, baseline_candidate):
@@ -498,12 +561,15 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         finally:
             delattr(self._sim, "disable_all_quantizers")
 
-    def set_quantizer_groups_candidates(self, quantizer_group_candidates: List[Tuple]) -> None:
+    def set_quantizer_groups_candidates(
+        self, quantizer_group_candidates: List[Tuple]
+    ) -> None:
         """
         Setter function to set quantizer groups to given candidate. This method also computes the encodings following
         the change in quantizer groups
         :param quantizer_group_candidates: list of quantizer groups and their candidates
         """
+
         def validate_quantizer_candidate(qg: QuantizerGroup, qg_candidate) -> bool:
             """
             Helper method to validate whether candidate can be applied
@@ -511,7 +577,9 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
             :param qg_candidate: the new candidate which needs to be applied to the quantizer group
             :return: boolean value True if success else False
             """
-            supported_candidates = self._supported_candidates_per_quantizer_group.get(qg)
+            supported_candidates = self._supported_candidates_per_quantizer_group.get(
+                qg
+            )
             if not qg.parameter_quantizers:
                 (activation_bw, activation_data_type), _ = qg_candidate
                 # Since only activation quantizers are present, validate activation candidate
@@ -525,9 +593,14 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
 
         for quantizer_group, candidate in quantizer_group_candidates:
             assert validate_quantizer_candidate(quantizer_group, candidate)
-            quantizer_group.set_quantizers_to_candidate(self._module_name_dict, candidate)
+            quantizer_group.set_quantizers_to_candidate(
+                self._module_name_dict, candidate
+            )
 
-        self._sim.compute_encodings(self.algo_params.forward_pass_callback, self.algo_params.forward_pass_callback_args)
+        self._sim.compute_encodings(
+            self.algo_params.forward_pass_callback,
+            self.algo_params.forward_pass_callback_args,
+        )
 
     def _create_op_graph(self, sim):
         """
@@ -543,8 +616,10 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         """
 
         # Recompute quantizer encodings
-        self._sim.compute_encodings(self.algo_params.forward_pass_callback,
-                                    self.algo_params.forward_pass_callback_args)
+        self._sim.compute_encodings(
+            self.algo_params.forward_pass_callback,
+            self.algo_params.forward_pass_callback_args,
+        )
         # Compute new accuracy score
         eval_score = self.evaluate_model(self.algo_params.eval_callback_for_phase2)
 
@@ -556,36 +631,54 @@ class GreedyMixedPrecisionAlgo(MixedPrecisionAlgo):
         Reduce mixed precision convert ops if enabled and supported
         """
         if self.ENABLE_CONVERT_OP_REDUCTION:
-            reduce_convert_ops_algo = ReduceConvertOps(self._sim, self.quantizer_groups, self.algo_params.candidates, self._mac_dict)
+            reduce_convert_ops_algo = ReduceConvertOps(
+                self._sim,
+                self.quantizer_groups,
+                self.algo_params.candidates,
+                self._mac_dict,
+            )
 
             # Check if phase 2 solution is all 8 bits
             phase2_all_8bits = all(
-                sol == 8 for sol in
-                reduce_convert_ops_algo._phase_two_sol.values()
+                sol == 8 for sol in reduce_convert_ops_algo._phase_two_sol.values()
             )
 
             # Check if phase 2 solution is all 16 bits
             phase2_all_16bits = all(
-                sol == 16 for sol in
-                reduce_convert_ops_algo._phase_two_sol.values()
+                sol == 16 for sol in reduce_convert_ops_algo._phase_two_sol.values()
             )
 
-            dummy_input_cpu = reduce_convert_ops_algo.convert_tensor_to_cpu(self.dummy_input)
+            dummy_input_cpu = reduce_convert_ops_algo.convert_tensor_to_cpu(
+                self.dummy_input
+            )
 
             if phase2_all_8bits or phase2_all_16bits:
-                logger.warning('Skipping phase3 because there is no scope to reduce convert-op overhead')
+                logger.warning(
+                    "Skipping phase3 because there is no scope to reduce convert-op overhead"
+                )
             else:
                 for alpha in reduce_convert_ops_algo.DEFAULT_ALPHA_OPTIONS:
-                    phase_three_sol, solve_data_dict = \
-                        reduce_convert_ops_algo.run_amp_phase_3(alpha, SamplingStrategy.weighted_with_predicted_convert_cost)
-                    qg_candidates = reduce_convert_ops_algo.generate_qg_solution(phase_three_sol)
+                    phase_three_sol, solve_data_dict = (
+                        reduce_convert_ops_algo.run_amp_phase_3(
+                            alpha, SamplingStrategy.weighted_with_predicted_convert_cost
+                        )
+                    )
+                    qg_candidates = reduce_convert_ops_algo.generate_qg_solution(
+                        phase_three_sol
+                    )
 
                     # save sim state with the new quantizer settings
                     self.set_quantizer_groups_candidates(qg_candidates)
 
                     # export
-                    self._sim.export(path=self._results_dir, filename_prefix=f'AMP_ph3_export_alpha_{alpha}',
-                                     dummy_input=dummy_input_cpu)
+                    self._sim.export(
+                        path=self._results_dir,
+                        filename_prefix=f"AMP_ph3_export_alpha_{alpha}",
+                        dummy_input=dummy_input_cpu,
+                    )
 
-                    reduce_convert_ops_algo.save_phase_3_data_as_json(solve_data_dict, self._results_dir,
-                                                                      filename_suffix="alpha_{}".format(alpha))
+                    reduce_convert_ops_algo.save_phase_3_data_as_json(
+                        solve_data_dict,
+                        self._results_dir,
+                        filename_suffix="alpha_{}".format(alpha),
+                    )

@@ -47,15 +47,13 @@ from aimet_torch.layer_selector import ConvFcLayerSelector, ConvNoDepthwiseLayer
 
 
 class TestLayerSelector(unittest.TestCase):
-
     def test_select_all_conv_layers(self):
-
         mock_output_shape = (1, 1, 1, 1)
 
         # Two regular conv layers
-        layer1 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
-        layer2 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
-        layer3 = Layer(Conv2d(10, 10, 5, groups=10), '', mock_output_shape)
+        layer1 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
+        layer2 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
+        layer3 = Layer(Conv2d(10, 10, 5, groups=10), "", mock_output_shape)
 
         layer_db = MagicMock()
         layer_db.__iter__.return_value = [layer1, layer2, layer3]
@@ -65,8 +63,8 @@ class TestLayerSelector(unittest.TestCase):
         layer_db.mark_picked_layers.assert_called_once_with([layer1, layer2])
 
         # One conv and one linear layer
-        layer1 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
-        layer2 = Layer(Linear(10, 20), '', mock_output_shape)
+        layer1 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
+        layer2 = Layer(Linear(10, 20), "", mock_output_shape)
 
         layer_db = MagicMock()
         layer_db.__iter__.return_value = [layer1, layer2]
@@ -75,8 +73,8 @@ class TestLayerSelector(unittest.TestCase):
         layer_db.mark_picked_layers.assert_called_once_with([layer1])
 
         # Two regular conv layers - one in ignore list
-        layer1 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
-        layer2 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
+        layer1 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
+        layer2 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
 
         layer_db = MagicMock()
         layer_db.__iter__.return_value = [layer1, layer2]
@@ -85,13 +83,12 @@ class TestLayerSelector(unittest.TestCase):
         layer_db.mark_picked_layers.assert_called_once_with([layer1])
 
     def test_select_all_conv_and_fc_layers(self):
-
         mock_output_shape = (1, 1, 1, 1)
 
         # one regular conv layer, one depth wise conv layer and one FC layer
-        layer1 = Layer(Conv2d(10, 10, 5, groups=10), '', mock_output_shape)
-        layer2 = Layer(Linear(10, 20), '', mock_output_shape)
-        layer3 = Layer(Conv2d(20, 40, 5), '', mock_output_shape)
+        layer1 = Layer(Conv2d(10, 10, 5, groups=10), "", mock_output_shape)
+        layer2 = Layer(Linear(10, 20), "", mock_output_shape)
+        layer3 = Layer(Conv2d(20, 40, 5), "", mock_output_shape)
 
         layer_db = MagicMock()
         layer_db.__iter__.return_value = [layer1, layer2, layer3]
@@ -101,9 +98,9 @@ class TestLayerSelector(unittest.TestCase):
         layer_db.mark_picked_layers.assert_called_once_with([layer2, layer3])
 
         # Two regular conv layers and one FC layer - one in ignore list
-        layer1 = Layer(Conv2d(10, 20, 5), '', mock_output_shape)
-        layer2 = Layer(Linear(10, 20), '', mock_output_shape)
-        layer3 = Layer(Conv2d(20, 40, 5), '', mock_output_shape)
+        layer1 = Layer(Conv2d(10, 20, 5), "", mock_output_shape)
+        layer2 = Layer(Linear(10, 20), "", mock_output_shape)
+        layer3 = Layer(Conv2d(20, 40, 5), "", mock_output_shape)
 
         layer_db = MagicMock()
         layer_db.__iter__.return_value = [layer1, layer2, layer3]

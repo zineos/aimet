@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Loss function for Keras Adaround """
+"""Loss function for Keras Adaround"""
 
 from typing import Tuple, Union
 import numpy as np
@@ -50,7 +50,14 @@ class AdaroundHyperParameters:
     """
     Hyper parameters for Adaround
     """
-    def __init__(self, num_iterations: int, reg_param: float, beta_range: Tuple, warm_start: float):
+
+    def __init__(
+        self,
+        num_iterations: int,
+        reg_param: float,
+        beta_range: Tuple,
+        warm_start: float,
+    ):
         """
         :param num_iterations: Number of maximum iterations to adaround layer
         :param reg_param: Regularization parameter, trading off between rounding loss vs reconstruction loss
@@ -68,8 +75,11 @@ class AdaroundLoss:
     Calculates the Reconstruction loss and Rounding loss - needed for Adaround optimization to
     learn weight rounding
     """
+
     @staticmethod
-    def compute_recon_loss(ada_quantized_output: tf.Tensor, orig_output: tf.Tensor, channels_index: int) -> tf.Tensor:
+    def compute_recon_loss(
+        ada_quantized_output: tf.Tensor, orig_output: tf.Tensor, channels_index: int
+    ) -> tf.Tensor:
         """
         Compute Reconstruction Loss using Squared Frobenius Norm - first part of Combined Loss
         :param ada_quantized_output: Activation output from quantized wrapper module
@@ -77,14 +87,23 @@ class AdaroundLoss:
         :param channels_index: channels_index across which loss will be computed
         :return: reconstruction loss
         """
-        recon_loss = tf.reduce_mean(tf.reduce_sum(tf.math.squared_difference(ada_quantized_output, orig_output),
-                                                  channels_index))
+        recon_loss = tf.reduce_mean(
+            tf.reduce_sum(
+                tf.math.squared_difference(ada_quantized_output, orig_output),
+                channels_index,
+            )
+        )
 
         return recon_loss
 
     @classmethod
-    def compute_round_loss(cls, alpha: tf.Variable, reg_param: float, warm_start: Union[bool, tf.Tensor],
-                           beta: float) -> tf.Tensor:
+    def compute_round_loss(
+        cls,
+        alpha: tf.Variable,
+        reg_param: float,
+        warm_start: Union[bool, tf.Tensor],
+        beta: float,
+    ) -> tf.Tensor:
         """
         Compute Rounding Loss - second part of Combined Loss
         :param alpha: parameter 'alpha' to be optimized, float32 tensor same shape as weight tensor
@@ -93,26 +112,37 @@ class AdaroundLoss:
         :param beta: Beta parameter
         :return: rounding loss
         """
+
         def round_loss_fn():
             # compute rectified sigmoid of parameter 'alpha' which maps it between zero and one
-            h_alpha = tf.clip_by_value(tf.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA) +
-                                       AdaroundConstants.GAMMA, 0, 1)
+            h_alpha = tf.clip_by_value(
+                tf.sigmoid(alpha) * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)
+                + AdaroundConstants.GAMMA,
+                0,
+                1,
+            )
 
             # calculate regularization term - which ensures parameter to converge to exactly zeros and ones
             # at the end of optimization
-            reg_term = tf.reduce_sum(tf.add(-tf.pow(tf.abs(tf.add(2 * h_alpha, -1)), beta), 1))
+            reg_term = tf.reduce_sum(
+                tf.add(-tf.pow(tf.abs(tf.add(2 * h_alpha, -1)), beta), 1)
+            )
 
             # calculate the rounding loss
             round_loss = reg_param * reg_term
 
             return round_loss
 
-        round_loss = tf.cond(warm_start, lambda: tf.constant(0.0, dtype=tf.float32), round_loss_fn)
+        round_loss = tf.cond(
+            warm_start, lambda: tf.constant(0.0, dtype=tf.float32), round_loss_fn
+        )
 
         return round_loss
 
     @staticmethod
-    def compute_beta(max_iter: int, cur_iter: int, beta_range: Tuple, warm_start: float) -> float:
+    def compute_beta(
+        max_iter: int, cur_iter: int, beta_range: Tuple, warm_start: float
+    ) -> float:
         """
         Compute beta parameter used in regularization function using cosine decay
         :param max_iter: total maximum number of iterations

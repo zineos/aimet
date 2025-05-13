@@ -44,24 +44,42 @@ from .utils import *
 
 
 @overload
-def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-             bitwidth: Union[int, float], signed: bool = False,
-             block_size: Optional[Tuple[int, ...]] = None):
-    ...
+def quantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    bitwidth: Union[int, float],
+    signed: bool = False,
+    block_size: Optional[Tuple[int, ...]] = None,
+): ...
+
 
 @overload
-def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, *,
-             num_steps: int, signed: bool = False, block_size: Optional[Tuple[int, ...]] = None):
-    ...
+def quantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    *,
+    num_steps: int,
+    signed: bool = False,
+    block_size: Optional[Tuple[int, ...]] = None,
+): ...
+
 
 @overload
-def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-             qmin: int, qmax: int, block_size: Optional[Tuple[int, ...]] = None):
-    ...
+def quantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    qmin: int,
+    qmax: int,
+    block_size: Optional[Tuple[int, ...]] = None,
+): ...
 
 
-def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-             *args, **kwargs):
+def quantize(
+    tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, *args, **kwargs
+):
     r"""
     Applies quantization to the input.
 
@@ -89,12 +107,12 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
        Equivalent to:
 
        .. math::
-           qmin= 
+           qmin=
            \begin{cases}
                -\left\lceil\frac{2^{bitwidth}-1}{2}\right\rceil,& \text{if } signed\\
                0,                                               & \text{otherwise   (default)}
            \end{cases}
-           qmax= 
+           qmax=
            \begin{cases}
                \left\lfloor\frac{2^{bitwidth}-1}{2}\right\rfloor,& \text{if } signed\\
                2^{bitwidth}-1,                                   & \text{otherwise   (default)}
@@ -115,12 +133,12 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
        Equivalent to:
 
        .. math::
-           qmin= 
+           qmin=
            \begin{cases}
                -\left\lceil\frac{num\_steps}{2}\right\rceil,& \text{if } signed\\
                0,                                           & \text{otherwise   (default)}
            \end{cases}
-           qmax= 
+           qmax=
            \begin{cases}
                \left\lfloor\frac{num\_steps}{2}\right\rfloor,& \text{if } signed\\
                num\_steps,                                   & \text{otherwise   (default)}
@@ -182,27 +200,45 @@ def quantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
 
 
 @overload
-def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        bitwidth: Union[int, float], signed: bool = False,
-                        block_size: Optional[Tuple[int, ...]] = None,
-                        zero_point_shift: Optional[float] = None):
-    ...
+def quantize_dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    bitwidth: Union[int, float],
+    signed: bool = False,
+    block_size: Optional[Tuple[int, ...]] = None,
+    zero_point_shift: Optional[float] = None,
+): ...
+
 
 @overload
-def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, *,
-                        num_steps: int, signed: bool = False, block_size: Optional[Tuple[int, ...]] = None,
-                        zero_point_shift: Optional[float] = None):
-    ...
+def quantize_dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    *,
+    num_steps: int,
+    signed: bool = False,
+    block_size: Optional[Tuple[int, ...]] = None,
+    zero_point_shift: Optional[float] = None,
+): ...
+
 
 @overload
-def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        qmin: int, qmax: int, block_size: Optional[Tuple[int, ...]] = None,
-                        zero_point_shift: Optional[float] = None):
-    ...
+def quantize_dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    qmin: int,
+    qmax: int,
+    block_size: Optional[Tuple[int, ...]] = None,
+    zero_point_shift: Optional[float] = None,
+): ...
 
 
-def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-                        *args, **kwargs):
+def quantize_dequantize(
+    tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, *args, **kwargs
+):
     r"""
     Applies fake-quantization by quantizing and dequantizing the input.
 
@@ -238,12 +274,12 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
        Equivalent to:
 
        .. math::
-           qmin= 
+           qmin=
            \begin{cases}
                -\left\lceil\frac{2^{bitwidth}-1}{2}\right\rceil,& \text{if } signed\\
                0,                                               & \text{otherwise   (default)}
            \end{cases}
-           qmax= 
+           qmax=
            \begin{cases}
                \left\lfloor\frac{2^{bitwidth}-1}{2}\right\rfloor,& \text{if } signed\\
                2^{bitwidth}-1,                                   & \text{otherwise   (default)}
@@ -264,12 +300,12 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
        Equivalent to:
 
        .. math::
-           qmin= 
+           qmin=
            \begin{cases}
                -\left\lceil\frac{num\_steps}{2}\right\rceil,& \text{if } signed\\
                0,                                           & \text{otherwise   (default)}
            \end{cases}
-           qmax= 
+           qmax=
            \begin{cases}
                \left\lfloor\frac{num\_steps}{2}\right\rfloor,& \text{if } signed\\
                num\_steps,                                   & \text{otherwise   (default)}
@@ -328,11 +364,17 @@ def quantize_dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch
                 1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
     """
     qmin, qmax, block_size, zero_point_shift = _parse_args(args, kwargs)
-    return get_backend().quantize_dequantize(tensor, scale, offset, qmin, qmax, block_size, zero_point_shift)
+    return get_backend().quantize_dequantize(
+        tensor, scale, offset, qmin, qmax, block_size, zero_point_shift
+    )
 
 
-def dequantize(tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor,
-               block_size: Optional[Tuple[int, ...]] = None):
+def dequantize(
+    tensor: torch.Tensor,
+    scale: torch.Tensor,
+    offset: torch.Tensor,
+    block_size: Optional[Tuple[int, ...]] = None,
+):
     r"""
     Applies dequantization to the input.
 
@@ -363,14 +405,14 @@ def _parse_args(args, kwargs) -> Tuple[int, int, Optional[Tuple[int, ...]], floa
 
     # Pad positional args with None's such that len(args) == 4
     args = tuple(chain(args, repeat(None, 4 - len(args))))
-    arg0 = kwargs.get('qmin', kwargs.get('bitwidth', args[0]))
-    arg1 = kwargs.get('qmax', kwargs.get('signed', args[1]))
-    block_size = kwargs.get('block_size', None) or args[2]
-    zero_point_shift = args[3] or kwargs.get('zero_point_shift', 0.0)
+    arg0 = kwargs.get("qmin", kwargs.get("bitwidth", args[0]))
+    arg1 = kwargs.get("qmax", kwargs.get("signed", args[1]))
+    block_size = kwargs.get("block_size", None) or args[2]
+    zero_point_shift = args[3] or kwargs.get("zero_point_shift", 0.0)
 
     if arg0 is None:
-        num_steps = kwargs['num_steps']
-        signed = kwargs['signed']
+        num_steps = kwargs["num_steps"]
+        signed = kwargs["signed"]
         qmin, qmax = _derive_qmin_qmax(num_steps=num_steps, signed=signed)
     elif arg1 is None or isinstance(arg1, bool):
         bitwidth, signed = arg0, bool(arg1)
@@ -386,11 +428,11 @@ def _parse_args(args, kwargs) -> Tuple[int, int, Optional[Tuple[int, ...]], floa
 
 def _derive_qmin_qmax(*, bitwidth: int = None, num_steps: int = None, signed: bool):
     if bitwidth is not None:
-        num_steps = 2 ** bitwidth - 1
+        num_steps = 2**bitwidth - 1
 
     if signed:
-        qmin = -math.ceil(num_steps/2)
-        qmax = math.floor(num_steps/2)
+        qmin = -math.ceil(num_steps / 2)
+        qmax = math.floor(num_steps / 2)
     else:
         qmin = 0
         qmax = num_steps

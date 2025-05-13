@@ -241,7 +241,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utils for handling custom modules """
+"""Utils for handling custom modules"""
 
 try:
     import spconv.pytorch as spconv
@@ -252,7 +252,6 @@ except ImportError as e:
 else:
     from aimet_torch._base.quantsim import _QuantizedModuleProtocol
 
-
     def is_spconv_module(module):
         """
         Modified version of is_spconv_module from spconv.pytorch.modules.is_spconv_module
@@ -261,17 +260,17 @@ else:
         :return: True if module or _module_to_wrap is spconv module
         """
         # pylint: disable=protected-access
-        spconv_modules = (spconv.SparseModule, )
+        spconv_modules = (spconv.SparseModule,)
         if isinstance(module, _QuantizedModuleProtocol):
             return isinstance(module.get_original_module(), spconv_modules)
         return isinstance(module, spconv_modules)
-
 
     class QuantizableSparseSequential(spconv.SparseSequential):
         """
         Quantizable version of SparseSequential
         forward function is modified to use custom version of is_spconv_module
         """
+
         # pylint: disable=arguments-differ
         def forward(self, x):
             for module in self._modules.values():
@@ -290,8 +289,9 @@ else:
                         x = module(x)
             return x
 
-
-    def create_quantizable_sparse_sequential(module: spconv.SparseSequential) -> QuantizableSparseSequential:
+    def create_quantizable_sparse_sequential(
+        module: spconv.SparseSequential,
+    ) -> QuantizableSparseSequential:
         """
         Create QuantizableSparseSequential using existing SparseSequential module
         :param module: Existing SparseSequential module

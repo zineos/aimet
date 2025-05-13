@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Test top level mixed precision api """
+"""Test top level mixed precision api"""
 
 import tempfile
 import pytest
@@ -54,32 +54,53 @@ from aimet_common.amp.utils import AMPSearchAlgo, calculate_starting_bit_ops
 
 
 class TestMixedPrecision:
-    """ Test case for mixed precision api """
+    """Test case for mixed precision api"""
+
     @pytest.mark.cuda
     def test_quantize_with_mixed_precision(self):
-        """ Test top level quantize_with_mixed_precision api """
+        """Test top level quantize_with_mixed_precision api"""
         model = resnet18()
         default_bitwidth = 16
         input_shape = (1, 3, 224, 224)
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                     ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                     ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = 0.10015
 
         # Quantize the model to default bitwidth
-        sim = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_activation_bw=default_bitwidth)
-        sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
-        eval_callback = CallbackFunc(eval_function(num_candidates=len(candidates)), None)
+        sim = QuantizationSimModel(
+            model,
+            default_param_bw=default_bitwidth,
+            default_activation_bw=default_bitwidth,
+        )
+        sim.compute_encodings(
+            forward_pass_callback, forward_pass_callback_args=input_shape
+        )
+        eval_callback = CallbackFunc(
+            eval_function(num_candidates=len(candidates)), None
+        )
         fp32_accuracy = eval_callback.func(model, None)
         forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
         with tempfile.TemporaryDirectory() as tempdir:
-            pareto_front_list = choose_mixed_precision(sim, candidates, eval_callback, eval_callback,
-                                                       allowed_accuracy_drop, tempdir, True, forward_pass_call_back,
-                                                       amp_search_algo=AMPSearchAlgo.BruteForce)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                candidates,
+                eval_callback,
+                eval_callback,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                amp_search_algo=AMPSearchAlgo.BruteForce,
+            )
 
-            assert len(pareto_front_list) == 66, "Length of the pareto front list is not equal to the expected value: 24"
+            assert len(pareto_front_list) == 66, (
+                "Length of the pareto front list is not equal to the expected value: 24"
+            )
             # Test that final eval score is still within allowable accuracy range
             _, eval_score, _, _ = pareto_front_list[-1]
             assert fp32_accuracy - eval_score < 0.1
@@ -87,23 +108,31 @@ class TestMixedPrecision:
     @pytest.mark.cuda
     @pytest.mark.parametrize(
         "search_algo",
-        (AMPSearchAlgo.BruteForce, AMPSearchAlgo.Interpolation, AMPSearchAlgo.Binary)
+        (AMPSearchAlgo.BruteForce, AMPSearchAlgo.Interpolation, AMPSearchAlgo.Binary),
     )
     def test_quantize_with_mixed_precision_v2(self, search_algo):
-        """ Test top level quantize_with_mixed_precision api """
+        """Test top level quantize_with_mixed_precision api"""
 
         model = resnet18()
         default_bitwidth = 16
         input_shape = (1, 3, 224, 224)
         # ((activation bitwidth, activation data type), (param bitwidth, param data type))
-        candidates = [((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
-                      ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
-                      ((8, QuantizationDataType.int), (8, QuantizationDataType.int))]
+        candidates = [
+            ((16, QuantizationDataType.float), (16, QuantizationDataType.float)),
+            ((16, QuantizationDataType.int), (8, QuantizationDataType.int)),
+            ((8, QuantizationDataType.int), (8, QuantizationDataType.int)),
+        ]
         allowed_accuracy_drop = None
 
         # Quantize the model to default bitwidth
-        sim = QuantizationSimModel(model, default_param_bw=default_bitwidth, default_activation_bw=default_bitwidth)
-        sim.compute_encodings(forward_pass_callback, forward_pass_callback_args=input_shape)
+        sim = QuantizationSimModel(
+            model,
+            default_param_bw=default_bitwidth,
+            default_activation_bw=default_bitwidth,
+        )
+        sim.compute_encodings(
+            forward_pass_callback, forward_pass_callback_args=input_shape
+        )
 
         with tempfile.TemporaryDirectory() as tempdir:
             np.random.seed(0)
@@ -129,22 +158,32 @@ class TestMixedPrecision:
 
             forward_pass_call_back = CallbackFunc(forward_pass_callback, input_shape)
 
-            pareto_front_list = choose_mixed_precision(sim, candidates,
-                                                       eval_callback_phase1, eval_callback_phase2,
-                                                       allowed_accuracy_drop, tempdir, True,
-                                                       forward_pass_call_back, search_algo)
+            pareto_front_list = choose_mixed_precision(
+                sim,
+                candidates,
+                eval_callback_phase1,
+                eval_callback_phase2,
+                allowed_accuracy_drop,
+                tempdir,
+                True,
+                forward_pass_call_back,
+                search_algo,
+            )
             assert pareto_front_list
 
             eval_score = eval_function_v2(sim.model, args)
 
             # Check pareto curve contains the final eval score
-            pareto_eval_scores = [eval_score for _, eval_score, _, _ in pareto_front_list]
+            pareto_eval_scores = [
+                eval_score for _, eval_score, _, _ in pareto_front_list
+            ]
             assert eval_score in pareto_eval_scores
 
+
 def forward_pass_callback(session, inp_shape):
-    """ Call mnist_evaluate setting use_cuda to True, iterations=5 """
+    """Call mnist_evaluate setting use_cuda to True, iterations=5"""
     inputs = np.random.rand(*inp_shape).astype(np.float32)
-    in_tensor = {'input': inputs}
+    in_tensor = {"input": inputs}
     session.run(None, in_tensor)
 
 
@@ -179,10 +218,13 @@ def eval_function_v2(model, args):
     for op_name, op in sim.connected_graph.get_all_ops().items():
         if op.parameters:
             for product, values in op.parameters.values():
-                if values == 'weight':
+                if values == "weight":
                     weight_name_to_op_name_dict[product.name] = op_name
     for quantizer_group in quantizer_groups:
-        if quantizer_group.activation_quantizers and quantizer_group.parameter_quantizers:
+        if (
+            quantizer_group.activation_quantizers
+            and quantizer_group.parameter_quantizers
+        ):
             (act_bw, _), (param_bw, _) = quantizer_group.get_candidate(qg_dict)
             param_quantizer_name = quantizer_group.parameter_quantizers[0]
             mac = mac_dict[weight_name_to_op_name_dict[param_quantizer_name]]
@@ -193,7 +235,6 @@ def eval_function_v2(model, args):
 
 
 def eval_function(num_candidates=3):
-
     eval_scores = []
     first_val = 0.71
     for i in range(0, 1000):

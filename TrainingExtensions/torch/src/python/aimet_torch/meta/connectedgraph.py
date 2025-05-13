@@ -51,15 +51,24 @@ from typing import Tuple, Union, List, Dict, Type, Optional, Iterator
 import torch
 
 from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
-from aimet_common.connected_graph.connectedgraph import ConnectedGraph as AimetCommonConnectedGraph
+from aimet_common.connected_graph.connectedgraph import (
+    ConnectedGraph as AimetCommonConnectedGraph,
+)
 from aimet_common.connected_graph.product import Product
-from aimet_common.connected_graph.operation import determine_preceding_op_input_product_index_in_multi_input_op
+from aimet_common.connected_graph.operation import (
+    determine_preceding_op_input_product_index_in_multi_input_op,
+)
 from aimet_common.model_module import PytorchModelModule
 from aimet_common.utils import AimetLogger
 import aimet_torch._base.nn.modules.custom as aimet_modules
 from aimet_torch.meta.operation import Op
-from aimet_torch.utils import is_leaf_module, run_hook_for_layers_with_given_input, in_eval_mode, \
-    is_torch_nn_leaf_module, get_torch_tensortype_shape
+from aimet_torch.utils import (
+    is_leaf_module,
+    run_hook_for_layers_with_given_input,
+    in_eval_mode,
+    is_torch_nn_leaf_module,
+    get_torch_tensortype_shape,
+)
 from aimet_torch import onnx_utils
 import aimet_torch.utils
 
@@ -67,7 +76,7 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.ConnectedGraph)
 
 # Global dictionary holding arguments to be used in ConnectedGraph's torch.jit.trace. Can be imported and modified by
 # users as needed.
-jit_trace_args = {'check_trace': False}
+jit_trace_args = {"check_trace": False}
 
 # Dictionary mapping connected graph op types to a tuple consisting of:
 # index 0: number of expected inputs
@@ -76,24 +85,40 @@ jit_trace_args = {'check_trace': False}
 # This is needed for removing certain constant inputs to ops which we don't want to exist, for example mangled Conv and
 # BN ops which expose parameter inputs as constant inputs to the op.
 op_inputs_dict = {
-    'Conv': (1, False),
-    'ConvTranspose': (1, False),
-    'BatchNormalization': (1, False),
-    'Gemm': (1, False),
-    'Add': (2, True)
+    "Conv": (1, False),
+    "ConvTranspose": (1, False),
+    "BatchNormalization": (1, False),
+    "Gemm": (1, False),
+    "Add": (2, True),
 }
 
 # When traced, the leaf level module for these ops may have ordering of inputs flipped. We trace into these modules in
 # order to determine the true input ordering.
-MULTI_INPUT_OPS_TO_PARSE = [aimet_modules.Add, aimet_modules.Multiply, aimet_modules.Subtract,
-                            aimet_modules.Divide, aimet_modules.Pow, aimet_modules.IndexSelect, aimet_modules.MatMul,
-                            aimet_modules.Concat, aimet_modules.Minimum, aimet_modules.DynamicConv2d]
+MULTI_INPUT_OPS_TO_PARSE = [
+    aimet_modules.Add,
+    aimet_modules.Multiply,
+    aimet_modules.Subtract,
+    aimet_modules.Divide,
+    aimet_modules.Pow,
+    aimet_modules.IndexSelect,
+    aimet_modules.MatMul,
+    aimet_modules.Concat,
+    aimet_modules.Minimum,
+    aimet_modules.DynamicConv2d,
+]
 
 # We want to consider following operations as leaf nodes while creating op for connected graph.
-SKIP_LIST_FOR_SUBGRAPH_TRACE = [aimet_modules.StridedSlice, aimet_modules.GatherNd, aimet_modules.ScatterND,
-                                aimet_modules.CustomGather, aimet_modules.DepthToSpaceDCRMode,
-                                aimet_modules.RoiAlign, aimet_modules.ChannelShuffle, aimet_modules.NonMaxSuppression,
-                                aimet_modules.DepthToSpaceCRDMode, ]
+SKIP_LIST_FOR_SUBGRAPH_TRACE = [
+    aimet_modules.StridedSlice,
+    aimet_modules.GatherNd,
+    aimet_modules.ScatterND,
+    aimet_modules.CustomGather,
+    aimet_modules.DepthToSpaceDCRMode,
+    aimet_modules.RoiAlign,
+    aimet_modules.ChannelShuffle,
+    aimet_modules.NonMaxSuppression,
+    aimet_modules.DepthToSpaceCRDMode,
+]
 
 
 # pylint: disable=too-many-lines
@@ -106,15 +131,27 @@ class OpWithMultipleOutputs(Op):
     consolidate multiple output products into one for each op, and replace OpWithMultipleOutputs with connected graph
     Ops.
     """
-    def __init__(self, name: str, dotted_name: str, output_shape,
-                 is_anonymous: bool, op_type: str, residing_module: Union[torch.nn.Module, None]):
-        super().__init__(name, dotted_name, output_shape, is_anonymous, op_type, residing_module)
+
+    def __init__(
+        self,
+        name: str,
+        dotted_name: str,
+        output_shape,
+        is_anonymous: bool,
+        op_type: str,
+        residing_module: Union[torch.nn.Module, None],
+    ):
+        super().__init__(
+            name, dotted_name, output_shape, is_anonymous, op_type, residing_module
+        )
         self.output_products = []
+
 
 class GetAttrNodeInfo:
     """
     Holds information for GetAttr node types.
     """
+
     def __init__(self, node_alias: str, node_name: str, node_input: Union[None, str]):
         """
         Ex. GetAttr node: %1 : ... prim::GetAttr[name="model"](%self.1)
@@ -131,7 +168,9 @@ class GetAttrNodeInfo:
         self.node_input = node_input
 
 
-ModuleTensorShapeMapType = Dict[torch.nn.Module, Tuple[List[Union[List, torch.Size]], List[Union[List, torch.Size]]]]
+ModuleTensorShapeMapType = Dict[
+    torch.nn.Module, Tuple[List[Union[List, torch.Size]], List[Union[List, torch.Size]]]
+]
 
 
 class ConnectedGraph(AimetCommonConnectedGraph):
@@ -155,7 +194,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # Maps pytorch modules to module names
         self._module_to_name = {}
         self._op_counter = 0
-        self._split_count = 0  # Use it in the name of split Ops getting added to the connected graph.
+        self._split_count = (
+            0  # Use it in the name of split Ops getting added to the connected graph.
+        )
         # Counts number of constant inputs there are in the graph
         self._constant_count = 0
 
@@ -164,10 +205,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         self._generate_module_lookup_table(model)
         with in_eval_mode(model), torch.no_grad():
-            self._aimet_defined_modules = \
-                tuple(classtype for _, classtype in inspect.getmembers(aimet_modules,
-                                                                       lambda m: inspect.isclass(m) and issubclass(m,
-                                                                                                                   torch.nn.Module)))
+            self._aimet_defined_modules = tuple(
+                classtype
+                for _, classtype in inspect.getmembers(
+                    aimet_modules,
+                    lambda m: inspect.isclass(m) and issubclass(m, torch.nn.Module),
+                )
+            )
             self._construct_graph(model, model_input)
             del self._aimet_defined_modules
 
@@ -179,49 +223,49 @@ class ConnectedGraph(AimetCommonConnectedGraph):
     # List of math invariant op types which can remain as functional in pytorch model definition without affecting the
     # outcome of AIMET features.
     math_invariant_types = {
-        'size',
-        'NumToTensor',
-        'view',
-        'narrow',
-        'reshape',
-        'reshape_as',
-        'mean',
-        'index_select',
-        'slice',
-        'select',
-        'unsqueeze',
-        'randn',
-        'flatten',
-        'permute',
-        'squeeze',
-        'contiguous',
-        'copy',
-        'clone',
-        'index',
-        'ScalarImplicit',
-        'transpose',
-        'expand',
-        'expand_as',
-        'DictConstruct',
-        'eq',
-        'ne',
-        'split',
-        'chunk'
+        "size",
+        "NumToTensor",
+        "view",
+        "narrow",
+        "reshape",
+        "reshape_as",
+        "mean",
+        "index_select",
+        "slice",
+        "select",
+        "unsqueeze",
+        "randn",
+        "flatten",
+        "permute",
+        "squeeze",
+        "contiguous",
+        "copy",
+        "clone",
+        "index",
+        "ScalarImplicit",
+        "transpose",
+        "expand",
+        "expand_as",
+        "DictConstruct",
+        "eq",
+        "ne",
+        "split",
+        "chunk",
     }
 
     # Graph nodes for which we will treat as passthrough and not represent with an Op
     passthrough_graph_nodes = {
-        "Int",       # aten::Int
-        "t",         # aten::t
-        "to",        # aten::to
-        "detach",    # aten::detach
-        "values",    # aten::values
-        "Identity"
+        "Int",  # aten::Int
+        "t",  # aten::t
+        "to",  # aten::to
+        "detach",  # aten::detach
+        "values",  # aten::values
+        "Identity",
     }
 
     # Input graph nodes to ignore
     input_graph_nodes_to_ignore = {
-        "Constant",     # prim::Constant
+        "Constant",  # prim::Constant
     }
 
     def __del__(self):
@@ -254,9 +298,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             self._module_to_name[module] = name
 
     @staticmethod
-    def _generate_module_tensor_shapes_lookup_table(model: torch.nn.Module,
-                                                    model_input: Union[torch.Tensor, Tuple]) -> \
-            ModuleTensorShapeMapType:
+    def _generate_module_tensor_shapes_lookup_table(
+        model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]
+    ) -> ModuleTensorShapeMapType:
         """
         Generates a look up dictionary for getting module input and output shapes from the module.
         :param model: Pytorch model
@@ -265,9 +309,11 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         module_tensor_shapes_map = {}
 
-        def forward_hook(curr_module: torch.nn.Module,
-                         inputs: Union[torch.Tensor, List, Dict, None],
-                         outputs: Union[torch.Tensor, List, Dict, None]):
+        def forward_hook(
+            curr_module: torch.nn.Module,
+            inputs: Union[torch.Tensor, List, Dict, None],
+            outputs: Union[torch.Tensor, List, Dict, None],
+        ):
             """
             Custom forward hook function to add every module to module-to-tensor shapes dict.
             :param curr_module: Current module being traversed during forward pass.
@@ -282,18 +328,26 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 output_shapes = [output_shapes]
             module_tensor_shapes_map[curr_module] = (input_shapes, output_shapes)
 
-        run_hook_for_layers_with_given_input(model, model_input, forward_hook, leaf_node_only=False)
+        run_hook_for_layers_with_given_input(
+            model, model_input, forward_hook, leaf_node_only=False
+        )
 
         return module_tensor_shapes_map
 
-    def _construct_graph(self, model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]):
+    def _construct_graph(
+        self, model: torch.nn.Module, model_input: Union[torch.Tensor, Tuple]
+    ):
         """
         Construct connected graph from model and example inputs.
 
         :param model: Pytorch model to create connected graph from
         :param model_input: Example input to model.  Can be a single tensor or a list/tuple of input tensors
         """
-        module_tensor_shapes_map = ConnectedGraph._generate_module_tensor_shapes_lookup_table(model, model_input)
+        module_tensor_shapes_map = (
+            ConnectedGraph._generate_module_tensor_shapes_lookup_table(
+                model, model_input
+            )
+        )
         trace = torch.jit.trace(model, model_input, **jit_trace_args)
         self._parse_top_level_trace(trace, model)
         self._recover_input_output_structure()
@@ -314,13 +368,18 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         producer_to_product_name_map = defaultdict(list)
         for product in self._products.values():
             if product.producer:
-                producer_to_product_name_map[product.producer.dotted_name].append(product.name)
+                producer_to_product_name_map[product.producer.dotted_name].append(
+                    product.name
+                )
 
         for op in ops_list:
-            self._determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(op,
-                                                                                         producer_to_product_name_map)
+            self._determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(
+                op, producer_to_product_name_map
+            )
 
-    def _parse_top_level_trace(self, trace: torch.jit.TopLevelTracedModule, model: torch.nn.Module):
+    def _parse_top_level_trace(
+        self, trace: torch.jit.TopLevelTracedModule, model: torch.nn.Module
+    ):
         """
         Parse the top level trace.
         :param trace: Pytorch JIT trace for model or a submodule
@@ -332,20 +391,28 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         output_map = {}
         for idx, inp in enumerate(top_level_inputs):
             shape = get_torch_tensortype_shape(inp)
-            product = self._add_product(f'input_{idx}', shape=shape)
+            product = self._add_product(f"input_{idx}", shape=shape)
             product.is_model_input = True
             output_map[inp] = product
 
-        _ = self._parse_trace_graph(trace, model, output_map, top_level_inputs, module_to_jit_trace=module_to_jit_trace)
+        _ = self._parse_trace_graph(
+            trace,
+            model,
+            output_map,
+            top_level_inputs,
+            module_to_jit_trace=module_to_jit_trace,
+        )
 
     # pylint: disable=too-many-branches
-    def _parse_trace_graph(self, # pylint: disable=too-many-locals
-                           trace: torch.jit.TracedModule,
-                           model: torch.nn.Module,
-                           output_map: Dict[torch._C.TensorType, Product],
-                           higher_level_inputs: List[torch._C.TensorType],
-                           module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
-                           elementwise_info: Optional[Tuple[torch.nn.Module, torch.nn.Module]] = None):
+    def _parse_trace_graph(
+        self,  # pylint: disable=too-many-locals
+        trace: torch.jit.TracedModule,
+        model: torch.nn.Module,
+        output_map: Dict[torch._C.TensorType, Product],
+        higher_level_inputs: List[torch._C.TensorType],
+        module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
+        elementwise_info: Optional[Tuple[torch.nn.Module, torch.nn.Module]] = None,
+    ):
         """
         Implements a depth-first graph extraction to create ops and products.
         Depth-first extraction is realized using recursion.
@@ -386,17 +453,32 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             outputs = [output for output in node.outputs()]
 
             # retrieving a module reference
-            if 'GetAttr' in node.kind():
-                self._parse_getattr_node(node, curr_inputs, outputs, node_name_to_module, node_name_to_subgraph_model,
-                                         module_to_jit_trace, model, output_map, curr_level_tensors)
+            if "GetAttr" in node.kind():
+                self._parse_getattr_node(
+                    node,
+                    curr_inputs,
+                    outputs,
+                    node_name_to_module,
+                    node_name_to_subgraph_model,
+                    module_to_jit_trace,
+                    model,
+                    output_map,
+                    curr_level_tensors,
+                )
 
             # invoking forward method
-            elif 'CallMethod' in node.kind():
+            elif "CallMethod" in node.kind():
                 # In the case of parsing the interior of an elementwise op, we never expect to see any CallMethod nodes
                 assert not elementwise_info
-                submodule_outputs = self._parse_callmethod_node(node, trace, node_name_to_module,
-                                                                node_name_to_subgraph_model, output_map, model,
-                                                                module_to_jit_trace)
+                submodule_outputs = self._parse_callmethod_node(
+                    node,
+                    trace,
+                    node_name_to_module,
+                    node_name_to_subgraph_model,
+                    output_map,
+                    model,
+                    module_to_jit_trace,
+                )
                 assert len(submodule_outputs) == len(outputs)
 
                 # Output map contains outputs from the parsed callmethod node, which can be different than the outputs
@@ -412,8 +494,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             # functional operations e.g. cat, size etc
             else:
                 try:
-                    is_elementwise = bool(elementwise_info) and \
-                                     node == next(self._find_aten_nodes_in_forward_pass(trace))
+                    is_elementwise = bool(elementwise_info) and node == next(
+                        self._find_aten_nodes_in_forward_pass(trace)
+                    )
                 except StopIteration:
                     is_elementwise = False
 
@@ -421,18 +504,21 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     # Aten op that corresponds to the elementwise op
                     residing_module, op_module = elementwise_info
                     op_type = self.get_op_type(type(op_module))
-                    op = self._create_new_multi_output_op(op_type,
-                                                          residing_module=residing_module,
-                                                          op_module=op_module)
+                    op = self._create_new_multi_output_op(
+                        op_type, residing_module=residing_module, op_module=op_module
+                    )
                 else:
                     op_type = self._get_functional_node_type(node)
-                    op = self._create_new_multi_output_op(op_type, residing_module=model)
+                    op = self._create_new_multi_output_op(
+                        op_type, residing_module=model
+                    )
                 # For prim and aten nodes, inputs[0] is a regular input to the module, so no need to take inputs[1:]
                 # pylint: disable=unnecessary-comprehension
-                self._add_products_for_op(op, [inp for inp in node.inputs()], outputs, output_map)
+                self._add_products_for_op(
+                    op, [inp for inp in node.inputs()], outputs, output_map
+                )
                 for output in outputs:
                     curr_level_tensors.append(output)
-
 
         # replace entries in output_map for current level inputs back to the higher_level_inputs entries, so that other
         # callmethod nodes in the higher level trace graph can make use of those inputs.
@@ -460,17 +546,24 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :return: Op Type string
         """
         # extracting Op type from node.kind string e.g. aten::relu_, aten::size etc
-        op_type = node.kind().split("::")[-1].lstrip('_').rstrip('_')
+        op_type = node.kind().split("::")[-1].lstrip("_").rstrip("_")
         return op_type
 
     # pylint: disable=too-many-arguments
-    def _parse_getattr_node(self, node: torch._C.Node, inputs: List[torch._C.TensorType],
-                            outputs: List[torch._C.TensorType], node_name_to_module: Dict[str, torch.nn.Module],
-                            node_name_to_subgraph_model: Dict[str, Tuple[torch.jit.TracedModule, torch._C.Node]],
-                            module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
-                            residing_module: torch.nn.Module,
-                            output_map: Dict[torch._C.TensorType, Product],
-                            curr_level_tensors: List[torch._C.TensorType]):
+    def _parse_getattr_node(
+        self,
+        node: torch._C.Node,
+        inputs: List[torch._C.TensorType],
+        outputs: List[torch._C.TensorType],
+        node_name_to_module: Dict[str, torch.nn.Module],
+        node_name_to_subgraph_model: Dict[
+            str, Tuple[torch.jit.TracedModule, torch._C.Node]
+        ],
+        module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
+        residing_module: torch.nn.Module,
+        output_map: Dict[torch._C.TensorType, Product],
+        curr_level_tensors: List[torch._C.TensorType],
+    ):
         """
         Parse getattr nodes in the trace graph, adding name to module references and name to subgraph model references
         if it references a subgraph.
@@ -494,9 +587,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         subgraph_model = ConnectedGraph._get_module_instance(node, node_name_to_module)
         if isinstance(subgraph_model, torch.Tensor):
-            op = self._create_new_multi_output_op('Constant', residing_module=residing_module)
+            op = self._create_new_multi_output_op(
+                "Constant", residing_module=residing_module
+            )
             # pylint: disable=unnecessary-comprehension
-            self._add_products_for_op(op, [inp for inp in node.inputs()], outputs, output_map)
+            self._add_products_for_op(
+                op, [inp for inp in node.inputs()], outputs, output_map
+            )
             if isinstance(subgraph_model, torch.nn.Parameter):
                 op.output_products[0].is_parm = True
             for output in outputs:
@@ -505,9 +602,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         if getattr_node_info.node_alias not in node_name_to_module:
             node_name_to_module[getattr_node_info.node_alias] = subgraph_model
         else:
-            raise ValueError("duplicate model for {0} -> {1} and {2}".format(
-                getattr_node_info.node_alias, node_name_to_module[getattr_node_info.node_alias],
-                subgraph_model))
+            raise ValueError(
+                "duplicate model for {0} -> {1} and {2}".format(
+                    getattr_node_info.node_alias,
+                    node_name_to_module[getattr_node_info.node_alias],
+                    subgraph_model,
+                )
+            )
 
         # Recursive parsing is not needed 1) if the module is leaf module and
         # module is from torch.nn (Conv2d, Linear etc.) 2) if the module is leaf module and
@@ -518,18 +619,27 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # In the case of elementwise ops, we want to express the elementwise op as an Operation, however sometimes
         # it is necessary to parse the interior of the elementwise op's CallMethod to extract information about
         # constants being passed in, or the order in which operands are used.
-        if self._is_recursive_parsing_needed(subgraph_model, module_to_jit_trace[subgraph_model]) or \
-                self._is_multi_input_op_to_parse(subgraph_model):
-            node_name_to_subgraph_model[getattr_node_info.node_alias] = (subgraph_model, getattr_node_info)
+        if self._is_recursive_parsing_needed(
+            subgraph_model, module_to_jit_trace[subgraph_model]
+        ) or self._is_multi_input_op_to_parse(subgraph_model):
+            node_name_to_subgraph_model[getattr_node_info.node_alias] = (
+                subgraph_model,
+                getattr_node_info,
+            )
 
     # pylint: disable=too-many-arguments
-    def _parse_callmethod_node(self, node: torch._C.Node,
-                               trace: torch.jit.TracedModule,
-                               node_name_to_module: Dict[str, torch.nn.Module],
-                               node_name_to_subgraph_model: Dict[str, Tuple[torch.jit.TracedModule, torch._C.Node]],
-                               output_map: Dict[torch._C.TensorType, Product],
-                               residing_module: torch.nn.Module,
-                               module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule]):
+    def _parse_callmethod_node(
+        self,
+        node: torch._C.Node,
+        trace: torch.jit.TracedModule,
+        node_name_to_module: Dict[str, torch.nn.Module],
+        node_name_to_subgraph_model: Dict[
+            str, Tuple[torch.jit.TracedModule, torch._C.Node]
+        ],
+        output_map: Dict[torch._C.TensorType, Product],
+        residing_module: torch.nn.Module,
+        module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
+    ):
         # pylint: disable=too-many-locals
         """
         The call method node signifies invocation of the forward method. Typically the node has the following construct:
@@ -552,8 +662,10 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         outputs = [output for output in node.outputs()]
 
         # We don't want to further trace some custom implementation from aimet_modules
-        if input_name in node_name_to_subgraph_model and \
-                not isinstance(node_name_to_subgraph_model[input_name][0], tuple(SKIP_LIST_FOR_SUBGRAPH_TRACE)):
+        if input_name in node_name_to_subgraph_model and not isinstance(
+            node_name_to_subgraph_model[input_name][0],
+            tuple(SKIP_LIST_FOR_SUBGRAPH_TRACE),
+        ):
             elementwise_info = None
             subgraph_model, getattr_node_info = node_name_to_subgraph_model[input_name]
             # For elementwise ops, we need to parse the callmethod interior, but want to retain information about the
@@ -565,7 +677,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             # trace.<current node name> to get the trace for the subgraph. Otherwise, compile a list of node names to
             # call into by following the subgraph_input entries up the chain.
             while getattr_node_info.node_input is not None:
-                _, getattr_node_info = node_name_to_subgraph_model[getattr_node_info.node_input]
+                _, getattr_node_info = node_name_to_subgraph_model[
+                    getattr_node_info.node_input
+                ]
                 # Later on trace levels will be processed with most recent level first, so insert each one at the front.
                 trace_levels.insert(0, getattr_node_info.node_name)
             subgraph_trace = trace
@@ -576,34 +690,53 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             # elementwise op's residing module and torch module
             if self._is_multi_input_op_to_parse(subgraph_model):
                 try:
-                    aten_node = next(self._find_aten_nodes_in_forward_pass(subgraph_trace))
+                    aten_node = next(
+                        self._find_aten_nodes_in_forward_pass(subgraph_trace)
+                    )
                 except StopIteration:
                     aten_node = None
 
                 if aten_node:
-                    elementwise_info = (residing_module, node_name_to_module[input_name])
+                    elementwise_info = (
+                        residing_module,
+                        node_name_to_module[input_name],
+                    )
                 else:
                     # This is an elementwise op that does not actually perform aten operations inside.
                     # We see this in case of elementwise Add when it is concatenating two lists for example.
                     # In this case, simply treat the op as a leaf level op without parsing the interior.
                     op_type = self.get_op_type(type(node_name_to_module[input_name]))
-                    op = self._create_new_multi_output_op(op_type, residing_module, node_name_to_module[input_name])
+                    op = self._create_new_multi_output_op(
+                        op_type, residing_module, node_name_to_module[input_name]
+                    )
                     self._add_products_for_op(op, inputs[1:], outputs, output_map)
                     return outputs
 
-            submodule_outputs = self._parse_trace_graph(subgraph_trace, subgraph_model, output_map, inputs[1:],
-                                                        module_to_jit_trace=module_to_jit_trace,
-                                                        elementwise_info=elementwise_info)
+            submodule_outputs = self._parse_trace_graph(
+                subgraph_trace,
+                subgraph_model,
+                output_map,
+                inputs[1:],
+                module_to_jit_trace=module_to_jit_trace,
+                elementwise_info=elementwise_info,
+            )
             return submodule_outputs
 
         # Op is a leaf level module
         op_type = self.get_op_type(type(node_name_to_module[input_name]))
-        op = self._create_new_multi_output_op(op_type, residing_module, node_name_to_module[input_name])
+        op = self._create_new_multi_output_op(
+            op_type, residing_module, node_name_to_module[input_name]
+        )
         self._add_products_for_op(op, inputs[1:], outputs, output_map)
         return outputs
 
-    def _add_products_for_op(self, op: OpWithMultipleOutputs, inputs: List[torch._C.TensorType],
-                             outputs: List[torch._C.TensorType], output_map: Dict[torch._C.TensorType, Product]):
+    def _add_products_for_op(
+        self,
+        op: OpWithMultipleOutputs,
+        inputs: List[torch._C.TensorType],
+        outputs: List[torch._C.TensorType],
+        output_map: Dict[torch._C.TensorType, Product],
+    ):
         """
         Create output products for the op, and link to input products if existing.
         :param op: Op to link input products and create output products for
@@ -613,7 +746,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         for idx, output in enumerate(outputs):
             shape = get_torch_tensortype_shape(output)
-            product = self._add_product(f'{op.name}#{idx}', shape)
+            product = self._add_product(f"{op.name}#{idx}", shape)
             op.output_products.append(product)
             product.producer = op
             output_map[output] = product
@@ -625,8 +758,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 op.add_input(inp_product)
 
     @staticmethod
-    def _get_module_instance(node: torch._C.Node,
-                             node_name_to_module: Dict[str, torch.nn.Module]) -> torch.nn.Module:
+    def _get_module_instance(
+        node: torch._C.Node, node_name_to_module: Dict[str, torch.nn.Module]
+    ) -> torch.nn.Module:
         """
         Get the torch.nn.Module referenced by the node.
         :param node: trace graph node
@@ -634,7 +768,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :return: torch module corresponding to the node
         """
         input_name: str = node.input().debugName()
-        name = node.s('name')
+        name = node.s("name")
         model = node_name_to_module[input_name]
         sub_model = getattr(model, name)
         return sub_model
@@ -656,7 +790,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # the GetAttr nodes tells us this path (%2 comes from %1 which comes from %self.1, the current module)
         node_input = next(node.inputs()).debugName()
         node_alias = next(node.outputs()).debugName()
-        node_name = node.s('name')
+        node_name = node.s("name")
         return GetAttrNodeInfo(node_alias, node_name, node_input)
 
     @staticmethod
@@ -676,15 +810,25 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             logger.debug("unknown op_type -- defaulting to class name %s", op_type)
         return op_type
 
-    def _create_new_multi_output_op(self, op_type: str, residing_module: torch.nn.Module,
-                                    op_module: Union[None, torch.nn.Module] = None):
+    def _create_new_multi_output_op(
+        self,
+        op_type: str,
+        residing_module: torch.nn.Module,
+        op_module: Union[None, torch.nn.Module] = None,
+    ):
         """
         Create a new multi output operation and add it to self._ops
         """
-        op_name = op_type + f'_{self._op_counter}'
+        op_name = op_type + f"_{self._op_counter}"
         self._op_counter += 1
-        op = OpWithMultipleOutputs(name=op_name, dotted_name=op_name, output_shape=None, is_anonymous=False,
-                                   op_type=op_type, residing_module=residing_module)
+        op = OpWithMultipleOutputs(
+            name=op_name,
+            dotted_name=op_name,
+            output_shape=None,
+            is_anonymous=False,
+            op_type=op_type,
+            residing_module=residing_module,
+        )
         self._ops[op.name] = op
         if op_module:
             op.model_module = PytorchModelModule(op_module)
@@ -695,6 +839,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         pass through constructed graph to recover structure of input and output tensors. Creates a map of each input
         tensor to its first consumer op, and each output tensor to its last producer op.
         """
+
         def get_index_in_op_inputs(op, product):
             if not op:
                 return None
@@ -708,41 +853,63 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         def flatten_unpack_consumers(construct_op: Op):
             collapsed_outputs = []
             for product in construct_op.output_products:
-                consumers = [flatten_unpack_consumers(consumer) \
-                                 if consumer and consumer.type in ['TupleUnpack', 'ListUnpack'] \
-                                 else get_index_in_op_inputs(consumer, product) for consumer in product.consumers]
+                consumers = [
+                    flatten_unpack_consumers(consumer)
+                    if consumer and consumer.type in ["TupleUnpack", "ListUnpack"]
+                    else get_index_in_op_inputs(consumer, product)
+                    for consumer in product.consumers
+                ]
                 collapsed_outputs.append(consumers if len(consumers) > 0 else None)
             return collapsed_outputs
 
         def flatten_pack_producers(deconstruct_op: Op):
-            return [flatten_pack_producers(product.producer) \
-                        if product.producer and product.producer.type in ['TupleConstruct', 'ListConstruct'] \
-                        else get_index_in_op_outputs(product.producer, product) for product in deconstruct_op.inputs]
+            return [
+                flatten_pack_producers(product.producer)
+                if product.producer
+                and product.producer.type in ["TupleConstruct", "ListConstruct"]
+                else get_index_in_op_outputs(product.producer, product)
+                for product in deconstruct_op.inputs
+            ]
 
         input_structure = {}
         output_structure = {}
         for name, op in self.get_all_ops().items():
             # If there is an unpack op that takes in a model input, then "flatten" that op to find all downstream
             # consumers
-            if op.type in ['TupleUnpack', 'ListUnpack']:
+            if op.type in ["TupleUnpack", "ListUnpack"]:
                 if len(op.inputs) == 1 and not op.inputs[0].producer:
                     input_structure[op.inputs[0].name] = flatten_unpack_consumers(op)
             # If there is a pack op that produces a model outputs, then "flatten" that op to find all the upstream
             # nodes that produced the components
-            if op.type in ['TupleConstruct', 'ListConstruct']:
+            if op.type in ["TupleConstruct", "ListConstruct"]:
                 if len(op.output_products) == 1 and not op.output_products[0].consumers:
                     output_structure[name] = flatten_pack_producers(op)
 
         for name, product in self.get_all_products().items():
             # If there is a model input that has not already been captured, then store its consumer ops
             if product.is_model_input and name not in input_structure:
-                input_structure[name] = list(filter(
-                    lambda consumer: consumer and consumer.type not in ['TupleConstruct', 'ListConstruct'],
-                    product.consumers))
-                input_structure[name] = [get_index_in_op_inputs(consumer, product) for consumer in input_structure[name]] if len(input_structure[name]) > 0 else [None]
+                input_structure[name] = list(
+                    filter(
+                        lambda consumer: consumer
+                        and consumer.type not in ["TupleConstruct", "ListConstruct"],
+                        product.consumers,
+                    )
+                )
+                input_structure[name] = (
+                    [
+                        get_index_in_op_inputs(consumer, product)
+                        for consumer in input_structure[name]
+                    ]
+                    if len(input_structure[name]) > 0
+                    else [None]
+                )
             # If there is a model outputs that has not already been captured, then store its producer ops
-            elif not product.consumers and product.producer.name not in output_structure:
-                output_structure[product.producer.name] = get_index_in_op_outputs(product.producer, product )
+            elif (
+                not product.consumers and product.producer.name not in output_structure
+            ):
+                output_structure[product.producer.name] = get_index_in_op_outputs(
+                    product.producer, product
+                )
 
         # graph should only have one model output (could be a tuple or single item). If a single model output cannot
         # be isolated then we do not know which one is correct.
@@ -753,8 +920,14 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             self._output_structure = None
 
         # Remove inputs called "input_i" and populate their contents into a list based on their index
-        self._input_structure = [input_structure.pop(f'input_{i}') for i in range(len(input_structure))]
-        self._input_structure = self._input_structure[0] if len(self._input_structure) == 1 else self._input_structure
+        self._input_structure = [
+            input_structure.pop(f"input_{i}") for i in range(len(input_structure))
+        ]
+        self._input_structure = (
+            self._input_structure[0]
+            if len(self._input_structure) == 1
+            else self._input_structure
+        )
         if len(input_structure) != 0:
             logger.warning("Unable to isolate model inputs.")
             self._input_structure = None
@@ -797,7 +970,10 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         ops_to_remove = []
         for op in self.get_all_ops().values():
-            if op.type in self.passthrough_graph_nodes or op.type in self.input_graph_nodes_to_ignore:
+            if (
+                op.type in self.passthrough_graph_nodes
+                or op.type in self.input_graph_nodes_to_ignore
+            ):
                 assert len(op.output_products) == 1
                 # pylint: disable=unnecessary-comprehension
                 consumers = [consumer for consumer in op.output_products[0].consumers]
@@ -808,13 +984,17 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     for consumer in consumers:
                         # Check if consumer is not a passthrough or ignore op type. If so, create a constant input into
                         # the consumer.
-                        if consumer.type in self.passthrough_graph_nodes or consumer.type in \
-                                self.input_graph_nodes_to_ignore:
+                        if (
+                            consumer.type in self.passthrough_graph_nodes
+                            or consumer.type in self.input_graph_nodes_to_ignore
+                        ):
                             consumer.inputs.remove(op.output_products[0])
                         else:
                             product_index = consumer.inputs.index(op.output_products[0])
-                            constant_product = self._add_product(f'constant_{self._constant_count}',
-                                                                 op.output_products[0].shape)
+                            constant_product = self._add_product(
+                                f"constant_{self._constant_count}",
+                                op.output_products[0].shape,
+                            )
                             constant_product._is_const = True
                             constant_product._is_parm = op.output_products[0].is_parm
                             self._constant_count += 1
@@ -825,7 +1005,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     assert len(op.inputs) == 1
                     for consumer in consumers:
                         # Index of consumer's input list corresponding to this op's output product
-                        consumer_input_index = consumer.inputs.index(op.output_products[0])
+                        consumer_input_index = consumer.inputs.index(
+                            op.output_products[0]
+                        )
                         # Replace this op's output product in consumer's input with this op's input product
                         consumer.inputs[consumer_input_index] = op.inputs[0]
 
@@ -847,7 +1029,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         ops_to_remove = []
         for op in self.get_all_ops().values():
-            if op.type in ['TupleConstruct', 'ListConstruct']:
+            if op.type in ["TupleConstruct", "ListConstruct"]:
                 assert len(op.output_products) == 1
                 output = op.output_products[0]
                 # pylint: disable=unnecessary-comprehension
@@ -868,7 +1050,6 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     inp._consumers[op_index] = consumers
                     inp._consumers = _flatten_lists(inp.consumers)
 
-
                 # Remove all trace of op and its output products
                 ops_to_remove.append(op)
                 del self._products[output.name]
@@ -885,7 +1066,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # For tuple unpack, either input came from tuple pack, or an op that had multiple outputs
         ops_to_remove = []
         for op in self.get_all_ops().values():
-            if op.type in ['TupleUnpack', 'ListUnpack']:
+            if op.type in ["TupleUnpack", "ListUnpack"]:
                 # Two possibilities: 1) The op comes after a module with multiple outputs, given as one torch graph
                 # tensor, or 2) The op op comes after a Tuple/List construct op that was already processed, so this op's
                 # inputs had already been replaced with multiple constituent products.
@@ -898,9 +1079,11 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                         assert op.inputs[0].is_model_input
                         inp_name = op.inputs[0].name
                     else:
-                        assert len(inp_op.output_products) == 1, 'TupleUnpack with one input product has parent op ' \
-                                                                 'with multiple output products. This is currently ' \
-                                                                 'unhandled.'
+                        assert len(inp_op.output_products) == 1, (
+                            "TupleUnpack with one input product has parent op "
+                            "with multiple output products. This is currently "
+                            "unhandled."
+                        )
                         inp_op.output_products = []
                         inp_name = inp_op.name
 
@@ -910,7 +1093,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     for idx, output_product in enumerate(op.output_products):
                         # Create a product for each consumer of tuple unpack, to represent a distinct tensor feeding
                         # into each consumer.
-                        new_product = self._add_product(f'{inp_name}_#{idx}', shape=output_product.shape)
+                        new_product = self._add_product(
+                            f"{inp_name}_#{idx}", shape=output_product.shape
+                        )
                         for consumer in output_product.consumers:
                             # Replace consumer's input product with the input product of this op
                             consumer_input_idx = consumer.inputs.index(output_product)
@@ -952,8 +1137,10 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         for op in self.get_all_ops().values():
             if len(op.output_products) > 1:
-                error_message = f'Op {op.name} with multiple outputs detected. Currently, AIMET connected graph does ' \
-                                f'not distinguish between different outputs of the same op.'
+                error_message = (
+                    f"Op {op.name} with multiple outputs detected. Currently, AIMET connected graph does "
+                    f"not distinguish between different outputs of the same op."
+                )
                 logger.debug(error_message)
                 products_to_remove = []
                 consumers_of_first_output_product = set(op.output_products[0].consumers)
@@ -976,7 +1163,14 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         new_ops_dict = {}
         for op in self.get_all_ops().values():
-            new_op = Op(op.name, op.dotted_name, op.output_shape, op.is_anonymous, op.type, op.residing_module)
+            new_op = Op(
+                op.name,
+                op.dotted_name,
+                op.output_shape,
+                op.is_anonymous,
+                op.type,
+                op.residing_module,
+            )
             new_op.model_module = op.model_module
             new_op._inputs = op._inputs
             new_op._op_info = op._op_info
@@ -1009,7 +1203,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 # Input products don't have the #x in their name so we can directly take the product name
                 producer_name = product.name
             for consumer in product.consumers:
-                new_product = Product(f'{producer_name}_to_{consumer.name}', shape=product.shape)
+                new_product = Product(
+                    f"{producer_name}_to_{consumer.name}", shape=product.shape
+                )
                 new_product.producer = product.producer
                 new_product.is_model_input = product.is_model_input
                 new_product.is_const = product.is_const
@@ -1032,14 +1228,22 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             module = op.get_module()
             if module is not None:
                 name = self._module_to_name.get(module, None)
-                if isinstance(op.get_module(), tuple(aimet_torch.utils.modules_to_treat_as_leaf)):
+                if isinstance(
+                    op.get_module(), tuple(aimet_torch.utils.modules_to_treat_as_leaf)
+                ):
                     for child_name, child_module in op.get_module().named_children():
-                        self._create_param_products_helper(op, child_module, name + "." + child_name,
-                                                           self.get_op_type(type(child_module)))
+                        self._create_param_products_helper(
+                            op,
+                            child_module,
+                            name + "." + child_name,
+                            self.get_op_type(type(child_module)),
+                        )
                 else:
                     self._create_param_products_helper(op, module, name, op.type)
 
-    def _create_param_products_helper(self, conn_graph_op: Op, module: torch.nn.Module, module_name: str, op_type: str):
+    def _create_param_products_helper(
+        self, conn_graph_op: Op, module: torch.nn.Module, module_name: str, op_type: str
+    ):
         """
         Helper to create param products for ops like convolution, batch norm, and linear if they don't exist yet
         :param conn_graph_op: Connected graph whose param products need to be added
@@ -1048,23 +1252,29 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :param module_name: name of the module.
         :param op_type: type (str) of the op which is stored in the connected graph
         """
-        if op_type in ['Conv', 'ConvTranspose', 'BatchNormalization', 'Gemm']:
+        if op_type in ["Conv", "ConvTranspose", "BatchNormalization", "Gemm"]:
             if module.weight is not None:
-                product_name = module_name + '.weight'
-                self._create_and_add_param_product_if_not_exists(conn_graph_op, product_name, list(module.weight.shape))
+                product_name = module_name + ".weight"
+                self._create_and_add_param_product_if_not_exists(
+                    conn_graph_op, product_name, list(module.weight.shape)
+                )
             if module.bias is not None:
-                product_name = module_name + '.bias'
-                self._create_and_add_param_product_if_not_exists(conn_graph_op, product_name, list(module.bias.shape))
-        if op_type == 'BatchNormalization':
+                product_name = module_name + ".bias"
+                self._create_and_add_param_product_if_not_exists(
+                    conn_graph_op, product_name, list(module.bias.shape)
+                )
+        if op_type == "BatchNormalization":
             # If batch_norm, fill in rest of bn params
             if module.running_mean is not None:
-                product_name = module_name + '.running_mean'
-                self._create_and_add_param_product_if_not_exists(conn_graph_op, product_name,
-                                                                 list(module.running_mean.shape))
+                product_name = module_name + ".running_mean"
+                self._create_and_add_param_product_if_not_exists(
+                    conn_graph_op, product_name, list(module.running_mean.shape)
+                )
             if module.running_var is not None:
-                product_name = module_name + '.running_var'
-                self._create_and_add_param_product_if_not_exists(conn_graph_op, product_name,
-                                                                 list(module.running_var.shape))
+                product_name = module_name + ".running_var"
+                self._create_and_add_param_product_if_not_exists(
+                    conn_graph_op, product_name, list(module.running_var.shape)
+                )
 
     def _remove_inputs_for_ops(self):
         """
@@ -1072,7 +1282,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
 
         for op in self._ops.values():
-            num_expected_inputs, start_from_front = op_inputs_dict.get(op.type, (None, None))
+            num_expected_inputs, start_from_front = op_inputs_dict.get(
+                op.type, (None, None)
+            )
             if num_expected_inputs is not None and len(op.inputs) > num_expected_inputs:
                 if start_from_front:
                     # Remove trailing inputs so that only num_expected_inputs remains
@@ -1087,7 +1299,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     del self._products[inp.name]
                 op.inputs = inputs_to_keep
 
-    def _create_and_add_param_product_if_not_exists(self, op: Op, product_name: str, shape: List[int]):
+    def _create_and_add_param_product_if_not_exists(
+        self, op: Op, product_name: str, shape: List[int]
+    ):
         """
         Given a name of a product, create it if it doesn't exist, and attach it to the specified op as a parameter.
         :param op: Op to connect the parameter product to.
@@ -1126,12 +1340,18 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 elif op.output_shape is None:
                     op.output_shape = op.outputs[0].shape
                 elif op.outputs[0].shape != op.output_shape:
-                    logger.debug('Mismatch between existing shape %s for product %s and output shape %s for '
-                                 'output of op %s', op.outputs[0].shape, op.outputs[0].name, op.output_shape,
-                                 op.name)
+                    logger.debug(
+                        "Mismatch between existing shape %s for product %s and output shape %s for "
+                        "output of op %s",
+                        op.outputs[0].shape,
+                        op.outputs[0].name,
+                        op.output_shape,
+                        op.name,
+                    )
 
-    def _determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(self, op: Op,
-                                                                                producer_to_product_name_map: Dict[str, List]):
+    def _determine_split_behavior_for_op_and_insert_split_op_in_connected_graph(
+        self, op: Op, producer_to_product_name_map: Dict[str, List]
+    ):
         """
         Determine if an Op's output is used as an input to more than one Op. If it is, create a Split Op and
         insert it in the connected graph, below this Op.
@@ -1148,7 +1368,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         name_list = []
         for prod_name in output_product_names:
-            to_pos = prod_name.find('to')
+            to_pos = prod_name.find("to")
             first_name = prod_name[:to_pos]
             name_list.append(first_name)
 
@@ -1160,7 +1380,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 split_op = self._create_split_op(op)
 
                 # Insert the Split Op in the connected graph.
-                self._insert_split_op_in_connected_graph(op, split_op, producer_to_product_name_map)
+                self._insert_split_op_in_connected_graph(
+                    op, split_op, producer_to_product_name_map
+                )
 
     def _create_split_op(self, op: Op) -> Op:
         """
@@ -1169,18 +1391,28 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :return: Split op that was created
         """
         split_name_parts = [f"{CG_SPLIT}_", str(self._split_count)]
-        split_name = ''.join(split_name_parts)
+        split_name = "".join(split_name_parts)
         self._split_count += 1
         split_dotted_name_parts = [self._model_name, split_name]
-        split_dotted_name = '.'.join(split_dotted_name_parts)
+        split_dotted_name = ".".join(split_dotted_name_parts)
         is_anonymous = True
-        split_op = Op(name=split_name, dotted_name=split_dotted_name, output_shape=op.output_shape,
-                      is_anonymous=is_anonymous, op_type=CG_SPLIT, residing_module=None)
+        split_op = Op(
+            name=split_name,
+            dotted_name=split_dotted_name,
+            output_shape=op.output_shape,
+            is_anonymous=is_anonymous,
+            op_type=CG_SPLIT,
+            residing_module=None,
+        )
         self._ops[split_name] = split_op
         return split_op
 
-    def _insert_split_op_in_connected_graph(self, preceding_op: Op, split_op: Op,
-                                            producer_to_product_name_map: Dict[str, List]):
+    def _insert_split_op_in_connected_graph(
+        self,
+        preceding_op: Op,
+        split_op: Op,
+        producer_to_product_name_map: Dict[str, List],
+    ):
         """
         Insert a Split Op below the preceding Op in the connected graph.
         :param preceding_op: Op prior to split op
@@ -1224,7 +1456,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # 2.This product has multiple consumers. Add the consumers to the Product.
         # Get the consumers from the op's multiple products.
 
-        self._add_consumers_to_split_op_product(preceding_op, split_op_product, producer_to_product_name_map)
+        self._add_consumers_to_split_op_product(
+            preceding_op, split_op_product, producer_to_product_name_map
+        )
 
         # 3. Create a new product to connect the preceding Op to the Split Op.
         # Set the the preceding Op's output Product's consumer to Split Op.
@@ -1237,7 +1471,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         # Since the preceding Op was behaving like a Split Op, it  would have 2 products with the preceding Op as the
         # producer. Delete these products from the product dictionary.
-        preceding_op_product_names = copy.deepcopy(producer_to_product_name_map[preceding_op.dotted_name])
+        preceding_op_product_names = copy.deepcopy(
+            producer_to_product_name_map[preceding_op.dotted_name]
+        )
         for name in preceding_op_product_names:
             # Important Notes
             # The following check is needed since ResNet uses the same Relu twice in BasicBlock's forward()
@@ -1245,11 +1481,15 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             if preceding_op.name in name:
                 deleted_product = self._products.pop(name)
                 try:
-                    producer_to_product_name_map[preceding_op.dotted_name].remove(deleted_product.name)
+                    producer_to_product_name_map[preceding_op.dotted_name].remove(
+                        deleted_product.name
+                    )
                 except ValueError as e:
-                    raise AssertionError(f'Product {deleted_product.name} not found in producer_to_product_name_map') from e
+                    raise AssertionError(
+                        f"Product {deleted_product.name} not found in producer_to_product_name_map"
+                    ) from e
 
-        new_product_name = preceding_op.name + '__to__' + split_op.name
+        new_product_name = preceding_op.name + "__to__" + split_op.name
         new_product = self._add_product(new_product_name, new_product_shape)
         new_product.producer = preceding_op
         preceding_op.outputs = [new_product]
@@ -1259,16 +1499,20 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # new_name = preceding_op.name + '__to__' + split_op.name
         split_op.inputs.append(preceding_op.outputs[0])
 
-    def _create_split_op_output_product(self, preceding_op: Op, split_op: Op) -> Product:
+    def _create_split_op_output_product(
+        self, preceding_op: Op, split_op: Op
+    ) -> Product:
         """
         Create output product of the split op and connected it to the split op
         :param preceding_op: Op prior to split op
         :param split_op: Split op to create output product for
         :return: Output product of the split op
         """
-        split_op_product_name = split_op.name + '__to__' + 'multiple_ops'
+        split_op_product_name = split_op.name + "__to__" + "multiple_ops"
         split_op_product_shape = preceding_op.outputs[0].shape
-        split_op_product = self._add_product(split_op_product_name, split_op_product_shape)
+        split_op_product = self._add_product(
+            split_op_product_name, split_op_product_shape
+        )
         split_op_product.producer = split_op
         return split_op_product
 
@@ -1284,8 +1528,12 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         self._products[name] = product
         return product
 
-    def _add_consumers_to_split_op_product(self, preceding_op: Op, split_op_product: Product,
-                                           producer_to_product_name_map: Dict[str, List]):
+    def _add_consumers_to_split_op_product(
+        self,
+        preceding_op: Op,
+        split_op_product: Product,
+        producer_to_product_name_map: Dict[str, List],
+    ):
         """
         A Split Op's output product has multiple consumers. Add them to the product.
         :param preceding_op: Op prior to split op
@@ -1302,19 +1550,25 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # The second Relu's output is split with one branch feeding the next BasicBlock's conv1 and the other
         # branch feeding in to the next BasicBlock's Add.
         # The following line filters out the Relu whose output is NOT split :(
-        out_product_names = [name for name in output_product_names if preceding_op.name in name]
+        out_product_names = [
+            name for name in output_product_names if preceding_op.name in name
+        ]
 
         for name in out_product_names:
             a_product = self.get_product(name)
             a_consumer = a_product.consumers[0]
             split_op_product.consumers.append(a_consumer)
             # Need to insert the newly created split_op product in the correct input index of the op
-            input_product_index = determine_preceding_op_input_product_index_in_multi_input_op(preceding_op,
-                                                                                               a_consumer)
+            input_product_index = (
+                determine_preceding_op_input_product_index_in_multi_input_op(
+                    preceding_op, a_consumer
+                )
+            )
             a_consumer.inputs[input_product_index] = split_op_product
 
-    def _is_recursive_parsing_needed(self, module: torch.nn.Module,
-                                     trace: torch.jit.TracedModule) -> bool:
+    def _is_recursive_parsing_needed(
+        self, module: torch.nn.Module, trace: torch.jit.TracedModule
+    ) -> bool:
         """
         Utility to decide whether recursive parsing is needed for given module and it's jit trace.
         Recursive parsing is not needed
@@ -1327,19 +1581,25 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         """
         # pylint: disable=import-outside-toplevel, cyclic-import
         from aimet_torch.v2.nn import BaseQuantizationMixin
+
         if isinstance(module, BaseQuantizationMixin):
-            return self._is_recursive_parsing_needed(module.get_original_module(), trace)
+            return self._is_recursive_parsing_needed(
+                module.get_original_module(), trace
+            )
 
         if is_torch_nn_leaf_module(module):
             return False
 
-        if isinstance(module, (self._aimet_defined_modules, *aimet_torch.utils.modules_to_treat_as_leaf)):
+        if isinstance(
+            module,
+            (self._aimet_defined_modules, *aimet_torch.utils.modules_to_treat_as_leaf),
+        ):
             return False
 
-        is_custom_leaf_module = is_leaf_module(module) and \
-            len(tuple(
-                islice(self._find_aten_nodes_in_forward_pass(trace), 2)
-            )) <= 1
+        is_custom_leaf_module = (
+            is_leaf_module(module)
+            and len(tuple(islice(self._find_aten_nodes_in_forward_pass(trace), 2))) <= 1
+        )
 
         if is_custom_leaf_module:
             return False
@@ -1357,7 +1617,9 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         return isinstance(module, tuple(MULTI_INPUT_OPS_TO_PARSE))
 
-    def _generate_trace_lookup_table(self, model: torch.nn.Module, trace: torch.jit.TracedModule):
+    def _generate_trace_lookup_table(
+        self, model: torch.nn.Module, trace: torch.jit.TracedModule
+    ):
         """
         Generate pytorch module names to corresponding JIT trace dictionary. There will be always one to one
         mapping between pytorch module and corresponding JIT trace.
@@ -1365,6 +1627,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         :param model: PyTorch model.
         :param trace: PyTorch JIT trace.
         """
+
         def _add_jit_trace(model: torch.nn.Module, trace: torch.jit.TracedModule):
             """
             Recursively add jit trace for all the modules to dictionary.
@@ -1391,15 +1654,19 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 missing_modules -= set(m.modules())
 
         if missing_modules:
-            missing_modules = ', '.join([
-                self._module_to_name[module] for module in missing_modules
-            ])
-            raise RuntimeError(f"Couldn't find corresponding JIT trace for modules: {missing_modules}")
+            missing_modules = ", ".join(
+                [self._module_to_name[module] for module in missing_modules]
+            )
+            raise RuntimeError(
+                f"Couldn't find corresponding JIT trace for modules: {missing_modules}"
+            )
 
         return module_to_jit_trace
 
     @staticmethod
-    def _find_aten_nodes_in_forward_pass(trace: torch.jit.TracedModule) -> Iterator[torch._C.Node]:
+    def _find_aten_nodes_in_forward_pass(
+        trace: torch.jit.TracedModule,
+    ) -> Iterator[torch._C.Node]:
         """
         Find all the valid nodes in forward pass for given trace of model or submodule.
         Three possible outcomes:
@@ -1417,7 +1684,11 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             return
 
         for node in nodes:
-            if "aten::" in node.kind() and ConnectedGraph._parse_op_type(node) not in ConnectedGraph.passthrough_graph_nodes:
+            if (
+                "aten::" in node.kind()
+                and ConnectedGraph._parse_op_type(node)
+                not in ConnectedGraph.passthrough_graph_nodes
+            ):
                 yield node
 
     @staticmethod
@@ -1437,11 +1708,12 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         op_num_dict = {}
         for op in self.get_all_ops().values():
             if op.type != CG_SPLIT:
-                last_underscore_idx = op.name.rfind('_')
-                op_num = int(op.name[last_underscore_idx + 1:])
+                last_underscore_idx = op.name.rfind("_")
+                op_num = int(op.name[last_underscore_idx + 1 :])
                 op_num_dict[op_num] = op
 
         return [op for (num, op) in sorted(op_num_dict.items(), key=lambda x: x[0])]
+
 
 def _create_module_to_op_dict(ops: List[Op]) -> Dict[torch.nn.Module, Op]:
     """
@@ -1455,6 +1727,7 @@ def _create_module_to_op_dict(ops: List[Op]) -> Dict[torch.nn.Module, Op]:
             module_to_op_dict[op.get_module()] = op
     return module_to_op_dict
 
+
 def _fill_groups_info(op: Op, module: torch.nn.Module):
     """
     Fill in groups info for convolution ops. If op is not a conv op, groups is unchanged.
@@ -1462,8 +1735,9 @@ def _fill_groups_info(op: Op, module: torch.nn.Module):
     :param module: Pytorch module to check for groups
     """
 
-    if op.type in 'Conv':
+    if op.type in "Conv":
         op.groups = module.groups
+
 
 def _flatten_lists(nested_list: List[List]) -> List:
     """
@@ -1479,6 +1753,7 @@ def _flatten_lists(nested_list: List[List]) -> List:
         else:
             flattened_list.extend(_flatten_lists(item))
     return flattened_list
+
 
 def _get_module_tensor_shapes_entry(tensors: Union[torch.Tensor, List, Dict, None]):
     """
@@ -1499,6 +1774,9 @@ def _get_module_tensor_shapes_entry(tensors: Union[torch.Tensor, List, Dict, Non
         for k, v in tensors.items():
             shapes_dict[k] = _get_module_tensor_shapes_entry(v)
         return shapes_dict
-    logger.debug('Unexpected data type for tensor %s. Supported types include tensors, or Lists, Tuples, and Dicts of '
-                 'tensors.', type(tensors))
+    logger.debug(
+        "Unexpected data type for tensor %s. Supported types include tensors, or Lists, Tuples, and Dicts of "
+        "tensors.",
+        type(tensors),
+    )
     return None

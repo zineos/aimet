@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Unit tests for Auto Quant Keras """
+"""Unit tests for Auto Quant Keras"""
 
 import contextlib
 from dataclasses import dataclass
@@ -58,18 +58,26 @@ import logging
 
 AimetLogger.set_level_for_all_areas(logging.DEBUG)
 
+
 @pytest.fixture(scope="function")
 def model():
-    inputs = tf.keras.Input(shape=(32, 32, 3,))
+    inputs = tf.keras.Input(
+        shape=(
+            32,
+            32,
+            3,
+        )
+    )
     x = tf.keras.layers.Conv2D(32, (3, 3))(inputs)
     outputs = tf.keras.layers.Dense(10, activation="softmax")(x)
 
     functional_model = tf.keras.Model(inputs=inputs, outputs=outputs)
-    functional_model.__setattr__("applied_bn_folding",False)
-    functional_model.__setattr__("applied_cle",False)
-    functional_model.__setattr__("applied_adaround",False)
+    functional_model.__setattr__("applied_bn_folding", False)
+    functional_model.__setattr__("applied_cle", False)
+    functional_model.__setattr__("applied_adaround", False)
 
     return functional_model
+
 
 @pytest.fixture(scope="session")
 def dataset_length():
@@ -83,6 +91,7 @@ def unlabeled_dataset(dataset_length):
     dataset = dataset.batch(1)
     return dataset
 
+
 def assert_html(html_parsed, properties):
     for id_, prop in properties.items():
         elem = html_parsed.find(id=id_)
@@ -94,39 +103,41 @@ def assert_html(html_parsed, properties):
                 assert elem[prop_name] == prop_val
 
 
-_VISITED = { 'data-visited': 'true', }
-_NOT_VISITED = { 'data-visited': None, }
-_SUCCESS = {
-    'data-visited': 'true',
-    'data-stage-result': 'success'
+_VISITED = {
+    "data-visited": "true",
 }
-_DISCARDED = {
-    'data-visited': 'true',
-    'data-stage-result': 'discarded'
+_NOT_VISITED = {
+    "data-visited": None,
 }
-_ERROR_IGNORED = {
-    'data-visited': 'true',
-    'data-stage-result': 'error-ignored'
-}
-_ERROR_FAILED = {
-    'data-visited': 'true',
-    'data-stage-result': 'error-failed'
-}
+_SUCCESS = {"data-visited": "true", "data-stage-result": "success"}
+_DISCARDED = {"data-visited": "true", "data-stage-result": "discarded"}
+_ERROR_IGNORED = {"data-visited": "true", "data-stage-result": "error-ignored"}
+_ERROR_FAILED = {"data-visited": "true", "data-stage-result": "error-failed"}
+
 
 def assert_applied_techniques(
-        output_model, acc, encoding_path,
-        target_acc, bn_folded_acc, cle_acc, adaround_acc, results_dir,
+    output_model,
+    acc,
+    encoding_path,
+    target_acc,
+    bn_folded_acc,
+    cle_acc,
+    adaround_acc,
+    results_dir,
 ):
-    html_path = os.path.join(results_dir, 'diagnostics.html')
+    html_path = os.path.join(results_dir, "diagnostics.html")
     with open(html_path) as f:
         html_parsed = BeautifulSoup(f.read(), features="html.parser")
 
     # Batchnorm folding is always applied.
     assert output_model.applied_bn_folding
-    assert_html(html_parsed, {
-        'node_batchnorm_folding': _SUCCESS,
-        'node_test_batchnorm_folding': _VISITED,
-    })
+    assert_html(
+        html_parsed,
+        {
+            "node_batchnorm_folding": _SUCCESS,
+            "node_test_batchnorm_folding": _VISITED,
+        },
+    )
 
     # If accuracy is good enough after batchnorm folding
     if bn_folded_acc >= target_acc:
@@ -135,14 +146,17 @@ def assert_applied_techniques(
         assert not output_model.applied_cle
         assert not output_model.applied_adaround
 
-        assert_html(html_parsed, {
-            'node_cross_layer_equalization': _NOT_VISITED,
-            'node_test_cross_layer_equalization': _NOT_VISITED,
-            'node_adaround': _NOT_VISITED,
-            'node_test_adaround': _NOT_VISITED,
-            'node_result_fail': _NOT_VISITED,
-            'node_result_success': _VISITED,
-        })
+        assert_html(
+            html_parsed,
+            {
+                "node_cross_layer_equalization": _NOT_VISITED,
+                "node_test_cross_layer_equalization": _NOT_VISITED,
+                "node_adaround": _NOT_VISITED,
+                "node_test_adaround": _NOT_VISITED,
+                "node_result_fail": _NOT_VISITED,
+                "node_result_success": _VISITED,
+            },
+        )
         return
 
     # If accuracy is good enough after cle
@@ -152,20 +166,28 @@ def assert_applied_techniques(
         assert output_model.applied_cle
         assert not output_model.applied_adaround
 
-        assert_html(html_parsed, {
-            'node_adaround': _NOT_VISITED,
-            'node_test_adaround': _NOT_VISITED,
-            'node_result_fail': _NOT_VISITED,
-            'node_result_success': _VISITED,
-        })
+        assert_html(
+            html_parsed,
+            {
+                "node_adaround": _NOT_VISITED,
+                "node_test_adaround": _NOT_VISITED,
+                "node_result_fail": _NOT_VISITED,
+                "node_result_success": _VISITED,
+            },
+        )
         return
 
-    assert output_model.applied_adaround == (adaround_acc >= max(bn_folded_acc, cle_acc))
+    assert output_model.applied_adaround == (
+        adaround_acc >= max(bn_folded_acc, cle_acc)
+    )
 
-    assert_html(html_parsed, {
-        'node_adaround': _SUCCESS if output_model.applied_adaround else _DISCARDED,
-        'node_test_adaround': _VISITED,
-    })
+    assert_html(
+        html_parsed,
+        {
+            "node_adaround": _SUCCESS if output_model.applied_adaround else _DISCARDED,
+            "node_test_adaround": _VISITED,
+        },
+    )
 
     # If accuracy is good enough after adaround
     if adaround_acc >= target_acc:
@@ -173,15 +195,21 @@ def assert_applied_techniques(
         assert encoding_path.endswith("adaround.encodings")
         assert output_model.applied_adaround
 
-        assert_html(html_parsed, {
-            'node_result_fail': _NOT_VISITED,
-            'node_result_success': _VISITED,
-        })
+        assert_html(
+            html_parsed,
+            {
+                "node_result_fail": _NOT_VISITED,
+                "node_result_success": _VISITED,
+            },
+        )
         return
-    assert_html(html_parsed, {
-        'node_result_fail': _VISITED,
-        'node_result_success': _NOT_VISITED,
-    })
+    assert_html(
+        html_parsed,
+        {
+            "node_result_fail": _VISITED,
+            "node_result_success": _NOT_VISITED,
+        },
+    )
     assert acc == max(bn_folded_acc, cle_acc, adaround_acc)
 
     if max(bn_folded_acc, cle_acc, adaround_acc) == bn_folded_acc:
@@ -192,12 +220,12 @@ def assert_applied_techniques(
         assert encoding_path.endswith("adaround.encodings")
 
 
-FP32_ACC = .8
-W32_ACC = 0.8 # Assume W32 accuracy is equal to FP32 accuracy
+FP32_ACC = 0.8
+W32_ACC = 0.8  # Assume W32 accuracy is equal to FP32 accuracy
 RAW_QUANTSIM_ACC = 0.1
 
-def _set_attr_to_copied_model(copied_model: tf.keras.Model,
-                              model: tf.keras.Model):
+
+def _set_attr_to_copied_model(copied_model: tf.keras.Model, model: tf.keras.Model):
     for key in ["applied_bn_folding", "applied_cle", "applied_adaround"]:
         if hasattr(model, key):
             setattr(copied_model, key, getattr(model, key))
@@ -206,7 +234,14 @@ def _set_attr_to_copied_model(copied_model: tf.keras.Model,
 
 
 @contextlib.contextmanager
-def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc,fp32_acc=None, w32_acc=None, raw_quantsim_acc=None):
+def patch_ptq_techniques(
+    bn_folded_acc,
+    cle_acc,
+    adaround_acc,
+    fp32_acc=None,
+    w32_acc=None,
+    raw_quantsim_acc=None,
+):
     if fp32_acc is None:
         fp32_acc = FP32_ACC
 
@@ -238,27 +273,42 @@ def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc,fp32_acc=None, w32
         return copied_model
 
     class _PtqResult(PtqResult):
-
         def load_model(self) -> tf.keras.Model:
             model = super().load_model()
             bnf_val = True if "batchnorm_folding" in self.applied_techniques else 0
-            cle_val = True if "cross_layer_equalization" in self.applied_techniques else 0
+            cle_val = (
+                True if "cross_layer_equalization" in self.applied_techniques else 0
+            )
             if cle_val:
                 bnf_val = True
             ada_val = True if "adaround" in self.applied_techniques else 0
-            model.__setattr__("applied_bn_folding",bnf_val)
-            model.__setattr__("applied_cle",cle_val)
-            model.__setattr__("applied_adaround",ada_val)
+            model.__setattr__("applied_bn_folding", bnf_val)
+            model.__setattr__("applied_cle", cle_val)
+            model.__setattr__("applied_adaround", ada_val)
             return model
 
-
     class _QuantizationSimModel(QuantizationSimModel):
-        def __init__(self, model, quant_scheme: Union[QuantScheme, str] = 'tf_enhanced', rounding_mode: str = 'nearest',
-                     default_output_bw: int = 8, default_param_bw: int = 8, in_place: bool = False,
-                     config_file: str = None, default_data_type: QuantizationDataType = QuantizationDataType.int):
-
-            super(_QuantizationSimModel, self).__init__(model, quant_scheme, rounding_mode, default_output_bw,
-                                                        default_param_bw, in_place, config_file, default_data_type)
+        def __init__(
+            self,
+            model,
+            quant_scheme: Union[QuantScheme, str] = "tf_enhanced",
+            rounding_mode: str = "nearest",
+            default_output_bw: int = 8,
+            default_param_bw: int = 8,
+            in_place: bool = False,
+            config_file: str = None,
+            default_data_type: QuantizationDataType = QuantizationDataType.int,
+        ):
+            super(_QuantizationSimModel, self).__init__(
+                model,
+                quant_scheme,
+                rounding_mode,
+                default_output_bw,
+                default_param_bw,
+                in_place,
+                config_file,
+                default_data_type,
+            )
 
             self._model_without_wrappers = model
             if not in_place:
@@ -272,13 +322,24 @@ def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc,fp32_acc=None, w32
             self._layer_name_to_quant_wrapper = {}
             self._validate_model()
             self.connected_graph = ConnectedGraph(self._model_without_wrappers)
-            self._quantsim_configurator = self._initialize_quantsim_configurator(quant_scheme, rounding_mode,
-                                                                                 default_output_bw, default_param_bw,
-                                                                                 config_file)
+            self._quantsim_configurator = self._initialize_quantsim_configurator(
+                quant_scheme,
+                rounding_mode,
+                default_output_bw,
+                default_param_bw,
+                config_file,
+            )
             self.quant_scheme = quant_scheme
-            self.per_channel_quantization_enabled = self._quantsim_configurator.per_channel_quantization_flag
-            self.model = self._add_quantization_wrappers(quant_scheme, rounding_mode, default_output_bw,
-                                                         default_param_bw, QuantizationDataType.int)
+            self.per_channel_quantization_enabled = (
+                self._quantsim_configurator.per_channel_quantization_flag
+            )
+            self.model = self._add_quantization_wrappers(
+                quant_scheme,
+                rounding_mode,
+                default_output_bw,
+                default_param_bw,
+                QuantizationDataType.int,
+            )
             self._disable_quantizers_in_folded_batchnorm()
 
         def compute_encodings(self, *_):
@@ -287,15 +348,25 @@ def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc,fp32_acc=None, w32
         def set_and_freeze_param_encodings(self, _):
             pass
 
-        def _add_quantization_wrappers(self, quant_scheme, rounding_mode, default_output_bw,
-                                       default_param_bw, default_data_type):
-            model = super()._add_quantization_wrappers(quant_scheme, rounding_mode, default_output_bw,
-                                                       default_param_bw, default_data_type)
+        def _add_quantization_wrappers(
+            self,
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+        ):
+            model = super()._add_quantization_wrappers(
+                quant_scheme,
+                rounding_mode,
+                default_output_bw,
+                default_param_bw,
+                default_data_type,
+            )
             _set_attr_to_copied_model(model, self._model_without_wrappers)
             return model
 
     def mock_eval_callback(model, _):
-
         if not isinstance(model.layers[1], QcQuantizeWrapper):
             # Not quantized: return fp32 accuracy
             return fp32_acc
@@ -320,65 +391,104 @@ def patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc,fp32_acc=None, w32
         equalize_model: MagicMock
         apply_adaround: MagicMock
 
-    with patch("aimet_tensorflow.keras.auto_quant_v2.QuantizationSimModel", side_effect=_QuantizationSimModel) as mock_qsim, \
-            patch("aimet_tensorflow.keras.auto_quant_v2.PtqResult", side_effect=_PtqResult) as mock_ptq, \
-            patch("aimet_tensorflow.keras.auto_quant_v2.AutoQuant._apply_batchnorm_folding", side_effect=bn_folding) as mock_bn_folding, \
-            patch("aimet_tensorflow.keras.auto_quant_v2.AutoQuant._apply_cross_layer_equalization", side_effect=cle) as mock_cle, \
-            patch("aimet_tensorflow.keras.auto_quant_v2.Adaround.apply_adaround", side_effect=adaround) as mock_adaround:
+    with (
+        patch(
+            "aimet_tensorflow.keras.auto_quant_v2.QuantizationSimModel",
+            side_effect=_QuantizationSimModel,
+        ) as mock_qsim,
+        patch(
+            "aimet_tensorflow.keras.auto_quant_v2.PtqResult", side_effect=_PtqResult
+        ) as mock_ptq,
+        patch(
+            "aimet_tensorflow.keras.auto_quant_v2.AutoQuant._apply_batchnorm_folding",
+            side_effect=bn_folding,
+        ) as mock_bn_folding,
+        patch(
+            "aimet_tensorflow.keras.auto_quant_v2.AutoQuant._apply_cross_layer_equalization",
+            side_effect=cle,
+        ) as mock_cle,
+        patch(
+            "aimet_tensorflow.keras.auto_quant_v2.Adaround.apply_adaround",
+            side_effect=adaround,
+        ) as mock_adaround,
+    ):
         try:
-            yield Mocks(eval_callback=mock_eval_callback,
-                        QuantizationSimModel=mock_qsim,
-                        PtqResult=mock_ptq,
-                        fold_all_batch_norms=mock_bn_folding,
-                        equalize_model=mock_cle,
-                        apply_adaround=mock_adaround)
+            yield Mocks(
+                eval_callback=mock_eval_callback,
+                QuantizationSimModel=mock_qsim,
+                PtqResult=mock_ptq,
+                fold_all_batch_norms=mock_bn_folding,
+                equalize_model=mock_cle,
+                apply_adaround=mock_adaround,
+            )
         finally:
             pass
 
+
 class TestAutoQuant:
     def test_auto_quant_run_inference(self, model, unlabeled_dataset):
-        bn_folded_acc = .5
+        bn_folded_acc = 0.5
         with patch_ptq_techniques(bn_folded_acc, None, None) as mocks:
             with tempfile.TemporaryDirectory() as results_dir:
-                auto_quant = AutoQuant(model = model,
-                                       eval_callback=mocks.eval_callback,
-                                       dataset = unlabeled_dataset,
-                                       results_dir=results_dir)
+                auto_quant = AutoQuant(
+                    model=model,
+                    eval_callback=mocks.eval_callback,
+                    dataset=unlabeled_dataset,
+                    results_dir=results_dir,
+                )
                 auto_quant.run_inference()
 
     @pytest.mark.parametrize(
         "bn_folded_acc, cle_acc, adaround_acc",
-        [(0.50, 0.60, 0.70), (0.50, 0.70, 0.60), (0.70, 0.50, 0.60)]
+        [(0.50, 0.60, 0.70), (0.50, 0.70, 0.60), (0.70, 0.50, 0.60)],
     )
-
     def _test_auto_quant(
-            self, model, unlabeled_dataset,
-            allowed_accuracy_drop, bn_folded_acc, cle_acc, adaround_acc,
+        self,
+        model,
+        unlabeled_dataset,
+        allowed_accuracy_drop,
+        bn_folded_acc,
+        cle_acc,
+        adaround_acc,
     ):
-        with patch_ptq_techniques(
-                bn_folded_acc, cle_acc, adaround_acc
-        ) as mocks:
+        with patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc) as mocks:
             with tempfile.TemporaryDirectory() as results_dir:
-                auto_quant = AutoQuant(model = model,
-                                       eval_callback = mocks.eval_callback,
-                                       dataset = unlabeled_dataset,
-                                       results_dir=results_dir)
+                auto_quant = AutoQuant(
+                    model=model,
+                    eval_callback=mocks.eval_callback,
+                    dataset=unlabeled_dataset,
+                    results_dir=results_dir,
+                )
                 self._do_test_optimize_auto_quant(
-                    auto_quant, allowed_accuracy_drop,
-                    bn_folded_acc, cle_acc, adaround_acc
+                    auto_quant,
+                    allowed_accuracy_drop,
+                    bn_folded_acc,
+                    cle_acc,
+                    adaround_acc,
                 )
 
-    def _do_test_optimize_auto_quant(self, auto_quant,allowed_accuracy_drop, bn_folded_acc, cle_acc, adaround_acc,):
+    def _do_test_optimize_auto_quant(
+        self,
+        auto_quant,
+        allowed_accuracy_drop,
+        bn_folded_acc,
+        cle_acc,
+        adaround_acc,
+    ):
         target_acc = FP32_ACC - allowed_accuracy_drop
         output_model, acc, encoding_path = auto_quant.optimize(allowed_accuracy_drop)
         assert_applied_techniques(
-            output_model, acc, encoding_path,
-            target_acc, bn_folded_acc, cle_acc, adaround_acc,
+            output_model,
+            acc,
+            encoding_path,
+            target_acc,
+            bn_folded_acc,
+            cle_acc,
+            adaround_acc,
             auto_quant.results_dir,
         )
 
-    def test_auto_quant_invalid_input(self,model, unlabeled_dataset):
-
+    def test_auto_quant_invalid_input(self, model, unlabeled_dataset):
         with pytest.raises(ValueError):
             AutoQuant(None, lambda: None, unlabeled_dataset)
         with pytest.raises(ValueError):
@@ -410,85 +520,117 @@ class TestAutoQuant:
 
         with tempfile.TemporaryDirectory() as results_dir:
             with patch_ptq_techniques(
-                    bn_folded_acc=0, cle_acc=0, adaround_acc=0, w32_acc=w32_acc
+                bn_folded_acc=0, cle_acc=0, adaround_acc=0, w32_acc=w32_acc
             ) as mocks:
-                auto_quant = AutoQuant(model = model,
-                          eval_callback = mocks.eval_callback,
-                          dataset = unlabeled_dataset,
-                          results_dir=results_dir)
-                output_model, acc, encoding_path = auto_quant.optimize(allowed_accuracy_drop)
-
+                auto_quant = AutoQuant(
+                    model=model,
+                    eval_callback=mocks.eval_callback,
+                    dataset=unlabeled_dataset,
+                    results_dir=results_dir,
+                )
+                output_model, acc, encoding_path = auto_quant.optimize(
+                    allowed_accuracy_drop
+                )
 
             assert output_model is None
             assert acc is None
             assert encoding_path is None
 
-            with open(os.path.join(results_dir, 'diagnostics.html')) as f:
+            with open(os.path.join(results_dir, "diagnostics.html")) as f:
                 html_parsed = BeautifulSoup(f.read(), features="html.parser")
-                assert_html(html_parsed, {
-                    'node_test_w32_eval_score': _VISITED,
-                    'node_batchnorm_folding': _NOT_VISITED,
-                    'node_cross_layer_equalization': _NOT_VISITED,
-                    'node_adaround': _NOT_VISITED,
-                    'node_result_fail': _VISITED,
-                })
+                assert_html(
+                    html_parsed,
+                    {
+                        "node_test_w32_eval_score": _VISITED,
+                        "node_batchnorm_folding": _NOT_VISITED,
+                        "node_cross_layer_equalization": _NOT_VISITED,
+                        "node_adaround": _NOT_VISITED,
+                        "node_result_fail": _VISITED,
+                    },
+                )
 
     @pytest.mark.parametrize(
-        "bn_folded_acc, cle_acc, adaround_acc",
-        itertools.permutations([.5, .6, .7])
+        "bn_folded_acc, cle_acc, adaround_acc", itertools.permutations([0.5, 0.6, 0.7])
     )
-    @pytest.mark.parametrize("allowed_accuracy_drop", [.05, .15])
+    @pytest.mark.parametrize("allowed_accuracy_drop", [0.05, 0.15])
     def test_auto_quant_cpu(
-            self, model, unlabeled_dataset,
-            allowed_accuracy_drop, bn_folded_acc, cle_acc, adaround_acc,
+        self,
+        model,
+        unlabeled_dataset,
+        allowed_accuracy_drop,
+        bn_folded_acc,
+        cle_acc,
+        adaround_acc,
     ):
-
         self._test_auto_quant(
-            model, unlabeled_dataset,
-            allowed_accuracy_drop, bn_folded_acc, cle_acc, adaround_acc,
+            model,
+            unlabeled_dataset,
+            allowed_accuracy_drop,
+            bn_folded_acc,
+            cle_acc,
+            adaround_acc,
         )
 
-
     def test_auto_quant_scheme_selection(
-            self, model, unlabeled_dataset,
+        self,
+        model,
+        unlabeled_dataset,
     ):
         allowed_accuracy_drop = 0.0
-        bn_folded_acc, cle_acc, adaround_acc = .4, .5, .6
+        bn_folded_acc, cle_acc, adaround_acc = 0.4, 0.5, 0.6
         with patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc) as mocks:
+
             def eval_callback(model, _):
                 # Assumes the model's eval score drops to zero
                 # unless param_quant_scheme == tfe and output_quant_scheme == tf
                 if isinstance(model.layers[1], QcQuantizeWrapper):
-                    if model.layers[1].param_quantizers[0].quant_scheme != QuantScheme.post_training_tf_enhanced:
+                    if (
+                        model.layers[1].param_quantizers[0].quant_scheme
+                        != QuantScheme.post_training_tf_enhanced
+                    ):
                         return 0.0
-                    if model.layers[1].output_quantizers[0].quant_scheme != QuantScheme.post_training_tf:
+                    if (
+                        model.layers[1].output_quantizers[0].quant_scheme
+                        != QuantScheme.post_training_tf
+                    ):
                         return 0.0
                 return mocks.eval_callback(model, _)
 
             _optimize = AutoQuant.optimize
+
             def optimize(self, *args, **kwargs):
                 # Since all the other candidates (tf-tf, tfe-tfe, and tfe-percentile) yields zero accuracy,
                 # it is expected that tf-tfe is selected as the quant scheme for AutoQuant.
                 ret = _optimize(self, *args, **kwargs)
-                assert self._quantsim_params["quant_scheme"].param_quant_scheme == QuantScheme.post_training_tf_enhanced
-                assert self._quantsim_params["quant_scheme"].output_quant_scheme == QuantScheme.post_training_tf
+                assert (
+                    self._quantsim_params["quant_scheme"].param_quant_scheme
+                    == QuantScheme.post_training_tf_enhanced
+                )
+                assert (
+                    self._quantsim_params["quant_scheme"].output_quant_scheme
+                    == QuantScheme.post_training_tf
+                )
                 return ret
 
-            with patch("aimet_tensorflow.keras.auto_quant_v2.AutoQuant.optimize", optimize):
-                auto_quant = AutoQuant(model = model,
-                                       eval_callback = eval_callback,
-                                       dataset = unlabeled_dataset)
+            with patch(
+                "aimet_tensorflow.keras.auto_quant_v2.AutoQuant.optimize", optimize
+            ):
+                auto_quant = AutoQuant(
+                    model=model, eval_callback=eval_callback, dataset=unlabeled_dataset
+                )
                 auto_quant.optimize(allowed_accuracy_drop)
 
     def test_set_additional_params(self, model, unlabeled_dataset):
         allowed_accuracy_drop = 0
-        bn_folded_acc = .1
-        cle_acc = .2
-        adaround_acc = .3
+        bn_folded_acc = 0.1
+        cle_acc = 0.2
+        adaround_acc = 0.3
         with patch_ptq_techniques(bn_folded_acc, cle_acc, adaround_acc) as mocks:
-            auto_quant = AutoQuant(model = model,
-                      eval_callback = mocks.eval_callback,
-                                   dataset = unlabeled_dataset)
+            auto_quant = AutoQuant(
+                model=model,
+                eval_callback=mocks.eval_callback,
+                dataset=unlabeled_dataset,
+            )
             adaround_params = AdaroundParameters(unlabeled_dataset, 1)
             auto_quant.set_adaround_params(adaround_params)
             self._do_test_optimize_auto_quant(

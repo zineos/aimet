@@ -36,12 +36,14 @@
 # =============================================================================
 
 """BatchNorm Reestimation"""
+
 from typing import List, Dict
 import numpy as np
 import tensorflow as tf
 from aimet_common.utils import Handle, AimetLogger
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
+
 
 def _get_bn_submodules(model: tf.keras.Model) -> List[tf.keras.layers.Layer]:
     bn_layers = []
@@ -51,7 +53,12 @@ def _get_bn_submodules(model: tf.keras.Model) -> List[tf.keras.layers.Layer]:
     return bn_layers
 
 
-def _reset_bn_stats(bn_layers: List[tf.keras.layers.Layer], bn_mean_checkpoints: Dict, bn_var_checkpoints: Dict, bn_momentum_checkpoints: Dict) -> Handle:
+def _reset_bn_stats(
+    bn_layers: List[tf.keras.layers.Layer],
+    bn_mean_checkpoints: Dict,
+    bn_var_checkpoints: Dict,
+    bn_momentum_checkpoints: Dict,
+) -> Handle:
     """
     reset bn stats
     :param bn_layers: keras bn_layers
@@ -78,11 +85,15 @@ def _reset_bn_stats(bn_layers: List[tf.keras.layers.Layer], bn_mean_checkpoints:
         return Handle(cleanup)
     except:
         cleanup()
-        raise ValueError('exception for reset_bn_stats')  # pylint: disable=raise-missing-from
+        raise ValueError("exception for reset_bn_stats")  # pylint: disable=raise-missing-from
+
 
 # pylint: disable=too-many-locals
-def reestimate_bn_stats(model: tf.keras.Model, bn_re_estimation_dataset: tf.data.Dataset,
-                        bn_num_batches: int = 100) -> Handle:
+def reestimate_bn_stats(
+    model: tf.keras.Model,
+    bn_re_estimation_dataset: tf.data.Dataset,
+    bn_num_batches: int = 100,
+) -> Handle:
     """
 
     top level api for end user directly call
@@ -103,8 +114,19 @@ def reestimate_bn_stats(model: tf.keras.Model, bn_re_estimation_dataset: tf.data
     handle = _reset_bn_stats(bn_layers, bn_mean_ori, bn_var_ori, bn_momentum_ori)
 
     # 2. mean &var initialization
-    mean_sum_dict = {layer.name: np.zeros(layer.moving_mean.shape, dtype=layer.moving_mean.dtype.as_numpy_dtype) for layer in bn_layers}
-    var_sum_dict = {layer.name: np.zeros(layer.moving_variance.shape, dtype=layer.moving_variance.dtype.as_numpy_dtype) for  layer in bn_layers}
+    mean_sum_dict = {
+        layer.name: np.zeros(
+            layer.moving_mean.shape, dtype=layer.moving_mean.dtype.as_numpy_dtype
+        )
+        for layer in bn_layers
+    }
+    var_sum_dict = {
+        layer.name: np.zeros(
+            layer.moving_variance.shape,
+            dtype=layer.moving_variance.dtype.as_numpy_dtype,
+        )
+        for layer in bn_layers
+    }
 
     # 3 per batch forward for BN re-estimation, accumulate into mean&var buffers
     bn_dataset_iterator = iter(bn_re_estimation_dataset)
@@ -123,8 +145,8 @@ def reestimate_bn_stats(model: tf.keras.Model, bn_re_estimation_dataset: tf.data
 
     # 4 average mean&var buffers, Override BN stats with the reestimated stats
     for layer in bn_layers:
-        move_mean = mean_sum_dict[layer.name]/bn_num_batches
-        move_var = var_sum_dict[layer.name]/bn_num_batches
+        move_mean = mean_sum_dict[layer.name] / bn_num_batches
+        move_var = var_sum_dict[layer.name] / bn_num_batches
         gamma, beta, _, _ = layer.get_weights()
         layer.set_weights([gamma, beta, move_mean, move_var])
 

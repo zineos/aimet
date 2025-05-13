@@ -37,10 +37,14 @@
 """
 This file contains unit tests for testing ConnectedGraph
 """
+
 import pytest
 
 import test_models_keras
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_output_ops
+from aimet_common.connected_graph.connectedgraph_utils import (
+    get_all_input_ops,
+    get_all_output_ops,
+)
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 
 
@@ -95,7 +99,7 @@ class TestConnectedGraph:
             assert layer.inbound_nodes
 
         assert len(connected_graph.get_all_ops().keys()) == 6
-        concat_op = connected_graph.get_all_ops()['Concat_3']
+        concat_op = connected_graph.get_all_ops()["Concat_3"]
         assert len(concat_op.inputs) == 3
 
     def test_single_residual(self):

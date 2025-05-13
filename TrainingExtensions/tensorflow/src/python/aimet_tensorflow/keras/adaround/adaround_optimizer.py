@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Adaround optimizer """
+"""Adaround optimizer"""
 
 from typing import Callable, Tuple
 import numpy as np
@@ -45,19 +45,24 @@ import tensorflow.keras.backend as K
 
 # Import AIMET specific modules
 from aimet_common.utils import AimetLogger
-from aimet_tensorflow.keras.adaround.adaround_loss import AdaroundLoss, AdaroundHyperParameters
+from aimet_tensorflow.keras.adaround.adaround_loss import (
+    AdaroundLoss,
+    AdaroundHyperParameters,
+)
 from aimet_tensorflow.keras.adaround.adaround_wrapper import AdaroundWrapper
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
 BATCH_SIZE = 32
 
-#pylint: disable=too-many-ancestors
-#pylint: disable=abstract-method
+
+# pylint: disable=too-many-ancestors
+# pylint: disable=abstract-method
 class CustomModel(keras.Model):
     """
     Custom model to train adaraound wrapper
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.epoch_count = K.variable(0)
@@ -82,47 +87,77 @@ class CustomModel(keras.Model):
         self.compiled_metrics.update_state(y, y_pred)
         return {}
 
-    def calculate_loss_wrapper(self, opt_params: AdaroundHyperParameters, wrapper: AdaroundWrapper, channels_index: int):
+    def calculate_loss_wrapper(
+        self,
+        opt_params: AdaroundHyperParameters,
+        wrapper: AdaroundWrapper,
+        channels_index: int,
+    ):
         """
         Wrapper function to compute loss
         :param opt_params: Adaround hyper parameters
         :param wrapper: Adaround wrapper
         :param channels_index: channels_index across which reconstruction loss will be computed
         """
+
         def calculate_loss(orig_out_tensor, adaround_out_tensor):
             """
             :param inp_tensor: Input activation data tensor
             :param orig_out_tensor: Original output activation data tensor
             """
-            warm_start = self.epoch_count < opt_params.num_iterations * opt_params.warm_start
+            warm_start = (
+                self.epoch_count < opt_params.num_iterations * opt_params.warm_start
+            )
 
             # Compute beta parameter used in regularization function using cosine decay
-            beta = AdaroundLoss.compute_beta(opt_params.num_iterations, self.epoch_count, opt_params.beta_range, opt_params.warm_start)
-            recon_loss = AdaroundLoss.compute_recon_loss(adaround_out_tensor, orig_out_tensor, channels_index=channels_index)
-            round_loss = AdaroundLoss.compute_round_loss(alpha=wrapper.alpha, reg_param=opt_params.reg_param, warm_start=tf.cast(warm_start, tf.bool), beta=beta)
+            beta = AdaroundLoss.compute_beta(
+                opt_params.num_iterations,
+                self.epoch_count,
+                opt_params.beta_range,
+                opt_params.warm_start,
+            )
+            recon_loss = AdaroundLoss.compute_recon_loss(
+                adaround_out_tensor, orig_out_tensor, channels_index=channels_index
+            )
+            round_loss = AdaroundLoss.compute_round_loss(
+                alpha=wrapper.alpha,
+                reg_param=opt_params.reg_param,
+                warm_start=tf.cast(warm_start, tf.bool),
+                beta=beta,
+            )
             total_loss = recon_loss + round_loss
             return total_loss
+
         return calculate_loss
+
 
 class AccessEpochNumber(keras.callbacks.Callback):
     """
     Class to access and set epoch number during training.
     This epoch number will be used for calculating loss
     """
+
     def __init__(self, model):
         super().__init__()
         self.model = model
+
     def on_epoch_begin(self, epoch, logs=None):
         K.set_value(self.model.epoch_count, epoch)
+
 
 class AdaroundOptimizer:
     """
     Optimizes the weight rounding
     """
+
     @staticmethod
-    def adaround_wrapper(wrapper: AdaroundWrapper, act_func: Callable, all_inp_data: np.ndarray,
-                         all_orig_out_data: np.ndarray, opt_params: AdaroundHyperParameters) -> \
-            (np.ndarray, np.ndarray):
+    def adaround_wrapper(
+        wrapper: AdaroundWrapper,
+        act_func: Callable,
+        all_inp_data: np.ndarray,
+        all_orig_out_data: np.ndarray,
+        opt_params: AdaroundHyperParameters,
+    ) -> (np.ndarray, np.ndarray):
         """
         Adaround wrapper
         :param wrapper: Adaround wrapper
@@ -137,25 +172,35 @@ class AdaroundOptimizer:
         orig_out_data = all_orig_out_data[:BATCH_SIZE]
 
         # Reconstruction error using hard and soft rounding before optimization
-        recons_err_hard,\
-        recons_err_soft = AdaroundOptimizer._eval_recons_err_metrics(wrapper, act_func, inp_data, orig_out_data)
-        logger.debug("Before opt, Recons. error metrics using soft rounding=%f and hard rounding=%f", recons_err_soft,
-                     recons_err_hard)
+        recons_err_hard, recons_err_soft = AdaroundOptimizer._eval_recons_err_metrics(
+            wrapper, act_func, inp_data, orig_out_data
+        )
+        logger.debug(
+            "Before opt, Recons. error metrics using soft rounding=%f and hard rounding=%f",
+            recons_err_soft,
+            recons_err_hard,
+        )
 
-        hard_rounded_weight, soft_rounded_weight = AdaroundOptimizer.optimize_rounding(wrapper, act_func, all_inp_data,
-                                                                                       all_orig_out_data, opt_params)
+        hard_rounded_weight, soft_rounded_weight = AdaroundOptimizer.optimize_rounding(
+            wrapper, act_func, all_inp_data, all_orig_out_data, opt_params
+        )
 
         # Reconstruction error using hard and soft rounding after optimization
-        recons_err_hard,\
-        recons_err_soft = AdaroundOptimizer._eval_recons_err_metrics(wrapper, act_func, inp_data, orig_out_data)
-        logger.debug("After opt, Recons. error metrics using soft rounding=%f and hard rounding=%f", recons_err_soft,
-                     recons_err_hard)
+        recons_err_hard, recons_err_soft = AdaroundOptimizer._eval_recons_err_metrics(
+            wrapper, act_func, inp_data, orig_out_data
+        )
+        logger.debug(
+            "After opt, Recons. error metrics using soft rounding=%f and hard rounding=%f",
+            recons_err_soft,
+            recons_err_hard,
+        )
 
         return hard_rounded_weight, soft_rounded_weight
 
     @staticmethod
-    def _eval_recons_err_metrics(wrapper: AdaroundWrapper, act_func, inp_data: np.ndarray, out_data: np.ndarray) -> \
-            (float, float):
+    def _eval_recons_err_metrics(
+        wrapper: AdaroundWrapper, act_func, inp_data: np.ndarray, out_data: np.ndarray
+    ) -> (float, float):
         """
         Evaluates reconstruction error tensor using hard and soft rounding
         :param wrapper: Adaround wrapper
@@ -171,7 +216,9 @@ class AdaroundOptimizer:
         if act_func is not None:
             adaround_out_tensor = act_func(adaround_out_tensor)
             orig_out_tensor = act_func(out_data)
-        recons_error_hard = tf.reduce_mean(tf.math.squared_difference(adaround_out_tensor, orig_out_tensor))
+        recons_error_hard = tf.reduce_mean(
+            tf.math.squared_difference(adaround_out_tensor, orig_out_tensor)
+        )
 
         wrapper.use_soft_rounding.assign(True)
         adaround_out_tensor = wrapper(inp_data)
@@ -180,13 +227,20 @@ class AdaroundOptimizer:
         if act_func is not None:
             adaround_out_tensor = act_func(adaround_out_tensor)
             orig_out_tensor = act_func(out_data)
-        recons_error_soft = tf.reduce_mean(tf.math.squared_difference(adaround_out_tensor, orig_out_tensor))
+        recons_error_soft = tf.reduce_mean(
+            tf.math.squared_difference(adaround_out_tensor, orig_out_tensor)
+        )
 
         return float(recons_error_hard), float(recons_error_soft)
 
     @staticmethod
-    def optimize_rounding(wrapper: AdaroundWrapper, act_func, all_inp_data: np.ndarray, all_orig_out_data: np.ndarray,
-                          opt_params: AdaroundHyperParameters) -> Tuple[np.ndarray, np.ndarray]:
+    def optimize_rounding(
+        wrapper: AdaroundWrapper,
+        act_func,
+        all_inp_data: np.ndarray,
+        all_orig_out_data: np.ndarray,
+        opt_params: AdaroundHyperParameters,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Optimizes the weight rounding of Adaround wrapper layer and returns soft and hard rounded weight
         :param wrapper: Adaround wrapper
@@ -220,10 +274,18 @@ class AdaroundOptimizer:
 
         # Create custom model and training phase
         model = CustomModel(inp_layer, adaround_out_tensor)
-        model.compile(optimizer=optimizer, loss=model.calculate_loss_wrapper(opt_params, wrapper, channels_index))
+        model.compile(
+            optimizer=optimizer,
+            loss=model.calculate_loss_wrapper(opt_params, wrapper, channels_index),
+        )
         epochNumberCallback = AccessEpochNumber(model=model)
-        model.fit(inp_data, orig_out_data, epochs=opt_params.num_iterations,
-                  callbacks=[epochNumberCallback], verbose=0)
+        model.fit(
+            inp_data,
+            orig_out_data,
+            epochs=opt_params.num_iterations,
+            callbacks=[epochNumberCallback],
+            verbose=0,
+        )
 
         wrapper.use_soft_rounding.assign(False)
         hard_rounded_weight = wrapper.adaround_weights()

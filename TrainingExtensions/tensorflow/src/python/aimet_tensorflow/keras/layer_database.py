@@ -36,6 +36,7 @@
 # =============================================================================
 
 """Stores and updates Layer Attributes"""
+
 import copy
 from typing import Tuple
 import tensorflow as tf
@@ -47,12 +48,13 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
 
 class Layer(aimet_common.layer_database.Layer):
-    """ Holds attributes for a given layer """
+    """Holds attributes for a given layer"""
 
     def _set_type_specific_params(self, module: tf.keras.layers.Layer):
-
         if isinstance(module, tf.keras.layers.Conv2D):
-            params = aimet_common.layer_database.Conv2dTypeSpecificParams(module.strides, module.padding, module.groups)
+            params = aimet_common.layer_database.Conv2dTypeSpecificParams(
+                module.strides, module.padding, module.groups
+            )
             self.type_specific_params = params
 
     def __init__(self, layer: tf.keras.layers.Layer, name: str, output_shape: Tuple):
@@ -63,15 +65,27 @@ class Layer(aimet_common.layer_database.Layer):
         :param output_shape: Shape of the output activations
         """
         if isinstance(layer, tf.keras.layers.DepthwiseConv2D):
-            weight_shape = (layer.depth_multiplier, layer.input_shape[-1], layer.kernel_size[0], layer.kernel_size[1])
+            weight_shape = (
+                layer.depth_multiplier,
+                layer.input_shape[-1],
+                layer.kernel_size[0],
+                layer.kernel_size[1],
+            )
         elif isinstance(layer, tf.keras.layers.Conv2D):
-            weight_shape = (layer.kernel.shape[3], layer.kernel.shape[2], layer.kernel.shape[0], layer.kernel.shape[1])
+            weight_shape = (
+                layer.kernel.shape[3],
+                layer.kernel.shape[2],
+                layer.kernel.shape[0],
+                layer.kernel.shape[1],
+            )
         elif isinstance(layer, tf.keras.layers.Dense):
             weight_shape = (layer.kernel.shape[1], layer.kernel.shape[0], 1, 1)
         else:
             raise AssertionError("Layer currently supports only Conv2D and Linear")
 
-        aimet_common.layer_database.Layer.__init__(self, layer, name, weight_shape, output_shape)
+        aimet_common.layer_database.Layer.__init__(
+            self, layer, name, weight_shape, output_shape
+        )
 
         self.var_name_of_module_in_parent = None
         self.parent_module = None
@@ -92,7 +106,6 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
         self._create_database(model)
 
     def __deepcopy__(self, memodict):
-
         # pylint: disable=protected-access
 
         # Allocate a new LayerDatabase
@@ -110,12 +123,14 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
 
         # For all modules in the current model
         for index, module in enumerate(self._model.layers):
-
             # If this module is in the current layer database
             if id(module) in self._compressible_layers:
                 existing_layer = self._compressible_layers[id(module)]
-                new_layer = Layer(modules_in_copy[index], existing_layer.name,
-                                  existing_layer.output_shape)
+                new_layer = Layer(
+                    modules_in_copy[index],
+                    existing_layer.name,
+                    existing_layer.output_shape,
+                )
                 new_layer.picked_for_compression = existing_layer.picked_for_compression
                 layer_db._compressible_layers[id(modules_in_copy[index])] = new_layer
 
@@ -138,7 +153,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
 
         layer_name = layer.name
 
-        self._compressible_layers[id(layer)] = Layer(layer, layer_name, output_activation_shape)
+        self._compressible_layers[id(layer)] = Layer(
+            layer, layer_name, output_activation_shape
+        )
 
     def _create_database(self, model: tf.keras.Model):
         """
@@ -151,8 +168,9 @@ class LayerDatabase(aimet_common.layer_database.LayerDatabase):
             if isinstance(layer, (tf.keras.layers.Conv2D, tf.keras.layers.Dense)):
                 self._collect_layer_attributes(layer)
 
-    def replace_layer_with_sequential_of_two_layers(self, layer_to_replace: Layer,
-                                                    layer_a: Layer, layer_b: Layer):
+    def replace_layer_with_sequential_of_two_layers(
+        self, layer_to_replace: Layer, layer_a: Layer, layer_b: Layer
+    ):
         """
         Replaces original layer with two new layers in the graph.
         Adds two new layers in the database and remove the original layer from database.

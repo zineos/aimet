@@ -34,4 +34,4 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Base package to define the experimental features in aimet-torch """
+"""Base package to define the experimental features in aimet-torch"""

@@ -53,7 +53,10 @@ import warnings
 from torch import nn
 from torch.optim import SGD, RMSprop, Adagrad, Adam, AdamW
 
-from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer, _get_minimum_scale
+from aimet_torch.v2.quantization.encoding_analyzer import (
+    MinMaxEncodingAnalyzer,
+    _get_minimum_scale,
+)
 from aimet_torch.v2.quantization.affine import (
     AffineQuantizerBase,
     GroupedBlockQuantizeDequantize,
@@ -76,6 +79,7 @@ def set_seed():
 
 _PARAMETER_SHAPE = (100,)
 
+
 def _initialize(q, symmetric):
     min = torch.empty(_PARAMETER_SHAPE)
     max = torch.empty(_PARAMETER_SHAPE)
@@ -85,7 +89,7 @@ def _initialize(q, symmetric):
     negative_bins = math.ceil(total_bins / 2)
     positive_bins = math.floor(total_bins / 2)
     min.copy_(-1)
-    max.copy_(1 * positive_bins/negative_bins) # max is one tick smaller
+    max.copy_(1 * positive_bins / negative_bins)  # max is one tick smaller
 
     if not symmetric:
         # Move the center to 1
@@ -98,10 +102,12 @@ def _initialize(q, symmetric):
 
 def quantize(symmetric, initialized, bitwidth=8, params="min_max"):
     encoding_analyzer = MinMaxEncodingAnalyzer(shape=_PARAMETER_SHAPE)
-    quantize = Quantize(shape=_PARAMETER_SHAPE,
-                        bitwidth=bitwidth,
-                        symmetric=symmetric,
-                        encoding_analyzer=encoding_analyzer)
+    quantize = Quantize(
+        shape=_PARAMETER_SHAPE,
+        bitwidth=bitwidth,
+        symmetric=symmetric,
+        encoding_analyzer=encoding_analyzer,
+    )
     if initialized:
         _initialize(quantize, symmetric)
 
@@ -113,10 +119,12 @@ def quantize(symmetric, initialized, bitwidth=8, params="min_max"):
 
 def quantize_dequantize(symmetric, initialized, bitwidth=8, params="min_max"):
     encoding_analyzer = MinMaxEncodingAnalyzer(shape=_PARAMETER_SHAPE)
-    quantize_dequantize = QuantizeDequantize(shape=_PARAMETER_SHAPE,
-                                             bitwidth=bitwidth,
-                                             symmetric=symmetric,
-                                             encoding_analyzer=encoding_analyzer)
+    quantize_dequantize = QuantizeDequantize(
+        shape=_PARAMETER_SHAPE,
+        bitwidth=bitwidth,
+        symmetric=symmetric,
+        encoding_analyzer=encoding_analyzer,
+    )
     if initialized:
         _initialize(quantize_dequantize, symmetric)
 
@@ -143,20 +151,19 @@ def x():
 def init_process_group():
     import torch.distributed as dist
 
-    LOCAL_RANK = os.getenv('LOCAL_RANK', None)
+    LOCAL_RANK = os.getenv("LOCAL_RANK", None)
     try:
         # Create process group of size 1
-        dist.init_process_group(backend='gloo',
-                                store=dist.HashStore(),
-                                world_size=1,
-                                rank=0)
-        os.environ['LOCAL_RANK'] = '0'
+        dist.init_process_group(
+            backend="gloo", store=dist.HashStore(), world_size=1, rank=0
+        )
+        os.environ["LOCAL_RANK"] = "0"
         yield dist.new_group(ranks=[0])
     finally:
         if dist.is_initialized():
             dist.destroy_process_group()
         if LOCAL_RANK is not None:
-            os.environ['LOCAL_RANK'] = LOCAL_RANK
+            os.environ["LOCAL_RANK"] = LOCAL_RANK
 
 
 @pytest.fixture
@@ -168,7 +175,7 @@ def deepspeed_zero3_config():
 
 
 def minmax_to_scaleoffset(min, max, symmetric, bitwidth):
-    total_bins = 2 ** bitwidth - 1
+    total_bins = 2**bitwidth - 1
     scale = (max - min) / total_bins
     if symmetric:
         offset = torch.zeros_like(scale)
@@ -177,16 +184,19 @@ def minmax_to_scaleoffset(min, max, symmetric, bitwidth):
     return scale, offset
 
 
-@pytest.mark.parametrize('quantize', [
-    quantize(symmetric=True, initialized=False, params="min_max"),
-    quantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize(symmetric=False, initialized=False, params="min_max"),
-    quantize(symmetric=False, initialized=False, params="scale_offset"),
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "quantize",
+    [
+        quantize(symmetric=True, initialized=False, params="min_max"),
+        quantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize(symmetric=False, initialized=False, params="min_max"),
+        quantize(symmetric=False, initialized=False, params="scale_offset"),
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_quantize_compute_encodings(quantize: Quantize, x: torch.Tensor):
     """
     :param quantize: Quantize module
@@ -201,22 +211,22 @@ def test_quantize_compute_encodings(quantize: Quantize, x: torch.Tensor):
       2. self.get_scale(), self.get_offset() == dynamic scale/offset of x
     """
     num_quant_bins = math.pow(2, quantize.bitwidth) - 1
-    dynamic_min, dynamic_max =\
-            quantize.encoding_analyzer.compute_dynamic_encodings(x, num_quant_bins, quantize.symmetric)
-    dynamic_scale, dynamic_offset = minmax_to_scaleoffset(dynamic_min,
-                                                          dynamic_max,
-                                                          quantize.symmetric,
-                                                          bitwidth=8)
-    expected_x_int = Q.affine.quantize(x,
-                                       dynamic_scale,
-                                       dynamic_offset,
-                                       quantize.qmin,
-                                       quantize.qmax)
+    dynamic_min, dynamic_max = quantize.encoding_analyzer.compute_dynamic_encodings(
+        x, num_quant_bins, quantize.symmetric
+    )
+    dynamic_scale, dynamic_offset = minmax_to_scaleoffset(
+        dynamic_min, dynamic_max, quantize.symmetric, bitwidth=8
+    )
+    expected_x_int = Q.affine.quantize(
+        x, dynamic_scale, dynamic_offset, quantize.qmin, quantize.qmax
+    )
 
     with quantize.compute_encodings():
         x_int = quantize(x)
 
-    assert torch.allclose(x_int.quantized_repr(), expected_x_int.to(x_int.encoding.dtype))
+    assert torch.allclose(
+        x_int.quantized_repr(), expected_x_int.to(x_int.encoding.dtype)
+    )
     assert torch.allclose(x_int.encoding.scale, dynamic_scale)
     assert torch.allclose(x_int.encoding.offset, dynamic_offset)
 
@@ -227,17 +237,22 @@ def test_quantize_compute_encodings(quantize: Quantize, x: torch.Tensor):
     assert torch.allclose(quantize.get_offset(), dynamic_offset)
 
 
-@pytest.mark.parametrize('quantize_dequantize', [
-    quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
-def test_qdq_compute_encodings(quantize_dequantize: QuantizeDequantize, x: torch.Tensor):
+@pytest.mark.parametrize(
+    "quantize_dequantize",
+    [
+        quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
+def test_qdq_compute_encodings(
+    quantize_dequantize: QuantizeDequantize, x: torch.Tensor
+):
     """
     :param q: QuantizeDequantize module
     :param x: Input tensor
@@ -251,19 +266,21 @@ def test_qdq_compute_encodings(quantize_dequantize: QuantizeDequantize, x: torch
       2. self.get_scale(), self.get_offset() == dynamic scale/offset of x
     """
     num_quant_bins = math.pow(2, quantize_dequantize.bitwidth) - 1
-    dynamic_min, dynamic_max =\
-            quantize_dequantize.encoding_analyzer.compute_dynamic_encodings(x,
-                                                                            num_quant_bins,
-                                                                            quantize_dequantize.symmetric)
-    dynamic_scale, dynamic_offset = minmax_to_scaleoffset(dynamic_min,
-                                                          dynamic_max,
-                                                          quantize_dequantize.symmetric,
-                                                          bitwidth=8)
-    expected_output = Q.affine.quantize_dequantize(x,
-                                                   dynamic_scale,
-                                                   dynamic_offset,
-                                                   quantize_dequantize.qmin,
-                                                   quantize_dequantize.qmax)
+    dynamic_min, dynamic_max = (
+        quantize_dequantize.encoding_analyzer.compute_dynamic_encodings(
+            x, num_quant_bins, quantize_dequantize.symmetric
+        )
+    )
+    dynamic_scale, dynamic_offset = minmax_to_scaleoffset(
+        dynamic_min, dynamic_max, quantize_dequantize.symmetric, bitwidth=8
+    )
+    expected_output = Q.affine.quantize_dequantize(
+        x,
+        dynamic_scale,
+        dynamic_offset,
+        quantize_dequantize.qmin,
+        quantize_dequantize.qmax,
+    )
 
     with quantize_dequantize.compute_encodings():
         output = quantize_dequantize(x)
@@ -277,16 +294,19 @@ def test_qdq_compute_encodings(quantize_dequantize: QuantizeDequantize, x: torch
     assert torch.allclose(quantize_dequantize.get_offset(), dynamic_offset)
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=False, params="min_max"),
-    quantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=False, params="min_max"),
+        quantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+    ],
+)
 def test_compute_encodings_with_no_input(q: AffineQuantizerBase):
     """
     :param q: Quantize or QuantizeDequantize module
@@ -320,16 +340,19 @@ def test_compute_encodings_with_no_input(q: AffineQuantizerBase):
         assert torch.equal(q.get_max(), original_max)
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_backward_during_compute_encodings(q: AffineQuantizerBase, x: torch.Tensor):
     """
     :param q: Quantize or QuantizeDequantize module
@@ -351,13 +374,18 @@ def test_backward_during_compute_encodings(q: AffineQuantizerBase, x: torch.Tens
     assert all(p.grad is None for p in q.parameters())
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=False, params="min_max"),
-    quantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
-])
-def test_compute_encodings_updates_parameters_upon_exit(q: AffineQuantizerBase, x: torch.Tensor):
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=False, params="min_max"),
+        quantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
+    ],
+)
+def test_compute_encodings_updates_parameters_upon_exit(
+    q: AffineQuantizerBase, x: torch.Tensor
+):
     """
     :param q: Quantize or QuantizeDequantize module
     :param x: Input tensor
@@ -386,19 +414,21 @@ def test_compute_encodings_updates_parameters_upon_exit(q: AffineQuantizerBase, 
         assert q.get_scale() is None
         assert q.get_offset() is None
 
-
     assert q.get_min() is not None
     assert q.get_max() is not None
     assert q.get_scale() is not None
     assert q.get_offset() is not None
 
 
-@pytest.mark.parametrize('quantize', [
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "quantize",
+    [
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_quantize_forward(quantize: Quantize, x: torch.Tensor):
     """
     :param q: Quantize module
@@ -411,20 +441,23 @@ def test_quantize_forward(quantize: Quantize, x: torch.Tensor):
     Then: forward() returns parametric quantization output.
     """
     output = quantize(x)
-    expected_output = Q.affine.quantize(x,
-                                        quantize.get_scale(),
-                                        quantize.get_offset(),
-                                        quantize.qmin,
-                                        quantize.qmax)
-    assert torch.allclose(output.quantized_repr(), expected_output.to(output.encoding.dtype))
+    expected_output = Q.affine.quantize(
+        x, quantize.get_scale(), quantize.get_offset(), quantize.qmin, quantize.qmax
+    )
+    assert torch.allclose(
+        output.quantized_repr(), expected_output.to(output.encoding.dtype)
+    )
 
 
-@pytest.mark.parametrize('quantize_dequantize', [
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "quantize_dequantize",
+    [
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_qdq_forward(quantize_dequantize: QuantizeDequantize, x: torch.Tensor):
     """
     :param q: QuantizeDequantize module
@@ -437,24 +470,29 @@ def test_qdq_forward(quantize_dequantize: QuantizeDequantize, x: torch.Tensor):
     Then: forward() returns parametric quantization output.
     """
     output = quantize_dequantize(x)
-    expected_output = Q.affine.quantize_dequantize(x,
-                                                   quantize_dequantize.get_scale(),
-                                                   quantize_dequantize.get_offset(),
-                                                   quantize_dequantize.qmin,
-                                                   quantize_dequantize.qmax)
+    expected_output = Q.affine.quantize_dequantize(
+        x,
+        quantize_dequantize.get_scale(),
+        quantize_dequantize.get_offset(),
+        quantize_dequantize.qmin,
+        quantize_dequantize.qmax,
+    )
     assert torch.allclose(output, expected_output)
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_backward(q: AffineQuantizerBase, x: torch.Tensor):
     """
     :param q: Quantize or QuantizeDequantize module
@@ -473,16 +511,19 @@ def test_backward(q: AffineQuantizerBase, x: torch.Tensor):
     assert all(p.grad is not None for p in q.parameters())
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_backward_with_no_grad(q, x: torch.Tensor):
     """
     :param q: Quantize or QuantizeDequantize module
@@ -504,12 +545,15 @@ def test_backward_with_no_grad(q, x: torch.Tensor):
     assert all(p.grad is None for p in q.parameters())
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=False, params="min_max"),
-    quantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=False, params="min_max"),
+        quantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
+    ],
+)
 def test_uninitialized_quantize(q: AffineQuantizerBase, x: torch.Tensor):
     """
     :param q: Quantize or QuantizeDequantize module
@@ -558,17 +602,21 @@ def _test_symmetric_invariants(q):
     negative_bins = math.ceil(total_bins / 2)
 
     # min == scale * offset
-    assert torch.allclose(min, - scale * negative_bins,
-                          rtol=1e-3, atol=scale.abs().max().item() * 1e-5)
+    assert torch.allclose(
+        min, -scale * negative_bins, rtol=1e-3, atol=scale.abs().max().item() * 1e-5
+    )
 
     # max == scale * -(offset+1)
-    assert torch.allclose(max, scale * positive_bins,
-                          rtol=1e-3, atol=scale.abs().max().item() * 1e-5)
+    assert torch.allclose(
+        max, scale * positive_bins, rtol=1e-3, atol=scale.abs().max().item() * 1e-5
+    )
 
-    range = torch.maximum(-min * total_bins/negative_bins,
-                          max * total_bins/positive_bins)
-    assert torch.allclose(scale, range / total_bins,
-                          rtol=1e-3, atol=scale.abs().max().item() * 1e-5)
+    range = torch.maximum(
+        -min * total_bins / negative_bins, max * total_bins / positive_bins
+    )
+    assert torch.allclose(
+        scale, range / total_bins, rtol=1e-3, atol=scale.abs().max().item() * 1e-5
+    )
 
     # offset == -1 * 2 ** (bw -1)
     assert torch.equal(offset, torch.zeros_like(offset))
@@ -595,29 +643,38 @@ def _test_asymmetric_invariants(q):
     bw = q.bitwidth
 
     # min == scale * offset
-    assert torch.allclose(min, scale * offset,
-                          rtol=1e-3, atol=min.abs().max().item() * 1e-5)
+    assert torch.allclose(
+        min, scale * offset, rtol=1e-3, atol=min.abs().max().item() * 1e-5
+    )
 
     # max == min + scale * (2**bw - 1)
-    assert torch.allclose(max, min + scale * (2**bw - 1),
-                          rtol=1e-3, atol=max.abs().max().item() * 1e-5)
+    assert torch.allclose(
+        max, min + scale * (2**bw - 1), rtol=1e-3, atol=max.abs().max().item() * 1e-5
+    )
 
     # scale == (max - min) / (2**bw - 1)
-    assert torch.allclose(scale, (max - min) / (2**bw - 1),
-                          rtol=1e-3, atol=scale.abs().max().item() * 1e-5)
+    assert torch.allclose(
+        scale,
+        (max - min) / (2**bw - 1),
+        rtol=1e-3,
+        atol=scale.abs().max().item() * 1e-5,
+    )
 
     # offsets == round(min / scale)
-    assert torch.equal(torch.round(min/scale), offset)
+    assert torch.equal(torch.round(min / scale), offset)
     # offset is learned in asymmetric quantizer
     assert offset.requires_grad
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=False, params="min_max"),
-    quantize(symmetric=True, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=False, params="min_max"),
+        quantize(symmetric=True, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=False, params="scale_offset"),
+    ],
+)
 def test_symmetric_invariants(q, x: torch.Tensor):
     """
     Given: Symmetric quantizer
@@ -631,12 +688,15 @@ def test_symmetric_invariants(q, x: torch.Tensor):
 
 
 @pytest.mark.parametrize("optim_cls", [SGD, RMSprop, Adagrad, Adam, AdamW])
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=True, initialized=True, params="min_max"),
-    quantize(symmetric=True, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=True, initialized=True, params="min_max"),
+        quantize(symmetric=True, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=True, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=True, initialized=True, params="scale_offset"),
+    ],
+)
 def test_symmetric_learning(q, x, optim_cls):
     """
     Given:
@@ -668,12 +728,15 @@ def test_symmetric_learning(q, x, optim_cls):
     assert torch.equal(q.get_offset(), original_offset)
 
 
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=False, initialized=False, params="min_max"),
-    quantize(symmetric=False, initialized=False, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=False, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=False, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=False, initialized=False, params="min_max"),
+        quantize(symmetric=False, initialized=False, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=False, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=False, params="scale_offset"),
+    ],
+)
 def test_asymmetric_invariants(q: AffineQuantizerBase, x: torch.Tensor):
     """
     Given: Asymmetric quantizer
@@ -687,12 +750,15 @@ def test_asymmetric_invariants(q: AffineQuantizerBase, x: torch.Tensor):
 
 
 @pytest.mark.parametrize("optim_cls", [SGD, RMSprop, Adagrad, Adam, AdamW])
-@pytest.mark.parametrize('q', [
-    quantize(symmetric=False, initialized=True, params="min_max"),
-    quantize(symmetric=False, initialized=True, params="scale_offset"),
-    quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
-    quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
-])
+@pytest.mark.parametrize(
+    "q",
+    [
+        quantize(symmetric=False, initialized=True, params="min_max"),
+        quantize(symmetric=False, initialized=True, params="scale_offset"),
+        quantize_dequantize(symmetric=False, initialized=True, params="min_max"),
+        quantize_dequantize(symmetric=False, initialized=True, params="scale_offset"),
+    ],
+)
 def test_asymmetric_learning(q, x, optim_cls):
     """
     Given:
@@ -725,19 +791,23 @@ def test_asymmetric_learning(q, x, optim_cls):
     assert not torch.equal(q.get_scale(), original_scale)
     assert not torch.equal(q.get_offset(), original_offset)
 
+
 def test_extreme_values_warning():
-        extreme_val = torch.finfo(torch.float16).max
-        dummy_input = torch.arange(start = 0, end=extreme_val, dtype=torch.float16)        
-        param_shape = (1,)
-        encoding_shape = (1,)
-        qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            with qdq.compute_encodings():
-                qdq(dummy_input)
-            assert len(w) == 1
-            assert issubclass(w[-1].category, UserWarning)
-            assert "Extreme values" in str(w[-1].message)
+    extreme_val = torch.finfo(torch.float16).max
+    dummy_input = torch.arange(start=0, end=extreme_val, dtype=torch.float16)
+    param_shape = (1,)
+    encoding_shape = (1,)
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        with qdq.compute_encodings():
+            qdq(dummy_input)
+        assert len(w) == 1
+        assert issubclass(w[-1].category, UserWarning)
+        assert "Extreme values" in str(w[-1].message)
+
 
 def test_invalid_encoding_analyzer():
     """
@@ -749,30 +819,42 @@ def test_invalid_encoding_analyzer():
 
     encoding_shape = (12,)
     with pytest.raises(RuntimeError):
-        _ = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+        _ = QuantizeDequantize(
+            param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+        )
 
     encoding_shape = (10, 11)
-    qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
     with qdq.compute_encodings():
         _ = qdq(dummy_input)
 
     encoding_shape = (11,)
-    qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
     with qdq.compute_encodings():
         _ = qdq(dummy_input)
 
     encoding_shape = (10, 1)
-    qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
     with qdq.compute_encodings():
         _ = qdq(dummy_input)
 
     encoding_shape = 11
-    qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
     with qdq.compute_encodings():
         _ = qdq(dummy_input)
 
     encoding_shape = 1
-    qdq = QuantizeDequantize(param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape))
+    qdq = QuantizeDequantize(
+        param_shape, 8, True, MinMaxEncodingAnalyzer(encoding_shape)
+    )
     with qdq.compute_encodings():
         _ = qdq(dummy_input)
 
@@ -786,9 +868,18 @@ def test_is_initialized(x):
       1) All the parameters readily exist as nn.Parameters (not as None or nn.UninitializedParameters)
       2) quantizer.is_initialized() returns False
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    assert isinstance(qdq.min, nn.Parameter) and not isinstance(qdq.min, nn.UninitializedParameter)
-    assert isinstance(qdq.max, nn.Parameter) and not isinstance(qdq.max, nn.UninitializedParameter)
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    assert isinstance(qdq.min, nn.Parameter) and not isinstance(
+        qdq.min, nn.UninitializedParameter
+    )
+    assert isinstance(qdq.max, nn.Parameter) and not isinstance(
+        qdq.max, nn.UninitializedParameter
+    )
     assert not qdq.is_initialized()
 
     qdq.to(device="cuda", dtype=torch.float16)
@@ -798,9 +889,14 @@ def test_is_initialized(x):
     When: Update the parameters using in-place operation
     Then: is_initialized() returns True
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     qdq.min.copy_(torch.zeros(10))
-    assert not qdq.is_initialized() # False; max is not initialized yet
+    assert not qdq.is_initialized()  # False; max is not initialized yet
     qdq.max.add_(3)
     assert qdq.is_initialized()
 
@@ -808,9 +904,14 @@ def test_is_initialized(x):
     When: Update the parameters with assignment statement
     Then: is_initialized() returns True
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     qdq.min = nn.Parameter(-torch.ones(10) * 2)
-    assert not qdq.is_initialized() # False; max is not initialized yet
+    assert not qdq.is_initialized()  # False; max is not initialized yet
     qdq.max = nn.Parameter(torch.ones(10) * 2)
     assert qdq.is_initialized()
 
@@ -818,7 +919,12 @@ def test_is_initialized(x):
     When: Update the parameters with compute_encodings()
     Then: is_initialized() returns True
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     with qdq.compute_encodings():
         _ = qdq(torch.arange(-5, 5, dtype=torch.float))
     assert qdq.is_initialized()
@@ -827,35 +933,50 @@ def test_is_initialized(x):
     When: Invoke load_state_dict() with a state dict that contains all parameters
     Then: quantizer.is_initialized() returns True
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    qdq.load_state_dict({'min': -torch.ones(10), 'max': torch.ones(10)})
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    qdq.load_state_dict({"min": -torch.ones(10), "max": torch.ones(10)})
     assert qdq.is_initialized()
 
     """
     When: Invoke load_state_dict with insufficient parameters
     Then: quantizer.is_initialized() returns False
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    qdq.load_state_dict({'min': -torch.ones(10)}, strict=False)
-    assert not qdq.is_initialized() # False; max is not initialized yet
-    qdq.load_state_dict({'max': torch.ones(10)}, strict=False)
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    qdq.load_state_dict({"min": -torch.ones(10)}, strict=False)
+    assert not qdq.is_initialized()  # False; max is not initialized yet
+    qdq.load_state_dict({"max": torch.ones(10)}, strict=False)
     assert qdq.is_initialized()
 
     """
     When: Invoke load_state_dict() with a state dict that contains uninitialized parameters
     Then: quantizer.is_initialized() returns False
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     uninitialized_state_dict = qdq.state_dict()
     qdq.load_state_dict(uninitialized_state_dict)
     assert not qdq.is_initialized()
 
-    qdq.min.mul_(1.)
+    qdq.min.mul_(1.0)
     partially_initialized_state_dict = qdq.state_dict()
     qdq.load_state_dict(partially_initialized_state_dict)
     assert not qdq.is_initialized()
 
-    qdq.max.mul_(1.)
+    qdq.max.mul_(1.0)
     fully_initialized_state_dict = qdq.state_dict()
     qdq.load_state_dict(fully_initialized_state_dict)
     assert qdq.is_initialized()
@@ -864,12 +985,22 @@ def test_is_initialized(x):
     When: Create a deepcopy of quantizer
     Then: quantizer.is_initialized() flag should be preserved
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     qdq = copy.deepcopy(qdq)
     assert not qdq.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    qdq.load_state_dict({'min': -torch.ones(10), 'max': torch.ones(10)})
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    qdq.load_state_dict({"min": -torch.ones(10), "max": torch.ones(10)})
     qdq = copy.deepcopy(qdq)
     assert qdq.is_initialized()
 
@@ -877,13 +1008,23 @@ def test_is_initialized(x):
     When: Pickle and unpickle quantizer
     Then: quantizer.is_initialized() flag should be preserved
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     res = pickle.dumps(qdq)
     qdq = pickle.loads(res)
     assert not qdq.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    qdq.load_state_dict({'min': -torch.ones(10), 'max': torch.ones(10)})
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    qdq.load_state_dict({"min": -torch.ones(10), "max": torch.ones(10)})
     out_before = qdq(x.view(-1, 10))
     res = pickle.dumps(qdq)
     qdq = pickle.loads(res)
@@ -892,26 +1033,42 @@ def test_is_initialized(x):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("params", [
-    "min_max",
-    # TODO: "scale_offset"
-])
-def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3_config, params):
+@pytest.mark.parametrize(
+    "params",
+    [
+        "min_max",
+        # TODO: "scale_offset"
+    ],
+)
+def test_is_initialized_with_deepspeed_zero3(
+    init_process_group, deepspeed_zero3_config, params
+):
     import deepspeed as ds
 
     """
     When: Partition a quantizer with deepspeed zero 3
     Then: quantizer.is_initialized() flag should be preserved after pertitioning
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
-    engine, *_ = ds.initialize(model=qdq, config=deepspeed_zero3_config,
-                               mpu=CustomMPU(init_process_group))
+    engine, *_ = ds.initialize(
+        model=qdq, config=deepspeed_zero3_config, mpu=CustomMPU(init_process_group)
+    )
     qdq_zero3 = engine.module
     assert not qdq_zero3.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     qdq.set_range(-1, 1)
@@ -923,7 +1080,12 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
     When: Gather the partitioned quantization parameters in read-only mode
     Then: quantizer.is_initialized() flag should be preserved during/after gathering
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     engine, *_ = ds.initialize(model=qdq, config=deepspeed_zero3_config)
@@ -933,7 +1095,12 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
         assert not qdq_zero3.is_initialized()
     assert not qdq_zero3.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     qdq.set_range(-1, 1)
@@ -948,7 +1115,12 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
     When: Modify the partitioned quantization parameters
     Then: quantizer.is_initialized() returns True
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     engine, *_ = ds.initialize(model=qdq, config=deepspeed_zero3_config)
@@ -956,20 +1128,30 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
     qdq_zero3.set_range(-1, 1)
     assert qdq_zero3.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     engine, *_ = ds.initialize(model=qdq, config=deepspeed_zero3_config)
     qdq_zero3 = engine.module
     with qdq_zero3.compute_encodings():
-        _ = qdq_zero3(torch.arange(-5, 5, dtype=torch.float, device='cuda:0'))
+        _ = qdq_zero3(torch.arange(-5, 5, dtype=torch.float, device="cuda:0"))
     assert qdq_zero3.is_initialized()
 
     """
     When: Gather the partitioned quantization parameters in writable mode but don't modify them
     Then: quantizer.is_initialized() flag should be preserved during/after gathering
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     engine, *_ = ds.initialize(model=qdq, config=deepspeed_zero3_config)
@@ -979,7 +1161,12 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
         assert not qdq_zero3.is_initialized()
     assert not qdq_zero3.is_initialized()
 
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
     qdq.set_range(-1, 1)
@@ -992,9 +1179,11 @@ def test_is_initialized_with_deepspeed_zero3(init_process_group, deepspeed_zero3
 
 
 @torch.no_grad()
-@pytest.mark.parametrize('symmetric', [True, False])
+@pytest.mark.parametrize("symmetric", [True, False])
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
-def test_quantize_dequantize_then_quantize_and_dequantize_equality(x, symmetric, params):
+def test_quantize_dequantize_then_quantize_and_dequantize_equality(
+    x, symmetric, params
+):
     qdq = QuantizeDequantize((), 8, symmetric)
     q = Quantize((), 8, symmetric)
 
@@ -1011,8 +1200,13 @@ def test_quantize_dequantize_then_quantize_and_dequantize_equality(x, symmetric,
     assert torch.equal(a, b)
 
 
-@pytest.mark.parametrize("q", (Quantize(_PARAMETER_SHAPE, 8, False),
-                               QuantizeDequantize(_PARAMETER_SHAPE, 8, True)))
+@pytest.mark.parametrize(
+    "q",
+    (
+        Quantize(_PARAMETER_SHAPE, 8, False),
+        QuantizeDequantize(_PARAMETER_SHAPE, 8, True),
+    ),
+)
 def test_allow_overwrite(x, q):
     with q.compute_encodings():
         q(x)
@@ -1034,10 +1228,9 @@ def test_allow_overwrite(x, q):
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_bq_compute_encodings_and_forward(params):
     shape = (2, 2, 4)
-    bq = QuantizeDequantize(shape=shape,
-                            bitwidth=4,
-                            symmetric=True,
-                            block_size=(2, 4, 3))
+    bq = QuantizeDequantize(
+        shape=shape, bitwidth=4, symmetric=True, block_size=(2, 4, 3)
+    )
     if params == "scale_offset":
         bq._reparametrize_to_scale_offset()
     assert bq.encoding_analyzer.observer.shape == (2, 1, 2, 1, 4, 1)
@@ -1051,22 +1244,27 @@ def test_bq_compute_encodings_and_forward(params):
     assert bq.get_min().shape == shape
     assert out.shape == param_tensor.shape
 
-    qdq_out = affine.quantize_dequantize(param_tensor, bq.get_scale(), bq.get_offset(), bq.qmin, bq.qmax,
-                                         block_size=bq.block_size)
+    qdq_out = affine.quantize_dequantize(
+        param_tensor,
+        bq.get_scale(),
+        bq.get_offset(),
+        bq.qmin,
+        bq.qmax,
+        block_size=bq.block_size,
+    )
     assert torch.equal(out, qdq_out)
 
-@pytest.mark.parametrize('shape, block_sizes', [[(4, 1, 1), (1, 4, 4)],
-                                                [(1, 4, 1), (4, 1, 4)],
-                                                [(1, 1, 4), (4, 4, 1)]])
+
+@pytest.mark.parametrize(
+    "shape, block_sizes",
+    [[(4, 1, 1), (1, 4, 4)], [(1, 4, 1), (4, 1, 4)], [(1, 1, 4), (4, 4, 1)]],
+)
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_bq_vs_per_channel_sanity(shape, block_sizes, params):
-    bq = QuantizeDequantize(shape=shape,
-                            bitwidth=4,
-                            symmetric=True,
-                            block_size=block_sizes)
-    pc = QuantizeDequantize(shape=shape,
-                            bitwidth=4,
-                            symmetric=True)
+    bq = QuantizeDequantize(
+        shape=shape, bitwidth=4, symmetric=True, block_size=block_sizes
+    )
+    pc = QuantizeDequantize(shape=shape, bitwidth=4, symmetric=True)
     if params == "scale_offset":
         bq._reparametrize_to_scale_offset()
         pc._reparametrize_to_scale_offset()
@@ -1082,14 +1280,12 @@ def test_bq_vs_per_channel_sanity(shape, block_sizes, params):
 
     assert torch.equal(bq(param_tensor), pc(param_tensor))
 
+
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_quantized_tensor_with_block_size(params):
     shape = (2, 2, 4)
     tensor = torch.randn(4, 8, 12)
-    bq = Quantize(shape=shape,
-                  bitwidth=4,
-                  symmetric=True,
-                  block_size=(2, 4, 3))
+    bq = Quantize(shape=shape, bitwidth=4, symmetric=True, block_size=(2, 4, 3))
     if params == "scale_offset":
         bq._reparametrize_to_scale_offset()
     with bq.compute_encodings():
@@ -1097,20 +1293,24 @@ def test_quantized_tensor_with_block_size(params):
     assert bq.get_encodings().block_size == bq.block_size
     q = bq(tensor)
     assert q.encoding.block_size == bq.block_size
-    assert torch.equal(q.dequantize(), affine.dequantize(q, bq.get_scale(), bq.get_offset(), bq.block_size))
+    assert torch.equal(
+        q.dequantize(),
+        affine.dequantize(q, bq.get_scale(), bq.get_offset(), bq.block_size),
+    )
+
 
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_gbbq_sanity(params):
     tensor = torch.randn(8, 12)
-    gbbq = GroupedBlockQuantizeDequantize(shape=(8, 4),
-                                          bitwidth=4,
-                                          symmetric=True,
-                                          decompressed_bw=8,
-                                          block_size=(-1, -1),
-                                          block_grouping=(1, -1))
-    pc = QuantizeDequantize(shape=(8, 1),
-                            bitwidth=4,
-                            symmetric=True)
+    gbbq = GroupedBlockQuantizeDequantize(
+        shape=(8, 4),
+        bitwidth=4,
+        symmetric=True,
+        decompressed_bw=8,
+        block_size=(-1, -1),
+        block_grouping=(1, -1),
+    )
+    pc = QuantizeDequantize(shape=(8, 1), bitwidth=4, symmetric=True)
 
     if params == "scale_offset":
         gbbq._reparametrize_to_scale_offset()
@@ -1125,24 +1325,30 @@ def test_gbbq_sanity(params):
     assert gbbq.get_scale().shape == (8, 4)
 
     # The largest scale for any given channel GBBQ should equal the scale for per channel
-    assert torch.equal(torch.amax(gbbq.get_scale(), dim=1, keepdim=True), pc.get_scale())
+    assert torch.equal(
+        torch.amax(gbbq.get_scale(), dim=1, keepdim=True), pc.get_scale()
+    )
 
     assert not torch.equal(gbbq(tensor), pc(tensor))
 
-@pytest.mark.parametrize('bitwidth, decompressed_bw', [[4, 8], [4, 16], [4, 12], [3, 5], [5, 9], [6, 6]])
+
+@pytest.mark.parametrize(
+    "bitwidth, decompressed_bw", [[4, 8], [4, 16], [4, 12], [3, 5], [5, 9], [6, 6]]
+)
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_gbbq_per_block_sanity(bitwidth, decompressed_bw, params):
     tensor = torch.randn(4, 8, 12)
-    gbbq = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                          bitwidth=bitwidth,
-                                          symmetric=True,
-                                          block_size=(2, 2, 2),
-                                          decompressed_bw=decompressed_bw,
-                                          block_grouping=(2, 2, 3))
-    qdq = QuantizeDequantize(shape=(2, 4, 6),
-                             bitwidth=bitwidth,
-                             symmetric=True,
-                             block_size=(2, 2, 2))
+    gbbq = GroupedBlockQuantizeDequantize(
+        shape=(2, 4, 6),
+        bitwidth=bitwidth,
+        symmetric=True,
+        block_size=(2, 2, 2),
+        decompressed_bw=decompressed_bw,
+        block_grouping=(2, 2, 3),
+    )
+    qdq = QuantizeDequantize(
+        shape=(2, 4, 6), bitwidth=bitwidth, symmetric=True, block_size=(2, 2, 2)
+    )
 
     if params == "scale_offset":
         gbbq._reparametrize_to_scale_offset()
@@ -1157,33 +1363,44 @@ def test_gbbq_per_block_sanity(bitwidth, decompressed_bw, params):
     for i in range(gbbq.shape[0] // gbbq.block_grouping[0]):
         for j in range(gbbq.shape[1] // gbbq.block_grouping[1]):
             for k in range(gbbq.shape[2] // gbbq.block_grouping[2]):
-                gbbq_block_group = gbbq.get_scale()[i * gbbq.block_grouping[0]:(i + 1) * gbbq.block_grouping[0],
-                                                    j * gbbq.block_grouping[1]:(j + 1) * gbbq.block_grouping[1],
-                                                    k * gbbq.block_grouping[2]:(k + 1) * gbbq.block_grouping[2]]
-                qdq_block_group = qdq.get_scale()[i * gbbq.block_grouping[0]:(i + 1) * gbbq.block_grouping[0],
-                                                  j * gbbq.block_grouping[1]:(j + 1) * gbbq.block_grouping[1],
-                                                  k * gbbq.block_grouping[2]:(k + 1) * gbbq.block_grouping[2]]
+                gbbq_block_group = gbbq.get_scale()[
+                    i * gbbq.block_grouping[0] : (i + 1) * gbbq.block_grouping[0],
+                    j * gbbq.block_grouping[1] : (j + 1) * gbbq.block_grouping[1],
+                    k * gbbq.block_grouping[2] : (k + 1) * gbbq.block_grouping[2],
+                ]
+                qdq_block_group = qdq.get_scale()[
+                    i * gbbq.block_grouping[0] : (i + 1) * gbbq.block_grouping[0],
+                    j * gbbq.block_grouping[1] : (j + 1) * gbbq.block_grouping[1],
+                    k * gbbq.block_grouping[2] : (k + 1) * gbbq.block_grouping[2],
+                ]
                 max_scale = torch.max(qdq_block_group)
                 compression_factor = 2 ** (decompressed_bw - bitwidth)
                 gamma = max_scale / compression_factor
-                int_rounded_scales = torch.maximum(torch.tensor([1.0]), torch.round(qdq_block_group / gamma))
+                int_rounded_scales = torch.maximum(
+                    torch.tensor([1.0]), torch.round(qdq_block_group / gamma)
+                )
                 rounded_scales = int_rounded_scales * gamma
                 assert torch.equal(rounded_scales, gbbq_block_group)
+
 
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_gbbq_quantizer_default_grouping(params):
     tensor = torch.randn(4, 8, 12)
-    gbbq_default_grouping = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                                           bitwidth=4,
-                                                           symmetric=True,
-                                                           block_size=(2, 2, 2),
-                                                           decompressed_bw=8)
-    gbbq_no_grouping = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                                      bitwidth=4,
-                                                      symmetric=True,
-                                                      block_size=(2, 2, 2),
-                                                      decompressed_bw=8,
-                                                      block_grouping=(1, 1, 1))
+    gbbq_default_grouping = GroupedBlockQuantizeDequantize(
+        shape=(2, 4, 6),
+        bitwidth=4,
+        symmetric=True,
+        block_size=(2, 2, 2),
+        decompressed_bw=8,
+    )
+    gbbq_no_grouping = GroupedBlockQuantizeDequantize(
+        shape=(2, 4, 6),
+        bitwidth=4,
+        symmetric=True,
+        block_size=(2, 2, 2),
+        decompressed_bw=8,
+        block_grouping=(1, 1, 1),
+    )
     if params == "scale_offset":
         gbbq_default_grouping._reparametrize_to_scale_offset()
         gbbq_no_grouping._reparametrize_to_scale_offset()
@@ -1197,30 +1414,43 @@ def test_gbbq_quantizer_default_grouping(params):
     assert torch.equal(gbbq_default_grouping.get_scale(), gbbq_no_grouping.get_scale())
     assert torch.equal(gbbq_default_grouping(tensor), gbbq_no_grouping(tensor))
 
-@pytest.mark.parametrize('gbbq_shape, gbbq_decompressed_bw, gbbq_block_size, gbbq_block_grouping, qdq_shape,'
-                         'qdq_block_size',
-                         [[(2, 4, 6), 8, (2, 2, 2), (1, 1, 1), (2, 4, 6), (2, 2, 2)],
-                          [(2, 4, 6), 4, (2, 2, 2), (-1, -1, -1), (1, 1, 1), None],
-                          [(2, 8, 6), 4, (2, 1, 2), (-1, 1, -1), (1, 8, 1), None]])
+
+@pytest.mark.parametrize(
+    "gbbq_shape, gbbq_decompressed_bw, gbbq_block_size, gbbq_block_grouping, qdq_shape,"
+    "qdq_block_size",
+    [
+        [(2, 4, 6), 8, (2, 2, 2), (1, 1, 1), (2, 4, 6), (2, 2, 2)],
+        [(2, 4, 6), 4, (2, 2, 2), (-1, -1, -1), (1, 1, 1), None],
+        [(2, 8, 6), 4, (2, 1, 2), (-1, 1, -1), (1, 8, 1), None],
+    ],
+)
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
-def test_gbbq_equivalences(gbbq_shape, gbbq_decompressed_bw, gbbq_block_size, gbbq_block_grouping, qdq_shape,
-                           qdq_block_size, params):
+def test_gbbq_equivalences(
+    gbbq_shape,
+    gbbq_decompressed_bw,
+    gbbq_block_size,
+    gbbq_block_grouping,
+    qdq_shape,
+    qdq_block_size,
+    params,
+):
     # Test 1: GBBQ should be equal to BQ in the case when block_grouping is 1 for all dims.
     # Test 2: GBBQ should be equal to per tensor in the case when block_grouping is -1 for all dims and decompressed_bw
     #         is equal to bitwidth.
     # Test 3: GBBQ should be equal to per channel in the case when block_grouping is -1 for all dims except the channel
     #         dimension and decompressed_bw is equal to bitwidth.
     tensor = torch.randn(4, 8, 12)
-    gbbq = GroupedBlockQuantizeDequantize(shape=gbbq_shape,
-                                          bitwidth=4,
-                                          symmetric=True,
-                                          block_size=gbbq_block_size,
-                                          decompressed_bw=gbbq_decompressed_bw,
-                                          block_grouping=gbbq_block_grouping)
-    qdq = QuantizeDequantize(shape=qdq_shape,
-                             bitwidth=4,
-                             symmetric=True,
-                             block_size=qdq_block_size)
+    gbbq = GroupedBlockQuantizeDequantize(
+        shape=gbbq_shape,
+        bitwidth=4,
+        symmetric=True,
+        block_size=gbbq_block_size,
+        decompressed_bw=gbbq_decompressed_bw,
+        block_grouping=gbbq_block_grouping,
+    )
+    qdq = QuantizeDequantize(
+        shape=qdq_shape, bitwidth=4, symmetric=True, block_size=qdq_block_size
+    )
 
     if params == "scale_offset":
         gbbq._reparametrize_to_scale_offset()
@@ -1242,31 +1472,36 @@ def test_gbbq_equivalences(gbbq_shape, gbbq_decompressed_bw, gbbq_block_size, gb
         gbbq_out.backward(grad)
         qdq_out.backward(grad)
 
-        assert all(torch.equal(p1.grad, p2.grad) for p1, p2 in zip(gbbq.parameters(), qdq.parameters()))
+        assert all(
+            torch.equal(p1.grad, p2.grad)
+            for p1, p2 in zip(gbbq.parameters(), qdq.parameters())
+        )
+
 
 def test_invalid_gbbq_settings():
     with pytest.raises(RuntimeError):
-        _ = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                           bitwidth=4,
-                                           symmetric=False,
-                                           decompressed_bw=8)
+        _ = GroupedBlockQuantizeDequantize(
+            shape=(2, 4, 6), bitwidth=4, symmetric=False, decompressed_bw=8
+        )
     with pytest.raises(RuntimeError):
-        _ = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                           bitwidth=4,
-                                           symmetric=True,
-                                           decompressed_bw=8,
-                                           block_grouping=(-1, -1, -1, -1))
+        _ = GroupedBlockQuantizeDequantize(
+            shape=(2, 4, 6),
+            bitwidth=4,
+            symmetric=True,
+            decompressed_bw=8,
+            block_grouping=(-1, -1, -1, -1),
+        )
 
     with pytest.raises(RuntimeError):
-        _ = GroupedBlockQuantizeDequantize(shape=(2, 4, 6),
-                                           bitwidth=4,
-                                           symmetric=True,
-                                           decompressed_bw=3)
+        _ = GroupedBlockQuantizeDequantize(
+            shape=(2, 4, 6), bitwidth=4, symmetric=True, decompressed_bw=3
+        )
+
 
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_import_signed_flag(params):
-    symmetric_quantizer = QuantizeDequantize((1, ), 8, symmetric=True)
-    asymmetric_quantizer = QuantizeDequantize((1, ), 8, symmetric=False)
+    symmetric_quantizer = QuantizeDequantize((1,), 8, symmetric=True)
+    asymmetric_quantizer = QuantizeDequantize((1,), 8, symmetric=False)
 
     if params == "scale_offset":
         symmetric_quantizer._reparametrize_to_scale_offset()
@@ -1279,7 +1514,9 @@ def test_import_signed_flag(params):
     When: Load signed-symmetric encodings into unsigned-asymmetric quantizer
     Then: unsigned-asymmetric quantizer becomes signed-symmetric
     """
-    asymmetric_quantizer.set_legacy_encodings(symmetric_quantizer.get_legacy_encodings())
+    asymmetric_quantizer.set_legacy_encodings(
+        symmetric_quantizer.get_legacy_encodings()
+    )
     assert asymmetric_quantizer.signed
     assert asymmetric_quantizer.symmetric
     """
@@ -1291,7 +1528,9 @@ def test_import_signed_flag(params):
         asymmetric_quantizer._reparametrize_to_scale_offset()
     with asymmetric_quantizer.compute_encodings():
         asymmetric_quantizer(torch.randn(10))
-    symmetric_quantizer.set_legacy_encodings(asymmetric_quantizer.get_legacy_encodings())
+    symmetric_quantizer.set_legacy_encodings(
+        asymmetric_quantizer.get_legacy_encodings()
+    )
 
     assert not symmetric_quantizer.signed
     assert not symmetric_quantizer.symmetric
@@ -1303,26 +1542,31 @@ def test_onnx_export(params):
     When: torch.onnx.export a quantizer
     Then: export shouldn't throw error
     """
-    qdq = QuantizeDequantize((10,), bitwidth=8, symmetric=True, encoding_analyzer=MinMaxEncodingAnalyzer((10,)))
-    qdq.load_state_dict({'min': -torch.ones(10), 'max': torch.ones(10)})
+    qdq = QuantizeDequantize(
+        (10,),
+        bitwidth=8,
+        symmetric=True,
+        encoding_analyzer=MinMaxEncodingAnalyzer((10,)),
+    )
+    qdq.load_state_dict({"min": -torch.ones(10), "max": torch.ones(10)})
 
     if params == "scale_offset":
         qdq._reparametrize_to_scale_offset()
 
     with tempfile.TemporaryDirectory() as tempdir:
-        with open(os.path.join(tempdir, 'qtzr.onnx'), 'wb') as f:
+        with open(os.path.join(tempdir, "qtzr.onnx"), "wb") as f:
             torch.onnx.export(qdq, torch.randn(10, 10), f)
 
 
 def get_qtzn_grid(bitwidth, signed):
     if signed:
-        qmin = -2 ** (bitwidth - 1)
+        qmin = -(2 ** (bitwidth - 1))
         qmax = -qmin - 1
     else:
         qmin = 0
-        qmax = 2 ** bitwidth - 1
+        qmax = 2**bitwidth - 1
 
-    return torch.tensor([qmin, qmin+1, qmax-1, qmax], dtype=torch.long)
+    return torch.tensor([qmin, qmin + 1, qmax - 1, qmax], dtype=torch.long)
 
 
 FLOAT32_TINY = torch.tensor(torch.finfo(torch.float32).tiny)
@@ -1336,20 +1580,54 @@ Supported dtypes for QuantizeDequantize
 | bfloat16 |  V   |  V   |   V   |       |
 |  float32 |  V   |  V   |   V   |   V   |
 """
-@pytest.mark.parametrize('symmetric', [True, False])
+
+
+@pytest.mark.parametrize("symmetric", [True, False])
 @pytest.mark.parametrize(
-    'dtype,          bitwidth', [
-    (torch.float16,  4,     ),
-    (torch.float16,  8,     ),
-    (torch.float16,  16,    ),
-    (torch.bfloat16, 4,     ),
-    (torch.bfloat16, 8,     ),
-    (torch.bfloat16, 16,    ),
-    (torch.float32,  4,     ),
-    (torch.float32,  8,     ),
-    (torch.float32,  16,    ),
-    (torch.float32,  32,    ),
-])
+    "dtype,          bitwidth",
+    [
+        (
+            torch.float16,
+            4,
+        ),
+        (
+            torch.float16,
+            8,
+        ),
+        (
+            torch.float16,
+            16,
+        ),
+        (
+            torch.bfloat16,
+            4,
+        ),
+        (
+            torch.bfloat16,
+            8,
+        ),
+        (
+            torch.bfloat16,
+            16,
+        ),
+        (
+            torch.float32,
+            4,
+        ),
+        (
+            torch.float32,
+            8,
+        ),
+        (
+            torch.float32,
+            16,
+        ),
+        (
+            torch.float32,
+            32,
+        ),
+    ],
+)
 def test_sub_float32_quantize_dequantize(dtype, bitwidth, symmetric):
     """
     Given: Input of range [0, 2**bw) * tiny_scale
@@ -1377,14 +1655,16 @@ def test_sub_float32_quantize_dequantize(dtype, bitwidth, symmetric):
     out = qtzr(x)
     assert out.dtype == x.dtype
     assert torch.all(out.isfinite())
-    expected = Q.affine.quantize_dequantize(x.float(),
-                                            min_scale,
-                                            torch.zeros([]).float(),
-                                            qmin=int(x_int.min()),
-                                            qmax=int(x_int.max())).to(dtype)
+    expected = Q.affine.quantize_dequantize(
+        x.float(),
+        min_scale,
+        torch.zeros([]).float(),
+        qmin=int(x_int.min()),
+        qmax=int(x_int.max()),
+    ).to(dtype)
 
     assert torch.equal(out, expected)
-    assert torch.allclose(out, x, atol=float(min_scale)/2)
+    assert torch.allclose(out, x, atol=float(min_scale) / 2)
 
 
 """
@@ -1395,17 +1675,42 @@ Supported dtypes for Quantize
 | bfloat16 |  V   |  V   |       |       |
 |  float32 |  V   |  V   |   V   |       |
 """
-@pytest.mark.parametrize('symmetric', [True, False])
+
+
+@pytest.mark.parametrize("symmetric", [True, False])
 @pytest.mark.parametrize(
-    'dtype,          bitwidth', [
-    (torch.float16,  4,     ),
-    (torch.float16,  8,     ),
-    (torch.bfloat16, 4,     ),
-    (torch.bfloat16, 8,     ),
-    (torch.float32,  4,     ),
-    (torch.float32,  8,     ),
-    (torch.float32,  16,    ),
-])
+    "dtype,          bitwidth",
+    [
+        (
+            torch.float16,
+            4,
+        ),
+        (
+            torch.float16,
+            8,
+        ),
+        (
+            torch.bfloat16,
+            4,
+        ),
+        (
+            torch.bfloat16,
+            8,
+        ),
+        (
+            torch.float32,
+            4,
+        ),
+        (
+            torch.float32,
+            8,
+        ),
+        (
+            torch.float32,
+            16,
+        ),
+    ],
+)
 def test_sub_float32_quantize(dtype, bitwidth, symmetric):
     """
     Given: Input of range [0, 2**bw) * tiny_scale
@@ -1433,22 +1738,26 @@ def test_sub_float32_quantize(dtype, bitwidth, symmetric):
     out = qtzr(x)
     assert out.dtype == x.dtype
     assert torch.all(out.isfinite())
-    expected = Q.affine.quantize(x.float(),
-                                 min_scale,
-                                 torch.zeros([]).float(),
-                                 qmin=int(x_int.min()),
-                                 qmax=int(x_int.max())).to(dtype)
+    expected = Q.affine.quantize(
+        x.float(),
+        min_scale,
+        torch.zeros([]).float(),
+        qmin=int(x_int.min()),
+        qmax=int(x_int.max()),
+    ).to(dtype)
 
     assert torch.equal(out.as_subclass(torch.Tensor).long(), expected.long())
 
 
 @pytest.mark.parametrize(
-    'dtype,          bitwidth,  symmetric', [
-    (torch.float16,  13,        True),
-    (torch.float16,  12,        False),
-    (torch.bfloat16, 10,        True),
-    (torch.bfloat16, 9,         False),
-])
+    "dtype,          bitwidth,  symmetric",
+    [
+        (torch.float16, 13, True),
+        (torch.float16, 12, False),
+        (torch.bfloat16, 10, True),
+        (torch.bfloat16, 9, False),
+    ],
+)
 def test_sub_float32_error(dtype, bitwidth, symmetric):
     """
     Given: Input of range [0, 2**bw) * scale
@@ -1466,10 +1775,12 @@ def test_sub_float32_error(dtype, bitwidth, symmetric):
 
 
 @pytest.mark.parametrize(
-    'qmin,   qmax,  bitwidth, symmetric', [
-    (0,      15,    4,        False),
-    (-8,     7,     4,        True),
-])
+    "qmin,   qmax,  bitwidth, symmetric",
+    [
+        (0, 15, 4, False),
+        (-8, 7, 4, True),
+    ],
+)
 def test_qmin_qmax_consistency(qmin, qmax, bitwidth, symmetric):
     """
     When: Assign new bitwidths
@@ -1576,7 +1887,7 @@ def test_non_integer_bitwidth():
            [0, 2**B-1] or [2**(B-1), 2**(B-1)-1] where B is a positive non-integer
     """
     # 2**15 - 1 < 0xff7f < 2**16 - 1
-    q = Q.affine.QuantizeDequantize((), qmin=0, qmax=0xff7f, symmetric=False)
+    q = Q.affine.QuantizeDequantize((), qmin=0, qmax=0xFF7F, symmetric=False)
 
     """
     When: Get bitwidth
@@ -1596,22 +1907,24 @@ def test_non_integer_bitwidth():
 
 
 @pytest.mark.parametrize(
-    'qmin,   qmax,  bitwidth, symmetric', [
-    (0,      15,    4,        False),
-    (0,      255,   8,        False),
-    (0,      65535, 16,       False),
-    (-8,     7,     4,        True),
-    (-128,   127,   8,        True),
-    (-32768, 32767, 16,       True),
-])
-@pytest.mark.parametrize('qtzr_cls', [Q.affine.Quantize, Q.affine.QuantizeDequantize])
+    "qmin,   qmax,  bitwidth, symmetric",
+    [
+        (0, 15, 4, False),
+        (0, 255, 8, False),
+        (0, 65535, 16, False),
+        (-8, 7, 4, True),
+        (-128, 127, 8, True),
+        (-32768, 32767, 16, True),
+    ],
+)
+@pytest.mark.parametrize("qtzr_cls", [Q.affine.Quantize, Q.affine.QuantizeDequantize])
 def test_parse_args_equivalence(qtzr_cls, qmin, qmax, bitwidth, symmetric):
     """
     When: Instantiate quantizers with (qmin, qmax) and (bitwidth, signed)
           with mathematically equivalent values
     Then: The output of the quantizers should be equal to each other
     """
-    x = torch.arange(qmin, qmax+1, dtype=torch.float32)
+    x = torch.arange(qmin, qmax + 1, dtype=torch.float32)
     quantizers = [
         qtzr_cls((), qmin, qmax, symmetric),
         qtzr_cls((), qmin, qmax, symmetric=symmetric),
@@ -1629,9 +1942,10 @@ def test_parse_args_equivalence(qtzr_cls, qmin, qmax, bitwidth, symmetric):
     for qtzr in quantizers:
         assert torch.equal(qtzr.min, torch.tensor(qmin))
         assert torch.equal(qtzr.max, torch.tensor(qmax))
-        assert torch.equal(qtzr.get_scale(), torch.tensor(1.))
-        assert torch.equal(qtzr.get_offset(), torch.tensor(0.))
+        assert torch.equal(qtzr.get_scale(), torch.tensor(1.0))
+        assert torch.equal(qtzr.get_offset(), torch.tensor(0.0))
         assert torch.equal(qtzr(x), x)
+
 
 def test_parse_args_error():
     """
@@ -1692,7 +2006,7 @@ def test_parse_args_error():
 
 
 @torch.no_grad()
-@pytest.mark.parametrize('symmetric', [True, False])
+@pytest.mark.parametrize("symmetric", [True, False])
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
 def test_signed_doesnt_affect_output(symmetric, params):
     """
@@ -1712,8 +2026,7 @@ def test_signed_doesnt_affect_output(symmetric, params):
 
     x = torch.arange(-10.0, 6.0)
 
-    with q_int8.compute_encodings(), \
-            q_uint8.compute_encodings():
+    with q_int8.compute_encodings(), q_uint8.compute_encodings():
         _ = q_int8(x)
         _ = q_uint8(x)
 
@@ -1729,8 +2042,7 @@ def test_signed_doesnt_affect_output(symmetric, params):
 
     x = torch.arange(-10.0, 6.0)
 
-    with qdq_int8.compute_encodings(), \
-            qdq_uint8.compute_encodings():
+    with qdq_int8.compute_encodings(), qdq_uint8.compute_encodings():
         _ = qdq_int8(x)
         _ = qdq_uint8(x)
 
@@ -1740,45 +2052,63 @@ def test_signed_doesnt_affect_output(symmetric, params):
     assert torch.equal(out_int8.quantize(), out_uint8.quantize() - 128)
 
 
-def _onnx_QuantizeLinear(input_shape, y_scale, y_zero_point, axis, block_size, output_dtype):
+def _onnx_QuantizeLinear(
+    input_shape, y_scale, y_zero_point, axis, block_size, output_dtype
+):
     op = OperatorSetIdProto()
     op.version = 21
 
     assert output_dtype in ("int8", "int16", "uint8", "uint16")
 
-    onnx_dtype = TensorProto.INT16 if output_dtype == "int16" else \
-                 TensorProto.INT8 if output_dtype == "int8" else \
-                 TensorProto.INT4 if output_dtype == "int4" else \
-                 TensorProto.UINT16 if output_dtype == "uint16" else \
-                 TensorProto.UINT8 if output_dtype == "uint8" else \
-                 TensorProto.UINT4 if output_dtype == "uint4" else \
-                 None
+    onnx_dtype = (
+        TensorProto.INT16
+        if output_dtype == "int16"
+        else TensorProto.INT8
+        if output_dtype == "int8"
+        else TensorProto.INT4
+        if output_dtype == "int4"
+        else TensorProto.UINT16
+        if output_dtype == "uint16"
+        else TensorProto.UINT8
+        if output_dtype == "uint8"
+        else TensorProto.UINT4
+        if output_dtype == "uint4"
+        else None
+    )
     assert onnx_dtype is not None
 
-    x = helper.make_tensor_value_info(name='x',
-                                      elem_type=TensorProto.FLOAT,
-                                      shape=input_shape)
+    x = helper.make_tensor_value_info(
+        name="x", elem_type=TensorProto.FLOAT, shape=input_shape
+    )
 
-    y_scale = numpy_helper.from_array(np.array(y_scale).astype('float32'), name='y_scale')
+    y_scale = numpy_helper.from_array(
+        np.array(y_scale).astype("float32"), name="y_scale"
+    )
     if y_zero_point is not None:
-        y_zero_point = numpy_helper.from_array(np.array(y_zero_point).astype(output_dtype), name='y_zero_point')
+        y_zero_point = numpy_helper.from_array(
+            np.array(y_zero_point).astype(output_dtype), name="y_zero_point"
+        )
 
-    y = helper.make_tensor_value_info(name='y',
-                                      elem_type=onnx_dtype,
-                                      shape=input_shape)
+    y = helper.make_tensor_value_info(name="y", elem_type=onnx_dtype, shape=input_shape)
 
-    quantize_node = helper.make_node('QuantizeLinear',
-                                     inputs=['x', 'y_scale', 'y_zero_point'] if y_zero_point is not None else ['x', 'y_scale'],
-                                     outputs=['y'],
-                                     axis=axis,
-                                     block_size=block_size,
-                                     output_dtype=onnx_dtype)
+    quantize_node = helper.make_node(
+        "QuantizeLinear",
+        inputs=["x", "y_scale", "y_zero_point"]
+        if y_zero_point is not None
+        else ["x", "y_scale"],
+        outputs=["y"],
+        axis=axis,
+        block_size=block_size,
+        output_dtype=onnx_dtype,
+    )
 
-    onnx_graph = helper.make_graph([quantize_node],
-                                   name='quantize',
-                                   inputs=[x],
-                                   outputs=[y],
-                                   initializer=[y_scale, y_zero_point] if y_zero_point is not None else [y_scale])
+    onnx_graph = helper.make_graph(
+        [quantize_node],
+        name="quantize",
+        inputs=[x],
+        outputs=[y],
+        initializer=[y_scale, y_zero_point] if y_zero_point is not None else [y_scale],
+    )
 
     model = helper.make_model(onnx_graph, opset_imports=[op])
     onnx.checker.check_model(model, True)
@@ -1793,57 +2123,59 @@ def _onnx_QuantizeLinear(input_shape, y_scale, y_zero_point, axis, block_size, o
     #         +- channel axis (if block size is None)
     # axis := |
     #         +- block axis (otherwise)
-    "shape,         block_size,   axis", [
-    ((),            None,         None), # per-tensor
-    ((10, 1, 1, 1), None,         0),    # per-channel with axis=0 (Convolution)
-    ((1, 10, 1, 1), None,         1),    # per-channel with axis=1 (Convolution)
-    ((10, 1),       None,         0),    # per-channel with axis=0 (Linear/Gemm)
-    ((1, 10),       None,         1),    # per-channel with axis=1 (Linear/Gemm)
-    ((10, 2, 1, 1), (1, 5, 1, 1), 1),    # per-block with block_axis=1 (Convolution)
-    ((2, 10, 1, 1), (5, 1, 1, 1), 0),    # per-block with block_axis=0 (Convolution)
-    ((10, 2),       (1, 5),       1),    # per-block with block_axis=1 (Linear/Gemm)
-    ((2, 10),       (5, 1),       0),    # per-block with block_axis=0 (Linear/Gemm)
-])
+    "shape,         block_size,   axis",
+    [
+        ((), None, None),  # per-tensor
+        ((10, 1, 1, 1), None, 0),  # per-channel with axis=0 (Convolution)
+        ((1, 10, 1, 1), None, 1),  # per-channel with axis=1 (Convolution)
+        ((10, 1), None, 0),  # per-channel with axis=0 (Linear/Gemm)
+        ((1, 10), None, 1),  # per-channel with axis=1 (Linear/Gemm)
+        ((10, 2, 1, 1), (1, 5, 1, 1), 1),  # per-block with block_axis=1 (Convolution)
+        ((2, 10, 1, 1), (5, 1, 1, 1), 0),  # per-block with block_axis=0 (Convolution)
+        ((10, 2), (1, 5), 1),  # per-block with block_axis=1 (Linear/Gemm)
+        ((2, 10), (5, 1), 0),  # per-block with block_axis=0 (Linear/Gemm)
+    ],
+)
 @pytest.mark.parametrize(
-    "qmin,   qmax,     symmetric, offset, output_dtype", [
-    (-8,     7,        True,      0,      "int4"),
-    (-8,     7,        False,     -5,     "int4"),
-    (-8,     7,        False,     0,      "int4"),
-    (0,      15,       True,      -8,     "uint4"),
-    (0,      15,       False,     -5,     "uint4"),
-    (0,      15,       False,     0,      "uint4"),
-    (-128,   127,      True,      0,      "int8"),
-    (-128,   127,      False,     -5,     "int8"),
-    (-128,   127,      False,     0,      "int8"),
-    (0,      255,      True,      -128,   "uint8"),
-    (0,      255,      False,     -5,     "uint8"),
-    (0,      255,      False,     0,      "uint8"),
-    (-2**15, 2**15-1,  True,      0,      "int16"),
-    (-2**15, 2**15-1,  False,     -5,     "int16"),
-    (-2**15, 2**15-1,  False,     0,      "int16"),
-    (0,      2**16-1,  True,      -2**15, "uint16"),
-    (0,      2**16-1,  False,     -5,     "uint16"),
-    (0,      2**16-1,  False,     0,      "uint16"),
-    (-2**31, 2**31-1,  True,      0,      "int32"),
-    # NOTE: Skipping since simulating int32 with non-zero offset is numerically very unstable
-    # (-2**31, 2**31-1,  False,     -5,     "int32"),
-    (-2**31, 2**31-1,  False,     0,      "int32"),
-])
+    "qmin,   qmax,     symmetric, offset, output_dtype",
+    [
+        (-8, 7, True, 0, "int4"),
+        (-8, 7, False, -5, "int4"),
+        (-8, 7, False, 0, "int4"),
+        (0, 15, True, -8, "uint4"),
+        (0, 15, False, -5, "uint4"),
+        (0, 15, False, 0, "uint4"),
+        (-128, 127, True, 0, "int8"),
+        (-128, 127, False, -5, "int8"),
+        (-128, 127, False, 0, "int8"),
+        (0, 255, True, -128, "uint8"),
+        (0, 255, False, -5, "uint8"),
+        (0, 255, False, 0, "uint8"),
+        (-(2**15), 2**15 - 1, True, 0, "int16"),
+        (-(2**15), 2**15 - 1, False, -5, "int16"),
+        (-(2**15), 2**15 - 1, False, 0, "int16"),
+        (0, 2**16 - 1, True, -(2**15), "uint16"),
+        (0, 2**16 - 1, False, -5, "uint16"),
+        (0, 2**16 - 1, False, 0, "uint16"),
+        (-(2**31), 2**31 - 1, True, 0, "int32"),
+        # NOTE: Skipping since simulating int32 with non-zero offset is numerically very unstable
+        # (-2**31, 2**31-1,  False,     -5,     "int32"),
+        (-(2**31), 2**31 - 1, False, 0, "int32"),
+    ],
+)
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
-def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
-                                      qmin, qmax, symmetric, offset, output_dtype,
-                                      params):
+def test_affine_encoding_schema_2_0_0(
+    shape, block_size, axis, qmin, qmax, symmetric, offset, output_dtype, params
+):
     """
     When: Export affine encoding in 2.0.0 schema
     """
-    scale = torch.arange(1, np.prod(shape)+1).view(shape) * 0.001
+    scale = torch.arange(1, np.prod(shape) + 1).view(shape) * 0.001
     offset = torch.full_like(scale, offset)
 
-    qtzr = QuantizeDequantize(shape=shape,
-                              qmin=qmin,
-                              qmax=qmax,
-                              symmetric=symmetric,
-                              block_size=block_size).to(torch.float64)
+    qtzr = QuantizeDequantize(
+        shape=shape, qmin=qmin, qmax=qmax, symmetric=symmetric, block_size=block_size
+    ).to(torch.float64)
     if params == "scale_offset":
         qtzr._reparametrize_to_scale_offset()
 
@@ -1865,7 +2197,9 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
     if torch.all(offset == 0):
         assert "y_zero_point" not in encoding
     else:
-        assert torch.equal(torch.tensor(encoding["y_zero_point"]).view_as(offset), -offset)
+        assert torch.equal(
+            torch.tensor(encoding["y_zero_point"]).view_as(offset), -offset
+        )
 
     if axis is None:
         assert "axis" not in encoding
@@ -1875,10 +2209,11 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
     if block_size is None:
         assert "block_size" not in encoding
     else:
-        assert encoding["block_size"] == next(iter(blk for blk in block_size if blk != 1))
+        assert encoding["block_size"] == next(
+            iter(blk for blk in block_size if blk != 1)
+        )
 
     assert encoding["output_dtype"] == output_dtype
-
 
     """
     Then: The output of onnx::QuantizeLinear with the exported qnn encoding should be
@@ -1888,31 +2223,35 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
         pytest.skip(reason="onnx::QuantizeLinear only supports these data types")
 
     if version.parse(ort.__version__) < version.parse("1.20.0"):
-        pytest.skip(reason="Remaining tests require onnxruntime>=1.20 for blockwise QuantizeLinear")
+        pytest.skip(
+            reason="Remaining tests require onnxruntime>=1.20 for blockwise QuantizeLinear"
+        )
 
     input_shape = tuple(s * b for s, b in zip(shape, block_size or itertools.repeat(1)))
     input_numel = np.prod(input_shape)
     x = Q.affine.dequantize(
-        torch.arange(qmin, qmax, step=(qmax-qmin)/input_numel).view(input_shape),
+        torch.arange(qmin, qmax, step=(qmax - qmin) / input_numel).view(input_shape),
         scale,
         torch.zeros_like(scale),
         block_size=block_size,
     )
 
-    onnx_QuantizeLinear = _onnx_QuantizeLinear(input_shape=tuple(x.shape),
-                                               y_scale=encoding["y_scale"],
-                                               y_zero_point=encoding.get("y_zero_point", None),
-                                               axis=encoding.get("axis", None),
-                                               block_size=encoding.get("block_size", None),
-                                               output_dtype=encoding["output_dtype"])
+    onnx_QuantizeLinear = _onnx_QuantizeLinear(
+        input_shape=tuple(x.shape),
+        y_scale=encoding["y_scale"],
+        y_zero_point=encoding.get("y_zero_point", None),
+        axis=encoding.get("axis", None),
+        block_size=encoding.get("block_size", None),
+        output_dtype=encoding["output_dtype"],
+    )
     with tempfile.TemporaryDirectory() as tmp_dir:
         full_path = os.path.join(tmp_dir, "model.onnx")
 
         with open(full_path, "wb") as f:
             f.write(onnx_QuantizeLinear.SerializeToString())
 
-        sess = ort.InferenceSession(full_path, providers=['CPUExecutionProvider'])
-        ort_out, = sess.run(None, {'x': x.numpy()})
+        sess = ort.InferenceSession(full_path, providers=["CPUExecutionProvider"])
+        (ort_out,) = sess.run(None, {"x": x.numpy()})
 
     ort_out = torch.from_numpy(ort_out.astype("float64"))
     torch_out = qtzr(x.to(torch.float64)).quantize()
@@ -1920,57 +2259,83 @@ def test_affine_encoding_schema_2_0_0(shape, block_size, axis,
     assert torch.allclose(ort_out, torch_out, atol=1)
 
 
-def _onnx_LPBQ(input_shape, per_block_int_scale, per_channel_float_scale,
-               y_zero_point, axis, block_size, output_dtype):
+def _onnx_LPBQ(
+    input_shape,
+    per_block_int_scale,
+    per_channel_float_scale,
+    y_zero_point,
+    axis,
+    block_size,
+    output_dtype,
+):
     op = OperatorSetIdProto()
     op.version = 21
 
     assert y_zero_point is None
 
-    x_int_dtype = TensorProto.INT16 if output_dtype == "int16" else \
-                  TensorProto.INT8 if output_dtype == "int8" else \
-                  TensorProto.INT4 if output_dtype == "int4" else \
-                  TensorProto.UINT16 if output_dtype == "uint16" else \
-                  TensorProto.UINT8 if output_dtype == "uint8" else \
-                  TensorProto.UINT4 if output_dtype == "uint4" else \
-                  None
+    x_int_dtype = (
+        TensorProto.INT16
+        if output_dtype == "int16"
+        else TensorProto.INT8
+        if output_dtype == "int8"
+        else TensorProto.INT4
+        if output_dtype == "int4"
+        else TensorProto.UINT16
+        if output_dtype == "uint16"
+        else TensorProto.UINT8
+        if output_dtype == "uint8"
+        else TensorProto.UINT4
+        if output_dtype == "uint4"
+        else None
+    )
     assert x_int_dtype is not None
 
-    x = helper.make_tensor_value_info(name='x',
-                                      elem_type=TensorProto.FLOAT,
-                                      shape=input_shape)
+    x = helper.make_tensor_value_info(
+        name="x", elem_type=TensorProto.FLOAT, shape=input_shape
+    )
 
-    per_block_int_scale = numpy_helper.from_array(np.array(per_block_int_scale).astype('float32'),
-                                                  name='per_block_int_scale')
-    per_channel_float_scale = numpy_helper.from_array(np.array(per_channel_float_scale).astype('float32'),
-                                                      name='per_channel_float_scale')
+    per_block_int_scale = numpy_helper.from_array(
+        np.array(per_block_int_scale).astype("float32"), name="per_block_int_scale"
+    )
+    per_channel_float_scale = numpy_helper.from_array(
+        np.array(per_channel_float_scale).astype("float32"),
+        name="per_channel_float_scale",
+    )
 
-    y = helper.make_tensor_value_info(name='y',
-                                      elem_type=TensorProto.FLOAT,
-                                      shape=input_shape)
+    y = helper.make_tensor_value_info(
+        name="y", elem_type=TensorProto.FLOAT, shape=input_shape
+    )
 
-    mul_node = helper.make_node('Mul',
-                                inputs=['per_block_int_scale', 'per_channel_float_scale'],
-                                outputs=['y_scale'])
+    mul_node = helper.make_node(
+        "Mul",
+        inputs=["per_block_int_scale", "per_channel_float_scale"],
+        outputs=["y_scale"],
+    )
 
-    quantize_node = helper.make_node('QuantizeLinear',
-                                     inputs=['x', 'y_scale'],
-                                     outputs=['x_int'],
-                                     axis=axis,
-                                     block_size=block_size,
-                                     output_dtype=x_int_dtype)
+    quantize_node = helper.make_node(
+        "QuantizeLinear",
+        inputs=["x", "y_scale"],
+        outputs=["x_int"],
+        axis=axis,
+        block_size=block_size,
+        output_dtype=x_int_dtype,
+    )
 
-    dequantize_node = helper.make_node('DequantizeLinear',
-                                       inputs=['x_int', 'y_scale'],
-                                       outputs=['y'],
-                                       axis=axis,
-                                       block_size=block_size)
+    dequantize_node = helper.make_node(
+        "DequantizeLinear",
+        inputs=["x_int", "y_scale"],
+        outputs=["y"],
+        axis=axis,
+        block_size=block_size,
+    )
 
-    onnx_graph = helper.make_graph([mul_node, quantize_node, dequantize_node],
-                                   name='lpbq',
-                                   inputs=[x],
-                                   outputs=[y],
-                                   initializer=[per_block_int_scale, per_channel_float_scale])
+    onnx_graph = helper.make_graph(
+        [mul_node, quantize_node, dequantize_node],
+        name="lpbq",
+        inputs=[x],
+        outputs=[y],
+        initializer=[per_block_int_scale, per_channel_float_scale],
+    )
 
     model = helper.make_model(onnx_graph, opset_imports=[op])
     onnx.checker.check_model(model, True)
@@ -1980,33 +2345,50 @@ def _onnx_LPBQ(input_shape, per_block_int_scale, per_channel_float_scale,
 
 @torch.no_grad()
 @pytest.mark.parametrize(
-    "shape,          block_size,   block_grouping, axis", [
-    ((10, 64, 1, 1), (1, 8, 1, 1), (1, 64, 1, 1),  1),    # per-block with block_axis=1 (Convolution)
-    ((64, 10, 1, 1), (8, 1, 1, 1), (64, 1, 1, 1),  0),    # per-block with block_axis=0 (Convolution)
-    ((10, 64),       (1, 8),       (1, 64),        1),    # per-block with block_axis=1 (Linear/Gemm)
-    ((64, 10),       (8, 1),       (64, 1),        0),    # per-block with block_axis=0 (Linear/Gemm)
-])
+    "shape,          block_size,   block_grouping, axis",
+    [
+        (
+            (10, 64, 1, 1),
+            (1, 8, 1, 1),
+            (1, 64, 1, 1),
+            1,
+        ),  # per-block with block_axis=1 (Convolution)
+        (
+            (64, 10, 1, 1),
+            (8, 1, 1, 1),
+            (64, 1, 1, 1),
+            0,
+        ),  # per-block with block_axis=0 (Convolution)
+        ((10, 64), (1, 8), (1, 64), 1),  # per-block with block_axis=1 (Linear/Gemm)
+        ((64, 10), (8, 1), (64, 1), 0),  # per-block with block_axis=0 (Linear/Gemm)
+    ],
+)
 @pytest.mark.parametrize(
-    "compressed_bw, decompressed_bw", [
-    (4,             8),
-    (8,             16),
-])
+    "compressed_bw, decompressed_bw",
+    [
+        (4, 8),
+        (8, 16),
+    ],
+)
 @pytest.mark.parametrize("params", ["min_max", "scale_offset"])
-def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
-                                    compressed_bw, decompressed_bw, params):
+def test_lpbq_encoding_schema_2_0_0(
+    shape, block_size, block_grouping, axis, compressed_bw, decompressed_bw, params
+):
     """
     When: Export affine encoding in 2.0.0 schema
     """
-    scale = torch.arange(1, np.prod(shape)+1).view(shape) * 0.001
-    qmin = -2 ** (decompressed_bw - 1)
+    scale = torch.arange(1, np.prod(shape) + 1).view(shape) * 0.001
+    qmin = -(2 ** (decompressed_bw - 1))
     qmax = 2 ** (decompressed_bw - 1) - 1
 
-    qtzr = GroupedBlockQuantizeDequantize(shape=shape,
-                                          bitwidth=compressed_bw,
-                                          symmetric=True,
-                                          decompressed_bw=decompressed_bw,
-                                          block_size=block_size,
-                                          block_grouping=block_grouping).to(torch.float64)
+    qtzr = GroupedBlockQuantizeDequantize(
+        shape=shape,
+        bitwidth=compressed_bw,
+        symmetric=True,
+        decompressed_bw=decompressed_bw,
+        block_size=block_size,
+        block_grouping=block_grouping,
+    ).to(torch.float64)
     if params == "scale_offset":
         qtzr._reparametrize_to_scale_offset()
 
@@ -2035,40 +2417,43 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
             tensor=per_block_int_scale.to(torch.float32),
             scale=per_channel_float_scale,
             offset=torch.zeros_like(per_channel_float_scale),
-            block_size=block_grouping
-        )
+            block_size=block_grouping,
+        ),
     )
     assert "y_zero_point" not in encoding
     assert encoding["axis"] == axis
     assert encoding["block_size"] == next(iter(blk for blk in block_size if blk != 1))
     assert encoding["output_dtype"] == f"int{compressed_bw}"
 
-
     """
     Then: The output of onnx::QuantizeLinear with the exported qnn encoding should be
           all-close to AIMET affine.quantize() output with off-by-one tolerance threshold
     """
     if version.parse(ort.__version__) < version.parse("1.20.0"):
-        pytest.skip(reason="Remaining tests require onnxruntime>=1.20 for blockwise QuantizeLinear")
+        pytest.skip(
+            reason="Remaining tests require onnxruntime>=1.20 for blockwise QuantizeLinear"
+        )
 
     input_shape = tuple(s * b for s, b in zip(shape, block_size))
     input_numel = np.prod(input_shape)
-    qmin = -2 ** (compressed_bw-1)
-    qmax = 2 ** (compressed_bw-1) - 1
+    qmin = -(2 ** (compressed_bw - 1))
+    qmax = 2 ** (compressed_bw - 1) - 1
     x = Q.affine.dequantize(
-        torch.arange(qmin, qmax, step=(qmax-qmin)/input_numel).view(input_shape),
+        torch.arange(qmin, qmax, step=(qmax - qmin) / input_numel).view(input_shape),
         scale,
         torch.zeros_like(scale),
         block_size=block_size,
     )
 
-    onnx_LPBQ = _onnx_LPBQ(input_shape=tuple(x.shape),
-                           per_block_int_scale=encoding["per_block_int_scale"],
-                           per_channel_float_scale=encoding["per_channel_float_scale"],
-                           y_zero_point=None,
-                           axis=encoding["axis"],
-                           block_size=encoding["block_size"],
-                           output_dtype=encoding["output_dtype"])
+    onnx_LPBQ = _onnx_LPBQ(
+        input_shape=tuple(x.shape),
+        per_block_int_scale=encoding["per_block_int_scale"],
+        per_channel_float_scale=encoding["per_channel_float_scale"],
+        y_zero_point=None,
+        axis=encoding["axis"],
+        block_size=encoding["block_size"],
+        output_dtype=encoding["output_dtype"],
+    )
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         full_path = os.path.join(tmp_dir, "model.onnx")
@@ -2076,14 +2461,15 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
         with open(full_path, "wb") as f:
             f.write(onnx_LPBQ.SerializeToString())
 
-        sess = ort.InferenceSession(full_path, providers=['CPUExecutionProvider'])
-        ort_out, = sess.run(None, {'x': x.numpy()})
+        sess = ort.InferenceSession(full_path, providers=["CPUExecutionProvider"])
+        (ort_out,) = sess.run(None, {"x": x.numpy()})
 
     ort_out = torch.from_numpy(ort_out.astype("float64"))
     torch_out = qtzr(x.to(torch.float64))
-    atol = per_block_int_scale * per_channel_float_scale # Allow off-by-one error
-    atol = atol.amax(dim=[axis for axis, blk in enumerate(block_size) if blk != 1],
-                     keepdim=True)
+    atol = per_block_int_scale * per_channel_float_scale  # Allow off-by-one error
+    atol = atol.amax(
+        dim=[axis for axis, blk in enumerate(block_size) if blk != 1], keepdim=True
+    )
 
     assert torch.all((ort_out - torch_out).abs() < atol)
 
@@ -2091,16 +2477,24 @@ def test_lpbq_encoding_schema_2_0_0(shape, block_size, block_grouping, axis,
 @pytest.mark.parametrize("symmetric", [True, False])
 @pytest.mark.parametrize("bitwidth", [4, 8, 16])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-@pytest.mark.parametrize("device", [
-    torch.device("cpu"),
-    *([torch.device("cuda:0")] if torch.cuda.is_available() else [])
-])
-@pytest.mark.parametrize("input_range", [
-    (-1., 1.),
-    (-0.1, 0.1),
-    (-0.01, 0.01),
-])
-def test_min_max_scale_offset_equivalence(symmetric, bitwidth, dtype, device, input_range):
+@pytest.mark.parametrize(
+    "device",
+    [
+        torch.device("cpu"),
+        *([torch.device("cuda:0")] if torch.cuda.is_available() else []),
+    ],
+)
+@pytest.mark.parametrize(
+    "input_range",
+    [
+        (-1.0, 1.0),
+        (-0.1, 0.1),
+        (-0.01, 0.01),
+    ],
+)
+def test_min_max_scale_offset_equivalence(
+    symmetric, bitwidth, dtype, device, input_range
+):
     """
     When: Reparametrize min-max quantizer to scale-offset
     Then: 1. Quantizer should be an instance of ScaleOffsetQuantizer, NOT MinMaxQuantizer
@@ -2110,7 +2504,7 @@ def test_min_max_scale_offset_equivalence(symmetric, bitwidth, dtype, device, in
           5. Other metadata (bitwidth, symmetric, device, ...) should NOT change
     """
     min, max = input_range
-    x = torch.arange(min, max, step=(max-min)/100, dtype=dtype, device=device)
+    x = torch.arange(min, max, step=(max - min) / 100, dtype=dtype, device=device)
     qtzr = QuantizeDequantize((), bitwidth=bitwidth, symmetric=symmetric)
     qtzr.to(dtype=dtype, device=device)
     with qtzr.compute_encodings():
@@ -2174,10 +2568,13 @@ def test_min_max_scale_offset_equivalence(symmetric, bitwidth, dtype, device, in
     assert qtzr.symmetric == symmetric
     assert all(p.device == device for p in qtzr.parameters())
 
+
 def test_equivalence_with_pairwise_nearest():
     torch.manual_seed(0)
     for i in range(10):
-        quantizer = QuantizeDequantize(shape=(), bitwidth=2, symmetric=True, zero_point_shift=0.5)
+        quantizer = QuantizeDequantize(
+            shape=(), bitwidth=2, symmetric=True, zero_point_shift=0.5
+        )
         tensor_to_qdq = torch.rand(5, 10) * 10.0 - 5
         with quantizer.compute_encodings():
             _ = quantizer(tensor_to_qdq)
@@ -2186,11 +2583,15 @@ def test_equivalence_with_pairwise_nearest():
         tensor_max = torch.max(torch.abs(tensor_to_qdq))
         scale = tensor_max / 1.5
         assert qcom_scale == scale
-        c_dist_bins = torch.tensor([scale * -1.5, scale * -.5, scale * .5, scale * 1.5])
+        c_dist_bins = torch.tensor(
+            [scale * -1.5, scale * -0.5, scale * 0.5, scale * 1.5]
+        )
 
         orig_shape = tensor_to_qdq.shape
 
-        distances = torch.cdist(tensor_to_qdq.flatten().unsqueeze(1), c_dist_bins.unsqueeze(1))
+        distances = torch.cdist(
+            tensor_to_qdq.flatten().unsqueeze(1), c_dist_bins.unsqueeze(1)
+        )
 
         # Find the indices of the closest values
         closest_indices = distances.argmin(dim=1)

@@ -60,9 +60,9 @@ struct ConvSpecArgs
     float input_scale;
     // quantization bitwidths
     uint8_t bw;
-    // weight scales of weight encodings of convolution, if the quantization scheme is perchannel, the length of 
+    // weight scales of weight encodings of convolution, if the quantization scheme is perchannel, the length of
     // weight_scale is equal to the count, if the quantization scheme is pertensor, the length of weight_scale is 1.
-    std::vector<DTYPE> weight_scale;   
+    std::vector<DTYPE> weight_scale;
 };
 
 /**

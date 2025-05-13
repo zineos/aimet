@@ -55,12 +55,17 @@ import aimet_torch._base.nn.modules.custom as aimet_modules
 
 import aimet_torch.v1.quantsim as v1
 import aimet_torch.v2.quantsim as v2
-from .models.test_models import TinyModel, MultiInput, ModelWithReusedNodes, SingleResidual, EmbeddingModel
+from .models.test_models import (
+    TinyModel,
+    MultiInput,
+    ModelWithReusedNodes,
+    SingleResidual,
+    EmbeddingModel,
+)
 from safetensors.numpy import save_file as save_safetensor_file
 
 
 class TestTrainingExtensionsUtils(unittest.TestCase):
-
     def test_round_up_to_higher_multiplicity(self):
         self.assertEqual(round_up_to_multiplicity(8, 3, 32), 8)
         self.assertEqual(round_up_to_multiplicity(8, 13, 32), 16)
@@ -79,9 +84,11 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         model = torchvision.models.resnet18()
         model.eval()
 
-        utils.replace_modules(model,
-                              lambda module: isinstance(module, torch.nn.ReLU),
-                              lambda _: torch.nn.ReLU6())
+        utils.replace_modules(
+            model,
+            lambda module: isinstance(module, torch.nn.ReLU),
+            lambda _: torch.nn.ReLU6(),
+        )
 
         # check - no ReLU modules left in the model anymore
         for module in model.modules():
@@ -96,9 +103,11 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         model = torchvision.models.resnet18()
         model.eval()
 
-        utils.replace_modules(model,
-                              lambda module: module in [model.layer1[0].bn1, model.layer1[1].bn1],
-                              lambda _: torch.nn.Identity())
+        utils.replace_modules(
+            model,
+            lambda module: module in [model.layer1[0].bn1, model.layer1[1].bn1],
+            lambda _: torch.nn.Identity(),
+        )
 
         # check - given modules have been replaced
         self.assertTrue(isinstance(model.layer1[0].bn1, torch.nn.Identity))
@@ -128,11 +137,13 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         dummy_input = torch.randn(1, 1)
         all_ops = utils.get_ordered_list_of_modules(model, dummy_input)
         assert len(all_ops) == 2
-        all_ops = utils.get_ordered_list_of_modules(model, dummy_input, ignore_duplicates=True)
+        all_ops = utils.get_ordered_list_of_modules(
+            model, dummy_input, ignore_duplicates=True
+        )
         assert len(all_ops) == 1
 
     def test_get_reused_modules(self):
-        """ Test get_reused_modules utility """
+        """Test get_reused_modules utility"""
         model = ModelWithReusedNodes()
         model_input = torch.randn((1, 3, 32, 32))
         reused_modules = aimet_torch.utils.get_reused_modules(model, model_input)
@@ -143,65 +154,72 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
     def test_create_rand_tensors_given_shapes(self):
         shape_1 = (1, 32)
         shape_2 = [3, 3]
-        rand_tensors = utils.create_rand_tensors_given_shapes([shape_1, shape_2], device=torch.device('cpu'))
+        rand_tensors = utils.create_rand_tensors_given_shapes(
+            [shape_1, shape_2], device=torch.device("cpu")
+        )
         self.assertEqual(2, len(rand_tensors))
         self.assertEqual(shape_1, tuple(rand_tensors[0].shape))
         self.assertEqual(shape_2, list(rand_tensors[1].shape))
-        self.assertEqual(torch.device('cpu'), rand_tensors[0].device)
+        self.assertEqual(torch.device("cpu"), rand_tensors[0].device)
 
-        rand_tensors = utils.create_rand_tensors_given_shapes((shape_1, shape_2), device=torch.device('cuda:0'))
+        rand_tensors = utils.create_rand_tensors_given_shapes(
+            (shape_1, shape_2), device=torch.device("cuda:0")
+        )
         self.assertEqual(shape_1, tuple(rand_tensors[0].shape))
         self.assertEqual(shape_2, list(rand_tensors[1].shape))
-        self.assertEqual(torch.device('cuda:0'), rand_tensors[0].device)
+        self.assertEqual(torch.device("cuda:0"), rand_tensors[0].device)
 
     @pytest.mark.cuda
     def test_change_tensor_device(self):
-
         # 1) test only tensor on CPU and GPU
 
         random_tensor = torch.rand(2, 2)
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cuda:0'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cuda:0")
+        )
 
-        assert random_tensor.device == torch.device('cpu')
-        assert random_tensor_new.device == torch.device('cuda:0')
+        assert random_tensor.device == torch.device("cpu")
+        assert random_tensor_new.device == torch.device("cuda:0")
 
-        random_tensor = torch.rand(2, 2).to(device='cuda:0')
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cpu'))
+        random_tensor = torch.rand(2, 2).to(device="cuda:0")
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cpu")
+        )
 
-        assert random_tensor.device == torch.device('cuda:0')
-        assert random_tensor_new.device == torch.device('cpu')
+        assert random_tensor.device == torch.device("cuda:0")
+        assert random_tensor_new.device == torch.device("cpu")
 
         # 2) list of tensors
 
-        random_tensor = [
-            torch.rand(2, 2),
-            torch.rand(2, 2),
-            torch.rand(2, 2)
-        ]
+        random_tensor = [torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2)]
 
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cuda:0'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cuda:0")
+        )
 
         for item in random_tensor_new:
-            assert item.device == torch.device('cuda:0')
+            assert item.device == torch.device("cuda:0")
 
         for item in random_tensor:
-            assert item.device == torch.device('cpu')
+            assert item.device == torch.device("cpu")
 
         assert len(random_tensor) == len(random_tensor_new)
 
         random_tensor = [
-            torch.rand(2, 2).to(device='cuda:0'),
-            torch.rand(2, 2).to(device='cuda:0'),
-            torch.rand(2, 2).to(device='cuda:0')
+            torch.rand(2, 2).to(device="cuda:0"),
+            torch.rand(2, 2).to(device="cuda:0"),
+            torch.rand(2, 2).to(device="cuda:0"),
         ]
 
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cpu'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cpu")
+        )
 
         for item in random_tensor_new:
-            assert item.device == torch.device('cpu')
+            assert item.device == torch.device("cpu")
 
         for item in random_tensor:
-            assert item.device == torch.device('cuda:0')
+            assert item.device == torch.device("cuda:0")
 
         assert len(random_tensor) == len(random_tensor_new)
 
@@ -210,26 +228,28 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         random_tensor = [
             [torch.rand(1, 1), torch.rand(1, 1)],
             [torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2)],
-            torch.rand(2, 2)
+            torch.rand(2, 2),
         ]
 
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cuda:0'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cuda:0")
+        )
 
-        assert random_tensor_new[0][0].device == torch.device('cuda:0')
-        assert random_tensor_new[0][1].device == torch.device('cuda:0')
-        assert random_tensor_new[1][0].device == torch.device('cuda:0')
-        assert random_tensor_new[1][1].device == torch.device('cuda:0')
-        assert random_tensor_new[1][2].device == torch.device('cuda:0')
-        assert random_tensor_new[1][3].device == torch.device('cuda:0')
-        assert random_tensor_new[2].device == torch.device('cuda:0')
+        assert random_tensor_new[0][0].device == torch.device("cuda:0")
+        assert random_tensor_new[0][1].device == torch.device("cuda:0")
+        assert random_tensor_new[1][0].device == torch.device("cuda:0")
+        assert random_tensor_new[1][1].device == torch.device("cuda:0")
+        assert random_tensor_new[1][2].device == torch.device("cuda:0")
+        assert random_tensor_new[1][3].device == torch.device("cuda:0")
+        assert random_tensor_new[2].device == torch.device("cuda:0")
 
-        assert random_tensor[0][0].device == torch.device('cpu')
-        assert random_tensor[0][1].device == torch.device('cpu')
-        assert random_tensor[1][0].device == torch.device('cpu')
-        assert random_tensor[1][1].device == torch.device('cpu')
-        assert random_tensor[1][2].device == torch.device('cpu')
-        assert random_tensor[1][3].device == torch.device('cpu')
-        assert random_tensor[2].device == torch.device('cpu')
+        assert random_tensor[0][0].device == torch.device("cpu")
+        assert random_tensor[0][1].device == torch.device("cpu")
+        assert random_tensor[1][0].device == torch.device("cpu")
+        assert random_tensor[1][1].device == torch.device("cpu")
+        assert random_tensor[1][2].device == torch.device("cpu")
+        assert random_tensor[1][3].device == torch.device("cpu")
+        assert random_tensor[2].device == torch.device("cpu")
 
         assert len(random_tensor) == len(random_tensor_new)
 
@@ -239,29 +259,31 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
             [torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2)],
             (torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2), torch.rand(2, 2)),
         )
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cuda:0'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cuda:0")
+        )
 
-        assert random_tensor_new[0][0].device == torch.device('cuda:0')
-        assert random_tensor_new[0][1].device == torch.device('cuda:0')
-        assert random_tensor_new[1][0].device == torch.device('cuda:0')
-        assert random_tensor_new[1][1].device == torch.device('cuda:0')
-        assert random_tensor_new[1][2].device == torch.device('cuda:0')
-        assert random_tensor_new[1][3].device == torch.device('cuda:0')
-        assert random_tensor_new[2][0].device == torch.device('cuda:0')
-        assert random_tensor_new[2][1].device == torch.device('cuda:0')
-        assert random_tensor_new[2][2].device == torch.device('cuda:0')
-        assert random_tensor_new[2][3].device == torch.device('cuda:0')
+        assert random_tensor_new[0][0].device == torch.device("cuda:0")
+        assert random_tensor_new[0][1].device == torch.device("cuda:0")
+        assert random_tensor_new[1][0].device == torch.device("cuda:0")
+        assert random_tensor_new[1][1].device == torch.device("cuda:0")
+        assert random_tensor_new[1][2].device == torch.device("cuda:0")
+        assert random_tensor_new[1][3].device == torch.device("cuda:0")
+        assert random_tensor_new[2][0].device == torch.device("cuda:0")
+        assert random_tensor_new[2][1].device == torch.device("cuda:0")
+        assert random_tensor_new[2][2].device == torch.device("cuda:0")
+        assert random_tensor_new[2][3].device == torch.device("cuda:0")
 
-        assert random_tensor[0][0].device == torch.device('cpu')
-        assert random_tensor[0][1].device == torch.device('cpu')
-        assert random_tensor[1][0].device == torch.device('cpu')
-        assert random_tensor[1][1].device == torch.device('cpu')
-        assert random_tensor[1][2].device == torch.device('cpu')
-        assert random_tensor[1][3].device == torch.device('cpu')
-        assert random_tensor[2][0].device == torch.device('cpu')
-        assert random_tensor[2][1].device == torch.device('cpu')
-        assert random_tensor[2][2].device == torch.device('cpu')
-        assert random_tensor[2][3].device == torch.device('cpu')
+        assert random_tensor[0][0].device == torch.device("cpu")
+        assert random_tensor[0][1].device == torch.device("cpu")
+        assert random_tensor[1][0].device == torch.device("cpu")
+        assert random_tensor[1][1].device == torch.device("cpu")
+        assert random_tensor[1][2].device == torch.device("cpu")
+        assert random_tensor[1][3].device == torch.device("cpu")
+        assert random_tensor[2][0].device == torch.device("cpu")
+        assert random_tensor[2][1].device == torch.device("cpu")
+        assert random_tensor[2][2].device == torch.device("cpu")
+        assert random_tensor[2][3].device == torch.device("cpu")
 
         assert len(random_tensor) == len(random_tensor_new)
         assert isinstance(random_tensor_new, tuple)
@@ -274,20 +296,22 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         random_tensor = (
             (torch.rand(1, 1), torch.rand(1, 1)),
             torch.rand(2, 2),
-            torch.rand(2, 2)
+            torch.rand(2, 2),
         )
 
-        random_tensor_new = utils.change_tensor_device_placement(random_tensor, device=torch.device('cuda:0'))
+        random_tensor_new = utils.change_tensor_device_placement(
+            random_tensor, device=torch.device("cuda:0")
+        )
 
-        assert random_tensor_new[0][0].device == torch.device('cuda:0')
-        assert random_tensor_new[0][1].device == torch.device('cuda:0')
-        assert random_tensor_new[1].device == torch.device('cuda:0')
-        assert random_tensor_new[2].device == torch.device('cuda:0')
+        assert random_tensor_new[0][0].device == torch.device("cuda:0")
+        assert random_tensor_new[0][1].device == torch.device("cuda:0")
+        assert random_tensor_new[1].device == torch.device("cuda:0")
+        assert random_tensor_new[2].device == torch.device("cuda:0")
 
-        assert random_tensor[0][0].device == torch.device('cpu')
-        assert random_tensor[0][1].device == torch.device('cpu')
-        assert random_tensor[1].device == torch.device('cpu')
-        assert random_tensor[2].device == torch.device('cpu')
+        assert random_tensor[0][0].device == torch.device("cpu")
+        assert random_tensor[0][1].device == torch.device("cpu")
+        assert random_tensor[1].device == torch.device("cpu")
+        assert random_tensor[2].device == torch.device("cpu")
 
         assert len(random_tensor) == len(random_tensor_new)
         assert isinstance(random_tensor_new, tuple)
@@ -299,166 +323,228 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         model_input = torch.randn(1, 3, 32, 32).to(device=device)
 
         module_data = utils.ModuleData(model, model.conv1)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=False, collect_output=False)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=False, collect_output=False
+        )
         self.assertEqual(inp, None)
         self.assertEqual(out, None)
 
         module_data = utils.ModuleData(model, model.conv1)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=True, collect_output=False)
-        self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()))
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=True, collect_output=False
+        )
+        self.assertTrue(
+            np.array_equal(
+                inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()
+            )
+        )
         self.assertEqual(out, None)
 
         module_data = utils.ModuleData(model, model.conv1)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=False, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+        )
         conv1_out = model.conv1(model_input)
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy())
+        )
         self.assertEqual(inp, None)
 
         module_data = utils.ModuleData(model, model.conv1)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=True, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=True, collect_output=True
+        )
         conv1_out = model.conv1(model_input)
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy()))
-        self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy())
+        )
+        self.assertTrue(
+            np.array_equal(
+                inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()
+            )
+        )
 
         module_data = utils.ModuleData(model, model.fc)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=False, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+        )
         fc_out = model(model_input)
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy())
+        )
         self.assertEqual(inp, None)
 
     def test_collect_inp_out_data_cpu(self):
-        """ test collect input output data from module """
+        """test collect input output data from module"""
 
-        self._collect_inp_out_data(torch.device('cpu'))
+        self._collect_inp_out_data(torch.device("cpu"))
 
     @pytest.mark.cuda
     def test_collect_inp_out_data_gpu(self):
-        """ test collect input output data from module """
+        """test collect input output data from module"""
 
-        self._collect_inp_out_data(torch.device('cuda:0'))
+        self._collect_inp_out_data(torch.device("cuda:0"))
 
     def _collect_inp_out_data_multi_input(self, device):
         model = MultiInput().to(device=device)
         model.eval()
         inp_shape_1 = (1, 3, 32, 32)
         inp_shape_2 = (1, 3, 20, 20)
-        model_input = utils.create_rand_tensors_given_shapes([inp_shape_1, inp_shape_2], device)
+        model_input = utils.create_rand_tensors_given_shapes(
+            [inp_shape_1, inp_shape_2], device
+        )
+
         def forward_fn(model, inputs):
             model(*inputs)
 
         module_data = utils.ModuleData(model, model.conv1, forward_fn)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=True, collect_output=False)
-        self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input[0].cpu().detach().numpy()))
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=True, collect_output=False
+        )
+        self.assertTrue(
+            np.array_equal(
+                inp.cpu().detach().numpy(), model_input[0].cpu().detach().numpy()
+            )
+        )
         self.assertEqual(out, None)
 
         module_data = utils.ModuleData(model, model.conv1, forward_fn)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=False, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+        )
         conv1_out = model.conv1(model_input[0])
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), conv1_out.cpu().detach().numpy())
+        )
         self.assertEqual(inp, None)
 
         module_data = utils.ModuleData(model, model.conv3, forward_fn)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=True, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=True, collect_output=True
+        )
         conv3_out = model.conv3(model_input[1])
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), conv3_out.cpu().detach().numpy()))
-        self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input[1].cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), conv3_out.cpu().detach().numpy())
+        )
+        self.assertTrue(
+            np.array_equal(
+                inp.cpu().detach().numpy(), model_input[1].cpu().detach().numpy()
+            )
+        )
 
         module_data = utils.ModuleData(model, model.fc, forward_fn)
-        inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                    collect_input=False, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+        )
         fc_out = model(*model_input)
-        self.assertTrue(np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()))
+        self.assertTrue(
+            np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy())
+        )
         self.assertEqual(inp, None)
 
     def test_collect_inp_out_data_multi_input_cpu(self):
-        """ test collect input output data from module using multi input """
+        """test collect input output data from module using multi input"""
 
-        self._collect_inp_out_data_multi_input(torch.device('cpu'))
+        self._collect_inp_out_data_multi_input(torch.device("cpu"))
 
     @pytest.mark.cuda
     def test_collect_inp_out_data_multi_input_gpu(self):
-        """ test collect input output data from module using multi input """
+        """test collect input output data from module using multi input"""
 
-        self._collect_inp_out_data_multi_input(torch.device('cuda:0'))
+        self._collect_inp_out_data_multi_input(torch.device("cuda:0"))
 
     def _collect_inp_out_data_int_input(self, device):
         model = EmbeddingModel().to(device=device)
         model.eval()
         input_ids = torch.randint(1000, (10, 128))
         module_data = utils.ModuleData(model, model.linear)
-        inp, out = module_data.collect_inp_out_data(args=(input_ids,), kwargs={},
-                                                    collect_input=True, collect_output=True)
+        inp, out = module_data.collect_inp_out_data(
+            args=(input_ids,), kwargs={}, collect_input=True, collect_output=True
+        )
         assert torch.equal(inp, model.embedding(input_ids.to(device)))
         assert torch.equal(out, model.linear(model.embedding(input_ids.to(device))))
 
     def test_collect_inp_out_data_int_input_cpu(self):
-        """ test collect input output data from module using multi input """
+        """test collect input output data from module using multi input"""
 
-        self._collect_inp_out_data_int_input(torch.device('cpu'))
+        self._collect_inp_out_data_int_input(torch.device("cpu"))
 
     @pytest.mark.cuda
     def test_collect_inp_out_data_int_input_gpu(self):
-        """ test collect input output data from module using multi input """
+        """test collect input output data from module using multi input"""
 
-        self._collect_inp_out_data_int_input(torch.device('cuda:0'))
+        self._collect_inp_out_data_int_input(torch.device("cuda:0"))
 
     def test_collect_inp_out_data_quantsim_model_cpu(self):
-        """ test collect input output data from module """
+        """test collect input output data from module"""
 
-        device_list = [torch.device('cpu')]
+        device_list = [torch.device("cpu")]
 
         for device in device_list:
             model = TinyModel().to(device=device)
             model_input = torch.randn(1, 3, 32, 32).to(device=device)
 
             module_data = utils.ModuleData(model, model.fc)
-            inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                        collect_input=False, collect_output=True)
+            inp, out = module_data.collect_inp_out_data(
+                args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+            )
             fc_out = model(model_input)
-            self.assertFalse(np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()))
+            self.assertFalse(
+                np.array_equal(
+                    out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()
+                )
+            )
 
             module_data = utils.ModuleData(model, model.conv1)
-            inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                        collect_input=True, collect_output=False)
-            self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()))
+            inp, out = module_data.collect_inp_out_data(
+                args=(model_input,), kwargs={}, collect_input=True, collect_output=False
+            )
+            self.assertTrue(
+                np.array_equal(
+                    inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()
+                )
+            )
 
     @pytest.mark.cuda
     def test_collect_inp_out_data_quantsim_model_gpu(self):
-        """ test collect input output data from module """
+        """test collect input output data from module"""
 
-        device_list = [torch.device('cuda:0')]
+        device_list = [torch.device("cuda:0")]
 
         for device in device_list:
             model = TinyModel().to(device=device)
             model_input = torch.randn(1, 3, 32, 32).to(device=device)
 
             module_data = utils.ModuleData(model, model.fc)
-            inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                        collect_input=False, collect_output=True)
+            inp, out = module_data.collect_inp_out_data(
+                args=(model_input,), kwargs={}, collect_input=False, collect_output=True
+            )
             fc_out = model(model_input)
-            self.assertFalse(np.array_equal(out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()))
+            self.assertFalse(
+                np.array_equal(
+                    out.cpu().detach().numpy(), fc_out.cpu().detach().numpy()
+                )
+            )
 
             module_data = utils.ModuleData(model, model.conv1)
-            inp, out = module_data.collect_inp_out_data(args=(model_input,), kwargs={},
-                                                        collect_input=True, collect_output=False)
-            self.assertTrue(np.array_equal(inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()))
+            inp, out = module_data.collect_inp_out_data(
+                args=(model_input,), kwargs={}, collect_input=True, collect_output=False
+            )
+            self.assertTrue(
+                np.array_equal(
+                    inp.cpu().detach().numpy(), model_input.cpu().detach().numpy()
+                )
+            )
 
     def test_cached_dataset(self):
-        """ Test cache data loader splitting into train and validation """
+        """Test cache data loader splitting into train and validation"""
         dataset_size = 256
         batch_size = 16
 
         # create fake data loader with image size (1, 2, 2)
-        data_loader = utils.create_fake_data_loader(dataset_size=dataset_size, batch_size=batch_size,
-                                                    image_size=(1, 2, 2))
+        data_loader = utils.create_fake_data_loader(
+            dataset_size=dataset_size, batch_size=batch_size, image_size=(1, 2, 2)
+        )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             num_batches = 6
@@ -476,9 +562,13 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         Test functionality to find cardinality of the inputs, outputs for each leaf module
         """
         model = SingleResidual()
-        inout_map = utils.find_num_inout_tensors_per_module(model, [torch.rand(1, 3, 32, 32)])
+        inout_map = utils.find_num_inout_tensors_per_module(
+            model, [torch.rand(1, 3, 32, 32)]
+        )
 
-        inout_counts_check = [num_outputs == (1, 1) for num_outputs in inout_map.values()]
+        inout_counts_check = [
+            num_outputs == (1, 1) for num_outputs in inout_map.values()
+        ]
         self.assertTrue(all(inout_counts_check))
 
         # Create a model with a layer with multi-outputs
@@ -509,8 +599,12 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
                 return x
 
         model = MyModel()
-        inout_map = utils.find_num_inout_tensors_per_module(model, [torch.rand(1, 3, 32, 32)])
-        inout_counts_check = [num_outputs == (1, 1) for num_outputs in inout_map.values()]
+        inout_map = utils.find_num_inout_tensors_per_module(
+            model, [torch.rand(1, 3, 32, 32)]
+        )
+        inout_counts_check = [
+            num_outputs == (1, 1) for num_outputs in inout_map.values()
+        ]
 
         self.assertFalse(all(inout_counts_check))
         self.assertEqual(2, inout_counts_check.count(False))
@@ -523,34 +617,34 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         """
         model = TinyModel()
         model_input = torch.randn(1, 3, 32, 32)
-        #1 model in eval mode in the beginning
+        # 1 model in eval mode in the beginning
         model.eval()
         with utils.in_eval_mode(model):
             model(model_input)
             _assert_mode_recursive(model, training=False)
         _assert_mode_recursive(model, training=False)
 
-        #2 model in train mode in the beginning
+        # 2 model in train mode in the beginning
         model.train()
         with utils.in_eval_mode(model):
             model(model_input)
             _assert_mode_recursive(model, training=False)
         _assert_mode_recursive(model, training=True)
 
-        #3 model in train mode in the beginning with exception safety check
+        # 3 model in train mode in the beginning with exception safety check
         model.train()
         try:
             with utils.in_eval_mode(model):
                 model(model_input)
                 _assert_mode_recursive(model, training=False)
-                raise AssertionError   # raise an exception
+                raise AssertionError  # raise an exception
         except:
             pass
         _assert_mode_recursive(model, training=True)
 
-        #4 One of the submodules are set to different mode
+        # 4 One of the submodules are set to different mode
         model.train()
-        model.fc.add_module('submodule', torch.nn.Identity())
+        model.fc.add_module("submodule", torch.nn.Identity())
         model.fc.submodule.eval()
         with utils.in_eval_mode(model):
             model(model_input)
@@ -567,34 +661,34 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         """
         model = TinyModel()
         model_input = torch.randn(1, 3, 32, 32)
-        #1 model in eval mode in the beginning
+        # 1 model in eval mode in the beginning
         model.eval()
         with utils.in_train_mode(model):
             model(model_input)
             _assert_mode_recursive(model, training=True)
         _assert_mode_recursive(model, training=False)
 
-        #2 model in train mode in the beginning
+        # 2 model in train mode in the beginning
         model.train()
         with utils.in_train_mode(model):
             model(model_input)
             _assert_mode_recursive(model, training=True)
         _assert_mode_recursive(model, training=True)
 
-        #3 model in eval mode in the beginning with exception safety check
+        # 3 model in eval mode in the beginning with exception safety check
         model.eval()
         try:
             with utils.in_train_mode(model):
                 model(model_input)
                 _assert_mode_recursive(model, training=True)
-                raise AssertionError   # raise an exception
+                raise AssertionError  # raise an exception
         except:
             pass
         _assert_mode_recursive(model, training=False)
 
-        #4 One of the submodules are set to different mode
+        # 4 One of the submodules are set to different mode
         model.eval()
-        model.fc.add_module('submodule', torch.nn.Identity())
+        model.fc.add_module("submodule", torch.nn.Identity())
         model.fc.submodule.train()
         with utils.in_train_mode(model):
             model(model_input)
@@ -606,16 +700,28 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
                 assert not module.training
 
     def test_is_torch_module(self):
-        """ test _is_torch_nn_module() utility """
+        """test _is_torch_nn_module() utility"""
         assert utils.is_torch_nn_module(torch.nn.Conv2d(3, 3, 2))
         assert utils.is_torch_nn_module(torch.nn.Linear(3, 10))
         assert utils.is_torch_nn_module(torch.nn.BatchNorm2d(3))
-        assert utils.is_torch_nn_module(torch.nn.RNN(input_size=3, hidden_size=5, num_layers=1))
-        assert utils.is_torch_nn_module(torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1, bidirectional=True))
-        assert utils.is_torch_nn_module(torch.nn.Sequential(torch.nn.Conv2d(3, 16, 2), torch.nn.BatchNorm2d(16)))
-        assert utils.is_torch_nn_module(torch.nn.ModuleList([torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
-                                                             torch.nn.ReLU(inplace=True),
-                                                             torch.nn.Conv2d(16, 8, kernel_size=2)]))
+        assert utils.is_torch_nn_module(
+            torch.nn.RNN(input_size=3, hidden_size=5, num_layers=1)
+        )
+        assert utils.is_torch_nn_module(
+            torch.nn.LSTM(input_size=3, hidden_size=5, num_layers=1, bidirectional=True)
+        )
+        assert utils.is_torch_nn_module(
+            torch.nn.Sequential(torch.nn.Conv2d(3, 16, 2), torch.nn.BatchNorm2d(16))
+        )
+        assert utils.is_torch_nn_module(
+            torch.nn.ModuleList(
+                [
+                    torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+                    torch.nn.ReLU(inplace=True),
+                    torch.nn.Conv2d(16, 8, kernel_size=2),
+                ]
+            )
+        )
         assert not utils.is_torch_nn_module(aimet_modules.Add())
         assert not utils.is_torch_nn_module(aimet_modules.Multiply())
         assert not utils.is_torch_nn_module(aimet_modules.Concat())
@@ -633,7 +739,9 @@ class TestTrainingExtensionsUtils(unittest.TestCase):
         sim = v1.QuantizationSimModel(model, dummy_input=dummy_input)
 
         all_quantizers = sum(utils.get_all_quantizers(sim.model), start=[])
-        active_quantizers = set(quantizer for quantizer in all_quantizers if quantizer.enabled)
+        active_quantizers = set(
+            quantizer for quantizer in all_quantizers if quantizer.enabled
+        )
 
         # Disable all the quantizers within with-as block
         with utils.disable_all_quantizers(sim.model):
@@ -681,32 +789,37 @@ def _assert_mode_recursive(root: torch.nn.Module, training: bool):
 
 def test_profile():
     from aimet_common.utils import AimetLogger
+
     logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
     with tempfile.TemporaryDirectory() as tmpdir:
-        file_path_and_name = os.path.join(tmpdir, 'temp_profile.txt')
-        with utils.profile('profile 1', file_path_and_name, new_file=True, logger=logger):
+        file_path_and_name = os.path.join(tmpdir, "temp_profile.txt")
+        with utils.profile(
+            "profile 1", file_path_and_name, new_file=True, logger=logger
+        ):
             _ = 1 + 1
-        with utils.profile('profile 2', file_path_and_name, logger=logger):
+        with utils.profile("profile 2", file_path_and_name, logger=logger):
             _ = 1 + 1
-        with open(file_path_and_name, 'r') as f:
+        with open(file_path_and_name, "r") as f:
             lines = f.readlines()
         assert len(lines) == 2
-        assert lines[0].startswith('profile 1: ')
-        assert lines[1].startswith('profile 2: ')
+        assert lines[0].startswith("profile 1: ")
+        assert lines[1].startswith("profile 2: ")
 
-        with utils.profile('profile 3', file_path_and_name, new_file=True, logger=logger):
+        with utils.profile(
+            "profile 3", file_path_and_name, new_file=True, logger=logger
+        ):
             _ = 1 + 1
 
-        @utils.profile('profile 4', file_path_and_name)
+        @utils.profile("profile 4", file_path_and_name)
         def foobar():
             _ = 1 + 1
 
         foobar()
-        with open(file_path_and_name, 'r') as f:
+        with open(file_path_and_name, "r") as f:
             lines = f.readlines()
         assert len(lines) == 2
-        assert lines[0].startswith('profile 3: ')
-        assert lines[1].startswith('profile 4: ')
+        assert lines[0].startswith("profile 3: ")
+        assert lines[1].startswith("profile 4: ")
 
-        with utils.profile('profile 4'):
+        with utils.profile("profile 4"):
             _ = 1 + 1

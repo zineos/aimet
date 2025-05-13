@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Find quantizer groups in a model """
+"""Find quantizer groups in a model"""
+
 import itertools
 from typing import Dict, Tuple, List
 from collections import defaultdict
@@ -45,8 +46,11 @@ from aimet_common.connected_graph.operation import Op
 
 from aimet_common.amp.utils import CANDIDATE_WITH_DTYPE
 
-from aimet_common.amp.quantizer_groups import QuantizerGroupBase, get_supported_candidates_for_quantizers, \
-    compute_baseline_candidate_options
+from aimet_common.amp.quantizer_groups import (
+    QuantizerGroupBase,
+    get_supported_candidates_for_quantizers,
+    compute_baseline_candidate_options,
+)
 from aimet_common.utils import AimetLogger
 
 from aimet_onnx.meta.connectedgraph import ConnectedGraph, Product
@@ -61,6 +65,7 @@ class QuantizerGroup(QuantizerGroupBase):
     """
     Group of modules and quantizers
     """
+
     parameter_quantizers: Tuple[str, ...] = field(default_factory=tuple)
     activation_quantizers: Tuple[str, ...] = field(default_factory=tuple)
 
@@ -87,9 +92,9 @@ class QuantizerGroup(QuantizerGroupBase):
 
         return (activation_bw, activation_dtype), (parameter_bw, param_dtype)
 
-    def set_quantizers_to_candidate(self,
-                                    name_to_quantizer_dict: Dict,
-                                    candidate: CANDIDATE_WITH_DTYPE):
+    def set_quantizers_to_candidate(
+        self, name_to_quantizer_dict: Dict, candidate: CANDIDATE_WITH_DTYPE
+    ):
         """
         Sets a quantizer group to a given candidate bitwidth
 
@@ -112,10 +117,15 @@ class QuantizerGroup(QuantizerGroupBase):
 
         :return: List containing input/output quantizers & weight quantizers
         """
-        return list(itertools.chain(
-            (("activation", module_name) for module_name in self.activation_quantizers),
-            (("weight", module_name) for module_name in self.parameter_quantizers),
-        ))
+        return list(
+            itertools.chain(
+                (
+                    ("activation", module_name)
+                    for module_name in self.activation_quantizers
+                ),
+                (("weight", module_name) for module_name in self.parameter_quantizers),
+            )
+        )
 
     def get_active_quantizers(self, name_to_quantizer_dict) -> List[QcQuantizeOp]:
         """
@@ -124,8 +134,9 @@ class QuantizerGroup(QuantizerGroupBase):
         :param name_to_quantizer_dict: Gets module from module name
         :return: List of active quantizers
         """
-        quantizers = self.get_activation_quantizers(name_to_quantizer_dict) + \
-                     self.get_param_quantizers(name_to_quantizer_dict)
+        quantizers = self.get_activation_quantizers(
+            name_to_quantizer_dict
+        ) + self.get_param_quantizers(name_to_quantizer_dict)
         return [quantizer for quantizer in quantizers if quantizer.enabled]
 
     def get_activation_quantizers(self, name_to_quantizer_dict):
@@ -157,8 +168,8 @@ class QuantizerGroup(QuantizerGroupBase):
         return result
 
 
-op_types_to_ignore = ['Reshape', 'branch', 'Gather', 'Unsqueeze', 'Pad', 'Transpose']
-ops_not_to_traverse = ['Shape']
+op_types_to_ignore = ["Reshape", "branch", "Gather", "Unsqueeze", "Pad", "Transpose"]
+ops_not_to_traverse = ["Shape"]
 
 
 def find_quantizer_group(sim: QuantizationSimModel):
@@ -172,7 +183,9 @@ def find_quantizer_group(sim: QuantizationSimModel):
     Note that two activations feeding into the same binary op would not fall into the same quantizer group using the above
     definition, while an activation and parameter feeding into a binary op would be in the same group
     """
-    quantized_tensors = {name for name, quantizer in sim.qc_quantize_op_dict.items() if quantizer.enabled}
+    quantized_tensors = {
+        name for name, quantizer in sim.qc_quantize_op_dict.items() if quantizer.enabled
+    }
     visited_tensors = set()
     quantizer_groups = []
 
@@ -183,25 +196,33 @@ def find_quantizer_group(sim: QuantizationSimModel):
 
         # Get all tensors belonging to the same group
         # TODO: Derive op_types_to_ignore from config file
-        related_tensors = _get_related_quantizers(tensor_name,
-                                                  quantized_tensors,
-                                                  sim.connected_graph,
-                                                  op_types_to_ignore)
+        related_tensors = _get_related_quantizers(
+            tensor_name, quantized_tensors, sim.connected_graph, op_types_to_ignore
+        )
 
         visited_tensors |= related_tensors
 
         # Use ConnectedGraph to determine which tensors are parameters vs. activations
-        parameters = {tensor for tensor in related_tensors if sim.connected_graph.get_all_products()[tensor].is_parm}
+        parameters = {
+            tensor
+            for tensor in related_tensors
+            if sim.connected_graph.get_all_products()[tensor].is_parm
+        }
         activations = related_tensors - parameters
 
         quantizer_group = QuantizerGroup(tuple(parameters), tuple(activations))
-        logger.debug('Quantizer Group added: %s', quantizer_group)
+        logger.debug("Quantizer Group added: %s", quantizer_group)
         quantizer_groups.append(quantizer_group)
 
     return sim.qc_quantize_op_dict, quantizer_groups
 
 
-def _get_related_quantizers(tensor: str, quantized_tensors: set[str], connected_graph: ConnectedGraph, pass_through_op_types: List[str]):
+def _get_related_quantizers(
+    tensor: str,
+    quantized_tensors: set[str],
+    connected_graph: ConnectedGraph,
+    pass_through_op_types: List[str],
+):
     """
     Get all tensors for which the valid configurations depend on the configuration of `tensor`.
 
@@ -226,7 +247,9 @@ def _get_related_quantizers(tensor: str, quantized_tensors: set[str], connected_
         input_tensors = {name}
         for op in consumers:
             if any(name in quantized_tensors for name in op.parameters.keys()):
-                input_tensors |= set(t.name for t in _get_op_input_tensors(op, pass_through_op_types))
+                input_tensors |= set(
+                    t.name for t in _get_op_input_tensors(op, pass_through_op_types)
+                )
 
         # Only look at quantized tensors which we haven't visited
         input_tensors = (input_tensors & quantized_tensors) - related_quantized_tensors
@@ -241,7 +264,7 @@ def _get_related_quantizers(tensor: str, quantized_tensors: set[str], connected_
 
 
 def _get_op_input_tensors(op: Op, pass_through_op_types: List[str]) -> List[Product]:
-    """ Get all input tensors to `op`, traversing through ops of type `pass_through_op_types` """
+    """Get all input tensors to `op`, traversing through ops of type `pass_through_op_types`"""
     inputs = []
     for inp in op.inputs:
         # Pass through ops which don't have output quantizers if necessary
@@ -253,22 +276,28 @@ def _get_op_input_tensors(op: Op, pass_through_op_types: List[str]) -> List[Prod
 
 
 def _get_tensor_consumers(product: Product, pass_through_op_types: List[str]):
-    """ Get all consumers of `product`, traversing through ops of type `pass_through_op_types` """
+    """Get all consumers of `product`, traversing through ops of type `pass_through_op_types`"""
     consumers = set()
     for consumer in product.consumers:
         if consumer.type in pass_through_op_types:
-            consumers |= {op for output in consumer.outputs for op in _get_tensor_consumers(output, pass_through_op_types)}
+            consumers |= {
+                op
+                for output in consumer.outputs
+                for op in _get_tensor_consumers(output, pass_through_op_types)
+            }
         else:
             consumers.add(consumer)
 
     return consumers
 
 
-def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
-                              amp_candidates: List[CANDIDATE_WITH_DTYPE],
-                              supported_kernels: Dict,
-                              quantizer_to_op_type: Dict,
-                              use_all_amp_candidates: bool) -> Tuple[Dict, List]:
+def find_supported_candidates(
+    quantizer_groups: List[QuantizerGroup],
+    amp_candidates: List[CANDIDATE_WITH_DTYPE],
+    supported_kernels: Dict,
+    quantizer_to_op_type: Dict,
+    use_all_amp_candidates: bool,
+) -> Tuple[Dict, List]:
     """
     Computes 1. a list of supported candidates per Quantizer and 2. List of candidate options for max_candidate
     :param quantizer_groups: List of quantizer groups computed for the given model
@@ -283,18 +312,29 @@ def find_supported_candidates(quantizer_groups: List[QuantizerGroup],
     quantizers_with_supported_candidates = defaultdict(list)
 
     for quantizer_group in quantizer_groups:
-        quantizers = sorted(set(itertools.chain(quantizer_group.activation_quantizers,
-                                                quantizer_group.parameter_quantizers)))
+        quantizers = sorted(
+            set(
+                itertools.chain(
+                    quantizer_group.activation_quantizers,
+                    quantizer_group.parameter_quantizers,
+                )
+            )
+        )
 
-        supported_kernels_for_quantizers = get_supported_candidates_for_quantizers(quantizers,
-                                                                                   quantizer_to_op_type,
-                                                                                   supported_kernels,
-                                                                                   amp_candidates,
-                                                                                   use_all_amp_candidates)
+        supported_kernels_for_quantizers = get_supported_candidates_for_quantizers(
+            quantizers,
+            quantizer_to_op_type,
+            supported_kernels,
+            amp_candidates,
+            use_all_amp_candidates,
+        )
 
-        quantizers_with_supported_candidates[quantizer_group] = supported_kernels_for_quantizers.copy()
+        quantizers_with_supported_candidates[quantizer_group] = (
+            supported_kernels_for_quantizers.copy()
+        )
 
-    max_candidate_options = compute_baseline_candidate_options(quantizers_with_supported_candidates, amp_candidates,
-                                                               use_all_amp_candidates)
+    max_candidate_options = compute_baseline_candidate_options(
+        quantizers_with_supported_candidates, amp_candidates, use_all_amp_candidates
+    )
 
     return quantizers_with_supported_candidates, max_candidate_options

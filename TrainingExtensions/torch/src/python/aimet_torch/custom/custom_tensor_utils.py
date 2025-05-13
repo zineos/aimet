@@ -34,17 +34,18 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Utils for handling custom tensor types """
+"""Utils for handling custom tensor types"""
 
 try:
     import spconv.pytorch as spconv
 except ImportError as e:
+
     def to_torch_tensor(tensors):
-        """ placeholder in case spconv doesn't exist """
+        """placeholder in case spconv doesn't exist"""
         return tensors
 
     def to_custom_tensor(original, torch_tensors):
-        """ placeholder in case spconv doesn't exist """
+        """placeholder in case spconv doesn't exist"""
         return torch_tensors
 else:
     from typing import List, Union, Tuple
@@ -66,8 +67,9 @@ else:
 
         return outputs
 
-
-    def to_custom_tensor(original: Union[List, Tuple], torch_tensors: List[torch.Tensor]) -> List:
+    def to_custom_tensor(
+        original: Union[List, Tuple], torch_tensors: List[torch.Tensor]
+    ) -> List:
         """
         Convert torch tensors to original custom tensors
         :param original: List of original tensors

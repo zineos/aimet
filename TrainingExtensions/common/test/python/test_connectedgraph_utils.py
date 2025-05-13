@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" This file contains unit tests for testing connected graph utils. """
+"""This file contains unit tests for testing connected graph utils."""
 
 import json
 import os
@@ -47,7 +47,11 @@ from aimet_common.connected_graph.product import Product
 from aimet_common.connected_graph import connectedgraph_utils
 from aimet_common.model_module import ModelModule
 
-@patch("aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__", set())
+
+@patch(
+    "aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__",
+    set(),
+)
 def test_serialize_ops():
     conn_graph = get_dummy_connected_graph()
     ops_list = connectedgraph_utils._serialize_ops(conn_graph)
@@ -55,46 +59,50 @@ def test_serialize_ops():
 
     expected_ops = [
         {
-            'name': 'op1_dotted_name',
-            'type': 'op1_type',
-            'inputs': [],
-            'outputs': ['op3_dotted_name'],
-            'is_functional': True
+            "name": "op1_dotted_name",
+            "type": "op1_type",
+            "inputs": [],
+            "outputs": ["op3_dotted_name"],
+            "is_functional": True,
         },
         {
-            'name': 'op2_dotted_name',
-            'type': 'op2_type',
-            'inputs': [],
-            'outputs': ['op3_dotted_name'],
-            'is_functional': False
+            "name": "op2_dotted_name",
+            "type": "op2_type",
+            "inputs": [],
+            "outputs": ["op3_dotted_name"],
+            "is_functional": False,
         },
         {
-            'name': 'op3_dotted_name',
-            'type': 'op3_type',
-            'inputs': ['op1_dotted_name', 'op2_dotted_name'],
-            'outputs': ['op4_dotted_name', 'op5_dotted_name'],
-            'is_functional': True
+            "name": "op3_dotted_name",
+            "type": "op3_type",
+            "inputs": ["op1_dotted_name", "op2_dotted_name"],
+            "outputs": ["op4_dotted_name", "op5_dotted_name"],
+            "is_functional": True,
         },
         {
-            'name': 'op4_dotted_name',
-            'type': 'op4_type',
-            'inputs': ['op3_dotted_name'],
-            'outputs': [],
-            'is_functional': True
+            "name": "op4_dotted_name",
+            "type": "op4_type",
+            "inputs": ["op3_dotted_name"],
+            "outputs": [],
+            "is_functional": True,
         },
         {
-            'name': 'op5_dotted_name',
-            'type': 'op5_type',
-            'inputs': ['op3_dotted_name'],
-            'outputs': [],
-            'is_functional': True
-        }
+            "name": "op5_dotted_name",
+            "type": "op5_type",
+            "inputs": ["op3_dotted_name"],
+            "outputs": [],
+            "is_functional": True,
+        },
     ]
 
     for op in expected_ops:
         assert op in ops_list
 
-@patch("aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__", set())
+
+@patch(
+    "aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__",
+    set(),
+)
 def test_serialize_products():
     conn_graph = get_dummy_connected_graph()
     activations, params = connectedgraph_utils._serialize_products(conn_graph)
@@ -106,41 +114,20 @@ def test_serialize_products():
     assert len(params) == 3
 
     expected_activations = [
+        {"producer": None, "consumers": ["op1_dotted_name"]},
+        {"producer": None, "consumers": ["op2_dotted_name"]},
+        {"producer": "op1_dotted_name", "consumers": ["op3_dotted_name"]},
+        {"producer": "op2_dotted_name", "consumers": ["op3_dotted_name"]},
         {
-            'producer': None,
-            'consumers': ['op1_dotted_name']
+            "producer": "op3_dotted_name",
+            "consumers": ["op4_dotted_name", "op5_dotted_name"],
         },
-        {
-            'producer': None,
-            'consumers': ['op2_dotted_name']
-        },
-        {
-            'producer': 'op1_dotted_name',
-            'consumers': ['op3_dotted_name']
-        },
-        {
-            'producer': 'op2_dotted_name',
-            'consumers': ['op3_dotted_name']
-        },
-        {
-            'producer': 'op3_dotted_name',
-            'consumers': ['op4_dotted_name', 'op5_dotted_name']
-        }
     ]
 
     expected_params = [
-        {
-            'name': 'op4.param',
-            'op': 'op4_dotted_name'
-        },
-        {
-            'name': 'op5.param1',
-            'op': 'op5_dotted_name'
-        },
-        {
-            'name': 'op5.param1',
-            'op': 'op5_dotted_name'
-        }
+        {"name": "op4.param", "op": "op4_dotted_name"},
+        {"name": "op5.param1", "op": "op5_dotted_name"},
+        {"name": "op5.param1", "op": "op5_dotted_name"},
     ]
 
     for product in expected_activations:
@@ -149,22 +136,29 @@ def test_serialize_products():
     for product in expected_params:
         assert product in params
 
-@patch("aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__", set())
+
+@patch(
+    "aimet_common.connected_graph.connectedgraph.ConnectedGraph.__abstractmethods__",
+    set(),
+)
 def test_export_connected_graph():
     with tempfile.TemporaryDirectory() as tmp_dir:
         conn_graph = get_dummy_connected_graph()
-        connectedgraph_utils.export_connected_graph(conn_graph, tmp_dir, 'dummy_cg_export')
+        connectedgraph_utils.export_connected_graph(
+            conn_graph, tmp_dir, "dummy_cg_export"
+        )
 
-        with open(Path(tmp_dir, "dummy_cg_export.json"), 'r') as cg_export_file:
+        with open(Path(tmp_dir, "dummy_cg_export.json"), "r") as cg_export_file:
             cg_export = json.load(cg_export_file)
 
-        assert 'ops' in cg_export
-        assert 'products' in cg_export
-        assert 'activations' in cg_export['products']
-        assert 'parameters' in cg_export['products']
-        assert len(cg_export['ops']) == 5
-        assert len(cg_export['products']['activations']) == 5
-        assert len(cg_export['products']['parameters']) == 3
+        assert "ops" in cg_export
+        assert "products" in cg_export
+        assert "activations" in cg_export["products"]
+        assert "parameters" in cg_export["products"]
+        assert len(cg_export["ops"]) == 5
+        assert len(cg_export["products"]["activations"]) == 5
+        assert len(cg_export["products"]["parameters"]) == 3
+
 
 def get_dummy_connected_graph():
     """
@@ -178,36 +172,36 @@ def get_dummy_connected_graph():
      Ops 1 and 2 are model inputs. Op 4 has one parameter product, and Op 5 has two parameter products.
     """
     conn_graph = ConnectedGraph()
-    op1 = Op('op1', 'op1_dotted_name', None, False, 'op1_type')
-    op2 = Op('op2', 'op2_dotted_name', None, False, 'op2_type')
-    op2.model_module = ModelModule('module')
-    op3 = Op('op3', 'op3_dotted_name', None, False, 'op3_type')
-    op4 = Op('op4', 'op4_dotted_name', None, False, 'op4_type')
-    op5 = Op('op5', 'op5_dotted_name', None, False, 'op5_type')
+    op1 = Op("op1", "op1_dotted_name", None, False, "op1_type")
+    op2 = Op("op2", "op2_dotted_name", None, False, "op2_type")
+    op2.model_module = ModelModule("module")
+    op3 = Op("op3", "op3_dotted_name", None, False, "op3_type")
+    op4 = Op("op4", "op4_dotted_name", None, False, "op4_type")
+    op5 = Op("op5", "op5_dotted_name", None, False, "op5_type")
 
-    prod_inp_1 = Product('input1_to_op1', None)
+    prod_inp_1 = Product("input1_to_op1", None)
     prod_inp_1.is_model_input = True
     prod_inp_1.add_consumer(op1)
     op1.add_input(prod_inp_1)
 
-    prod_inp_2 = Product('input2_to_op2', None)
+    prod_inp_2 = Product("input2_to_op2", None)
     prod_inp_2.is_model_input = True
     prod_inp_2.add_consumer(op2)
     op2.add_input(prod_inp_2)
 
-    prod_1_3 = Product('op1_to_op3', None)
+    prod_1_3 = Product("op1_to_op3", None)
     prod_1_3.producer = op1
     prod_1_3.add_consumer(op3)
     op1.outputs = [prod_1_3]
     op3.add_input(prod_1_3)
 
-    prod_2_3 = Product('op2_to_op3', None)
+    prod_2_3 = Product("op2_to_op3", None)
     prod_2_3.producer = op2
     prod_2_3.add_consumer(op3)
     op2.outputs = [prod_2_3]
     op3.add_input(prod_2_3)
 
-    prod_3_out = Product('op3_to_multiple_ops', None)
+    prod_3_out = Product("op3_to_multiple_ops", None)
     prod_3_out.producer = op3
     prod_3_out.add_consumer(op4)
     prod_3_out.add_consumer(op5)
@@ -215,17 +209,17 @@ def get_dummy_connected_graph():
     op4.add_input(prod_3_out)
     op5.add_input(prod_3_out)
 
-    prod_4_param = Product('op4.param', None)
+    prod_4_param = Product("op4.param", None)
     prod_4_param.is_parm = True
     prod_4_param.add_consumer(op4)
     op4.add_input(prod_4_param)
 
-    prod_5_param_1 = Product('op5.param1', None)
+    prod_5_param_1 = Product("op5.param1", None)
     prod_5_param_1.is_parm = True
     prod_5_param_1.add_consumer(op5)
     op5.add_input(prod_5_param_1)
 
-    prod_5_param_2 = Product('op5.param2', None)
+    prod_5_param_2 = Product("op5.param2", None)
     prod_5_param_2.is_parm = True
     prod_5_param_2.add_consumer(op5)
     op5.add_input(prod_5_param_2)

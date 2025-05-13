@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantizer base class """
+"""Quantizer base class"""
 
 import abc
 import copy
@@ -58,13 +58,14 @@ if TYPE_CHECKING:
     from aimet_torch.v2.quantization.tensor import QuantizedTensorBase
 
 
-__all__ = ['QuantizerBase']
+__all__ = ["QuantizerBase"]
 
 
 class QuantizerBase(abc.ABC, torch.nn.Module):
     """
     Quantizer base class
     """
+
     encoding_analyzer: EncodingAnalyzer
 
     def __init__(self):
@@ -76,7 +77,7 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
         self._initial_parameters = OrderedDict()
         self._allow_overwrite = True
 
-    def forward(self, input: torch.Tensor) -> 'QuantizedTensorBase': # pylint: disable=redefined-builtin
+    def forward(self, input: torch.Tensor) -> "QuantizedTensorBase":  # pylint: disable=redefined-builtin
         """
         Quantize the input tensor
 
@@ -150,10 +151,14 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
             for param_name, param in self.named_parameters()
         )
 
-    def _is_initialized(self, param_name: str, current_param: torch.nn.Parameter) -> bool:
+    def _is_initialized(
+        self, param_name: str, current_param: torch.nn.Parameter
+    ) -> bool:
         # pylint: disable=protected-access
 
-        initial_param_weakref, initial_param_version = self._initial_parameters.get(param_name, (None, None))
+        initial_param_weakref, initial_param_version = self._initial_parameters.get(
+            param_name, (None, None)
+        )
         if not initial_param_weakref:
             # parameters created using register_parameter need not be initialized
             return True
@@ -164,38 +169,44 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
             # The initial parameter object doesn't exist in memory space anymore.
             return True
 
-        if current_param is initial_param and current_param._version == initial_param_version:
+        if (
+            current_param is initial_param
+            and current_param._version == initial_param_version
+        ):
             # 1. Current parameter is the identical object as the initial parameter
             # 2. The version nubmer of the current parameter never changed
             return False
 
         return True
 
-    def state_dict(self, *args, **kwargs): # pylint: disable=arguments-differ
-        state_dict = super().state_dict(*args, **kwargs) # pylint: disable=missing-kwoa
+    def state_dict(self, *args, **kwargs):  # pylint: disable=arguments-differ
+        state_dict = super().state_dict(*args, **kwargs)  # pylint: disable=missing-kwoa
 
         if version.parse(torch.__version__) < version.parse("1.10"):
             # This is for backward compatibility with torch < 1.10
             # which doesn't support get/set_extra_state() hooks
-            prefix = kwargs['prefix']
-            state_dict[f'{prefix}extra_state'] = self.get_extra_state()
+            prefix = kwargs["prefix"]
+            state_dict[f"{prefix}extra_state"] = self.get_extra_state()
 
         return state_dict
 
-    def load_state_dict(self, state_dict, strict: bool = True): # pylint:disable=arguments-differ
-        if '_extra_state' not in state_dict:
-            is_initialized = OrderedDict({
-                param_name: torch.tensor(True) for param_name in state_dict
-                if param_name in self._parameters
-            })
-            state_dict['_extra_state'] = is_initialized
+    def load_state_dict(self, state_dict, strict: bool = True):  # pylint:disable=arguments-differ
+        if "_extra_state" not in state_dict:
+            is_initialized = OrderedDict(
+                {
+                    param_name: torch.tensor(True)
+                    for param_name in state_dict
+                    if param_name in self._parameters
+                }
+            )
+            state_dict["_extra_state"] = is_initialized
 
         ret = super().load_state_dict(state_dict, strict)
 
         if version.parse(torch.__version__) < version.parse("1.10"):
             # This is for backward compatibility with torch < 1.10
             # which doesn't support get/set_extra_state() hooks
-            self.set_extra_state(state_dict['_extra_state'])
+            self.set_extra_state(state_dict["_extra_state"])
 
         return ret
 
@@ -203,15 +214,21 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
         """
         Get extra state that describes which parameters are initialized.
         """
-        extra_state_dict = OrderedDict({
-            param_name: torch.tensor(self._is_initialized(param_name, param))
-            for param_name, param in self.named_parameters()
-        })
+        extra_state_dict = OrderedDict(
+            {
+                param_name: torch.tensor(self._is_initialized(param_name, param))
+                for param_name, param in self.named_parameters()
+            }
+        )
 
         # NOTE: This is a hack to bypass a bug in PyTorch onnx export
         #       where it assumes state dict is always Mapping[str, Tensor]
         #       and tries to `.detach()` all the values in the state dict.
-        setattr(extra_state_dict, 'detach', functools.partial(tree_map, torch.Tensor.detach, extra_state_dict))
+        setattr(
+            extra_state_dict,
+            "detach",
+            functools.partial(tree_map, torch.Tensor.detach, extra_state_dict),
+        )
         return extra_state_dict
 
     @torch.no_grad()
@@ -227,7 +244,7 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
                 if is_initialized[param_name]:
                     # If the parameter has been already initialized,
                     # artificially increment the parameter version to mark as initialized
-                    param.mul_(1.)
+                    param.mul_(1.0)
 
     @torch.no_grad()
     def __deepcopy__(self, memo):
@@ -238,20 +255,20 @@ class QuantizerBase(abc.ABC, torch.nn.Module):
         return self_copy
 
     def __getstate__(self):
-        getstate = getattr(super(), '__getstate__', self.__dict__.copy)
+        getstate = getattr(super(), "__getstate__", self.__dict__.copy)
         state = getstate()
-        state.pop('_initial_parameters')
-        state['is_initialized'] = self.get_extra_state()
+        state.pop("_initial_parameters")
+        state["is_initialized"] = self.get_extra_state()
         return state
 
     @torch.no_grad()
     def __setstate__(self, state):
         self._initial_parameters = OrderedDict()
-        is_initialized = state.pop('is_initialized')
-        setstate = getattr(super(), '__setstate__', self.__dict__.update)
+        is_initialized = state.pop("is_initialized")
+        setstate = getattr(super(), "__setstate__", self.__dict__.update)
         setstate(state)
         self.set_extra_state(is_initialized)
 
     def allow_overwrite(self, mode: bool):
-        """ Set allow_overwite flag """
+        """Set allow_overwite flag"""
         self._allow_overwrite = mode

@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" aimet_torch.v2 subpackage """
+"""aimet_torch.v2 subpackage"""
+
 from . import experimental
 from . import nn
 from . import quantization

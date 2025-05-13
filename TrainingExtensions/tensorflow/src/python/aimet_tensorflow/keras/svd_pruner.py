@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Prunes layers using Spatial SVD schemes """
+"""Prunes layers using Spatial SVD schemes"""
+
 from typing import Tuple
 
 import tensorflow as tf
@@ -49,7 +50,10 @@ from aimet_common.pruner import Pruner
 
 from aimet_tensorflow.keras.utils import pymo_utils
 from aimet_tensorflow.keras.layer_database import LayerDatabase, Layer
-from aimet_tensorflow.keras.svd_spiltter import SpatialSvdModuleSplitter, WeightSvdModuleSplitter
+from aimet_tensorflow.keras.svd_spiltter import (
+    SpatialSvdModuleSplitter,
+    WeightSvdModuleSplitter,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Svd)
 
@@ -59,7 +63,9 @@ class SpatialSvdPruner(aimet_common.svd_pruner.SpatialSvdPruner):
     Pruner for Spatial-SVD method
     """
 
-    def _perform_svd_and_split_layer(self, layer: Layer, rank: int, comp_layer_db: LayerDatabase):
+    def _perform_svd_and_split_layer(
+        self, layer: Layer, rank: int, comp_layer_db: LayerDatabase
+    ):
         """
         Performs spatial svd and splits given layer into two layers
         :param layer: Layer to split
@@ -69,7 +75,9 @@ class SpatialSvdPruner(aimet_common.svd_pruner.SpatialSvdPruner):
         """
 
         # Split module using Spatial SVD
-        module_a, module_b = SpatialSvdModuleSplitter.split_module(comp_layer_db.model, layer, rank)
+        module_a, module_b = SpatialSvdModuleSplitter.split_module(
+            comp_layer_db.model, layer, rank
+        )
 
         # get the output activation shape for first conv op
         output_shape_a = _get_layer_output_shape(module_a)
@@ -81,7 +89,9 @@ class SpatialSvdPruner(aimet_common.svd_pruner.SpatialSvdPruner):
         layer_a = Layer(layer=module_a, name=module_a.name, output_shape=output_shape_a)
         layer_b = Layer(layer=module_b, name=module_b.name, output_shape=output_shape_b)
 
-        comp_layer_db.replace_layer_with_sequential_of_two_layers(layer, layer_a, layer_b)
+        comp_layer_db.replace_layer_with_sequential_of_two_layers(
+            layer, layer_a, layer_b
+        )
 
 
 class WeightSvdPruner(Pruner):
@@ -89,8 +99,14 @@ class WeightSvdPruner(Pruner):
     Pruner for Weight-SVD method
     """
 
-    def _prune_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase, layer: Layer, comp_ratio: float,
-                     cost_metric: CostMetric) -> float:
+    def _prune_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: float,
+        cost_metric: CostMetric,
+    ) -> float:
         """
         Replaces a given layer within the comp_layer_db with a pruned version of the layer
         In this case, the replaced layer will be a sequential of two spatial-svd-decomposed layers
@@ -104,21 +120,30 @@ class WeightSvdPruner(Pruner):
         """
 
         # Given a compression ratio, find the appropriate rounded rank
-        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(layer, comp_ratio, cost_metric)
+        rank = cost_calculator.WeightSvdCostCalculator.calculate_rank_given_comp_ratio(
+            layer, comp_ratio, cost_metric
+        )
 
         logger.info("Weight SVD splitting layer: %s using rank: %s", layer.name, rank)
 
         # For the rounded rank compute the new compression ratio
-        comp_ratio = cost_calculator.WeightSvdCostCalculator.calculate_comp_ratio_given_rank(layer, rank,
-                                                                                             cost_metric)
+        comp_ratio = (
+            cost_calculator.WeightSvdCostCalculator.calculate_comp_ratio_given_rank(
+                layer, rank, cost_metric
+            )
+        )
 
         # Create a new instance of libpymo and register layers with it
         svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd([layer], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE)
+        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
+            [layer], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
+        )
 
         # Split module using Weight SVD
         logger.info("Splitting module: %s with rank: %r", layer.name, rank)
-        module_a, module_b = WeightSvdModuleSplitter.split_module(comp_layer_db.model, layer.module, rank, svd_lib_ref)
+        module_a, module_b = WeightSvdModuleSplitter.split_module(
+            comp_layer_db.model, layer.module, rank, svd_lib_ref
+        )
 
         # get the output activation shape for first conv/fc op
         output_shape_a = _get_layer_output_shape(module_a)
@@ -130,7 +155,9 @@ class WeightSvdPruner(Pruner):
         layer_a = Layer(layer=module_a, name=module_a.name, output_shape=output_shape_a)
         layer_b = Layer(layer=module_b, name=module_b.name, output_shape=output_shape_b)
 
-        comp_layer_db.replace_layer_with_sequential_of_two_layers(layer, layer_a, layer_b)
+        comp_layer_db.replace_layer_with_sequential_of_two_layers(
+            layer, layer_a, layer_b
+        )
         return comp_ratio
 
 

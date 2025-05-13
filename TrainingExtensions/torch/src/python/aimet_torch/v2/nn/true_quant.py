@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=too-many-lines, redefined-builtin
-""" Quantized modules"""
+"""Quantized modules"""
 
 from packaging import version
 import contextlib
@@ -52,7 +52,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch import Tensor
 from torch.overrides import BaseTorchFunctionMode, get_overridable_functions
-from torch._VF import ( # pylint: disable=no-name-in-module
+from torch._VF import (  # pylint: disable=no-name-in-module
     gru as _gru,
     gru_cell as _gru_cell,
     lstm as _lstm,
@@ -119,19 +119,21 @@ def _exit_compute_encodings(qmodule):
 
 
 class QuantizationMixinMeta(ABCMeta):
-    """Sets :meth:`forward` to :meth:`quantized_forward` if only :meth:`quantized_forward` is defined
-    """
+    """Sets :meth:`forward` to :meth:`quantized_forward` if only :meth:`quantized_forward` is defined"""
 
     def __new__(mcs, name, bases, namespace, **kwargs):
         if "quantized_forward" in namespace and "forward" not in namespace:
-            warnings.warn("Support for defining `quantized_forward` in place of `forward` method will be deprecated, "
-                          "please use `forward` instead.",
-                          DeprecationWarning, stacklevel=2)
+            warnings.warn(
+                "Support for defining `quantized_forward` in place of `forward` method will be deprecated, "
+                "please use `forward` instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             namespace["forward"] = namespace["quantized_forward"]
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
 
-class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta): # pylint: disable=abstract-method
+class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta):  # pylint: disable=abstract-method
     """Quantization mixin class for torch.nn.Module.
 
     Specifically, a quantized module will quantize input, output, and parameter tensors with
@@ -183,7 +185,6 @@ class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta):
     def __binary__(self):
         super().__quant_init__()
         self.input_quantizers = nn.ModuleList([None, None])
-
 
     def __ternary__(self):
         super().__quant_init__()
@@ -294,8 +295,10 @@ class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta):
 
     @contextlib.contextmanager
     def compute_encodings(self):  # pylint: disable=missing-function-docstring
-        ctx = _ContextManager(action=lambda: _enter_computing_encodings(self),
-                              cleanup=lambda: _exit_compute_encodings(self))
+        ctx = _ContextManager(
+            action=lambda: _enter_computing_encodings(self),
+            cleanup=lambda: _exit_compute_encodings(self),
+        )
         with super().compute_encodings(), ctx:
             yield
 
@@ -314,14 +317,16 @@ class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta):
         Wrap a regular module class into a quantized module class
         """
         if not issubclass(module_cls, nn.Module):
-            raise ValueError("Expected module_cls to be a subclass of torch.nn.Module. "
-                             f"Got {module_cls}.")
+            raise ValueError(
+                "Expected module_cls to be a subclass of torch.nn.Module. "
+                f"Got {module_cls}."
+            )
         if module_cls in cls.cls_to_qcls:
             return cls.cls_to_qcls[module_cls]
 
         quantized_cls_name = f"Quantized{module_cls.__name__}"
         base_classes = (cls, module_cls)
-        quantized_cls = type(quantized_cls_name, base_classes, {'__module__': __name__})
+        quantized_cls = type(quantized_cls_name, base_classes, {"__module__": __name__})
         return cls.implements(module_cls)(quantized_cls)
 
     @classmethod
@@ -462,8 +467,8 @@ class _DispatchMeta(QuantizationMixinMeta):
         """
         Sanity check for class definitions of dispatch-based quantized modules
         """
-        if '_builtin_torch_fn' in namespace:
-            torch_fn = namespace['_builtin_torch_fn']
+        if "_builtin_torch_fn" in namespace:
+            torch_fn = namespace["_builtin_torch_fn"]
             if torch_fn and torch_fn not in _dispatch_table:
                 raise RuntimeError(f"PyTorch doesn't support overriding {torch_fn}")
         return super().__new__(mcs, name, bases, namespace, **kwargs)
@@ -497,12 +502,10 @@ class _DispatchMixin(metaclass=_DispatchMeta):
                 for x, qtzr in zip(args, self.input_quantizers)
             )
             others = (
-                _dequantize_if_applicable(x)
-                for x in args[len(self.input_quantizers):]
+                _dequantize_if_applicable(x) for x in args[len(self.input_quantizers) :]
             )
             kwargs = {
-                key: _dequantize_if_applicable(value)
-                for key, value in kwargs.items()
+                key: _dequantize_if_applicable(value) for key, value in kwargs.items()
             }
 
             output = fn(*qtzd_args, *others, **kwargs)
@@ -517,9 +520,13 @@ class _DispatchMixin(metaclass=_DispatchMeta):
                 _quantize_if_applicable(x, qtzr)
                 for x, qtzr in zip(args, self.input_quantizers)
             )
-            others = args[len(self.input_quantizers):]
+            others = args[len(self.input_quantizers) :]
 
-            output_encodings = self.output_quantizers[0].get_encodings() if self.output_quantizers[0] else None
+            output_encodings = (
+                self.output_quantizers[0].get_encodings()
+                if self.output_quantizers[0]
+                else None
+            )
             kwargs.update(output_encodings=output_encodings)
             return fn(*qtzd_args, *others, **kwargs)
 
@@ -527,8 +534,7 @@ class _DispatchMixin(metaclass=_DispatchMeta):
 
 
 def _generate_docstring(parent_cls):
-    return \
-    f"""
+    return f"""
     Quantized subclass of torch.nn.{parent_cls.__name__}
 
     .. method:: forward{str(signature(parent_cls.forward))}
@@ -543,10 +549,12 @@ def _generate_docstring(parent_cls):
     """
 
 
-def _derive_bias_scale(input_scale: Optional[torch.Tensor],
-                       weight_scale: Optional[torch.Tensor],
-                       bias_shape: torch.Size,
-                       channel_axis: int):
+def _derive_bias_scale(
+    input_scale: Optional[torch.Tensor],
+    weight_scale: Optional[torch.Tensor],
+    bias_shape: torch.Size,
+    channel_axis: int,
+):
     if input_scale is None or weight_scale is None:
         return None
 
@@ -561,7 +569,9 @@ def _derive_bias_scale(input_scale: Optional[torch.Tensor],
     #      weight_scale and bias_scale are of shape [Cout, NUM_BLOCKS, 1, 1]
     #
     # In any case, we need to reduce bias_scale into a 1D vector of the same shape as bias (=[Cout])
-    non_channel_axes = tuple(axis for axis in range(bias_scale.dim()) if axis != channel_axis)
+    non_channel_axes = tuple(
+        axis for axis in range(bias_scale.dim()) if axis != channel_axis
+    )
     bias_scale = torch.amax(bias_scale, dim=non_channel_axes)
 
     if bias_scale.shape in ((), bias_shape):
@@ -573,7 +583,9 @@ def _derive_bias_scale(input_scale: Optional[torch.Tensor],
 
 
 @QuantizationMixin.implements(nn.AdaptiveAvgPool1d)
-class QuantizedAdaptiveAvgPool1d(_DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool1d):
+class QuantizedAdaptiveAvgPool1d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool1d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(nn.AdaptiveAvgPool1d)
     _builtin_torch_fn = F.adaptive_avg_pool1d
@@ -581,7 +593,9 @@ class QuantizedAdaptiveAvgPool1d(_DispatchMixin, QuantizationMixin, nn.AdaptiveA
 
 
 @QuantizationMixin.implements(nn.AdaptiveAvgPool2d)
-class QuantizedAdaptiveAvgPool2d(_DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool2d):
+class QuantizedAdaptiveAvgPool2d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool2d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.AdaptiveAvgPool2d)
     _builtin_torch_fn = F.adaptive_avg_pool2d
@@ -589,7 +603,9 @@ class QuantizedAdaptiveAvgPool2d(_DispatchMixin, QuantizationMixin, nn.AdaptiveA
 
 
 @QuantizationMixin.implements(nn.AdaptiveAvgPool3d)
-class QuantizedAdaptiveAvgPool3d(_DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool3d):
+class QuantizedAdaptiveAvgPool3d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveAvgPool3d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.AdaptiveAvgPool3d)
     _builtin_torch_fn = F.adaptive_avg_pool3d
@@ -602,7 +618,9 @@ class QuantizedAdaptiveAvgPool3d(_DispatchMixin, QuantizationMixin, nn.AdaptiveA
 
 
 @QuantizationMixin.implements(nn.AdaptiveMaxPool1d)
-class QuantizedAdaptiveMaxPool1d(_DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool1d):
+class QuantizedAdaptiveMaxPool1d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool1d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.AdaptiveMaxPool1d)
     _builtin_torch_fn = F.adaptive_max_pool1d
@@ -610,7 +628,9 @@ class QuantizedAdaptiveMaxPool1d(_DispatchMixin, QuantizationMixin, nn.AdaptiveM
 
 
 @QuantizationMixin.implements(nn.AdaptiveMaxPool2d)
-class QuantizedAdaptiveMaxPool2d(_DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool2d):
+class QuantizedAdaptiveMaxPool2d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool2d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.AdaptiveMaxPool2d)
     _builtin_torch_fn = F.adaptive_max_pool2d
@@ -618,7 +638,9 @@ class QuantizedAdaptiveMaxPool2d(_DispatchMixin, QuantizationMixin, nn.AdaptiveM
 
 
 @QuantizationMixin.implements(nn.AdaptiveMaxPool3d)
-class QuantizedAdaptiveMaxPool3d(_DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool3d):
+class QuantizedAdaptiveMaxPool3d(
+    _DispatchMixin, QuantizationMixin, nn.AdaptiveMaxPool3d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.AdaptiveMaxPool3d)
     _builtin_torch_fn = F.adaptive_max_pool3d
@@ -666,7 +688,9 @@ class QuantizedBCELoss(_DispatchMixin, QuantizationMixin, nn.BCELoss):
 
 
 @QuantizationMixin.implements(nn.BCEWithLogitsLoss)
-class QuantizedBCEWithLogitsLoss(_DispatchMixin, QuantizationMixin, nn.BCEWithLogitsLoss):
+class QuantizedBCEWithLogitsLoss(
+    _DispatchMixin, QuantizationMixin, nn.BCEWithLogitsLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.BCEWithLogitsLoss)
     _builtin_torch_fn = F.binary_cross_entropy_with_logits
@@ -730,6 +754,7 @@ class QuantizedChannelShuffle(_DispatchMixin, QuantizationMixin, nn.ChannelShuff
 
 
 if version.parse(torch.__version__) >= version.parse("2.1.0"):
+
     @QuantizationMixin.implements(nn.CircularPad1d)
     class QuantizedCircularPad1d(_DispatchMixin, QuantizationMixin, nn.CircularPad1d):
         # pylint: disable=missing-class-docstring
@@ -737,14 +762,12 @@ if version.parse(torch.__version__) >= version.parse("2.1.0"):
         _builtin_torch_fn = F.pad
         __quant_init__ = QuantizationMixin.__unary__
 
-
     @QuantizationMixin.implements(nn.CircularPad2d)
     class QuantizedCircularPad2d(_DispatchMixin, QuantizationMixin, nn.CircularPad2d):
         # pylint: disable=missing-class-docstring
         __doc__ = _generate_docstring(parent_cls=nn.CircularPad2d)
         _builtin_torch_fn = F.pad
         __quant_init__ = QuantizationMixin.__unary__
-
 
     @QuantizationMixin.implements(nn.CircularPad3d)
     class QuantizedCircularPad3d(_DispatchMixin, QuantizationMixin, nn.CircularPad3d):
@@ -790,8 +813,12 @@ class QuantizedConv1d(_DispatchMixin, QuantizationMixin, nn.Conv1d):  # pylint: 
     _builtin_torch_fn = F.conv1d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=0)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=0
+        )
 
 
 @QuantizationMixin.implements(nn.Conv2d)
@@ -801,8 +828,12 @@ class QuantizedConv2d(_DispatchMixin, QuantizationMixin, nn.Conv2d):  # pylint: 
     _builtin_torch_fn = F.conv2d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=0)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=0
+        )
 
 
 @QuantizationMixin.implements(nn.Conv3d)
@@ -812,45 +843,63 @@ class QuantizedConv3d(_DispatchMixin, QuantizationMixin, nn.Conv3d):  # pylint: 
     _builtin_torch_fn = F.conv3d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=0)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=0
+        )
 
 
 @QuantizationMixin.implements(nn.ConvTranspose1d)
-class QuantizedConvTranspose1d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose1d): # pylint: disable=too-many-ancestors
+class QuantizedConvTranspose1d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose1d):  # pylint: disable=too-many-ancestors
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.ConvTranspose1d)
     _builtin_torch_fn = F.conv_transpose1d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=1)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=1
+        )
 
 
 @QuantizationMixin.implements(nn.ConvTranspose2d)
-class QuantizedConvTranspose2d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose2d): # pylint: disable=too-many-ancestors
+class QuantizedConvTranspose2d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose2d):  # pylint: disable=too-many-ancestors
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.ConvTranspose2d)
     _builtin_torch_fn = F.conv_transpose2d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=1)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=1
+        )
 
 
 @QuantizationMixin.implements(nn.ConvTranspose3d)
-class QuantizedConvTranspose3d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose3d): # pylint: disable=too-many-ancestors
+class QuantizedConvTranspose3d(_DispatchMixin, QuantizationMixin, nn.ConvTranspose3d):  # pylint: disable=too-many-ancestors
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.ConvTranspose3d)
     _builtin_torch_fn = F.conv_transpose3d
     __quant_init__ = QuantizationMixin.__unary__
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=1)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=1
+        )
 
 
 @QuantizationMixin.implements(nn.CosineEmbeddingLoss)
-class QuantizedCosineEmbeddingLoss(_DispatchMixin, QuantizationMixin, nn.CosineEmbeddingLoss):
+class QuantizedCosineEmbeddingLoss(
+    _DispatchMixin, QuantizationMixin, nn.CosineEmbeddingLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.CosineEmbeddingLoss)
     _builtin_torch_fn = F.cosine_embedding_loss
@@ -887,6 +936,7 @@ class QuantizedDropout(_DispatchMixin, QuantizationMixin, nn.Dropout):
 
 
 if version.parse(torch.__version__) >= version.parse("1.12.0"):
+
     @QuantizationMixin.implements(nn.Dropout1d)
     class QuantizedDropout1d(_DispatchMixin, QuantizationMixin, nn.Dropout1d):
         # pylint: disable=missing-class-docstring
@@ -934,75 +984,89 @@ class QuantizedEmbeddingBag(_DispatchMixin, QuantizationMixin, nn.EmbeddingBag):
     _builtin_torch_fn = F.embedding_bag
 
     def _builtin_torch_fn_helper(self, fn: Callable[..., Tensor]):
-        def embedding_bag(input: Tensor, # pylint: disable=redefined-builtin, too-many-arguments
-                          weight: Tensor,
-                          offsets: Optional[Tensor] = None,
-                          max_norm: Optional[float] = None,
-                          norm_type: float = 2,
-                          scale_grad_by_freq: bool = False,
-                          mode: str = "mean",
-                          sparse: bool = False,
-                          per_sample_weights: Optional[Tensor] = None,
-                          include_last_offset: bool = False,
-                          padding_idx: Optional[int] = None):
-
+        def embedding_bag(
+            input: Tensor,  # pylint: disable=redefined-builtin, too-many-arguments
+            weight: Tensor,
+            offsets: Optional[Tensor] = None,
+            max_norm: Optional[float] = None,
+            norm_type: float = 2,
+            scale_grad_by_freq: bool = False,
+            mode: str = "mean",
+            sparse: bool = False,
+            per_sample_weights: Optional[Tensor] = None,
+            include_last_offset: bool = False,
+            padding_idx: Optional[int] = None,
+        ):
             if per_sample_weights is not None:
                 qtzr = self.input_quantizers[0]
-                per_sample_weights = _quantize_dequantize_if_applicable(per_sample_weights, qtzr)
+                per_sample_weights = _quantize_dequantize_if_applicable(
+                    per_sample_weights, qtzr
+                )
 
-            output = fn(input,
-                        weight,
-                        offsets=offsets,
-                        max_norm=max_norm,
-                        norm_type=norm_type,
-                        scale_grad_by_freq=scale_grad_by_freq,
-                        mode=mode,
-                        sparse=sparse,
-                        per_sample_weights=per_sample_weights,
-                        include_last_offset=include_last_offset,
-                        padding_idx=padding_idx)
+            output = fn(
+                input,
+                weight,
+                offsets=offsets,
+                max_norm=max_norm,
+                norm_type=norm_type,
+                scale_grad_by_freq=scale_grad_by_freq,
+                mode=mode,
+                sparse=sparse,
+                per_sample_weights=per_sample_weights,
+                include_last_offset=include_last_offset,
+                padding_idx=padding_idx,
+            )
 
             return _quantize_dequantize_if_applicable(output, self.output_quantizers[0])
 
         return embedding_bag
 
     def _custom_kernel_helper(self, fn: Callable[..., QuantizedTensorBase]):
-        def embedding_bag(input: Tensor, # pylint: disable=redefined-builtin, too-many-arguments
-                          weight: Tensor,
-                          offsets: Optional[Tensor] = None,
-                          max_norm: Optional[float] = None,
-                          norm_type: float = 2,
-                          scale_grad_by_freq: bool = False,
-                          mode: str = "mean",
-                          sparse: bool = False,
-                          per_sample_weights: Optional[Tensor] = None,
-                          include_last_offset: bool = False,
-                          padding_idx: Optional[int] = None):
-
+        def embedding_bag(
+            input: Tensor,  # pylint: disable=redefined-builtin, too-many-arguments
+            weight: Tensor,
+            offsets: Optional[Tensor] = None,
+            max_norm: Optional[float] = None,
+            norm_type: float = 2,
+            scale_grad_by_freq: bool = False,
+            mode: str = "mean",
+            sparse: bool = False,
+            per_sample_weights: Optional[Tensor] = None,
+            include_last_offset: bool = False,
+            padding_idx: Optional[int] = None,
+        ):
             if per_sample_weights is not None:
                 qtzr = self.input_quantizers[0]
                 per_sample_weights = _quantize_if_applicable(per_sample_weights, qtzr)
 
-            output_encodings = self.output_quantizers[0].get_encodings() if self.output_quantizers[0] else None
+            output_encodings = (
+                self.output_quantizers[0].get_encodings()
+                if self.output_quantizers[0]
+                else None
+            )
 
-            return fn(input,
-                      weight,
-                      offsets=offsets,
-                      max_norm=max_norm,
-                      norm_type=norm_type,
-                      scale_grad_by_freq=scale_grad_by_freq,
-                      mode=mode,
-                      sparse=sparse,
-                      per_sample_weights=per_sample_weights,
-                      include_last_offset=include_last_offset,
-                      padding_idx=padding_idx,
-                      output_encodings=output_encodings)
+            return fn(
+                input,
+                weight,
+                offsets=offsets,
+                max_norm=max_norm,
+                norm_type=norm_type,
+                scale_grad_by_freq=scale_grad_by_freq,
+                mode=mode,
+                sparse=sparse,
+                per_sample_weights=per_sample_weights,
+                include_last_offset=include_last_offset,
+                padding_idx=padding_idx,
+                output_encodings=output_encodings,
+            )
 
         return embedding_bag
 
 
 @QuantizationMixin.implements(nn.FeatureAlphaDropout)
-class QuantizedFeatureAlphaDropout(_DispatchMixin, QuantizationMixin, nn.FeatureAlphaDropout):
+class QuantizedFeatureAlphaDropout(
+    _DispatchMixin, QuantizationMixin, nn.FeatureAlphaDropout
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.FeatureAlphaDropout)
     _builtin_torch_fn = F.feature_alpha_dropout
@@ -1013,6 +1077,7 @@ class QuantizedFeatureAlphaDropout(_DispatchMixin, QuantizationMixin, nn.Feature
 class QuantizedFlatten(_DispatchMixin, QuantizationMixin, nn.Flatten):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.Flatten)
+
     def _get_builtin_torch_fn(self):
         return Tensor.flatten
 
@@ -1028,7 +1093,9 @@ class QuantizedFold(_DispatchMixin, QuantizationMixin, nn.Fold):
 
 
 @QuantizationMixin.implements(nn.FractionalMaxPool2d)
-class QuantizedFractionalMaxPool2d(_DispatchMixin, QuantizationMixin, nn.FractionalMaxPool2d):
+class QuantizedFractionalMaxPool2d(
+    _DispatchMixin, QuantizationMixin, nn.FractionalMaxPool2d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.FractionalMaxPool2d)
     _builtin_torch_fn = F.fractional_max_pool2d
@@ -1036,7 +1103,9 @@ class QuantizedFractionalMaxPool2d(_DispatchMixin, QuantizationMixin, nn.Fractio
 
 
 @QuantizationMixin.implements(nn.FractionalMaxPool3d)
-class QuantizedFractionalMaxPool3d(_DispatchMixin, QuantizationMixin, nn.FractionalMaxPool3d):
+class QuantizedFractionalMaxPool3d(
+    _DispatchMixin, QuantizationMixin, nn.FractionalMaxPool3d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.FractionalMaxPool3d)
     _builtin_torch_fn = F.fractional_max_pool3d
@@ -1104,7 +1173,9 @@ class QuantizedGRU(_DispatchMixin, QuantizationMixin, nn.GRU):
 
         def gru(*args):
             args = self._quantize_inputs(args, apply)
-            output_encodings = tuple(qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers)
+            output_encodings = tuple(
+                qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers
+            )
             return fn(*args, output_encodings=output_encodings)
 
         return gru
@@ -1140,7 +1211,9 @@ class QuantizedGRUCell(_DispatchMixin, QuantizationMixin, nn.GRUCell):
         def gru_cell(input, hx, *args, **kwargs):
             input = apply(input, self.input_quantizers[0])
             hx = apply(hx, self.input_quantizers[1])
-            output_encodings = self.output_quantizers[0] and self.output_quantizers[0].get_encodings()
+            output_encodings = (
+                self.output_quantizers[0] and self.output_quantizers[0].get_encodings()
+            )
             return fn(input, hx, *args, **kwargs, output_encodings=output_encodings)
 
         return gru_cell
@@ -1195,7 +1268,9 @@ class QuantizedHardtanh(_DispatchMixin, QuantizationMixin, nn.Hardtanh):
 
 
 @QuantizationMixin.implements(nn.HingeEmbeddingLoss)
-class QuantizedHingeEmbeddingLoss(_DispatchMixin, QuantizationMixin, nn.HingeEmbeddingLoss):
+class QuantizedHingeEmbeddingLoss(
+    _DispatchMixin, QuantizationMixin, nn.HingeEmbeddingLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.HingeEmbeddingLoss)
     _builtin_torch_fn = F.hinge_embedding_loss
@@ -1319,7 +1394,9 @@ class QuantizedLSTM(_DispatchMixin, QuantizationMixin, nn.LSTM):
 
         def lstm(*args):
             args = self._quantize_inputs(args, apply)
-            output_encodings = tuple(qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers)
+            output_encodings = tuple(
+                qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers
+            )
             return fn(*args, output_encodings=output_encodings)
 
         return lstm
@@ -1364,7 +1441,9 @@ class QuantizedLSTMCell(_DispatchMixin, QuantizationMixin, nn.LSTMCell):
             h_qtzr, c_qtzr = self.input_quantizers[1:]
             hx = (apply(h, h_qtzr), apply(c, c_qtzr))
 
-            output_encodings = tuple(qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers)
+            output_encodings = tuple(
+                qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers
+            )
             return fn(input, hx, *args, **kwargs, output_encodings=output_encodings)
 
         return lstm_cell
@@ -1468,15 +1547,21 @@ class QuantizedLinear(_DispatchMixin, QuantizationMixin, nn.Linear):
         # that nn.Linear invokes F.linear.
         # To circumvent this issue, we temporarily restore the original F.linear
         # before running forward.
-        with patch_attr(F, 'linear', type(self)._builtin_torch_fn):
+        with patch_attr(F, "linear", type(self)._builtin_torch_fn):
             return super().forward(*args, **kwargs)
 
-    def _derive_bias_scale(self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]):
-        return _derive_bias_scale(input_scale, weight_scale, self.bias.shape, channel_axis=0)
+    def _derive_bias_scale(
+        self, input_scale: Optional[torch.Tensor], weight_scale: Optional[torch.Tensor]
+    ):
+        return _derive_bias_scale(
+            input_scale, weight_scale, self.bias.shape, channel_axis=0
+        )
 
 
 @QuantizationMixin.implements(nn.LocalResponseNorm)
-class QuantizedLocalResponseNorm(_DispatchMixin, QuantizationMixin, nn.LocalResponseNorm):
+class QuantizedLocalResponseNorm(
+    _DispatchMixin, QuantizationMixin, nn.LocalResponseNorm
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.LocalResponseNorm)
     _builtin_torch_fn = F.local_response_norm
@@ -1508,7 +1593,9 @@ class QuantizedMSELoss(_DispatchMixin, QuantizationMixin, nn.MSELoss):
 
 
 @QuantizationMixin.implements(nn.MarginRankingLoss)
-class QuantizedMarginRankingLoss(_DispatchMixin, QuantizationMixin, nn.MarginRankingLoss):
+class QuantizedMarginRankingLoss(
+    _DispatchMixin, QuantizationMixin, nn.MarginRankingLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.MarginRankingLoss)
     _builtin_torch_fn = F.margin_ranking_loss
@@ -1587,7 +1674,9 @@ class QuantizedMish(_DispatchMixin, QuantizationMixin, nn.Mish):
 
 
 @QuantizationMixin.implements(nn.MultiLabelMarginLoss)
-class QuantizedMultiLabelMarginLoss(_DispatchMixin, QuantizationMixin, nn.MultiLabelMarginLoss):
+class QuantizedMultiLabelMarginLoss(
+    _DispatchMixin, QuantizationMixin, nn.MultiLabelMarginLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.MultiLabelMarginLoss)
     _builtin_torch_fn = F.multilabel_margin_loss
@@ -1595,7 +1684,9 @@ class QuantizedMultiLabelMarginLoss(_DispatchMixin, QuantizationMixin, nn.MultiL
 
 
 @QuantizationMixin.implements(nn.MultiLabelSoftMarginLoss)
-class QuantizedMultiLabelSoftMarginLoss(_DispatchMixin, QuantizationMixin, nn.MultiLabelSoftMarginLoss):
+class QuantizedMultiLabelSoftMarginLoss(
+    _DispatchMixin, QuantizationMixin, nn.MultiLabelSoftMarginLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.MultiLabelSoftMarginLoss)
     _builtin_torch_fn = F.multilabel_soft_margin_loss
@@ -1685,9 +1776,10 @@ class QuantizedPoissonNLLLoss(_DispatchMixin, QuantizationMixin, nn.PoissonNLLLo
 class QuantizedRNN(_DispatchMixin, QuantizationMixin, nn.RNN):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.RNN)
+
     def _get_builtin_torch_fn(self):
-        assert self.mode in ('RNN_TANH', 'RNN_RELU')
-        if self.mode == 'RNN_TANH':
+        assert self.mode in ("RNN_TANH", "RNN_RELU")
+        if self.mode == "RNN_TANH":
             return _rnn_tanh
         return _rnn_relu
 
@@ -1730,7 +1822,9 @@ class QuantizedRNN(_DispatchMixin, QuantizationMixin, nn.RNN):
 
         def rnn(*args):
             args = self._quantize_inputs(args, apply)
-            output_encodings = tuple(qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers)
+            output_encodings = tuple(
+                qtzr and qtzr.get_encodings() for qtzr in self.output_quantizers
+            )
             return fn(*args, output_encodings=output_encodings)
 
         return rnn
@@ -1745,6 +1839,7 @@ class QuantizedRNN(_DispatchMixin, QuantizationMixin, nn.RNN):
 class QuantizedRNNCell(_DispatchMixin, QuantizationMixin, nn.RNNCell):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.RNNCell)
+
     def _get_builtin_torch_fn(self):
         assert self.nonlinearity in ("tanh", "relu")
 
@@ -1776,7 +1871,9 @@ class QuantizedRNNCell(_DispatchMixin, QuantizationMixin, nn.RNNCell):
         def rnn_cell(input, hx, *args, **kwargs):
             input = apply(input, self.input_quantizers[0])
             hx = apply(hx, self.input_quantizers[1])
-            output_encodings = self.output_quantizers[0] and self.output_quantizers[0].get_encodings()
+            output_encodings = (
+                self.output_quantizers[0] and self.output_quantizers[0].get_encodings()
+            )
             return fn(input, hx, *args, **kwargs, output_encodings=output_encodings)
 
         return rnn_cell
@@ -1828,8 +1925,11 @@ class QuantizedReflectionPad2d(_DispatchMixin, QuantizationMixin, nn.ReflectionP
 
 
 if version.parse(torch.__version__) >= version.parse("1.10.0"):
+
     @QuantizationMixin.implements(nn.ReflectionPad3d)
-    class QuantizedReflectionPad3d(_DispatchMixin, QuantizationMixin, nn.ReflectionPad3d):
+    class QuantizedReflectionPad3d(
+        _DispatchMixin, QuantizationMixin, nn.ReflectionPad3d
+    ):
         # pylint: disable=missing-class-docstring
         __doc__ = _generate_docstring(parent_cls=nn.ReflectionPad3d)
         _builtin_torch_fn = F.pad
@@ -2009,7 +2109,9 @@ class QuantizedThreshold(_DispatchMixin, QuantizationMixin, nn.Threshold):
 
 
 @QuantizationMixin.implements(nn.TripletMarginLoss)
-class QuantizedTripletMarginLoss(_DispatchMixin, QuantizationMixin, nn.TripletMarginLoss):
+class QuantizedTripletMarginLoss(
+    _DispatchMixin, QuantizationMixin, nn.TripletMarginLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.TripletMarginLoss)
     _builtin_torch_fn = F.triplet_margin_loss
@@ -2017,7 +2119,9 @@ class QuantizedTripletMarginLoss(_DispatchMixin, QuantizationMixin, nn.TripletMa
 
 
 @QuantizationMixin.implements(nn.TripletMarginWithDistanceLoss)
-class QuantizedTripletMarginWithDistanceLoss(_DispatchMixin, QuantizationMixin, nn.TripletMarginWithDistanceLoss):
+class QuantizedTripletMarginWithDistanceLoss(
+    _DispatchMixin, QuantizationMixin, nn.TripletMarginWithDistanceLoss
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.TripletMarginWithDistanceLoss)
     _builtin_torch_fn = F.triplet_margin_with_distance_loss
@@ -2028,6 +2132,7 @@ class QuantizedTripletMarginWithDistanceLoss(_DispatchMixin, QuantizationMixin, 
 class QuantizedUnflatten(_DispatchMixin, QuantizationMixin, nn.Unflatten):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.Unflatten)
+
     def _get_builtin_torch_fn(self):
         return Tensor.unflatten
 
@@ -2049,7 +2154,9 @@ class QuantizedUpsample(_DispatchMixin, QuantizationMixin, nn.Upsample):
 
 
 @QuantizationMixin.implements(nn.UpsamplingBilinear2d)
-class QuantizedUpsamplingBilinear2d(_DispatchMixin, QuantizationMixin, nn.UpsamplingBilinear2d):
+class QuantizedUpsamplingBilinear2d(
+    _DispatchMixin, QuantizationMixin, nn.UpsamplingBilinear2d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.UpsamplingBilinear2d)
     _builtin_torch_fn = F.interpolate
@@ -2057,7 +2164,9 @@ class QuantizedUpsamplingBilinear2d(_DispatchMixin, QuantizationMixin, nn.Upsamp
 
 
 @QuantizationMixin.implements(nn.UpsamplingNearest2d)
-class QuantizedUpsamplingNearest2d(_DispatchMixin, QuantizationMixin, nn.UpsamplingNearest2d):
+class QuantizedUpsamplingNearest2d(
+    _DispatchMixin, QuantizationMixin, nn.UpsamplingNearest2d
+):
     # pylint: disable=missing-class-docstring
     __doc__ = _generate_docstring(parent_cls=nn.UpsamplingNearest2d)
     _builtin_torch_fn = F.interpolate
@@ -2065,6 +2174,7 @@ class QuantizedUpsamplingNearest2d(_DispatchMixin, QuantizationMixin, nn.Upsampl
 
 
 if version.parse(torch.__version__) >= version.parse("2.1.0"):
+
     @QuantizationMixin.implements(nn.ZeroPad1d)
     class QuantizedZeroPad1d(_DispatchMixin, QuantizationMixin, nn.ZeroPad1d):
         # pylint: disable=missing-class-docstring
@@ -2082,6 +2192,7 @@ class QuantizedZeroPad2d(_DispatchMixin, QuantizationMixin, nn.ZeroPad2d):
 
 
 if version.parse(torch.__version__) >= version.parse("2.1.0"):
+
     @QuantizationMixin.implements(nn.ZeroPad3d)
     class QuantizedZeroPad3d(_DispatchMixin, QuantizationMixin, nn.ZeroPad3d):
         # pylint: disable=missing-class-docstring

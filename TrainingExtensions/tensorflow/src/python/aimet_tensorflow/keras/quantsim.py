@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantsim for Keras """
+"""Quantsim for Keras"""
+
 from __future__ import annotations
 
 import contextlib
@@ -52,13 +53,27 @@ from aimet_common import quantsim
 from aimet_common.quantsim import extract_global_quantizer_args
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 from aimet_tensorflow.keras.graphsearchtuils import GraphSearchUtils
-from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import QcQuantizeWrapper, QuantizerSettings
-from aimet_tensorflow.keras.quant_sim.qc_mha_wrapper import QcQuantizableMultiHeadAttention
+from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import (
+    QcQuantizeWrapper,
+    QuantizerSettings,
+)
+from aimet_tensorflow.keras.quant_sim.qc_mha_wrapper import (
+    QcQuantizableMultiHeadAttention,
+)
 from aimet_tensorflow.keras.rnn.qc_quant_LSTM import QuantizedLSTM
-from aimet_tensorflow.keras.quant_sim.tensor_quantizer import TensorQuantizer, ActivationTensorQuantizer, \
-    ParamPerTensorQuantizer, StaticGridPerChannelQuantizer, ParamPerChannelQuantizer
-from aimet_tensorflow.keras.quantsim_config.quantsim_config import QuantSimConfigurator, INPUT_QUANTIZERS, \
-    OUTPUT_QUANTIZERS, PARAM_QUANTIZERS
+from aimet_tensorflow.keras.quant_sim.tensor_quantizer import (
+    TensorQuantizer,
+    ActivationTensorQuantizer,
+    ParamPerTensorQuantizer,
+    StaticGridPerChannelQuantizer,
+    ParamPerChannelQuantizer,
+)
+from aimet_tensorflow.keras.quantsim_config.quantsim_config import (
+    QuantSimConfigurator,
+    INPUT_QUANTIZERS,
+    OUTPUT_QUANTIZERS,
+    PARAM_QUANTIZERS,
+)
 from aimet_tensorflow.keras.utils.common import convert_h5_model_to_pb_model
 
 from aimet_tensorflow.keras.defs import AxisHandling
@@ -69,7 +84,7 @@ _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 unquantizable_modules = (tf.keras.layers.InputLayer, QcQuantizeWrapper)
 substitutable_modules = {
     tf.keras.layers.MultiHeadAttention: QcQuantizableMultiHeadAttention,
-    tf.keras.layers.LSTM: QuantizedLSTM
+    tf.keras.layers.LSTM: QuantizedLSTM,
 }
 
 
@@ -78,8 +93,9 @@ class QuantizationSimModelParams:
     """
     Data class that holds parameters for QuantizationSimModel. Used specifically to rebuild after converting to TF frozen pb
     """
-    quant_scheme: Union[QuantScheme, str] = 'tf_enhanced'
-    rounding_mode: str = 'nearest'
+
+    quant_scheme: Union[QuantScheme, str] = "tf_enhanced"
+    rounding_mode: str = "nearest"
     default_output_bw: int = 8
     default_param_bw: int = 8
     in_place: bool = False
@@ -97,9 +113,17 @@ class QuantizationSimModel(tf.keras.Model):
 
     # pylint: disable=too-many-arguments
     # pylint: disable=unused-argument
-    def __init__(self, model, quant_scheme: Union[QuantScheme, str] = 'tf_enhanced', rounding_mode: str = 'nearest',
-                 default_output_bw: int = 8, default_param_bw: int = 8, in_place: bool = False,
-                 config_file: str = None, default_data_type: QuantizationDataType = QuantizationDataType.int):
+    def __init__(
+        self,
+        model,
+        quant_scheme: Union[QuantScheme, str] = "tf_enhanced",
+        rounding_mode: str = "nearest",
+        default_output_bw: int = 8,
+        default_param_bw: int = 8,
+        in_place: bool = False,
+        config_file: str = None,
+        default_data_type: QuantizationDataType = QuantizationDataType.int,
+    ):
         """
         :param model: Model to quantize
         :param quant_scheme: Quantization Scheme, currently supported schemes are post_training_tf and
@@ -126,18 +150,39 @@ class QuantizationSimModel(tf.keras.Model):
         self._substituted_layer = {}  # to hold the substituted layers
         self._validate_model()
         self.connected_graph = ConnectedGraph(self._model_without_wrappers)
-        self._quantsim_configurator = self._initialize_quantsim_configurator(quant_scheme, rounding_mode,
-                                                                             default_output_bw, default_param_bw,
-                                                                             default_data_type, config_file)
+        self._quantsim_configurator = self._initialize_quantsim_configurator(
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+            config_file,
+        )
         self.quant_scheme = quant_scheme
         self._percentile_value = 100  # default percentile value
-        self.per_channel_quantization_enabled = self._quantsim_configurator.per_channel_quantization_flag
-        self.model = self._add_quantization_wrappers(quant_scheme, rounding_mode,
-                                                     default_output_bw, default_param_bw, default_data_type)
-        self.quant_args = extract_global_quantizer_args(quant_scheme, self._quantsim_configurator)
+        self.per_channel_quantization_enabled = (
+            self._quantsim_configurator.per_channel_quantization_flag
+        )
+        self.model = self._add_quantization_wrappers(
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+        )
+        self.quant_args = extract_global_quantizer_args(
+            quant_scheme, self._quantsim_configurator
+        )
 
-        self._params = QuantizationSimModelParams(quant_scheme, rounding_mode, default_output_bw, default_param_bw,
-                                                  in_place, config_file, default_data_type)
+        self._params = QuantizationSimModelParams(
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            in_place,
+            config_file,
+            default_data_type,
+        )
 
     def _validate_model(self):
         """
@@ -150,9 +195,11 @@ class QuantizationSimModel(tf.keras.Model):
                 multiple_inbound_node_layers.append(layer.name)
 
         if multiple_inbound_node_layers:
-            error_msg = (f'Layers with more than one inbound nodes are unsupported. This may occur if a layer is '
-                         f'reused multiple times in the model definition.\n'
-                         f'Layers with multiple inbound nodes: {multiple_inbound_node_layers}')
+            error_msg = (
+                f"Layers with more than one inbound nodes are unsupported. This may occur if a layer is "
+                f"reused multiple times in the model definition.\n"
+                f"Layers with multiple inbound nodes: {multiple_inbound_node_layers}"
+            )
             _logger.error(error_msg)
             raise NotImplementedError(error_msg)
 
@@ -162,9 +209,13 @@ class QuantizationSimModel(tf.keras.Model):
             # and Pointwise. For depthwise kernels, LAST TWO AXIS should be considered and for pointwise kernels LAST AXIS
             # should be considered, which is not handled here. Running model preparer beforehand will resolve this as there the
             # SeparableConv2D is splitted into two layers Depthwise and Pointwise seperately.
-            raise AssertionError("SeparableConv2D found in the model. Please run model preparer before calling QuantizationSimModel")
+            raise AssertionError(
+                "SeparableConv2D found in the model. Please run model preparer before calling QuantizationSimModel"
+            )
 
-    def check_separable_conv(self, model: tf.keras.models.Model | tf.keras.Sequential) -> bool:
+    def check_separable_conv(
+        self, model: tf.keras.models.Model | tf.keras.Sequential
+    ) -> bool:
         """
         Checks for SeparableConv2D layer in the model
         :param model: Keras Model
@@ -215,10 +266,15 @@ class QuantizationSimModel(tf.keras.Model):
             if quantizer.quant_scheme == QuantScheme.post_training_percentile:
                 quantizer.set_percentile_value(self._percentile_value)
 
-    def _initialize_quantsim_configurator(self, quant_scheme: Union[QuantScheme, str], rounding_mode: str,
-                                          default_output_bw: int, default_param_bw: int,
-                                          default_data_type: QuantizationDataType = QuantizationDataType.int,
-                                          config_file: str = None) -> QuantSimConfigurator:
+    def _initialize_quantsim_configurator(
+        self,
+        quant_scheme: Union[QuantScheme, str],
+        rounding_mode: str,
+        default_output_bw: int,
+        default_param_bw: int,
+        default_data_type: QuantizationDataType = QuantizationDataType.int,
+        config_file: str = None,
+    ) -> QuantSimConfigurator:
         """
         Initialize quantsim configurator
         :param quant_scheme: Quantization Scheme
@@ -229,11 +285,24 @@ class QuantizationSimModel(tf.keras.Model):
         :param config_file: Path to a config file to use to specify rules for placing quant ops in the model
         :return: QuantSimConfigurator
         """
-        return QuantSimConfigurator(self.connected_graph, quant_scheme, rounding_mode,
-                                    default_output_bw, default_param_bw, default_data_type, config_file)
+        return QuantSimConfigurator(
+            self.connected_graph,
+            quant_scheme,
+            rounding_mode,
+            default_output_bw,
+            default_param_bw,
+            default_data_type,
+            config_file,
+        )
 
-    def _add_quantization_wrappers(self, quant_scheme, rounding_mode,
-                                   default_output_bw, default_param_bw, default_data_type):
+    def _add_quantization_wrappers(
+        self,
+        quant_scheme,
+        rounding_mode,
+        default_output_bw,
+        default_param_bw,
+        default_data_type,
+    ):
         """
         Add quantization wrappers to the model and return a new model with the wrappers inserted.
         :param quant_scheme: Quantization scheme to use
@@ -259,7 +328,9 @@ class QuantizationSimModel(tf.keras.Model):
                         config["is_sequential_model"] = True
 
                     # pylint: disable=protected-access
-                    if self._quantsim_configurator._layer_to_config_dict[layer]["is_input_quantized"]["setting"]:
+                    if self._quantsim_configurator._layer_to_config_dict[layer][
+                        "is_input_quantized"
+                    ]["setting"]:
                         config["is_input_quantized"] = True
                     config["quant_scheme"] = quant_scheme
                     config["rounding_mode"] = rounding_mode
@@ -277,27 +348,52 @@ class QuantizationSimModel(tf.keras.Model):
             if isinstance(layer, unquantizable_modules) or layer.submodules:
                 return layer
 
-            activation_quant_settings = QuantizerSettings(default_output_bw, default_data_type, rounding_mode,
-                                                          quant_scheme, False, False, False)
-            param_quant_settings = QuantizerSettings(default_param_bw, default_data_type, rounding_mode,
-                                                     quant_scheme, False, False, False)
+            activation_quant_settings = QuantizerSettings(
+                default_output_bw,
+                default_data_type,
+                rounding_mode,
+                quant_scheme,
+                False,
+                False,
+                False,
+            )
+            param_quant_settings = QuantizerSettings(
+                default_param_bw,
+                default_data_type,
+                rounding_mode,
+                quant_scheme,
+                False,
+                False,
+                False,
+            )
 
-            input_quantizers, output_quantizers, param_quantizers = self._get_quantizers_by_layer(layer)
-            wrapper = QcQuantizeWrapper(layer, activation_quant_settings, param_quant_settings,
-                                        num_inputs=len(layer.inbound_nodes[0].keras_inputs),
-                                        input_quantizers=input_quantizers,
-                                        output_quantizers=output_quantizers,
-                                        param_quantizers=param_quantizers,
-                                        per_channel_quantization_enabled=self.per_channel_quantization_enabled)
+            input_quantizers, output_quantizers, param_quantizers = (
+                self._get_quantizers_by_layer(layer)
+            )
+            wrapper = QcQuantizeWrapper(
+                layer,
+                activation_quant_settings,
+                param_quant_settings,
+                num_inputs=len(layer.inbound_nodes[0].keras_inputs),
+                input_quantizers=input_quantizers,
+                output_quantizers=output_quantizers,
+                param_quantizers=param_quantizers,
+                per_channel_quantization_enabled=self.per_channel_quantization_enabled,
+            )
             self._layer_name_to_quant_wrapper[layer.name] = wrapper
             return wrapper
 
-        return tf.keras.models.clone_model(self._model_without_wrappers, clone_function=wrap_layer)
+        return tf.keras.models.clone_model(
+            self._model_without_wrappers, clone_function=wrap_layer
+        )
 
-    def _get_quantizers_by_layer(self, layer: tf.keras.layers.Layer) -> Tuple[Optional[ActivationTensorQuantizer],
-                                                                              Optional[ActivationTensorQuantizer],
-                                                                              Union[ParamPerTensorQuantizer,
-                                                                                    ParamPerChannelQuantizer]]:
+    def _get_quantizers_by_layer(
+        self, layer: tf.keras.layers.Layer
+    ) -> Tuple[
+        Optional[ActivationTensorQuantizer],
+        Optional[ActivationTensorQuantizer],
+        Union[ParamPerTensorQuantizer, ParamPerChannelQuantizer],
+    ]:
         """
         Get input/output/param quantizers from quantizers dictionary or initialize quantizers if layer is not found
         :param layer: Target layer
@@ -305,7 +401,10 @@ class QuantizationSimModel(tf.keras.Model):
         """
         quantizers_dict = self._quantsim_configurator.get_quantizers_dict(layer)
         if quantizers_dict is None:
-            _logger.warning("%s not found in quantizers dict, will generate quantizers automatically", layer.name)
+            _logger.warning(
+                "%s not found in quantizers dict, will generate quantizers automatically",
+                layer.name,
+            )
             input_quantizers = None
             output_quantizers = None
             param_quantizers = None
@@ -317,7 +416,9 @@ class QuantizationSimModel(tf.keras.Model):
         return input_quantizers, output_quantizers, param_quantizers
 
     @staticmethod
-    def _quantizer_to_name_tuple(quantizers: List[TensorQuantizer]) -> Tuple[Optional[List[str]]]:
+    def _quantizer_to_name_tuple(
+        quantizers: List[TensorQuantizer],
+    ) -> Tuple[Optional[List[str]]]:
         """
         Converts a list of quantizers to a tuple of quantizer names
         :param quantizers: quantizers
@@ -331,27 +432,35 @@ class QuantizationSimModel(tf.keras.Model):
             quant_list.append(quantizer.name)
         return tuple(quant_list)
 
-    def get_quantizer_name_by_layer(self, layer: tf.keras.layers.Layer) -> Tuple[Optional[List[str]],
-                                                                                 Optional[List[str]],
-                                                                                 Optional[List[str]]]:
+    def get_quantizer_name_by_layer(
+        self, layer: tf.keras.layers.Layer
+    ) -> Tuple[Optional[List[str]], Optional[List[str]], Optional[List[str]]]:
         """
         Get the names of input, output and param quantizers
         :param layer: the keras layer
         :return: Tuple of quantizer names
         """
-        input_quantizers, output_quantizers, param_quantizers = self._get_quantizers_by_layer(layer)
+        input_quantizers, output_quantizers, param_quantizers = (
+            self._get_quantizers_by_layer(layer)
+        )
         output_quantizers_names = self._quantizer_to_name_tuple(output_quantizers)
         input_quantizers_names = self._quantizer_to_name_tuple(input_quantizers)
         parameter_quantizers_names = self._quantizer_to_name_tuple(param_quantizers)
 
-        return input_quantizers_names, output_quantizers_names, parameter_quantizers_names
+        return (
+            input_quantizers_names,
+            output_quantizers_names,
+            parameter_quantizers_names,
+        )
 
     def _disable_quantizers_in_folded_batchnorm(self):
         """
         Disable input/output/param quantizers if layer is folded batch normalization
         """
         for quantsim_wrapper in self._layer_name_to_quant_wrapper.values():
-            if GraphSearchUtils.is_folded_batch_normalization(quantsim_wrapper.original_layer):
+            if GraphSearchUtils.is_folded_batch_normalization(
+                quantsim_wrapper.original_layer
+            ):
                 for q in quantsim_wrapper.input_quantizers:
                     q.disable()
                 for q in quantsim_wrapper.output_quantizers:
@@ -360,29 +469,36 @@ class QuantizationSimModel(tf.keras.Model):
                     q.disable()
 
     @staticmethod
-    def _get_encoding_dict_for_quantizer(quantizer: TensorQuantizer) -> Union[List[Dict[str, Union[str, int, float]]],
-                                                                              Dict[str, Union[str, int, float]]]:
+    def _get_encoding_dict_for_quantizer(
+        quantizer: TensorQuantizer,
+    ) -> Union[
+        List[Dict[str, Union[str, int, float]]], Dict[str, Union[str, int, float]]
+    ]:
         """
         Get encoding dict for a tensor quantizer.
 
         :param quantizer: Quantizer to get encoding info from
         :return: Dictionary or List of dictionaries containing encodings info for the tensor quantizer
         """
-        if not isinstance(quantizer, ParamPerChannelQuantizer) or quantizer.data_type == QuantizationDataType.float:
+        if (
+            not isinstance(quantizer, ParamPerChannelQuantizer)
+            or quantizer.data_type == QuantizationDataType.float
+        ):
             quantizer_encodings = [quantizer.encoding]
         else:
             quantizer_encodings = quantizer.encoding
         return [
             {
-                'min': encoding.min,
-                'max': encoding.max,
-                'scale': encoding.delta,
-                'offset': int(encoding.offset),
-                'bitwidth': encoding.bw,
-                'is_symmetric': str(quantizer.is_symmetric),
-                'dtype': 'int'
-            } if quantizer.data_type == QuantizationDataType.int
-            else {'dtype': 'float', 'bitwidth': int(quantizer.bitwidth)}
+                "min": encoding.min,
+                "max": encoding.max,
+                "scale": encoding.delta,
+                "offset": int(encoding.offset),
+                "bitwidth": encoding.bw,
+                "is_symmetric": str(quantizer.is_symmetric),
+                "dtype": "int",
+            }
+            if quantizer.data_type == QuantizationDataType.int
+            else {"dtype": "float", "bitwidth": int(quantizer.bitwidth)}
             for encoding in quantizer_encodings
         ]
 
@@ -397,24 +513,41 @@ class QuantizationSimModel(tf.keras.Model):
         param_encodings = {}
         for wrapper in self.quant_wrappers():
             for idx, input_quantizer in enumerate(wrapper.input_quantizers):
-                if input_quantizer.is_encoding_valid() or input_quantizer.data_type == QuantizationDataType.float:
+                if (
+                    input_quantizer.is_encoding_valid()
+                    or input_quantizer.data_type == QuantizationDataType.float
+                ):
                     # because dense layers in quantizable MHA are not explicitly sublayers, they don't have their
                     # inbound_nodes parameter populated, so the name of the quantizer is used instead
                     if not wrapper._layer_to_wrap.inbound_nodes:
                         tensor_name = wrapper.name + "/" + input_quantizer.name + ":0"
                     else:
-                        tensor_name = wrapper._layer_to_wrap.inbound_nodes[0].keras_inputs[idx].name
-                    encoding_dict = self._get_encoding_dict_for_quantizer(input_quantizer)
+                        tensor_name = (
+                            wrapper._layer_to_wrap.inbound_nodes[0]
+                            .keras_inputs[idx]
+                            .name
+                        )
+                    encoding_dict = self._get_encoding_dict_for_quantizer(
+                        input_quantizer
+                    )
                     if tensor_name in model_input_tensor_names:
                         tensor_name += ":0"
                     activation_encodings[tensor_name] = encoding_dict
             for idx, param_quantizer in enumerate(wrapper.param_quantizers):
-                if param_quantizer.is_encoding_valid() or param_quantizer.data_type == QuantizationDataType.float:
+                if (
+                    param_quantizer.is_encoding_valid()
+                    or param_quantizer.data_type == QuantizationDataType.float
+                ):
                     param_name = wrapper._layer_to_wrap.weights[idx].name
-                    encoding_dict = self._get_encoding_dict_for_quantizer(param_quantizer)
+                    encoding_dict = self._get_encoding_dict_for_quantizer(
+                        param_quantizer
+                    )
                     param_encodings[param_name] = encoding_dict
             for idx, output_quantizer in enumerate(wrapper.output_quantizers):
-                if output_quantizer.is_encoding_valid() or output_quantizer.data_type == QuantizationDataType.float:
+                if (
+                    output_quantizer.is_encoding_valid()
+                    or output_quantizer.data_type == QuantizationDataType.float
+                ):
                     # because dense layers in quantizable MHA are not explicitly sublayers, they don't have their
                     # inbound_nodes parameter populated, so the name of the quantizer is used instead
                     if not wrapper._layer_to_wrap.inbound_nodes:
@@ -423,13 +556,15 @@ class QuantizationSimModel(tf.keras.Model):
                         tensor_name = wrapper._layer_to_wrap.output[idx].name
                     else:
                         tensor_name = wrapper._layer_to_wrap.output.name
-                    encoding_dict = self._get_encoding_dict_for_quantizer(output_quantizer)
+                    encoding_dict = self._get_encoding_dict_for_quantizer(
+                        output_quantizer
+                    )
                     activation_encodings[tensor_name] = encoding_dict
         return {
-            'version': quantsim.encoding_version,
-            'activation_encodings': activation_encodings,
-            'param_encodings': param_encodings,
-            'quantizer_args': self.quant_args if hasattr(self, "quant_args") else {}
+            "version": quantsim.encoding_version,
+            "activation_encodings": activation_encodings,
+            "param_encodings": param_encodings,
+            "quantizer_args": self.quant_args if hasattr(self, "quant_args") else {},
         }
 
     def compute_encodings(self, forward_pass_callback, forward_pass_callback_args):
@@ -456,15 +591,20 @@ class QuantizationSimModel(tf.keras.Model):
         self._set_op_mode_parameters(op_mode)
 
         if ops_with_invalid_encodings:
-            _logger.info('The following quantizers did not have valid encodings and have been set to passThrough mode: '
-                         '%s', ops_with_invalid_encodings)
-            _logger.info('This can be due to the quantizers not having been evaluated during the forward pass in '
-                         'compute encodings. Evaluation is required to collect statistics needed to compute valid '
-                         'encodings.\n'
-                         'As a result, the quantizers have been set to passThrough mode, meaning no quantization noise '
-                         'will be simulated for these ops if they are evaluated in the future.\n'
-                         'If this is not desired, amend the forward pass to evaluate tensors which require these ops '
-                         'to be evaluated, and recompute encodings.')
+            _logger.info(
+                "The following quantizers did not have valid encodings and have been set to passThrough mode: "
+                "%s",
+                ops_with_invalid_encodings,
+            )
+            _logger.info(
+                "This can be due to the quantizers not having been evaluated during the forward pass in "
+                "compute encodings. Evaluation is required to collect statistics needed to compute valid "
+                "encodings.\n"
+                "As a result, the quantizers have been set to passThrough mode, meaning no quantization noise "
+                "will be simulated for these ops if they are evaluated in the future.\n"
+                "If this is not desired, amend the forward pass to evaluate tensors which require these ops "
+                "to be evaluated, and recompute encodings."
+            )
 
     def _set_op_mode_parameters(self, op_mode: libpymo.TensorQuantizerOpMode):
         """
@@ -481,12 +621,14 @@ class QuantizationSimModel(tf.keras.Model):
     @staticmethod
     @contextlib.contextmanager
     def _set_encoding_version_to_0_6_1():
-        assert quantsim.encoding_version in {'0.6.1', '1.0.0'}
-        if quantsim.encoding_version == '1.0.0':
-            _logger.info('Exporting to encoding version 1.0.0 is not yet supported. Exporting using version 0.6.1 '
-                         'instead.')
+        assert quantsim.encoding_version in {"0.6.1", "1.0.0"}
+        if quantsim.encoding_version == "1.0.0":
+            _logger.info(
+                "Exporting to encoding version 1.0.0 is not yet supported. Exporting using version 0.6.1 "
+                "instead."
+            )
         old_encoding_version = quantsim.encoding_version
-        quantsim.encoding_version = '0.6.1'
+        quantsim.encoding_version = "0.6.1"
 
         yield
 
@@ -506,51 +648,78 @@ class QuantizationSimModel(tf.keras.Model):
         with self._set_encoding_version_to_0_6_1():
             model_path = os.path.join(path, filename_prefix)
 
-            #TF Version 2.4 has bug i.e. save() in tf format don't work for unrolled LSTM.
+            # TF Version 2.4 has bug i.e. save() in tf format don't work for unrolled LSTM.
             for layer in self._model_without_wrappers.layers:
                 if isinstance(layer, tf.keras.layers.LSTM):
                     break
             else:
                 self._model_without_wrappers.save(model_path)
 
-            self._model_without_wrappers.save(model_path + '.h5', save_format='h5')
+            self._model_without_wrappers.save(model_path + ".h5", save_format="h5")
 
             # Conversion of saved h5 model to pb model for consumption by SNPE/QNN
             try:
                 if convert_to_pb:
-                    convert_h5_model_to_pb_model(f'{model_path}.h5', custom_objects=custom_objects)
+                    convert_h5_model_to_pb_model(
+                        f"{model_path}.h5", custom_objects=custom_objects
+                    )
             except ValueError:
-                _logger.error("Could not convert h5 to frozen pb. "
-                              "Please call export() again with custom_objects defined.")
+                _logger.error(
+                    "Could not convert h5 to frozen pb. "
+                    "Please call export() again with custom_objects defined."
+                )
                 raise
             finally:
                 encodings_dict = self.get_encodings_dict()
-                encoding_file_path = os.path.join(path, filename_prefix + '.encodings')
+                encoding_file_path = os.path.join(path, filename_prefix + ".encodings")
                 save_json_yaml(encoding_file_path, encodings_dict)
 
     def _compute_and_set_parameter_encodings(self, ops_with_invalid_encodings: List):
         # pylint: disable=too-many-nested-blocks
         for quantizer_wrapper in self.quant_wrappers():
             for idx, param_quantizer in enumerate(quantizer_wrapper.param_quantizers):
-                if param_quantizer.is_enabled() and param_quantizer.data_type == QuantizationDataType.int:
+                if (
+                    param_quantizer.is_enabled()
+                    and param_quantizer.data_type == QuantizationDataType.int
+                ):
                     # 0th input to our quant wrapper is the tensor being quantized
                     weight_tensor = quantizer_wrapper.original_layer.get_weights()[idx]
 
                     # Per-channel
                     if isinstance(param_quantizer, StaticGridPerChannelQuantizer):
-                        for index, tensor_quantizer in enumerate(param_quantizer.tensor_quantizer):
-                            if param_quantizer.axis_handling == AxisHandling.LAST_TWO_AXES.value:
-                                last_two_axes_combined_shape = list(weight_tensor.shape[:-2]) + [-1]
-                                channel_slice = weight_tensor.reshape(*last_two_axes_combined_shape)
-                                channel_slice = channel_slice.take(index, channel_slice.ndim - 1)
-                            elif isinstance(quantizer_wrapper.original_layer, tf.keras.layers.Conv2DTranspose):
+                        for index, tensor_quantizer in enumerate(
+                            param_quantizer.tensor_quantizer
+                        ):
+                            if (
+                                param_quantizer.axis_handling
+                                == AxisHandling.LAST_TWO_AXES.value
+                            ):
+                                last_two_axes_combined_shape = list(
+                                    weight_tensor.shape[:-2]
+                                ) + [-1]
+                                channel_slice = weight_tensor.reshape(
+                                    *last_two_axes_combined_shape
+                                )
+                                channel_slice = channel_slice.take(
+                                    index, channel_slice.ndim - 1
+                                )
+                            elif isinstance(
+                                quantizer_wrapper.original_layer,
+                                tf.keras.layers.Conv2DTranspose,
+                            ):
                                 if weight_tensor.ndim == 4:
-                                    channel_slice = weight_tensor.take(index, weight_tensor.ndim - 2)
+                                    channel_slice = weight_tensor.take(
+                                        index, weight_tensor.ndim - 2
+                                    )
                                 else:
                                     # For bias in Transpose layers
-                                    channel_slice = weight_tensor.take(index, weight_tensor.ndim - 1)
+                                    channel_slice = weight_tensor.take(
+                                        index, weight_tensor.ndim - 1
+                                    )
                             else:
-                                channel_slice = weight_tensor.take(index, weight_tensor.ndim - 1)
+                                channel_slice = weight_tensor.take(
+                                    index, weight_tensor.ndim - 1
+                                )
                             tensor_quantizer.updateStats(channel_slice, False)
 
                     # Per-tensor
@@ -585,8 +754,8 @@ class QuantizationSimModel(tf.keras.Model):
         with open(encoding_file_path) as json_file:
             encodings = json.load(json_file)
 
-        param_encodings = encodings['param_encodings']
-        activation_encodings = encodings['activation_encodings']
+        param_encodings = encodings["param_encodings"]
+        activation_encodings = encodings["activation_encodings"]
 
         model_input_tensor_names = [inp.name for inp in self.model.inputs]
 
@@ -597,80 +766,126 @@ class QuantizationSimModel(tf.keras.Model):
                 if not wrapper._layer_to_wrap.inbound_nodes:
                     tensor_name = wrapper.name + "/" + input_quantizer.name + ":0"
                 else:
-                    tensor_name = wrapper._layer_to_wrap.inbound_nodes[0].keras_inputs[idx].name
+                    tensor_name = (
+                        wrapper._layer_to_wrap.inbound_nodes[0].keras_inputs[idx].name
+                    )
                 if tensor_name in model_input_tensor_names:
                     tensor_name += ":0"
 
                 if tensor_name in activation_encodings:
                     if not input_quantizer.is_enabled():
-                        _logger.info("Not loading encodings for quantizer: %s as it is disabled", tensor_name)
+                        _logger.info(
+                            "Not loading encodings for quantizer: %s as it is disabled",
+                            tensor_name,
+                        )
                         continue
                     encoding_dict = activation_encodings[tensor_name][0]
-                    if encoding_dict['dtype'] == 'int':
-                        encoding, is_symmetric = keras_common_utils.create_encoding_from_dict(encoding_dict)
+                    if encoding_dict["dtype"] == "int":
+                        encoding, is_symmetric = (
+                            keras_common_utils.create_encoding_from_dict(encoding_dict)
+                        )
                         input_quantizer.tensor_quantizer.isEncodingValid = True
-                        input_quantizer.set_quantizer_encodings(encoding.bw, is_symmetric, encoding,
-                                                                libpymo.TensorQuantizerOpMode.quantizeDequantize)
+                        input_quantizer.set_quantizer_encodings(
+                            encoding.bw,
+                            is_symmetric,
+                            encoding,
+                            libpymo.TensorQuantizerOpMode.quantizeDequantize,
+                        )
                         _logger.info("Setting encodings for : %s", tensor_name)
-                    elif encoding_dict['dtype'] == 'float':
+                    elif encoding_dict["dtype"] == "float":
                         input_quantizer.data_type = QuantizationDataType.float
-                        input_quantizer.bitwidth = encoding_dict['bitwidth']
-                        _logger.info("Setting quantizer dtype to float for : %s", tensor_name)
+                        input_quantizer.bitwidth = encoding_dict["bitwidth"]
+                        _logger.info(
+                            "Setting quantizer dtype to float for : %s", tensor_name
+                        )
                     else:
-                        raise RuntimeError("Unrecognized dtype %s for: %s" % (encoding_dict['dtype'], tensor_name))
+                        raise RuntimeError(
+                            "Unrecognized dtype %s for: %s"
+                            % (encoding_dict["dtype"], tensor_name)
+                        )
                 else:
                     if input_quantizer.is_enabled():
                         input_quantizer.disable()
-                        _logger.info("Encoding for quantizer: %s is not present thus disabling it.", tensor_name)
+                        _logger.info(
+                            "Encoding for quantizer: %s is not present thus disabling it.",
+                            tensor_name,
+                        )
 
             for idx, param_quantizer in enumerate(wrapper.param_quantizers):
                 param_name = wrapper._layer_to_wrap.weights[idx].name
 
                 if param_name in param_encodings:
                     if not param_quantizer.is_enabled():
-                        _logger.info("Not loading encodings for parameter: %s as quantizer is disabled", param_name)
+                        _logger.info(
+                            "Not loading encodings for parameter: %s as quantizer is disabled",
+                            param_name,
+                        )
                         continue
                     if isinstance(param_quantizer, StaticGridPerChannelQuantizer):
-                        if param_encodings[param_name][0]['dtype'] == 'float':
-                            wrapper.param_quantizers[idx] = ParamPerTensorQuantizer(layer=param_quantizer._original_layer,
-                                                                                    name=param_quantizer.name,
-                                                                                    quant_scheme=param_quantizer._quant_scheme,
-                                                                                    round_mode='nearest',
-                                                                                    bitwidth=param_encodings[param_name][0]['bitwidth'],
-                                                                                    data_type=QuantizationDataType.float,
-                                                                                    is_symmetric=param_quantizer.is_symmetric,
-                                                                                    use_strict_symmetric=param_quantizer.use_strict_symmetric,
-                                                                                    use_unsigned_symmetric=param_quantizer.use_unsigned_symmetric,
-                                                                                    enabled=False)
+                        if param_encodings[param_name][0]["dtype"] == "float":
+                            wrapper.param_quantizers[idx] = ParamPerTensorQuantizer(
+                                layer=param_quantizer._original_layer,
+                                name=param_quantizer.name,
+                                quant_scheme=param_quantizer._quant_scheme,
+                                round_mode="nearest",
+                                bitwidth=param_encodings[param_name][0]["bitwidth"],
+                                data_type=QuantizationDataType.float,
+                                is_symmetric=param_quantizer.is_symmetric,
+                                use_strict_symmetric=param_quantizer.use_strict_symmetric,
+                                use_unsigned_symmetric=param_quantizer.use_unsigned_symmetric,
+                                enabled=False,
+                            )
                         else:
-                            encoding, is_symmetric = keras_common_utils.create_encoding_from_dict(
-                                param_encodings[param_name])
+                            encoding, is_symmetric = (
+                                keras_common_utils.create_encoding_from_dict(
+                                    param_encodings[param_name]
+                                )
+                            )
                             for tensor_quantizer in param_quantizer.tensor_quantizer:
                                 tensor_quantizer.isEncodingValid = True
                             bw = encoding[0].bw
-                            param_quantizer.set_quantizer_encodings(bw, is_symmetric, encoding,
-                                                                    libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize)
+                            param_quantizer.set_quantizer_encodings(
+                                bw,
+                                is_symmetric,
+                                encoding,
+                                libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize,
+                            )
                         _logger.info("Setting encodings for : %s", param_name)
                     else:
                         encoding_dict = param_encodings[param_name][0]
-                        if encoding_dict['dtype'] == 'int':
-                            encoding, is_symmetric = keras_common_utils.create_encoding_from_dict(encoding_dict)
+                        if encoding_dict["dtype"] == "int":
+                            encoding, is_symmetric = (
+                                keras_common_utils.create_encoding_from_dict(
+                                    encoding_dict
+                                )
+                            )
                             param_quantizer.tensor_quantizer.isEncodingValid = True
                             bw = encoding.bw
-                            param_quantizer.set_quantizer_encodings(bw, is_symmetric, encoding,
-                                                                    libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize)
+                            param_quantizer.set_quantizer_encodings(
+                                bw,
+                                is_symmetric,
+                                encoding,
+                                libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize,
+                            )
                             _logger.info("Setting encodings for : %s", param_name)
-                        elif encoding_dict['dtype'] == 'float':
+                        elif encoding_dict["dtype"] == "float":
                             param_quantizer.data_type = QuantizationDataType.float
-                            param_quantizer.bitwidth = encoding_dict['bitwidth']
-                            _logger.info("Setting quantizer to float for : %s", param_name)
+                            param_quantizer.bitwidth = encoding_dict["bitwidth"]
+                            _logger.info(
+                                "Setting quantizer to float for : %s", param_name
+                            )
                         else:
-                            raise RuntimeError("Unrecognized dtype %s for: %s" % (encoding_dict['dtype'], tensor_name))
+                            raise RuntimeError(
+                                "Unrecognized dtype %s for: %s"
+                                % (encoding_dict["dtype"], tensor_name)
+                            )
                 else:
                     if param_quantizer.is_enabled():
                         param_quantizer.disable()
-                        _logger.info("Encoding for parameter: %s not present thus disabling this quantizer.",
-                                     param_name)
+                        _logger.info(
+                            "Encoding for parameter: %s not present thus disabling this quantizer.",
+                            param_name,
+                        )
 
             # Loading encodings means that compute encodings was called. Therefore, these two lines set the correct
             # op mode for the correct quant scheme and if the quantization was per channel or not.
@@ -687,8 +902,7 @@ class QuantizationSimModel(tf.keras.Model):
                     # `tf.split` in the model.
                     if isinstance(wrapper._layer_to_wrap.output, list):
                         tensor_names = [
-                            output.name
-                            for output in wrapper._layer_to_wrap.output
+                            output.name for output in wrapper._layer_to_wrap.output
                         ]
                     else:
                         tensor_names = [wrapper._layer_to_wrap.output.name]
@@ -696,35 +910,61 @@ class QuantizationSimModel(tf.keras.Model):
                 for tensor_name in tensor_names:
                     if tensor_name in activation_encodings:
                         if not output_quantizer.is_enabled():
-                            _logger.info("Not loading encodings for quantizer: %s as it is disabled", tensor_name)
+                            _logger.info(
+                                "Not loading encodings for quantizer: %s as it is disabled",
+                                tensor_name,
+                            )
                             continue
                         encoding_dict = activation_encodings[tensor_name][0]
-                        if encoding_dict['dtype'] == 'int':
-                            encoding, is_symmetric = keras_common_utils.create_encoding_from_dict(encoding_dict)
+                        if encoding_dict["dtype"] == "int":
+                            encoding, is_symmetric = (
+                                keras_common_utils.create_encoding_from_dict(
+                                    encoding_dict
+                                )
+                            )
                             output_quantizer.tensor_quantizer.isEncodingValid = True
-                            output_quantizer.set_quantizer_encodings(encoding.bw, is_symmetric, encoding,
-                                                                     libpymo.TensorQuantizerOpMode.quantizeDequantize)
+                            output_quantizer.set_quantizer_encodings(
+                                encoding.bw,
+                                is_symmetric,
+                                encoding,
+                                libpymo.TensorQuantizerOpMode.quantizeDequantize,
+                            )
                             _logger.info("Setting encodings for : %s", tensor_name)
-                        elif encoding_dict['dtype'] == 'float':
+                        elif encoding_dict["dtype"] == "float":
                             output_quantizer.data_type = QuantizationDataType.float
-                            output_quantizer.bitwidth = encoding_dict['bitwidth']
-                            _logger.info("Setting quantizer dtype to float for : %s", tensor_name)
+                            output_quantizer.bitwidth = encoding_dict["bitwidth"]
+                            _logger.info(
+                                "Setting quantizer dtype to float for : %s", tensor_name
+                            )
                         else:
-                            raise RuntimeError("Unrecognized dtype %s for: %s" % (encoding_dict['dtype'], tensor_name))
+                            raise RuntimeError(
+                                "Unrecognized dtype %s for: %s"
+                                % (encoding_dict["dtype"], tensor_name)
+                            )
                     else:
                         if output_quantizer.is_enabled():
                             output_quantizer.disable()
-                            _logger.info("Encoding for quantizer: %s is not present thus disabling it.", tensor_name)
+                            _logger.info(
+                                "Encoding for quantizer: %s is not present thus disabling it.",
+                                tensor_name,
+                            )
 
-    def _param_op_mode_after_analysis(self, quant_scheme) -> libpymo.TensorQuantizerOpMode:
+    def _param_op_mode_after_analysis(
+        self, quant_scheme
+    ) -> libpymo.TensorQuantizerOpMode:
         """
         Returns quant mode to use for parameters after encodings have been computed
         :param quant_scheme: Quantization scheme to use
         :return: Quant mode to use
         """
-        if quant_scheme in [QuantScheme.training_range_learning_with_tf_init,
-                            QuantScheme.training_range_learning_with_tf_enhanced_init] \
-                or self.per_channel_quantization_enabled:
+        if (
+            quant_scheme
+            in [
+                QuantScheme.training_range_learning_with_tf_init,
+                QuantScheme.training_range_learning_with_tf_enhanced_init,
+            ]
+            or self.per_channel_quantization_enabled
+        ):
             return libpymo.TensorQuantizerOpMode.quantizeDequantize
         return libpymo.TensorQuantizerOpMode.oneShotQuantizeDequantize
 
@@ -758,7 +998,6 @@ class QuantizationSimModel(tf.keras.Model):
         """
 
         def _find_weight_in_layer(weight_name: str, model_layer: tf.keras.layers.Layer):
-
             for weight in model_layer.weights:
                 if weight.name.split(":")[0] == weight_name:
                     return weight
@@ -766,29 +1005,48 @@ class QuantizationSimModel(tf.keras.Model):
             return None
 
         # Mapping used to get the gradients of weights(kernel, bias etc)
-        weight_name_to_gradient = dict(zip([weight.name.split(":")[0] for weight in self.model.trainable_weights],
-                                           gradients))
+        weight_name_to_gradient = dict(
+            zip(
+                [weight.name.split(":")[0] for weight in self.model.trainable_weights],
+                gradients,
+            )
+        )
 
         # Mapping used to get index of encoding min/max gradients (which would be `None`) and fill them
-        weight_name_to_index = dict(zip([weight.name for weight in self.model.trainable_weights],
-                                        range(len(self.model.trainable_weights))))
+        weight_name_to_index = dict(
+            zip(
+                [weight.name for weight in self.model.trainable_weights],
+                range(len(self.model.trainable_weights)),
+            )
+        )
 
         # Only process layers where 'param_quantizers' is defined (i.e. QcQuantizeWrapper layers)
-        for layer in filter(lambda _layer: hasattr(_layer, 'param_quantizers'), self.model.layers):
+        for layer in filter(
+            lambda _layer: hasattr(_layer, "param_quantizers"), self.model.layers
+        ):
             for param_quantizer in layer.param_quantizers:
                 if param_quantizer.name in weight_name_to_gradient:
                     # Value of weight associated with this param quantizer
-                    weight_tensor = _find_weight_in_layer(param_quantizer.name, layer.original_layer)
+                    weight_tensor = _find_weight_in_layer(
+                        param_quantizer.name, layer.original_layer
+                    )
 
                     # Gradients of the weights
                     grad = weight_name_to_gradient[param_quantizer.name]
 
                     # Using the weights and it's gradients, compute gradients for encoding min/max
-                    dloss_by_dmin, dloss_by_dmax = param_quantizer.get_gradients_for_encoding_min_max(weight_tensor,
-                                                                                                      grad)
+                    dloss_by_dmin, dloss_by_dmax = (
+                        param_quantizer.get_gradients_for_encoding_min_max(
+                            weight_tensor, grad
+                        )
+                    )
 
-                    enc_min_index = weight_name_to_index[param_quantizer.encoding_min.name]
-                    enc_max_index = weight_name_to_index[param_quantizer.encoding_max.name]
+                    enc_min_index = weight_name_to_index[
+                        param_quantizer.encoding_min.name
+                    ]
+                    enc_max_index = weight_name_to_index[
+                        param_quantizer.encoding_max.name
+                    ]
 
                     gradients[enc_min_index] = dloss_by_dmin
                     gradients[enc_max_index] = dloss_by_dmax
@@ -796,8 +1054,10 @@ class QuantizationSimModel(tf.keras.Model):
         # TODO: Remove this logic once this has been resolved in QNN/SNPE
         # Go through activation quantizers (Input/Output) and set any ReLU's encoding min to 0
         relu_quantize_wrappers = [
-            _layer for _layer in self.model.layers
-            if isinstance(_layer, QcQuantizeWrapper) and isinstance(_layer.original_layer, tf.keras.layers.ReLU)
+            _layer
+            for _layer in self.model.layers
+            if isinstance(_layer, QcQuantizeWrapper)
+            and isinstance(_layer.original_layer, tf.keras.layers.ReLU)
         ]
 
         def _set_encoding_min_grad_to_None(quantizer):
@@ -832,12 +1092,17 @@ class QuantizationSimModel(tf.keras.Model):
         gradients = tape.gradient(loss, self.model.trainable_weights)
 
         # Manually compute missing gradients for encoding min/max when using range learning
-        if self.quant_scheme in [QuantScheme.training_range_learning_with_tf_init,
-                                 QuantScheme.training_range_learning_with_tf_enhanced_init]:
+        if self.quant_scheme in [
+            QuantScheme.training_range_learning_with_tf_init,
+            QuantScheme.training_range_learning_with_tf_enhanced_init,
+        ]:
             self._fill_missing_encoding_min_max_gradients(gradients)
 
-        gradients_to_apply = [(gradient, weight) for gradient, weight in zip(gradients, self.model.trainable_weights)
-                              if gradient is not None]
+        gradients_to_apply = [
+            (gradient, weight)
+            for gradient, weight in zip(gradients, self.model.trainable_weights)
+            if gradient is not None
+        ]
 
         self.optimizer.apply_gradients(gradients_to_apply)
 
@@ -848,7 +1113,7 @@ class QuantizationSimModel(tf.keras.Model):
 
 def quant_wrappers_for_sequential_block(seq_block: tf.keras.Sequential):
     """
-        Generator for yielding all quantization wrappers for a Sequantial Block
+    Generator for yielding all quantization wrappers for a Sequantial Block
     """
     for layer in seq_block.layers:
         if isinstance(layer, QcQuantizeWrapper):

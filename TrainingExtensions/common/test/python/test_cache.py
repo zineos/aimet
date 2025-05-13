@@ -54,9 +54,9 @@ def _assert_equal_default(output, expected):
     assert output == expected
 
 
-def _test_cache(fn,
-                protocol: SerializationProtocolBase = None,
-                assert_equal_fn: Callable = None):
+def _test_cache(
+    fn, protocol: SerializationProtocolBase = None, assert_equal_fn: Callable = None
+):
     if not assert_equal_fn:
         assert_equal_fn = _assert_equal_default
 
@@ -100,4 +100,5 @@ def test_cache_none():
 def test_cache_numpy_array():
     def assert_equal(x, y):
         assert np.array_equal(x, y)
+
     _test_cache(lambda: np.random.randn(10, 10), assert_equal_fn=assert_equal)

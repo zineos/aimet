@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=redefined-builtin
-""" Affine encoding definition """
+"""Affine encoding definition"""
 
 from typing import Tuple, Optional, Dict, Any, overload, Union, List
 from itertools import chain, repeat
@@ -46,7 +46,11 @@ from aimet_common.defs import EncodingType
 from aimet_common.quantsim import VALID_ENCODING_VERSIONS
 from aimet_torch.v2.utils import docstring
 from aimet_torch.v2.quantization.base import EncodingBase
-from aimet_torch.v2.quantization.affine.backends import quantize, dequantize, _derive_qmin_qmax
+from aimet_torch.v2.quantization.affine.backends import (
+    quantize,
+    dequantize,
+    _derive_qmin_qmax,
+)
 from ._utils import _GridMixin, _register_signature
 
 
@@ -57,34 +61,49 @@ class AffineEncoding(EncodingBase, _GridMixin):
     """
     Encoding object for affine quantization
     """
+
     _init_signatures = []
 
     @overload
     @_register_signature(_init_signatures)
-    def __init__(self, scale: torch.Tensor, offset: torch.Tensor, qmin: int, qmax: int, symmetry=False,
-                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
-        ...
+    def __init__(
+        self,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        qmin: int,
+        qmax: int,
+        symmetry=False,
+        block_size: Optional[Tuple[int, ...]] = None,
+        zero_point_shift: Optional[float] = None,
+    ): ...
 
     @overload
     @_register_signature(_init_signatures)
-    def __init__(self, scale: torch.Tensor, offset: torch.Tensor, bitwidth: int, signed=False, symmetry=False,
-                 block_size: Optional[Tuple[int, ...]] = None, zero_point_shift: Optional[float] = None):
-        ...
+    def __init__(
+        self,
+        scale: torch.Tensor,
+        offset: torch.Tensor,
+        bitwidth: int,
+        signed=False,
+        symmetry=False,
+        block_size: Optional[Tuple[int, ...]] = None,
+        zero_point_shift: Optional[float] = None,
+    ): ...
 
-    def __init__(self, scale: torch.Tensor, offset: torch.Tensor, *args, **kwargs): # pylint: disable=too-many-locals
+    def __init__(self, scale: torch.Tensor, offset: torch.Tensor, *args, **kwargs):  # pylint: disable=too-many-locals
         self._scale = scale
         self._offset = offset
         full_args = (scale, offset, *args)
 
         # Pad positional args with None's such that len(args) == 5
         args = tuple(chain(args, repeat(None, 5 - len(args))))
-        arg0 = kwargs.pop('qmin', kwargs.pop('bitwidth', args[0]))
-        arg1 = kwargs.pop('qmax', kwargs.pop('signed', args[1]))
-        symmetry = kwargs.pop('symmetry', args[2])
+        arg0 = kwargs.pop("qmin", kwargs.pop("bitwidth", args[0]))
+        arg1 = kwargs.pop("qmax", kwargs.pop("signed", args[1]))
+        symmetry = kwargs.pop("symmetry", args[2])
         if symmetry is None:
             symmetry = False
-        block_size = kwargs.pop('block_size', args[3])
-        zero_point_shift = kwargs.pop('zero_point_shift', args[4])
+        block_size = kwargs.pop("block_size", args[3])
+        zero_point_shift = kwargs.pop("zero_point_shift", args[4])
 
         if arg1 is None or isinstance(arg1, bool):
             # (arg0, arg1) == (bitwidth, signed)
@@ -103,11 +122,15 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
         if kwargs:
             cls = type(self).__qualname__
-            unexpected_keys = ', '.join(kwargs.keys())
-            raise TypeError(f"{cls}.__init__ got unexpected keyword argument: {unexpected_keys}")
+            unexpected_keys = ", ".join(kwargs.keys())
+            raise TypeError(
+                f"{cls}.__init__ got unexpected keyword argument: {unexpected_keys}"
+            )
 
         if qmin >= qmax:
-            raise ValueError(f"qmax should be strictly larger than qmin. Got qmax={qmax}, qmin={qmin}")
+            raise ValueError(
+                f"qmax should be strictly larger than qmin. Got qmax={qmax}, qmin={qmin}"
+            )
 
         self.qmin = qmin
         self.qmax = qmax
@@ -115,7 +138,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
         self._block_size = block_size
         self._zero_point_shift = zero_point_shift or 0.0
         if self._zero_point_shift not in [0.0, 0.5]:
-            raise ValueError(f"zero_point_shift should be 0.0 or 0.5. Got {self._zero_point_shift}")
+            raise ValueError(
+                f"zero_point_shift should be 0.0 or 0.5. Got {self._zero_point_shift}"
+            )
 
     @property
     def mapping(self) -> str:
@@ -182,7 +207,7 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
     @property
     @docstring(_GridMixin._get_bitwidth.__doc__)
-    def bitwidth(self) -> int: # pylint: disable=missing-function-docstring
+    def bitwidth(self) -> int:  # pylint: disable=missing-function-docstring
         return self._get_bitwidth()
 
     @bitwidth.setter
@@ -191,7 +216,7 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
     @property
     @docstring(_GridMixin._get_signed.__doc__)
-    def signed(self) -> bool: # pylint: disable=missing-function-docstring
+    def signed(self) -> bool:  # pylint: disable=missing-function-docstring
         return self._get_signed()
 
     @signed.setter
@@ -206,15 +231,15 @@ class AffineEncoding(EncodingBase, _GridMixin):
         if 0 <= self.qmin < self.qmax < 2**8:
             return torch.uint8
 
-        if -2**7 <= self.qmin < self.qmax < 2**7:
+        if -(2**7) <= self.qmin < self.qmax < 2**7:
             return torch.int8
 
-        if -2**15 <= self.qmin < self.qmax < 2**15:
+        if -(2**15) <= self.qmin < self.qmax < 2**15:
             return torch.int16
 
         return torch.int32
 
-    def _get_export_dtype(self) -> str: # pylint: disable=too-many-return-statements
+    def _get_export_dtype(self) -> str:  # pylint: disable=too-many-return-statements
         if 0 <= self.qmin < self.qmax < 2**4:
             return "uint4"
 
@@ -224,13 +249,13 @@ class AffineEncoding(EncodingBase, _GridMixin):
         if 0 <= self.qmin < self.qmax < 2**16:
             return "uint16"
 
-        if -2**3 <= self.qmin < self.qmax < 2**3:
+        if -(2**3) <= self.qmin < self.qmax < 2**3:
             return "int4"
 
-        if -2**7 <= self.qmin < self.qmax < 2**7:
+        if -(2**7) <= self.qmin < self.qmax < 2**7:
             return "int8"
 
-        if -2**15 <= self.qmin < self.qmax < 2**15:
+        if -(2**15) <= self.qmin < self.qmax < 2**15:
             return "int16"
 
         return "int32"
@@ -262,13 +287,17 @@ class AffineEncoding(EncodingBase, _GridMixin):
             return self
 
         if not dtype.is_floating_point:
-            raise RuntimeError(f"Cannot change encoding data dtype to {dtype}, "
-                               "only floating point data types are supported")
+            raise RuntimeError(
+                f"Cannot change encoding data dtype to {dtype}, "
+                "only floating point data types are supported"
+            )
 
         scale = self._scale.to(dtype=dtype, device=device)
         offset = self._offset.to(dtype=dtype, device=device)
         properties = self._get_additional_properties()
-        return type(self)(scale, offset, self.qmin, self.qmax, self._symmetry, **properties)
+        return type(self)(
+            scale, offset, self.qmin, self.qmax, self._symmetry, **properties
+        )
 
     def quantize(self, input: torch.Tensor) -> torch.Tensor:
         scale = self.scale
@@ -277,30 +306,40 @@ class AffineEncoding(EncodingBase, _GridMixin):
         qmax = self.qmax
         block_size = self.block_size
         if self.zero_point_shift != 0.0:
-            raise RuntimeError('Nonzero quant shift not supported in AffineEncoding quantize')
+            raise RuntimeError(
+                "Nonzero quant shift not supported in AffineEncoding quantize"
+            )
 
         # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
         # is known to introduce substantial CPU overhead.
         # Cast types of the inputs to plain torch.Tensor for faster execution.
-        return quantize(input.as_subclass(torch.Tensor),
-                        scale.to(input.dtype).as_subclass(torch.Tensor),
-                        offset.to(input.dtype).as_subclass(torch.Tensor),
-                        qmin, qmax, block_size=block_size)
+        return quantize(
+            input.as_subclass(torch.Tensor),
+            scale.to(input.dtype).as_subclass(torch.Tensor),
+            offset.to(input.dtype).as_subclass(torch.Tensor),
+            qmin,
+            qmax,
+            block_size=block_size,
+        )
 
     def dequantize(self, input: torch.Tensor) -> torch.Tensor:
         scale = self.scale
         offset = self.offset
         block_size = self.block_size
         if self.zero_point_shift != 0.0:
-            raise RuntimeError('Nonzero quant shift not supported in AffineEncoding dequantize')
+            raise RuntimeError(
+                "Nonzero quant shift not supported in AffineEncoding dequantize"
+            )
 
         # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
         # is known to introduce substantial CPU overhead.
         # Cast types of the inputs to plain torch.Tensor for faster execution.
-        return dequantize(input.as_subclass(torch.Tensor),
-                          scale.to(input.dtype).as_subclass(torch.Tensor),
-                          offset.to(input.dtype).as_subclass(torch.Tensor),
-                          block_size=block_size)
+        return dequantize(
+            input.as_subclass(torch.Tensor),
+            scale.to(input.dtype).as_subclass(torch.Tensor),
+            offset.to(input.dtype).as_subclass(torch.Tensor),
+            block_size=block_size,
+        )
 
     def _to_legacy_format(self):
         min = self.min.flatten()
@@ -311,9 +350,15 @@ class AffineEncoding(EncodingBase, _GridMixin):
         offset = self.offset.flatten() + self.qmin
 
         return [
-            {'min': float(min_), 'max': float(max_),
-             'scale': float(scale_), 'offset': int(offset_),
-             'bitwidth': self.bitwidth, 'dtype': 'int', 'is_symmetric': str(self.symmetry)}
+            {
+                "min": float(min_),
+                "max": float(max_),
+                "scale": float(scale_),
+                "offset": int(offset_),
+                "bitwidth": self.bitwidth,
+                "dtype": "int",
+                "is_symmetric": str(self.symmetry),
+            }
             for min_, max_, scale_, offset_ in zip(min, max, scale, offset)
         ]
 
@@ -322,7 +367,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
     def _get_channel_axis(self) -> Optional[int]:
         try:
-            channel_axis = next(iter(axis for axis, dim in enumerate(self.scale.shape) if dim > 1))
+            channel_axis = next(
+                iter(axis for axis, dim in enumerate(self.scale.shape) if dim > 1)
+            )
         except StopIteration:
             # Per-channel encoding that happens to have only one output channel
             # In this case, fall back to per-tensor encoding since we aren't fully
@@ -344,47 +391,64 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
         return None
 
-    def to_qnn_encoding_dict(self, encoding_version=None) -> Union[List, Dict]: # pylint: disable=too-many-branches, too-many-statements
+    def to_qnn_encoding_dict(self, encoding_version=None) -> Union[List, Dict]:  # pylint: disable=too-many-branches, too-many-statements
         """
         Converts encoding object into QNN encoding
         """
-        if encoding_version == '0.6.1':
+        if encoding_version == "0.6.1":
             return self._to_legacy_format()
 
-        if encoding_version == '1.0.0':
-            encoding_dict = {'dtype': 'INT',
-                             'bw': self.bitwidth,
-                             'is_sym': self.symmetry,
-                             'scale': self.scale.flatten().tolist()}
+        if encoding_version == "1.0.0":
+            encoding_dict = {
+                "dtype": "INT",
+                "bw": self.bitwidth,
+                "is_sym": self.symmetry,
+                "scale": self.scale.flatten().tolist(),
+            }
 
             # Compute signed offset if necessary
             offset = self.offset
             if self.signed:
                 offset = offset - 2 ** (self.bitwidth - 1)
-            encoding_dict['offset'] = offset.to(torch.int).flatten().tolist()
+            encoding_dict["offset"] = offset.to(torch.int).flatten().tolist()
             if self.zero_point_shift != 0.0:
                 assert self.zero_point_shift == 0.5
                 assert self.symmetry
-                encoding_dict['offset'] = [encoding_dict['offset'][0] + self.zero_point_shift] * len(encoding_dict['offset'])
+                encoding_dict["offset"] = [
+                    encoding_dict["offset"][0] + self.zero_point_shift
+                ] * len(encoding_dict["offset"])
 
-            assert self.granularity != 'unknown'
-            if self.granularity == 'pertensor':
-                encoding_dict['enc_type'] = EncodingType.PER_TENSOR.name
-            elif self.granularity == 'perchannel':
-                encoding_dict['enc_type'] = EncodingType.PER_CHANNEL.name
+            assert self.granularity != "unknown"
+            if self.granularity == "pertensor":
+                encoding_dict["enc_type"] = EncodingType.PER_TENSOR.name
+            elif self.granularity == "perchannel":
+                encoding_dict["enc_type"] = EncodingType.PER_CHANNEL.name
             else:
-                encoding_dict['enc_type'] = EncodingType.PER_BLOCK.name
-                encoding_dict['block_size'] = self.block_size[self._get_block_axis()]
-                if encoding_dict['block_size'] == -1:
-                    raise NotImplementedError('Exporting encodings to 1.0.0 format with block size -1 is not '
-                                              'supported yet. Export using sim.export() instead.')
+                encoding_dict["enc_type"] = EncodingType.PER_BLOCK.name
+                encoding_dict["block_size"] = self.block_size[self._get_block_axis()]
+                if encoding_dict["block_size"] == -1:
+                    raise NotImplementedError(
+                        "Exporting encodings to 1.0.0 format with block size -1 is not "
+                        "supported yet. Export using sim.export() instead."
+                    )
             return encoding_dict
 
         if encoding_version == "2.0.0":
             if self._zero_point_shift != 0.0:
-                raise RuntimeError('Nonzero quant shift not supported in AffineEncoding to_qnn_encoding_dict')
+                raise RuntimeError(
+                    "Nonzero quant shift not supported in AffineEncoding to_qnn_encoding_dict"
+                )
             output_dtype = self._get_export_dtype()
-            assert output_dtype in ("int4", "int8", "int16", "int32", "uint4", "uint8", "uint16", "uint32")
+            assert output_dtype in (
+                "int4",
+                "int8",
+                "int16",
+                "int32",
+                "uint4",
+                "uint8",
+                "uint16",
+                "uint32",
+            )
 
             y_scale = self.scale
             if self.symmetry:
@@ -399,9 +463,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
             if self.granularity == "pertensor":
                 pass
-            elif self.granularity == 'perchannel':
+            elif self.granularity == "perchannel":
                 channel_axis = self._get_channel_axis()
-            elif self.granularity == 'blockwise':
+            elif self.granularity == "blockwise":
                 # NOTE: This sometimes fail
                 block_axis = self._get_block_axis()
             else:
@@ -420,7 +484,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
                 y_zero_point = y_zero_point.squeeze()
 
             y_scale = y_scale.tolist()
-            y_zero_point = None if torch.all(y_zero_point == 0) else y_zero_point.tolist()
+            y_zero_point = (
+                None if torch.all(y_zero_point == 0) else y_zero_point.tolist()
+            )
 
             ret = {
                 "output_dtype": output_dtype,
@@ -435,13 +501,17 @@ class AffineEncoding(EncodingBase, _GridMixin):
 
             return ret
 
-        raise AssertionError(f'Export encoding version {encoding_version} not supported.'
-                             f'Expected one of: {VALID_ENCODING_VERSIONS}')
+        raise AssertionError(
+            f"Export encoding version {encoding_version} not supported."
+            f"Expected one of: {VALID_ENCODING_VERSIONS}"
+        )
+
 
 class VectorEncoding(AffineEncoding):
     """
     Encoding object for vector quantization
     """
+
     def __init__(
         self,
         scale: torch.Tensor,
@@ -482,21 +552,24 @@ class VectorEncoding(AffineEncoding):
 
     def to_qnn_encoding_dict(self, encoding_version=None):
         encodings = super().to_qnn_encoding_dict(encoding_version)
-        if encoding_version == '1.0.0':
+        if encoding_version == "1.0.0":
             encodings.update(
                 rows_per_block=self.rows_per_block,
                 cols_per_block=self.cols_per_block,
                 vector_dim=self.vector_dim,
                 vector_stride=self.vector_stride,
-                index_bw=self.index_bw)
-            encodings['enc_type'] = EncodingType.VECTOR.name
+                index_bw=self.index_bw,
+            )
+            encodings["enc_type"] = EncodingType.VECTOR.name
         return encodings
+
 
 # pylint: disable=too-many-arguments
 class GroupedBlockEncoding(AffineEncoding):
     """
     Encoding object for grouped block quantization
     """
+
     def __init__(
         self,
         scale: torch.Tensor,
@@ -510,7 +583,9 @@ class GroupedBlockEncoding(AffineEncoding):
         per_channel_scale: Optional[torch.Tensor] = None,
         **kwargs,
     ):
-        super().__init__(scale, offset, bitwidth, signed, symmetry, block_size, **kwargs)
+        super().__init__(
+            scale, offset, bitwidth, signed, symmetry, block_size, **kwargs
+        )
         self.block_grouping = block_grouping
         self.decompressed_bw = decompressed_bw
         self.per_channel_scale = per_channel_scale
@@ -523,12 +598,14 @@ class GroupedBlockEncoding(AffineEncoding):
 
         scale = per_block_int_scale * per_channel_scale
         """
-        return quantize(self.scale,
-                        scale=self.per_channel_scale,
-                        offset=torch.zeros_like(self.per_channel_scale),
-                        qmin=1,
-                        qmax=2 ** (self.decompressed_bw - self.bitwidth),
-                        block_size=self.block_grouping)
+        return quantize(
+            self.scale,
+            scale=self.per_channel_scale,
+            offset=torch.zeros_like(self.per_channel_scale),
+            qmin=1,
+            qmax=2 ** (self.decompressed_bw - self.bitwidth),
+            block_size=self.block_grouping,
+        )
 
     def to_qnn_encoding_dict(self, encoding_version=None) -> Union[List, Dict]:
         """
@@ -537,17 +614,23 @@ class GroupedBlockEncoding(AffineEncoding):
         encoding_dict = super().to_qnn_encoding_dict(encoding_version)
 
         # Version 0.6.1 currently used for save_encodings_to_json
-        if all(group_size == 1 for group_size in self.block_grouping) or encoding_version == '0.6.1':
+        if (
+            all(group_size == 1 for group_size in self.block_grouping)
+            or encoding_version == "0.6.1"
+        ):
             # Equivalent to AffineEncoding
             pass
         elif encoding_version == "1.0.0":
-            encoding_dict['bw'] = self.decompressed_bw
-            encoding_dict['compressed_bw'] = self.bitwidth
-            encoding_dict['scale'] = self.per_channel_scale.flatten().tolist()
-            encoding_dict['offset'] = \
-                [-2 ** (self.decompressed_bw - 1) for _ in encoding_dict['scale']]
-            encoding_dict['enc_type'] = EncodingType.LPBQ.name
-            encoding_dict['per_block_int_scale'] = self.per_block_int_scale.to(torch.int32).flatten().tolist()
+            encoding_dict["bw"] = self.decompressed_bw
+            encoding_dict["compressed_bw"] = self.bitwidth
+            encoding_dict["scale"] = self.per_channel_scale.flatten().tolist()
+            encoding_dict["offset"] = [
+                -(2 ** (self.decompressed_bw - 1)) for _ in encoding_dict["scale"]
+            ]
+            encoding_dict["enc_type"] = EncodingType.LPBQ.name
+            encoding_dict["per_block_int_scale"] = (
+                self.per_block_int_scale.to(torch.int32).flatten().tolist()
+            )
         elif encoding_version == "2.0.0":
             del encoding_dict["y_scale"]
             del encoding_dict["output_dtype"]
@@ -561,10 +644,14 @@ class GroupedBlockEncoding(AffineEncoding):
                 )
 
             encoding_dict = {
-                "per_block_int_scale": self.per_block_int_scale.to(torch.int32).tolist(),
+                "per_block_int_scale": self.per_block_int_scale.to(
+                    torch.int32
+                ).tolist(),
                 "per_channel_float_scale": self.per_channel_scale.tolist(),
                 **encoding_dict,
-                "output_dtype": f"int{compressed_bw}" if self.signed else f"uint{compressed_bw}"
+                "output_dtype": f"int{compressed_bw}"
+                if self.signed
+                else f"uint{compressed_bw}",
             }
 
         return encoding_dict
@@ -591,14 +678,17 @@ class GroupedBlockEncoding(AffineEncoding):
 
         block_axis = encoding._get_block_axis()
         block_grouping = tuple(
-            s_dim if axis == block_axis else 1 for axis, s_dim in enumerate(encoding.scale.shape)
+            s_dim if axis == block_axis else 1
+            for axis, s_dim in enumerate(encoding.scale.shape)
         )
-        qtzr = GroupedBlockQuantizeDequantize(shape=encoding.scale.shape,
-                                              bitwidth=encoding.bitwidth,
-                                              symmetric=encoding.symmetry,
-                                              decompressed_bw=encoding.bitwidth * 2,
-                                              block_size=encoding.block_size,
-                                              block_grouping=block_grouping)
+        qtzr = GroupedBlockQuantizeDequantize(
+            shape=encoding.scale.shape,
+            bitwidth=encoding.bitwidth,
+            symmetric=encoding.symmetry,
+            decompressed_bw=encoding.bitwidth * 2,
+            block_size=encoding.block_size,
+            block_grouping=block_grouping,
+        )
         with torch.no_grad():
             qtzr.min.copy_(encoding.min)
             qtzr.max.copy_(encoding.max)
@@ -609,6 +699,4 @@ class GroupedBlockEncoding(AffineEncoding):
         if torch.allclose(encoding.scale, lpbq_scale):
             return qtzr.get_encodings()
 
-        raise ValueError(
-            "Failed to interpret encoding as GroupedBlockEncoding."
-        )
+        raise ValueError("Failed to interpret encoding as GroupedBlockEncoding.")

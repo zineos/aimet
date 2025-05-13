@@ -37,7 +37,7 @@
 #
 #  =============================================================================
 
-""" Contains Winnowing related utility functions are used by both PyTorch and TensorFlow Winnower. """
+"""Contains Winnowing related utility functions are used by both PyTorch and TensorFlow Winnower."""
 
 from typing import List, Set, Union
 from enum import Enum
@@ -71,7 +71,7 @@ def get_zero_positions_in_binary_mask(mask: List[int]) -> List[int]:
 
 
 class ConnectivityType(Enum):
-    """ Defines the channel types"""
+    """Defines the channel types"""
 
     null = 1
     direct = 2
@@ -89,98 +89,104 @@ class OpConnectivity:
     """
 
     # TODO: remove all types used in old connected graph when it is completely removed.
-    pytorch_dict = {'Conv': ConnectivityType.null,
-                    'ConvTranspose': ConnectivityType.null,
-                    'Linear': ConnectivityType.null,
-                    'Gemm': ConnectivityType.null,
-                    'DownsampleLayer': ConnectivityType.stop,
-                    'Dropout': ConnectivityType.direct,
-                    'Dropout2d': ConnectivityType.direct,
-                    'Relu': ConnectivityType.direct,
-                    'MaxPool': ConnectivityType.direct,
-                    'MaxPool2d': ConnectivityType.direct,
-                    'AveragePool': ConnectivityType.direct,
-                    'AvgPool2d': ConnectivityType.direct,
-                    'Neg': ConnectivityType.direct,
-                    'BatchNorm2d': ConnectivityType.direct,
-                    'Flatten': ConnectivityType.direct,
-                    'flatten': ConnectivityType.direct,
-                    'ReduceMean': ConnectivityType.direct,
-                    'GlobalAveragePool': ConnectivityType.direct,
-                    'AdaptiveAvgPool2d': ConnectivityType.direct,
-                    'BatchNormalization': ConnectivityType.direct,
-                    'BatchNorm1d': ConnectivityType.direct,
-                    'Add': ConnectivityType.add,
-                    'Concat': ConnectivityType.concat,
-                    'Split': ConnectivityType.split,
-                    CG_SPLIT: ConnectivityType.split,
-                    'LogSoftmax': ConnectivityType.direct,
-                    'Gather': ConnectivityType.skip,
-                    'Reshape': ConnectivityType.skip,
-                    'ListConstruct': ConnectivityType.skip,
-                    'Pad': ConnectivityType.skip,
-                    'Mul': ConnectivityType.skip,
-                    'Clip': ConnectivityType.direct,
-                    'Upsample': ConnectivityType.skip,
-                    'index_select': ConnectivityType.null,
-                    'mean': ConnectivityType.direct,
-                    'floor': ConnectivityType.direct,
-                    'cat': ConnectivityType.concat,
-                    'add': ConnectivityType.add,
-                    'size': ConnectivityType.skip,
-                    'NumToTensor': ConnectivityType.skip,
-                    'mul': ConnectivityType.skip,
-                    'view': ConnectivityType.skip,
-                    'reshape': ConnectivityType.skip,
-                    'slice': ConnectivityType.skip,
-                    'unsqueeze': ConnectivityType.skip,
-                    'select': ConnectivityType.skip}
+    pytorch_dict = {
+        "Conv": ConnectivityType.null,
+        "ConvTranspose": ConnectivityType.null,
+        "Linear": ConnectivityType.null,
+        "Gemm": ConnectivityType.null,
+        "DownsampleLayer": ConnectivityType.stop,
+        "Dropout": ConnectivityType.direct,
+        "Dropout2d": ConnectivityType.direct,
+        "Relu": ConnectivityType.direct,
+        "MaxPool": ConnectivityType.direct,
+        "MaxPool2d": ConnectivityType.direct,
+        "AveragePool": ConnectivityType.direct,
+        "AvgPool2d": ConnectivityType.direct,
+        "Neg": ConnectivityType.direct,
+        "BatchNorm2d": ConnectivityType.direct,
+        "Flatten": ConnectivityType.direct,
+        "flatten": ConnectivityType.direct,
+        "ReduceMean": ConnectivityType.direct,
+        "GlobalAveragePool": ConnectivityType.direct,
+        "AdaptiveAvgPool2d": ConnectivityType.direct,
+        "BatchNormalization": ConnectivityType.direct,
+        "BatchNorm1d": ConnectivityType.direct,
+        "Add": ConnectivityType.add,
+        "Concat": ConnectivityType.concat,
+        "Split": ConnectivityType.split,
+        CG_SPLIT: ConnectivityType.split,
+        "LogSoftmax": ConnectivityType.direct,
+        "Gather": ConnectivityType.skip,
+        "Reshape": ConnectivityType.skip,
+        "ListConstruct": ConnectivityType.skip,
+        "Pad": ConnectivityType.skip,
+        "Mul": ConnectivityType.skip,
+        "Clip": ConnectivityType.direct,
+        "Upsample": ConnectivityType.skip,
+        "index_select": ConnectivityType.null,
+        "mean": ConnectivityType.direct,
+        "floor": ConnectivityType.direct,
+        "cat": ConnectivityType.concat,
+        "add": ConnectivityType.add,
+        "size": ConnectivityType.skip,
+        "NumToTensor": ConnectivityType.skip,
+        "mul": ConnectivityType.skip,
+        "view": ConnectivityType.skip,
+        "reshape": ConnectivityType.skip,
+        "slice": ConnectivityType.skip,
+        "unsqueeze": ConnectivityType.skip,
+        "select": ConnectivityType.skip,
+    }
 
     # Including Reshape under null for tensorflow so that input to the layer below does not get propagated
     # to the output of the layer above.
     # Putting Placeholder under null so an output mask is generated for it, even though it will never be changed.
     # Output mask needed in a check in module_reducer
-    tensorflow_dict = {'Conv2D': ConnectivityType.null,
-                       'DepthwiseConv2dNative': ConnectivityType.null,
-                       'Dense': ConnectivityType.null,
-                       'Placeholder': ConnectivityType.null,
-                       'PlaceholderWithDefault': ConnectivityType.null,
-                       'Downsample': ConnectivityType.null,
-                       'BatchNorm': ConnectivityType.direct,
-                       'AvgPool': ConnectivityType.direct,
-                       'FusedBatchNormV3': ConnectivityType.direct,
-                       'Relu': ConnectivityType.direct,
-                       'Relu6': ConnectivityType.direct,
-                       'MaxPool': ConnectivityType.direct,
-                       'Tanh': ConnectivityType.direct,
-                       'Identity': ConnectivityType.direct,
-                       'Dropout': ConnectivityType.direct,
-                       'Pad': ConnectivityType.direct,
-                       'PadV2': ConnectivityType.direct,
-                       'MirrorPad': ConnectivityType.direct,
-                       'Minimum': ConnectivityType.direct,
-                       'Maximum': ConnectivityType.direct,
-                       'Upsample2D': ConnectivityType.direct,
-                       'LeakyRelu': ConnectivityType.direct,
-                       'Add': ConnectivityType.add,
-                       'AddN': ConnectivityType.add,
-                       'AddV2': ConnectivityType.add,
-                       'ConcatV2': ConnectivityType.concat,
-                       'branch': ConnectivityType.split,
-                       'Softmax': ConnectivityType.stop,
-                       'Squeeze': ConnectivityType.stop,
-                       'ArgMax': ConnectivityType.stop,
-                       'Equal': ConnectivityType.stop,
-                       'Cast': ConnectivityType.stop,
-                       'Mean': ConnectivityType.stop,
-                       'Reshape': ConnectivityType.stop,
-                       'Shape': ConnectivityType.stop,
-                       'Upsample': ConnectivityType.stop,
-                       'Flatten': ConnectivityType.stop,
-                       'GlobalMaxpool2D': ConnectivityType.stop}
+    tensorflow_dict = {
+        "Conv2D": ConnectivityType.null,
+        "DepthwiseConv2dNative": ConnectivityType.null,
+        "Dense": ConnectivityType.null,
+        "Placeholder": ConnectivityType.null,
+        "PlaceholderWithDefault": ConnectivityType.null,
+        "Downsample": ConnectivityType.null,
+        "BatchNorm": ConnectivityType.direct,
+        "AvgPool": ConnectivityType.direct,
+        "FusedBatchNormV3": ConnectivityType.direct,
+        "Relu": ConnectivityType.direct,
+        "Relu6": ConnectivityType.direct,
+        "MaxPool": ConnectivityType.direct,
+        "Tanh": ConnectivityType.direct,
+        "Identity": ConnectivityType.direct,
+        "Dropout": ConnectivityType.direct,
+        "Pad": ConnectivityType.direct,
+        "PadV2": ConnectivityType.direct,
+        "MirrorPad": ConnectivityType.direct,
+        "Minimum": ConnectivityType.direct,
+        "Maximum": ConnectivityType.direct,
+        "Upsample2D": ConnectivityType.direct,
+        "LeakyRelu": ConnectivityType.direct,
+        "Add": ConnectivityType.add,
+        "AddN": ConnectivityType.add,
+        "AddV2": ConnectivityType.add,
+        "ConcatV2": ConnectivityType.concat,
+        "branch": ConnectivityType.split,
+        "Softmax": ConnectivityType.stop,
+        "Squeeze": ConnectivityType.stop,
+        "ArgMax": ConnectivityType.stop,
+        "Equal": ConnectivityType.stop,
+        "Cast": ConnectivityType.stop,
+        "Mean": ConnectivityType.stop,
+        "Reshape": ConnectivityType.stop,
+        "Shape": ConnectivityType.stop,
+        "Upsample": ConnectivityType.stop,
+        "Flatten": ConnectivityType.stop,
+        "GlobalMaxpool2D": ConnectivityType.stop,
+    }
 
     @classmethod
-    def get_op_connectivity(cls, model_api: ModelApi, op_type: str) -> Union[ConnectivityType, None]:
+    def get_op_connectivity(
+        cls, model_api: ModelApi, op_type: str
+    ) -> Union[ConnectivityType, None]:
         """
         Get op connectivity for a module, and return None if the module is not recognized.
         :param model_api: Represents either pytorch or tensorflow
@@ -199,8 +205,8 @@ def get_conv_ops_for_api(model_api: ModelApi) -> Set:
     :param model_api: Enum for whether the api is pytorch or tensorflow
     """
     if model_api == ModelApi.pytorch:
-        return {'Conv', 'ConvTranspose'}
-    return {'Conv2D', 'DepthwiseConv2dNative'}
+        return {"Conv", "ConvTranspose"}
+    return {"Conv2D", "DepthwiseConv2dNative"}
 
 
 def get_linear_ops_for_api(model_api: ModelApi) -> Set:
@@ -210,11 +216,13 @@ def get_linear_ops_for_api(model_api: ModelApi) -> Set:
     :param model_api: Enum for whether the api is pytorch or tensorflow
     """
     if model_api == ModelApi.pytorch:
-        return {'Gemm'}
-    return {'Dense'}
+        return {"Gemm"}
+    return {"Dense"}
 
 
-def get_indices_among_ones_of_overlapping_ones(more_ones_mask: List[int], less_ones_mask: List[int]) -> List[int]:
+def get_indices_among_ones_of_overlapping_ones(
+    more_ones_mask: List[int], less_ones_mask: List[int]
+) -> List[int]:
     """
     :param more_ones_mask: Mask that has more ones
     :param less_ones_mask: Mask that has less ones

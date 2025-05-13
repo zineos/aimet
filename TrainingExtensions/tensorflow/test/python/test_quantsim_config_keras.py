@@ -43,9 +43,16 @@ from tensorflow.keras.layers import InputLayer
 from aimet_common.defs import QuantScheme, QuantizationDataType
 from aimet_tensorflow.keras.batch_norm_fold import fold_all_batch_norms
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
-from aimet_tensorflow.keras.quant_sim.tensor_quantizer import ParamPerChannelQuantizer, ParamPerTensorQuantizer
-from aimet_tensorflow.keras.quantsim_config.quantsim_config import QuantSimConfigurator, INPUT_QUANTIZERS, \
-    OUTPUT_QUANTIZERS, PARAM_QUANTIZERS
+from aimet_tensorflow.keras.quant_sim.tensor_quantizer import (
+    ParamPerChannelQuantizer,
+    ParamPerTensorQuantizer,
+)
+from aimet_tensorflow.keras.quantsim_config.quantsim_config import (
+    QuantSimConfigurator,
+    INPUT_QUANTIZERS,
+    OUTPUT_QUANTIZERS,
+    PARAM_QUANTIZERS,
+)
 from test_models_keras import single_residual, concat_functional, tiny_conv_net
 
 
@@ -60,8 +67,9 @@ class TestQuantSimConfig:
         """
         model = concat_functional()
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8)
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph, QuantScheme.post_training_tf_enhanced, "nearest", 8, 8
+        )
 
         # layers excluding InputLayer
         layers = [x for x in model.layers if not isinstance(x, InputLayer)]
@@ -72,7 +80,9 @@ class TestQuantSimConfig:
         # 1 (Affected quantizers when enabling output quantizer of this layer)
         # 2 (Affected quantizers when disabling input quantizer of this layer)
         # 3 (Affected quantizers when disabling output quantizer of this layer)
-        layer_to_affected_tensor_quantizers_dict = quant_sim_configurator._layer_to_affected_quantizer_info_dict
+        layer_to_affected_tensor_quantizers_dict = (
+            quant_sim_configurator._layer_to_affected_quantizer_info_dict
+        )
 
         # Input layer 1
         assert len(layer_to_affected_tensor_quantizers_dict[dense1][0]) == 1
@@ -94,9 +104,15 @@ class TestQuantSimConfig:
         assert len(layer_to_affected_tensor_quantizers_dict[concat1][0]) == 1
         assert len(layer_to_affected_tensor_quantizers_dict[concat1][1]) == 1
         assert len(layer_to_affected_tensor_quantizers_dict[concat1][2]) == 3
-        assert (concat1, "input") in layer_to_affected_tensor_quantizers_dict[concat1][2]
-        assert (dense2, "output") in layer_to_affected_tensor_quantizers_dict[concat1][2]
-        assert (dense3, "output") in layer_to_affected_tensor_quantizers_dict[concat1][2]
+        assert (concat1, "input") in layer_to_affected_tensor_quantizers_dict[concat1][
+            2
+        ]
+        assert (dense2, "output") in layer_to_affected_tensor_quantizers_dict[concat1][
+            2
+        ]
+        assert (dense3, "output") in layer_to_affected_tensor_quantizers_dict[concat1][
+            2
+        ]
         assert len(layer_to_affected_tensor_quantizers_dict[concat1][3]) == 2
 
         # Last layer
@@ -112,12 +128,19 @@ class TestQuantSimConfig:
         """
         model = single_residual()
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, "")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph, QuantScheme.post_training_tf_enhanced, "nearest", 8, 8, ""
+        )
 
         # layers excluding InputLayer
         layers = model.layers[1:]
-        conv1, bn1, max_pool1, conv2, conv4 = layers[0], layers[1], layers[3], layers[4], layers[7]
+        conv1, bn1, max_pool1, conv2, conv4 = (
+            layers[0],
+            layers[1],
+            layers[3],
+            layers[4],
+            layers[7],
+        )
         conv3, avg_pool1, add1, dense1 = layers[8], layers[9], layers[10], layers[14]
 
         # Note:
@@ -125,7 +148,9 @@ class TestQuantSimConfig:
         # 1 (Affected quantizers when enabling output quantizer of this layer)
         # 2 (Affected quantizers when disabling input quantizer of this layer)
         # 3 (Affected quantizers when disabling output quantizer of this layer)
-        layer_to_affected_tensor_quantizers_dict = quant_sim_configurator._layer_to_affected_quantizer_info_dict
+        layer_to_affected_tensor_quantizers_dict = (
+            quant_sim_configurator._layer_to_affected_quantizer_info_dict
+        )
 
         # First layer
         assert len(layer_to_affected_tensor_quantizers_dict[conv1][0]) == 1
@@ -140,9 +165,15 @@ class TestQuantSimConfig:
         assert len(layer_to_affected_tensor_quantizers_dict[max_pool1][1]) == 1
         assert len(layer_to_affected_tensor_quantizers_dict[max_pool1][2]) == 2
         assert len(layer_to_affected_tensor_quantizers_dict[max_pool1][3]) == 3
-        assert (max_pool1, "output") in layer_to_affected_tensor_quantizers_dict[max_pool1][3]
-        assert (conv2, "input") in layer_to_affected_tensor_quantizers_dict[max_pool1][3]
-        assert (conv4, "input") in layer_to_affected_tensor_quantizers_dict[max_pool1][3]
+        assert (max_pool1, "output") in layer_to_affected_tensor_quantizers_dict[
+            max_pool1
+        ][3]
+        assert (conv2, "input") in layer_to_affected_tensor_quantizers_dict[max_pool1][
+            3
+        ]
+        assert (conv4, "input") in layer_to_affected_tensor_quantizers_dict[max_pool1][
+            3
+        ]
 
         # Layer having multiple producers (Add layer)
         assert len(layer_to_affected_tensor_quantizers_dict[add1][0]) == 1
@@ -150,7 +181,9 @@ class TestQuantSimConfig:
         assert len(layer_to_affected_tensor_quantizers_dict[add1][2]) == 3
         assert (add1, "input") in layer_to_affected_tensor_quantizers_dict[add1][2]
         assert (conv3, "output") in layer_to_affected_tensor_quantizers_dict[add1][2]
-        assert (avg_pool1, "output") in layer_to_affected_tensor_quantizers_dict[add1][2]
+        assert (avg_pool1, "output") in layer_to_affected_tensor_quantizers_dict[add1][
+            2
+        ]
         assert len(layer_to_affected_tensor_quantizers_dict[add1][3]) == 2
 
         # Last layer
@@ -165,23 +198,17 @@ class TestQuantSimConfig:
         """
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "per_channel_quantization": "True",
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        with open('./data/quantsim_config.json', 'w') as f:
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
 
         model = single_residual()
@@ -189,8 +216,15 @@ class TestQuantSimConfig:
         # Here we fold those potential Batch Norms before going to the configurator.
         _, model = fold_all_batch_norms(model)
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         for op in connected_graph.ordered_ops:
@@ -219,8 +253,8 @@ class TestQuantSimConfig:
                     assert not q._tensor_quantizer.getUnsignedSymmetric()
                     assert not q._tensor_quantizer.getStrictSymmetric()
 
-        if os.path.exists('./data/quantsim_config.json'):
-            os.remove('./data/quantsim_config.json')
+        if os.path.exists("./data/quantsim_config.json"):
+            os.remove("./data/quantsim_config.json")
 
     def test_parse_config_file_symmetric_modes(self):
         """
@@ -231,22 +265,28 @@ class TestQuantSimConfig:
                 "ops": {},
                 "params": {},
                 "strict_symmetric": "True",
-                "unsigned_symmetric": "False"
+                "unsigned_symmetric": "False",
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-            }
+            "model_output": {},
         }
-        with open('./data/quantsim_config.json', 'w') as f:
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
 
         model = single_residual()
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         for op in connected_graph.ordered_ops:
@@ -264,8 +304,8 @@ class TestQuantSimConfig:
                 assert q.use_strict_symmetric
                 assert not q.use_unsigned_symmetric
 
-        if os.path.exists('./data/quantsim_config.json'):
-            os.remove('./data/quantsim_config.json')
+        if os.path.exists("./data/quantsim_config.json"):
+            os.remove("./data/quantsim_config.json")
 
     def test_parse_config_file_params(self):
         """
@@ -273,34 +313,29 @@ class TestQuantSimConfig:
         """
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
-            "params": {
-                "weight": {
-                    "is_quantized": "True",
-                    "is_symmetric": "False"
-                }
-            },
+            "params": {"weight": {"is_quantized": "True", "is_symmetric": "False"}},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-            }
+            "model_output": {},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
 
         model = single_residual()
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         for op in connected_graph.ordered_ops:
@@ -324,14 +359,8 @@ class TestQuantSimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
@@ -339,17 +368,13 @@ class TestQuantSimConfig:
                     "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
-                        "bias": {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        }
-                    }
+                        "bias": {"is_quantized": "True", "is_symmetric": "False"}
+                    },
                 }
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-            }
+            "model_output": {},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
@@ -359,8 +384,15 @@ class TestQuantSimConfig:
         # Here we fold those potential Batch Norms before going to the configurator.
         _, model = fold_all_batch_norms(model)
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         for op in connected_graph.ordered_ops:
@@ -395,25 +427,20 @@ class TestQuantSimConfig:
         """
 
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "False", # RuntimeError should happen from here
-                    "is_output_quantized": "False"
+                    "is_input_quantized": "False",  # RuntimeError should happen from here
+                    "is_output_quantized": "False",
                 },
-                "BatchNormalization": {
-                    "is_input_quantized": "True"
-                }
+                "BatchNormalization": {"is_input_quantized": "True"},
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        with open('./data/quantsim_config.json', 'w') as f:
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
 
         model = single_residual()
@@ -423,8 +450,15 @@ class TestQuantSimConfig:
         connected_graph = ConnectedGraph(model)
 
         with pytest.raises(RuntimeError):
-            _ = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced, "nearest",
-                                     8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+            _ = QuantSimConfigurator(
+                connected_graph,
+                QuantScheme.post_training_tf_enhanced,
+                "nearest",
+                8,
+                8,
+                QuantizationDataType.int,
+                "./data/quantsim_config.json",
+            )
 
         if os.path.exists("./data/quantsim_config.json"):
             os.remove("./data/quantsim_config.json")
@@ -434,17 +468,12 @@ class TestQuantSimConfig:
         Test that model input quantization parameters are set correctly when using json config file
         """
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
@@ -452,8 +481,15 @@ class TestQuantSimConfig:
         model = single_residual()
         connected_graph = ConnectedGraph(model)
 
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         conv1 = model.layers[1]
@@ -484,30 +520,18 @@ class TestQuantSimConfig:
         """
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "False"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [
-                {
-                    "op_list": ["Conv", "BatchNormalization"]
-                },
-                {
-                    "op_list": ["Relu", "MaxPool"]
-                },
-                {
-                    "op_list": ["Conv", "Relu", "AveragePool"]
-                }
+                {"op_list": ["Conv", "BatchNormalization"]},
+                {"op_list": ["Relu", "MaxPool"]},
+                {"op_list": ["Conv", "Relu", "AveragePool"]},
             ],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
@@ -515,13 +539,30 @@ class TestQuantSimConfig:
         model = tiny_conv_net()
         connected_graph = ConnectedGraph(model)
 
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
-        conv1, relu1, conv2, conv3 = model.layers[1], model.layers[3], model.layers[5], model.layers[8]
+        conv1, relu1, conv2, conv3 = (
+            model.layers[1],
+            model.layers[3],
+            model.layers[5],
+            model.layers[8],
+        )
         relu3 = model.layers[9]
-        bn1, maxpool, bn2, avgpool = model.layers[2], model.layers[4], model.layers[6], model.layers[10]
+        bn1, maxpool, bn2, avgpool = (
+            model.layers[2],
+            model.layers[4],
+            model.layers[6],
+            model.layers[10],
+        )
         for op in connected_graph.ordered_ops:
             layer = op.get_module()
 
@@ -555,17 +596,12 @@ class TestQuantSimConfig:
         Test that model output quantization parameters are set correctly when using json config file
         """
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-                "is_output_quantized": "True"
-            }
+            "model_output": {"is_output_quantized": "True"},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
@@ -573,8 +609,15 @@ class TestQuantSimConfig:
         model = single_residual()
         connected_graph = ConnectedGraph(model)
 
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         fc = model.layers[-1]
@@ -605,32 +648,32 @@ class TestQuantSimConfig:
         """
         quantsim_config = {
             "defaults": {
-                "ops": { "is_output_quantized": "True" },
-                "params": {
-                    "is_quantized": "True",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
                 "strict_symmetric": "False",
                 "unsigned_symmetric": "True",
-                "per_channel_quantization": "True"
+                "per_channel_quantization": "True",
             },
-            "params": {
-                "bias": { "is_quantized": "False" }
-            },
-            "op_type": {
-                "Gemm": { "per_channel_quantization": "False" }
-            },
+            "params": {"bias": {"is_quantized": "False"}},
+            "op_type": {"Gemm": {"per_channel_quantization": "False"}},
             "supergroups": [],
-            "model_input": { "is_input_quantized": "True" },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
         with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
 
         model = tiny_conv_net()
         connected_graph = ConnectedGraph(model)
-        quant_sim_configurator = QuantSimConfigurator(connected_graph, QuantScheme.post_training_tf_enhanced,
-                                                      "nearest", 8, 8, QuantizationDataType.int, "./data/quantsim_config.json")
+        quant_sim_configurator = QuantSimConfigurator(
+            connected_graph,
+            QuantScheme.post_training_tf_enhanced,
+            "nearest",
+            8,
+            8,
+            QuantizationDataType.int,
+            "./data/quantsim_config.json",
+        )
 
         layer_to_quantizers_dict = quant_sim_configurator._layer_to_quantizers_dict
         for layer, quantizers in layer_to_quantizers_dict.items():

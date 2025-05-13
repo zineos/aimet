@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Prunes layers using Channel Pruning scheme """
+"""Prunes layers using Channel Pruning scheme"""
+
 from typing import Iterator, List
 import copy
 
@@ -59,8 +60,13 @@ class InputChannelPruner(Pruner):
     Pruner for Channel Pruning method
     """
 
-    def __init__(self, data_loader: Iterator, input_shape, num_reconstruction_samples: int,
-                 allow_custom_downsample_ops: bool):
+    def __init__(
+        self,
+        data_loader: Iterator,
+        input_shape,
+        num_reconstruction_samples: int,
+        allow_custom_downsample_ops: bool,
+    ):
         """
         Input Channel Pruner with given data_loader, input shape, number of batches and samples per image.
 
@@ -97,12 +103,19 @@ class InputChannelPruner(Pruner):
 
         num_in_channels = layer.in_channels
 
-        prune_indices = select_channels_to_prune(weight_data, comp_ratio, num_in_channels)
+        prune_indices = select_channels_to_prune(
+            weight_data, comp_ratio, num_in_channels
+        )
 
         return prune_indices
 
-    def _data_subsample_and_reconstruction(self, orig_layer: torch.nn.Conv2d, pruned_layer: torch.nn.Conv2d,
-                                           orig_model: torch.nn.Module, comp_model: torch.nn.Module):
+    def _data_subsample_and_reconstruction(
+        self,
+        orig_layer: torch.nn.Conv2d,
+        pruned_layer: torch.nn.Conv2d,
+        orig_model: torch.nn.Module,
+        comp_model: torch.nn.Module,
+    ):
         """
         Collect and sub sampled output data from original layer and input from pruned layer and set
         reconstructed weight and bias to pruned layer in pruned model
@@ -113,13 +126,22 @@ class InputChannelPruner(Pruner):
         :param comp_model: compressed model
         :return: Nothing
         """
-        inp_data, out_data = DataSubSampler.get_sub_sampled_data(orig_layer, pruned_layer, orig_model, comp_model,
-                                                                 self._data_loader, self._num_reconstruction_samples)
+        inp_data, out_data = DataSubSampler.get_sub_sampled_data(
+            orig_layer,
+            pruned_layer,
+            orig_model,
+            comp_model,
+            self._data_loader,
+            self._num_reconstruction_samples,
+        )
 
-        WeightReconstructor.reconstruct_params_for_conv2d(pruned_layer, inp_data, out_data)
+        WeightReconstructor.reconstruct_params_for_conv2d(
+            pruned_layer, inp_data, out_data
+        )
 
-    def _sort_on_occurrence(self, model: torch.nn.Module, layer_comp_ratio_list: List[LayerCompRatioPair]) -> \
-            List[LayerCompRatioPair]:
+    def _sort_on_occurrence(
+        self, model: torch.nn.Module, layer_comp_ratio_list: List[LayerCompRatioPair]
+    ) -> List[LayerCompRatioPair]:
         """
         Function takes model and list of conv layer-comp ratio to sort, and sorts them based on
         occurrence in the model.
@@ -142,7 +164,9 @@ class InputChannelPruner(Pruner):
             """
             for pair in layer_comp_ratio_list:
                 if pair.layer.module == module:
-                    sorted_layer_comp_ratio_list.append(LayerCompRatioPair(pair.layer, pair.comp_ratio))
+                    sorted_layer_comp_ratio_list.append(
+                        LayerCompRatioPair(pair.layer, pair.comp_ratio)
+                    )
 
         handles = []
 
@@ -159,8 +183,14 @@ class InputChannelPruner(Pruner):
 
         return sorted_layer_comp_ratio_list
 
-    def _winnow_and_reconstruct_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase,
-                                      layer: Layer, comp_ratio: float, perform_reconstruction: bool):
+    def _winnow_and_reconstruct_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: float,
+        perform_reconstruction: bool,
+    ):
         """
         Replaces a given layer within the comp_layer_db with a pruned version of the layer
 
@@ -174,17 +204,24 @@ class InputChannelPruner(Pruner):
         prune_indices = self._select_inp_channels(layer.module, comp_ratio)
 
         # 2) winnow - in place API
-        _, module_list = winnow_model(comp_layer_db.model, self._input_shape,
-                                      [(layer.module, prune_indices)],
-                                      reshape=self._allow_custom_downsample_ops,
-                                      in_place=True)
+        _, module_list = winnow_model(
+            comp_layer_db.model,
+            self._input_shape,
+            [(layer.module, prune_indices)],
+            reshape=self._allow_custom_downsample_ops,
+            in_place=True,
+        )
 
         # 3) data sub sampling and reconstruction
         if perform_reconstruction:
             # get original layer reference
             orig_layer = orig_layer_db.find_layer_by_name(layer.name)
-            self._data_subsample_and_reconstruction(orig_layer.module, layer.module, orig_layer_db.model,
-                                                    comp_layer_db.model)
+            self._data_subsample_and_reconstruction(
+                orig_layer.module,
+                layer.module,
+                orig_layer_db.model,
+                comp_layer_db.model,
+            )
 
         # 4) update layer database
         if module_list:
@@ -192,10 +229,8 @@ class InputChannelPruner(Pruner):
 
     @staticmethod
     def _update_layer_database_after_winnowing(comp_layer_db, updated_module_list):
-
         # Get reference to the new module to update in the layer database
         for old_module_name, new_module in updated_module_list:
-
             try:
                 old_layer = comp_layer_db.find_layer_by_name(old_module_name)
             except KeyError:
@@ -203,22 +238,37 @@ class InputChannelPruner(Pruner):
                 continue
 
             if isinstance(new_module, torch.nn.Sequential):
-                comp_layer_db.update_layer_with_module_in_sequential(old_layer, new_module)
+                comp_layer_db.update_layer_with_module_in_sequential(
+                    old_layer, new_module
+                )
 
             else:
                 # Determine new output shape
-                new_output_shape = [old_layer.output_shape[0], new_module.out_channels,
-                                    old_layer.output_shape[2], old_layer.output_shape[3]]
+                new_output_shape = [
+                    old_layer.output_shape[0],
+                    new_module.out_channels,
+                    old_layer.output_shape[2],
+                    old_layer.output_shape[3],
+                ]
 
                 new_layer = Layer(new_module, old_layer.name, new_output_shape)
                 comp_layer_db.replace_layer(old_layer, new_layer)
 
-    def _prune_layer(self, orig_layer_db: LayerDatabase, comp_layer_db: LayerDatabase,
-                     layer: Layer, comp_ratio: float, cost_metric: CostMetric):
-        self._winnow_and_reconstruct_layer(orig_layer_db, comp_layer_db, layer, comp_ratio, True)
+    def _prune_layer(
+        self,
+        orig_layer_db: LayerDatabase,
+        comp_layer_db: LayerDatabase,
+        layer: Layer,
+        comp_ratio: float,
+        cost_metric: CostMetric,
+    ):
+        self._winnow_and_reconstruct_layer(
+            orig_layer_db, comp_layer_db, layer, comp_ratio, True
+        )
 
-    def calculate_compressed_cost(self, layer_db: LayerDatabase,
-                                  layer_comp_ratio_list: List[LayerCompRatioPair]) -> Cost:
+    def calculate_compressed_cost(
+        self, layer_db: LayerDatabase, layer_comp_ratio_list: List[LayerCompRatioPair]
+    ) -> Cost:
         """
         Calculate cost of a compressed model given a set of layers and corresponding comp-ratios
         :param layer_db: Layer database for original model
@@ -235,32 +285,45 @@ class InputChannelPruner(Pruner):
                 comp_ratio = layer_comp_ratio.comp_ratio
                 if comp_ratio == 1.0:
                     continue
-                self._winnow_and_reconstruct_layer(layer_db, comp_layer_db, layer,
-                                                   comp_ratio, False)
+                self._winnow_and_reconstruct_layer(
+                    layer_db, comp_layer_db, layer, comp_ratio, False
+                )
 
         # calculate and return the cost of this model
         return CostCalculator.compute_model_cost(comp_layer_db)
 
-    def prune_model(self, layer_db: LayerDatabase, layer_comp_ratio_list: List[LayerCompRatioPair],
-                    cost_metric: CostMetric, trainer):
-
+    def prune_model(
+        self,
+        layer_db: LayerDatabase,
+        layer_comp_ratio_list: List[LayerCompRatioPair],
+        cost_metric: CostMetric,
+        trainer,
+    ):
         # sort all the layers in layer_comp_ratio_list based on occurrence
-        layer_comp_ratio_list = self._sort_on_occurrence(layer_db.model, layer_comp_ratio_list)
+        layer_comp_ratio_list = self._sort_on_occurrence(
+            layer_db.model, layer_comp_ratio_list
+        )
         # call the base class method
-        comp_layer_db = Pruner.prune_model(self, layer_db,
-                                           layer_comp_ratio_list, cost_metric, trainer)
+        comp_layer_db = Pruner.prune_model(
+            self, layer_db, layer_comp_ratio_list, cost_metric, trainer
+        )
 
         return comp_layer_db
 
 
 class ChannelPruningCostCalculator(CostCalculator):
-    """ Cost calculation utilities for Channel Pruning """
+    """Cost calculation utilities for Channel Pruning"""
 
     def __init__(self, pruner: InputChannelPruner):
         self._pruner = pruner
 
-    def calculate_compressed_cost(self, layer_db: LayerDatabase, # pylint: disable=arguments-differ
-                                  layer_ratio_list: List[LayerCompRatioPair], cost_metric: CostMetric) -> Cost:
+    # pylint: disable=arguments-differ
+    def calculate_compressed_cost(
+        self,
+        layer_db: LayerDatabase,
+        layer_ratio_list: List[LayerCompRatioPair],
+        cost_metric: CostMetric,
+    ) -> Cost:
         """
         Calculate compressed cost of a model given a list of layer-compression-ratio pairs
         :param layer_db: Layer database for the original model
@@ -271,6 +334,8 @@ class ChannelPruningCostCalculator(CostCalculator):
 
         # Special logic for channel pruning - we first actually prune the model and then determine its cost
         # Because it is not easy to estimate it otherwise
-        compressed_cost = self._pruner.calculate_compressed_cost(layer_db, layer_ratio_list)
+        compressed_cost = self._pruner.calculate_compressed_cost(
+            layer_db, layer_ratio_list
+        )
 
         return compressed_cost

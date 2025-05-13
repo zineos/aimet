@@ -38,22 +38,35 @@
 
 """Update SNPE quantized DLC output encoding using aimet generated encoding for ONNX models"""
 
-
 import sys
 import json
 import argparse
 import os
+
 # pylint: disable=import-error
 import snpe
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    required = parser.add_argument_group('required arguments')
-    optional = parser.add_argument_group('option arguments')
-    required.add_argument('-e', '--aimet_json', required=True, type=str, help="aimet encodings JSON file path ")
-    required.add_argument('-d', '--dlc', required=True, type=str, help="quantized dlc path ")
-    optional.add_argument('-o', '--output_dlc', required=True, type=str, help="updated quantized dlc path ")
+    required = parser.add_argument_group("required arguments")
+    optional = parser.add_argument_group("option arguments")
+    required.add_argument(
+        "-e",
+        "--aimet_json",
+        required=True,
+        type=str,
+        help="aimet encodings JSON file path ",
+    )
+    required.add_argument(
+        "-d", "--dlc", required=True, type=str, help="quantized dlc path "
+    )
+    optional.add_argument(
+        "-o",
+        "--output_dlc",
+        required=True,
+        type=str,
+        help="updated quantized dlc path ",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.dlc):
@@ -65,7 +78,7 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     # reading JSON file
-    with open(args.aimet_json, 'r') as json_file:
+    with open(args.aimet_json, "r") as json_file:
         aimet_encodings = json.load(json_file)
 
     # reading SNPE-dlc
@@ -75,30 +88,42 @@ if __name__ == '__main__':
 
     # iterate over all the SNPE layers
     for snpe_layer in model.get_layers():
-
         # iterate outputs of SNPE layers
-        for snpe_layer_out_ind, snpe_layer_out in enumerate(snpe_layer['output_names']):
-
+        for snpe_layer_out_ind, snpe_layer_out in enumerate(snpe_layer["output_names"]):
             # iterate over all the aimet encodings
             for aimet_layer, encodings in aimet_encodings.items():
-
-                if str(snpe_layer_out) == str(aimet_layer).split('_')[-1]:
-
+                if str(snpe_layer_out) == str(aimet_layer).split("_")[-1]:
                     # encodings format : max, min, delta, offset, weight_bitwidth, activation_bitwidth
-                    new_enc_max, new_enc_min, act_bitwidth = encodings[0], encodings[1], encodings[5]
+                    new_enc_max, new_enc_min, act_bitwidth = (
+                        encodings[0],
+                        encodings[1],
+                        encodings[5],
+                    )
 
-                    layer_name = snpe_layer['name']
+                    layer_name = snpe_layer["name"]
 
-                    print('SNPE layer found in aimet JSON file: ', layer_name)
-                    print('Old Encodings : ', model.get_tf_output_encoding_by_index(name=layer_name,
-                                                                                    index=snpe_layer_out_ind))
+                    print("SNPE layer found in aimet JSON file: ", layer_name)
+                    print(
+                        "Old Encodings : ",
+                        model.get_tf_output_encoding_by_index(
+                            name=layer_name, index=snpe_layer_out_ind
+                        ),
+                    )
 
-                    model.set_tf_output_encoding_by_index(name=layer_name, index=snpe_layer_out_ind,
-                                                          bitwidth=act_bitwidth, min=new_enc_min,
-                                                          max=new_enc_max)
+                    model.set_tf_output_encoding_by_index(
+                        name=layer_name,
+                        index=snpe_layer_out_ind,
+                        bitwidth=act_bitwidth,
+                        min=new_enc_min,
+                        max=new_enc_max,
+                    )
 
-                    print('New Encodings : ', model.get_tf_output_encoding_by_index(name=layer_name,
-                                                                                    index=snpe_layer_out_ind))
+                    print(
+                        "New Encodings : ",
+                        model.get_tf_output_encoding_by_index(
+                            name=layer_name, index=snpe_layer_out_ind
+                        ),
+                    )
                     break
 
     model.quantize_weights(should_quantize=True)

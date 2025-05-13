@@ -34,7 +34,8 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Keras AdaRound Nightly Tests """
+"""Keras AdaRound Nightly Tests"""
+
 import json
 import pytest
 import numpy as np
@@ -45,12 +46,13 @@ from aimet_tensorflow.examples.test_models import keras_model
 from aimet_tensorflow.keras.quantsim import QuantizationSimModel
 from aimet_tensorflow.keras.adaround_weight import Adaround, AdaroundParameters
 
+
 @pytest.mark.cuda
 def test_adaround_mobilenet_only_weights(tmp_path):
-    """ test end to end adaround with only weight quantized """
+    """test end to end adaround with only weight quantized"""
 
     def dummy_forward_pass(model: tf.keras.Model):
-        """ Dummy forward pass """
+        """Dummy forward pass"""
         input_data = np.random.rand(1, 224, 224, 3)
         return model(input_data)
 
@@ -62,28 +64,40 @@ def test_adaround_mobilenet_only_weights(tmp_path):
     dataset = tf.data.Dataset.from_tensor_slices(input_data)
     dataset = dataset.batch(batch_size=batch_size)
 
-    params = AdaroundParameters(data_set=dataset, num_batches=possible_batches, default_num_iterations=1,
-                                default_reg_param=0.01, default_beta_range=(20, 2), default_warm_start=0.2)
+    params = AdaroundParameters(
+        data_set=dataset,
+        num_batches=possible_batches,
+        default_num_iterations=1,
+        default_reg_param=0.01,
+        default_beta_range=(20, 2),
+        default_warm_start=0.2,
+    )
 
-    adarounded_model = Adaround.apply_adaround(mobilenet_model, params, path=tmp_path,
-                                               filename_prefix='mobilenet', default_param_bw=4,
-                                               default_quant_scheme=QuantScheme.post_training_tf_enhanced)
+    adarounded_model = Adaround.apply_adaround(
+        mobilenet_model,
+        params,
+        path=tmp_path,
+        filename_prefix="mobilenet",
+        default_param_bw=4,
+        default_quant_scheme=QuantScheme.post_training_tf_enhanced,
+    )
 
     orig_output = dummy_forward_pass(mobilenet_model)
     adarounded_output = dummy_forward_pass(adarounded_model)
     assert orig_output.shape == adarounded_output.shape
 
     # Test exported encodings JSON file
-    with open(tmp_path / 'mobilenet.encodings') as json_file:
+    with open(tmp_path / "mobilenet.encodings") as json_file:
         encoding_data = json.load(json_file)
 
     assert isinstance(encoding_data["conv1/kernel:0"], list)
 
+
 def test_adaround_followed_by_quantsim(tmp_path):
-    """ test end to end adaround with weight 4 bits and output activations 8 bits quantized """
+    """test end to end adaround with weight 4 bits and output activations 8 bits quantized"""
 
     def dummy_forward_pass(model: tf.keras.Model, _):
-        """ Dummy forward pass """
+        """Dummy forward pass"""
         input_data = np.random.rand(32, 16, 16, 3)
         return model(input_data)
 
@@ -97,18 +111,26 @@ def test_adaround_followed_by_quantsim(tmp_path):
     dataset = tf.data.Dataset.from_tensor_slices(input_data)
     dataset = dataset.batch(batch_size=batch_size)
 
-    params = AdaroundParameters(data_set=dataset, num_batches=possible_batches, default_num_iterations=10)
+    params = AdaroundParameters(
+        data_set=dataset, num_batches=possible_batches, default_num_iterations=10
+    )
 
     # W4A8
     param_bw = 4
     output_bw = 8
     quant_scheme = QuantScheme.post_training_tf_enhanced
 
-    adarounded_model = Adaround.apply_adaround(model, params, path=tmp_path, filename_prefix='dummy',
-                                               default_param_bw=param_bw, default_quant_scheme=quant_scheme)
+    adarounded_model = Adaround.apply_adaround(
+        model,
+        params,
+        path=tmp_path,
+        filename_prefix="dummy",
+        default_param_bw=param_bw,
+        default_quant_scheme=quant_scheme,
+    )
 
     # Read exported param encodings JSON file
-    with open(tmp_path / 'dummy.encodings') as json_file:
+    with open(tmp_path / "dummy.encodings") as json_file:
         encoding_data = json.load(json_file)
 
     encoding = encoding_data["conv2d/kernel:0"]
@@ -118,9 +140,14 @@ def test_adaround_followed_by_quantsim(tmp_path):
     before_offset = np.array([e["offset"] for e in encoding])
 
     # Create QuantSim using adarounded_model, set and freeze parameter encodings and then invoke compute_encodings
-    sim = QuantizationSimModel(adarounded_model, quant_scheme, default_output_bw=output_bw, default_param_bw=param_bw)
+    sim = QuantizationSimModel(
+        adarounded_model,
+        quant_scheme,
+        default_output_bw=output_bw,
+        default_param_bw=param_bw,
+    )
 
-    sim.set_and_freeze_param_encodings(encoding_path=tmp_path / 'dummy.encodings')
+    sim.set_and_freeze_param_encodings(encoding_path=tmp_path / "dummy.encodings")
     sim.compute_encodings(dummy_forward_pass, None)
 
     conv_encoding = sim.model.layers[0].param_quantizers[0].encoding

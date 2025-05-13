@@ -51,9 +51,15 @@ class QuantizeLinear(opset13.QuantizeLinear):
     }
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         cls._check_dtype(dtype)
 
         if axis is None and block_size is not None:
@@ -62,16 +68,18 @@ class QuantizeLinear(opset13.QuantizeLinear):
                 f"got axis={axis}, block_size={block_size}"
             )
 
-        return helper.make_node("QuantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output],
-                                # NOTE: Don't pass output_dtype explicitly; ORT has a bug
-                                #       where per-tensor int8 QuantizeLinear
-                                #       fails with output_dtype explicitly specified as INT8
-                                # output_dtype=cls.SUPPORTED_DTYPES[dtype],
-                                axis=axis,
-                                block_size=block_size)
+        return helper.make_node(
+            "QuantizeLinear",
+            name=name,
+            inputs=list(inputs),
+            outputs=[output],
+            # NOTE: Don't pass output_dtype explicitly; ORT has a bug
+            #       where per-tensor int8 QuantizeLinear
+            #       fails with output_dtype explicitly specified as INT8
+            # output_dtype=cls.SUPPORTED_DTYPES[dtype],
+            axis=axis,
+            block_size=block_size,
+        )
 
 
 class DequantizeLinear(opset13.DequantizeLinear):
@@ -85,9 +93,15 @@ class DequantizeLinear(opset13.DequantizeLinear):
     }
 
     @classmethod
-    def make_node(cls, name: str, inputs: Iterable[str], output: str,
-                  dtype: str, axis: Optional[int] = None,
-                  block_size: Optional[int] = None):
+    def make_node(
+        cls,
+        name: str,
+        inputs: Iterable[str],
+        output: str,
+        dtype: str,
+        axis: Optional[int] = None,
+        block_size: Optional[int] = None,
+    ):
         cls._check_dtype(dtype)
 
         if axis is None and block_size is not None:
@@ -96,9 +110,11 @@ class DequantizeLinear(opset13.DequantizeLinear):
                 f"got axis={axis}, block_size={block_size}"
             )
 
-        return helper.make_node("DequantizeLinear",
-                                name=name,
-                                inputs=list(inputs),
-                                outputs=[output],
-                                axis=axis,
-                                block_size=block_size)
+        return helper.make_node(
+            "DequantizeLinear",
+            name=name,
+            inputs=list(inputs),
+            outputs=[output],
+            axis=axis,
+            block_size=block_size,
+        )

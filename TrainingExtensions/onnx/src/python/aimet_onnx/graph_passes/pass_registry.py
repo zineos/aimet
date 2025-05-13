@@ -47,10 +47,11 @@ class PassRegistry:
     """
     Registry for Graph passes.
     """
+
     def __init__(self):
         self.passes: Dict[str, GraphPass] = {}
 
-    def __getitem__(self, name:str) -> GraphPass:
+    def __getitem__(self, name: str) -> GraphPass:
         """
         return Graph Pass class associated with given pass name
         """
@@ -64,24 +65,28 @@ class PassRegistry:
         """
         return name in self.passes
 
-    def register(self, pass_cls: GraphPass, name: str, override: bool=False):
+    def register(self, pass_cls: GraphPass, name: str, override: bool = False):
         """
         Register Graph Pass
 
         Args:
             pass_cls (GraphPass): GraphPass class being registered.
-            name (str): Pass name to register graph pass with. 
+            name (str): Pass name to register graph pass with.
             override (bool, optional): Override existing pass if set. Defaults to False.
 
         Raises:
             RuntimeError: If override is not set and GraphPass already exists.
         """
         if name in self.passes and not override:
-            raise RuntimeError(f"Pass {name} is already registered. Consider using override if intent to replace default pass.")
+            raise RuntimeError(
+                f"Pass {name} is already registered. Consider using override if intent to replace default pass."
+            )
         self.passes[name] = pass_cls
+
 
 # Global Pass Registry to hold all graph passes
 PASS_REGISTRY = PassRegistry()
+
 
 def register_pass(name: str, override: bool = False):
     """
@@ -91,6 +96,7 @@ def register_pass(name: str, override: bool = False):
         name (str): Pass name to register graph pass with.
         override (bool, optional): Override pass if already registered. Defaults to False.
     """
+
     def wrapper(pass_cls: GraphPass):
         PASS_REGISTRY.register(pass_cls, name, override)
         return pass_cls
@@ -98,7 +104,12 @@ def register_pass(name: str, override: bool = False):
     return wrapper
 
 
-def apply_graph_passes(model: ModelProto, connected_graph:ConnectedGraph, op_to_quantizers:Dict[str, QcQuantizeOp], passes_to_run:List[str]):
+def apply_graph_passes(
+    model: ModelProto,
+    connected_graph: ConnectedGraph,
+    op_to_quantizers: Dict[str, QcQuantizeOp],
+    passes_to_run: List[str],
+):
     """
     Runs list of graph passes on input ConnectedGraph
 

@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantized Qwen2 modules """
+"""Quantized Qwen2 modules"""
 
 import torch
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
@@ -43,12 +43,16 @@ from aimet_torch.v2.nn.true_quant import QuantizationMixin
 try:
     from transformers.models.qwen2 import modeling_qwen2
 except ImportError as exc:
-    raise ImportError("aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 cannot be imported. Please make sure "
-                      "that you have transformers installed in your environment.") from exc
+    raise ImportError(
+        "aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 cannot be imported. Please make sure "
+        "that you have transformers installed in your environment."
+    ) from exc
+
 
 @QuantizationMixin.implements(modeling_qwen2.Qwen2RMSNorm)
 class QuantizedQwen2RMSNorm(QuantizationMixin, modeling_qwen2.Qwen2RMSNorm):
-    """ Implement Quantized Qwen RMSNorm """
+    """Implement Quantized Qwen RMSNorm"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()
@@ -72,8 +76,11 @@ class QuantizedQwen2RMSNorm(QuantizationMixin, modeling_qwen2.Qwen2RMSNorm):
 
 
 @QuantizationMixin.implements(modeling_qwen2.Qwen2RotaryEmbedding)
-class QuantizedQwen2RotaryEmbedding(QuantizationMixin, modeling_qwen2.Qwen2RotaryEmbedding):
-    """ Implement Quantized Qwen Rotary Embedding """
+class QuantizedQwen2RotaryEmbedding(
+    QuantizationMixin, modeling_qwen2.Qwen2RotaryEmbedding
+):
+    """Implement Quantized Qwen Rotary Embedding"""
+
     def __quant_init__(self):
         # pylint: disable=useless-parent-delegation
         super().__quant_init__()

@@ -34,13 +34,16 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Definitions for ONNX """
+"""Definitions for ONNX"""
+
 import numpy as np
+
 
 class DataLoader:
     """
     Example of a Dataloader which can be used for running AMPv2 and AutoQuantv2
     """
+
     def __init__(self, data: np.ndarray, batch_size: int, iterations: int):
         """
         :param data: Numpy array

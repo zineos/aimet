@@ -36,7 +36,8 @@
 # =============================================================================
 # pylint: disable=too-many-lines, disable=protected-access
 
-""" Implementation of AIMET AutoQuantBase """
+"""Implementation of AIMET AutoQuantBase"""
+
 import abc
 import copy
 import contextlib
@@ -90,6 +91,7 @@ class _MixedPrecisionArgs:
     """
     Mixed-precision specific arguments.
     """
+
     candidates: List[AmpCandidate]
     forward_pass_callback: CallbackFunc
     eval_callback_for_phase1: CallbackFunc
@@ -101,6 +103,7 @@ class _MixedPrecisionResult:
     """
     Mixed precision result
     """
+
     pareto_list: ParetoFrontType
     sim: _QuantizationSimModelInterface
     final_eval_score: float
@@ -108,11 +111,10 @@ class _MixedPrecisionResult:
     pareto_plot: bokeh.plotting.figure
 
 
-
-
 # The number of samples to be used for performance evaluation.
 # NOTE: None means "all".
 NUM_SAMPLES_FOR_PERFORMANCE_EVALUATION = None
+
 
 class _StageSkipped(Exception):
     pass
@@ -129,11 +131,15 @@ class _QuantSchemePair:
         def scheme_to_str(quant_scheme, percentile):
             if quant_scheme == QuantScheme.post_training_percentile:
                 return f"{percentile}%ile"
-            if quant_scheme in (QuantScheme.post_training_tf,
-                                QuantScheme.training_range_learning_with_tf_init):
+            if quant_scheme in (
+                QuantScheme.post_training_tf,
+                QuantScheme.training_range_learning_with_tf_init,
+            ):
                 return "tf"
-            if quant_scheme in (QuantScheme.post_training_tf_enhanced,
-                                QuantScheme.training_range_learning_with_tf_enhanced_init):
+            if quant_scheme in (
+                QuantScheme.post_training_tf_enhanced,
+                QuantScheme.training_range_learning_with_tf_enhanced_init,
+            ):
                 return "tf-enhanced"
             raise ValueError
 
@@ -145,43 +151,46 @@ class _QuantSchemePair:
 _QUANT_SCHEME_CANDIDATES = (
     # Weight:     tf
     # Activation: tf
-    _QuantSchemePair(QuantScheme.post_training_tf,
-                     QuantScheme.post_training_tf),
-
+    _QuantSchemePair(QuantScheme.post_training_tf, QuantScheme.post_training_tf),
     # Weight:     tf_enhanced
     # Activation: tf
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_tf),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced, QuantScheme.post_training_tf
+    ),
     # Weight:     tf_enhanced
     # Activation: tf_enhanced
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_tf_enhanced),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced, QuantScheme.post_training_tf_enhanced
+    ),
     # Weight:     tf_enhanced
     # Activation: percentile(99.9)
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_percentile,
-                     output_percentile=99.9),
-
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced,
+        QuantScheme.post_training_percentile,
+        output_percentile=99.9,
+    ),
     # Weight:     tf_enhanced
     # Activation: percentile(99.99)
-    _QuantSchemePair(QuantScheme.post_training_tf_enhanced,
-                     QuantScheme.post_training_percentile,
-                     output_percentile=99.99),
+    _QuantSchemePair(
+        QuantScheme.post_training_tf_enhanced,
+        QuantScheme.post_training_percentile,
+        output_percentile=99.99,
+    ),
 )
 
 
-def _validate_inputs(model: torch.nn.Module, # pylint: disable=too-many-arguments
-                     data_loader: DataLoader,
-                     eval_callback: Callable[[torch.nn.Module], float],
-                     dummy_input: torch.Tensor,
-                     results_dir: str,
-                     strict_validation: bool,
-                     quant_scheme: QuantScheme,
-                     param_bw: int,
-                     output_bw: int,
-                     rounding_mode: str):
+def _validate_inputs(
+    model: torch.nn.Module,  # pylint: disable=too-many-arguments
+    data_loader: DataLoader,
+    eval_callback: Callable[[torch.nn.Module], float],
+    dummy_input: torch.Tensor,
+    results_dir: str,
+    strict_validation: bool,
+    quant_scheme: QuantScheme,
+    param_bw: int,
+    output_bw: int,
+    rounding_mode: str,
+):
     """
     Confirms inputs are of the correct type
     :param model: Model to be quantized
@@ -196,27 +205,41 @@ def _validate_inputs(model: torch.nn.Module, # pylint: disable=too-many-argument
     :param rounding_mode: Rounding mode
     """
     if not isinstance(model, torch.nn.Module):
-        raise ValueError('Model must be of type torch.nn.Module, not ' + str(type(model).__name__))
+        raise ValueError(
+            "Model must be of type torch.nn.Module, not " + str(type(model).__name__)
+        )
 
     if not isinstance(data_loader, DataLoader):
-        raise ValueError('data_loader must be of type DataLoader, not ' + str(
-            type(data_loader).__name__))
+        raise ValueError(
+            "data_loader must be of type DataLoader, not "
+            + str(type(data_loader).__name__)
+        )
 
     if not isinstance(eval_callback, Callable):  # pylint: disable=isinstance-second-argument-not-valid-type
-        raise ValueError('eval_callback must be of type Callable, not ' + str(type(eval_callback).__name__))
+        raise ValueError(
+            "eval_callback must be of type Callable, not "
+            + str(type(eval_callback).__name__)
+        )
 
     if not isinstance(dummy_input, (torch.Tensor, Tuple)):
         raise ValueError(
-            'dummy_input must be of type torch.Tensor or Tuple, not ' + str(type(dummy_input).__name__))
+            "dummy_input must be of type torch.Tensor or Tuple, not "
+            + str(type(dummy_input).__name__)
+        )
 
     if not isinstance(results_dir, str):
-        raise ValueError('results_dir must be of type str, not ' + str(type(results_dir).__name__))
+        raise ValueError(
+            "results_dir must be of type str, not " + str(type(results_dir).__name__)
+        )
 
     results_dir = os.path.abspath(results_dir)
     os.makedirs(results_dir, exist_ok=True)
 
     if not isinstance(strict_validation, bool):
-        raise ValueError('strict_validation must be of type bool, not ' + str(type(strict_validation).__name__))
+        raise ValueError(
+            "strict_validation must be of type bool, not "
+            + str(type(strict_validation).__name__)
+        )
 
     validate_quantsim_inputs(quant_scheme, rounding_mode, output_bw, param_bw)
 
@@ -231,6 +254,7 @@ class PtqResult:
     :param encoding_path: Path to the encoding file.
     :param accuracy: Accuracy of the model.
     """
+
     model_path: str
     device: torch.device
     adaround_encoding_path: Optional[str]
@@ -260,12 +284,15 @@ class _EvalManager:
     """
     Evaluation manager for AutoQuant.
     """
-    def __init__(self,
-                 quantsim_factory: Callable,
-                 eval_func: Callable[[torch.nn.Module], float],
-                 dummy_input_on_cpu: Union[torch.Tensor, Tuple],
-                 results_dir: str,
-                 strict_validation: bool):
+
+    def __init__(
+        self,
+        quantsim_factory: Callable,
+        eval_func: Callable[[torch.nn.Module], float],
+        dummy_input_on_cpu: Union[torch.Tensor, Tuple],
+        results_dir: str,
+        strict_validation: bool,
+    ):
         """
         :param quantsim_factory: A factory function that returns QuantizationSimModel.
         :param eval_func: Evaluation function.
@@ -281,7 +308,7 @@ class _EvalManager:
 
         os.makedirs(self._results_dir, exist_ok=True)
 
-        self._all_sessions = OrderedDict() # type: OrderedDict[str, _EvalSession]
+        self._all_sessions = OrderedDict()  # type: OrderedDict[str, _EvalSession]
 
     def clear(self):
         """
@@ -295,8 +322,11 @@ class _EvalManager:
         Get the results with the highest evaluation score among the ptq results evaluated so far.
         :return: The best evaluation result so far.
         """
-        ptq_results = [sess.ptq_result for sess in self._all_sessions.values()
-                       if sess.ptq_result is not None]
+        ptq_results = [
+            sess.ptq_result
+            for sess in self._all_sessions.values()
+            if sess.ptq_result is not None
+        ]
         if not ptq_results:
             return None
 
@@ -310,13 +340,15 @@ class _EvalManager:
         :return: Session object.
         """
         if title not in self._all_sessions:
-            session = _EvalSession(title,
-                                   self._quantsim_factory,
-                                   self._eval_func,
-                                   self._dummy_input_on_cpu,
-                                   results_dir=os.path.join(self._results_dir, ".trace"),
-                                   strict_validation=self._strict_validation,
-                                   ptq=ptq)
+            session = _EvalSession(
+                title,
+                self._quantsim_factory,
+                self._eval_func,
+                self._dummy_input_on_cpu,
+                results_dir=os.path.join(self._results_dir, ".trace"),
+                strict_validation=self._strict_validation,
+                ptq=ptq,
+            )
             self._all_sessions[title] = session
         return self._all_sessions[title]
 
@@ -334,7 +366,9 @@ class _EvalManager:
         env = jinja2.Environment(loader=loader)
         template = env.get_template(os.path.basename(self.HTML_TEMPLATE_FILE))
 
-        if any(sess.diagnostics.contains_bokeh() for sess in self._all_sessions.values()):
+        if any(
+            sess.diagnostics.contains_bokeh() for sess in self._all_sessions.values()
+        ):
             head = CDN.render()
         else:
             head = ""
@@ -343,12 +377,8 @@ class _EvalManager:
         for sess in self._all_sessions.values():
             if sess.diagnostics.is_empty():
                 continue
-            log.write(
-                f"<h1> {sess.title} </h1>\n"
-            )
-            content = "\n".join(
-                line.get_html_elem() for line in sess.diagnostics
-            )
+            log.write(f"<h1> {sess.title} </h1>\n")
+            content = "\n".join(line.get_html_elem() for line in sess.diagnostics)
             log.write(f"{content}\n")
 
         result = OrderedDict()
@@ -370,22 +400,23 @@ class _EvalManager:
         return html
 
 
-class _EvalSession: # pylint: disable=too-many-instance-attributes
+class _EvalSession:  # pylint: disable=too-many-instance-attributes
     """
     Evaluation session for AutoQuant.
 
     Each session object contains a title and diagnostics produced during the session.
     The collected diagnostics will be exported into a html file by _EvalManager.
     """
+
     def __init__(
-            self,
-            title: str,
-            quantsim_factory: Callable,
-            eval_func: Callable[[torch.nn.Module], float],
-            dummy_input_on_cpu: Union[torch.Tensor, Tuple],
-            results_dir: str,
-            strict_validation: bool,
-            ptq: bool,
+        self,
+        title: str,
+        quantsim_factory: Callable,
+        eval_func: Callable[[torch.nn.Module], float],
+        dummy_input_on_cpu: Union[torch.Tensor, Tuple],
+        results_dir: str,
+        strict_validation: bool,
+        ptq: bool,
     ):
         """
         :param title: Title of the session.
@@ -459,8 +490,10 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
         """
 
         results_dir = self._results_dir
+
         class CachedResult:
-            """Cached result """
+            """Cached result"""
+
             def __init__(self, obj):
                 self._filename = os.path.join(results_dir, f".{uuid4()}")
                 while os.path.exists(self._filename):
@@ -469,7 +502,7 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
                     pickle.dump(obj, f)
 
             def load(self):
-                """Load cached result """
+                """Load cached result"""
                 with open(self._filename, "rb") as f:
                     return pickle.load(f)
 
@@ -480,6 +513,7 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
             ret = fn(*args, **kwargs)
             self._cached_result = CachedResult(ret)
             return ret
+
         return wrapper
 
     def eval(self, model: torch.nn.Module, **kwargs):
@@ -501,8 +535,11 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._ptq_result is not None:
-            _logger.info("Session finished: %s. (eval score: %f)",
-                         self.title, self._ptq_result.accuracy)
+            _logger.info(
+                "Session finished: %s. (eval score: %f)",
+                self.title,
+                self._ptq_result.accuracy,
+            )
 
         self._spinner.__exit__(exc_type, exc_val, exc_tb)
 
@@ -552,13 +589,13 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
         return self._ptq_result
 
     def set_ptq_result(
-            self,
-            applied_techniques: List[str],
-            model: torch.nn.Module = None,
-            sim: _QuantizationSimModelInterface = None,
-            acc: float = None,
-            export_kwargs: Mapping = None,
-            **kwargs
+        self,
+        applied_techniques: List[str],
+        model: torch.nn.Module = None,
+        sim: _QuantizationSimModelInterface = None,
+        acc: float = None,
+        export_kwargs: Mapping = None,
+        **kwargs,
     ) -> None:
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block.
@@ -586,15 +623,21 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
             assert acc is not None
             assert model is None
 
-        self._set_ptq_result(sim, acc, applied_techniques, export_kwargs, kwargs.get('adaround_encoding_path'))
+        self._set_ptq_result(
+            sim,
+            acc,
+            applied_techniques,
+            export_kwargs,
+            kwargs.get("adaround_encoding_path"),
+        )
 
     def _set_ptq_result(
-            self,
-            sim: _QuantizationSimModelInterface,
-            acc: float,
-            applied_techniques: List[str],
-            export_kwargs: Mapping,
-            adaround_encoding_path: Optional[str]
+        self,
+        sim: _QuantizationSimModelInterface,
+        acc: float,
+        applied_techniques: List[str],
+        export_kwargs: Mapping,
+        adaround_encoding_path: Optional[str],
     ) -> PtqResult:
         """
         Set the result of PTQ. Should be called exactly once inside a with-as block.
@@ -622,25 +665,35 @@ class _EvalSession: # pylint: disable=too-many-instance-attributes
         )
         return self._ptq_result
 
-    def _export(self, sim: _QuantizationSimModelInterface, export_kwargs: Mapping) -> Tuple[str, str]:
+    def _export(
+        self, sim: _QuantizationSimModelInterface, export_kwargs: Mapping
+    ) -> Tuple[str, str]:
         """
         Export quantsim.
         :param sim: QuantizationSimModel object to export.
         :param export_kwargs: Additional kwargs for sim.export
         :return: The paths where model and encoding are saved
         """
-        sim.export(path=self._results_dir,
-                   filename_prefix=self.title_lowercase,
-                   dummy_input=self._dummy_input_on_cpu,
-                   **export_kwargs)
+        sim.export(
+            path=self._results_dir,
+            filename_prefix=self.title_lowercase,
+            dummy_input=self._dummy_input_on_cpu,
+            **export_kwargs,
+        )
         model_path = os.path.join(self._results_dir, f"{self.title_lowercase}.pth")
-        encoding_path = os.path.join(self._results_dir, f"{self.title_lowercase}.encodings")
-        _logger.info("The results of %s is saved in %s and %s.",
-                     self.title, model_path, encoding_path)
+        encoding_path = os.path.join(
+            self._results_dir, f"{self.title_lowercase}.encodings"
+        )
+        _logger.info(
+            "The results of %s is saved in %s and %s.",
+            self.title,
+            model_path,
+            encoding_path,
+        )
         return model_path, encoding_path
 
 
-def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-many-return-statements
+def _build_flowchart_metadata(result: Mapping) -> Dict:  # pylint: disable=too-many-return-statements
     """
     Build flowchart metadata for the html template of summary report
 
@@ -675,12 +728,12 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
         node_prepare_model='data-visited="true"',
     )
 
-    status = result['prepare_model']['status']
+    status = result["prepare_model"]["status"]
     metadata.update(
         node_prepare_model=f'data-visited="true" data-stage-result="{status}"',
     )
 
-    if status == 'error-failed':
+    if status == "error-failed":
         return metadata
 
     metadata.update(
@@ -688,12 +741,12 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
     )
 
     if "quantscheme_selection" in result:
-        status = result['quantscheme_selection']['status']
+        status = result["quantscheme_selection"]["status"]
         metadata.update(
             node_quant_scheme_selection=f'data-visited="true" data-stage-result="{status}"',
         )
 
-        if status == 'error-failed':
+        if status == "error-failed":
             return metadata
 
     metadata.update(
@@ -712,34 +765,41 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
         edge_test_w32_eval_score_if_true='data-visited="true"',
     )
 
-
     for ptq_name, ptq_result in result["ptq_techniques"].items():
-        status = ptq_result['status']
-        effective = ptq_result['effective']
+        status = ptq_result["status"]
+        effective = ptq_result["effective"]
         if status == "success" and not effective:
             status = "discarded"
-        metadata.update({
-            f"node_{ptq_name}": f'data-visited="true" data-stage-result="{status}"',
-        })
+        metadata.update(
+            {
+                f"node_{ptq_name}": f'data-visited="true" data-stage-result="{status}"',
+            }
+        )
 
-        if status == 'error-failed':
+        if status == "error-failed":
             return metadata
 
-        metadata.update({
-            f'edge_{ptq_name}_out': 'data-visited="true"',
-            f'node_test_{ptq_name}': 'data-visited="true"',
-        })
+        metadata.update(
+            {
+                f"edge_{ptq_name}_out": 'data-visited="true"',
+                f"node_test_{ptq_name}": 'data-visited="true"',
+            }
+        )
 
-        if ptq_result['target_satisfied']:
-            metadata.update({
-                f'edge_test_{ptq_name}_if_true': 'data-visited="true"',
-                'node_result_success': 'data-visited="true"',
-            })
+        if ptq_result["target_satisfied"]:
+            metadata.update(
+                {
+                    f"edge_test_{ptq_name}_if_true": 'data-visited="true"',
+                    "node_result_success": 'data-visited="true"',
+                }
+            )
             return metadata
 
-        metadata.update({
-            f'edge_test_{ptq_name}_if_false': 'data-visited="true"',
-        })
+        metadata.update(
+            {
+                f"edge_test_{ptq_name}_if_false": 'data-visited="true"',
+            }
+        )
 
     metadata.update(
         node_result_fail='data-visited="true"',
@@ -748,7 +808,7 @@ def _build_flowchart_metadata(result: Mapping) -> Dict: # pylint: disable=too-ma
     return metadata
 
 
-class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
+class AutoQuantBase(abc.ABC):  # pylint: disable=too-many-instance-attributes
     """
     Integrate and apply post-training quantization techniques.
 
@@ -758,22 +818,23 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
     meets the evaluation goal given as allowed_accuracy_drop.
     """
 
-    def __init__( # pylint: disable=too-many-arguments, too-many-locals
-            self,
-            model: torch.nn.Module,
-            dummy_input: Union[torch.Tensor, Tuple],
-            data_loader: DataLoader,
-            eval_callback: Callable[[torch.nn.Module], float],
-            param_bw: int = 8,
-            output_bw: int = 8,
-            quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
-            rounding_mode: str = 'nearest',
-            config_file: str = None,
-            results_dir: str = "/tmp",
-            cache_id: str = None,
-            strict_validation: bool = True,
-            model_prepare_required: bool = True) -> None:
-        '''
+    def __init__(  # pylint: disable=too-many-arguments, too-many-locals
+        self,
+        model: torch.nn.Module,
+        dummy_input: Union[torch.Tensor, Tuple],
+        data_loader: DataLoader,
+        eval_callback: Callable[[torch.nn.Module], float],
+        param_bw: int = 8,
+        output_bw: int = 8,
+        quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
+        rounding_mode: str = "nearest",
+        config_file: str = None,
+        results_dir: str = "/tmp",
+        cache_id: str = None,
+        strict_validation: bool = True,
+        model_prepare_required: bool = True,
+    ) -> None:
+        """
         :param model: Model to be quantized. Assumes model is on the correct device
         :param dummy_input: Dummy input for the model. Assumes that dummy_input is on the correct device
         :param data_loader: A collection that iterates over an unlabeled dataset, used for computing encodings
@@ -787,9 +848,19 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         :param cache_id: ID associated with cache results
         :param strict_validation: Flag set to True by default.hen False, AutoQuant will proceed with execution and handle errors internally if possible. This may produce unideal or unintuitive results.
         :param model_prepare_required: Flag set to True by default.If False, AutoQuant will skip model prepare block in the pipeline.
-        '''
-        _validate_inputs(model, data_loader, eval_callback, dummy_input, results_dir,
-                         strict_validation, quant_scheme, param_bw, output_bw, rounding_mode)
+        """
+        _validate_inputs(
+            model,
+            data_loader,
+            eval_callback,
+            dummy_input,
+            results_dir,
+            strict_validation,
+            quant_scheme,
+            param_bw,
+            output_bw,
+            rounding_mode,
+        )
 
         self.fp32_model = model
         self.dummy_input = dummy_input
@@ -816,7 +887,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
             device = utils.get_device(model)
             with in_eval_mode(model), torch.no_grad():
                 for input_data in tqdm(data_loader):
-                    input_data = utils.change_tensor_device_placement(input_data, device)
+                    input_data = utils.change_tensor_device_placement(
+                        input_data, device
+                    )
                     if isinstance(input_data, torch.Tensor):
                         model(input_data)
                     else:
@@ -855,9 +928,12 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         self.eval_manager = _EvalManager(
             quantsim_factory=self._create_quantsim_and_encodings,
             eval_func=self._evaluate_model_performance,
-            dummy_input_on_cpu=utils.change_tensor_device_placement(dummy_input, torch.device("cpu")),
+            dummy_input_on_cpu=utils.change_tensor_device_placement(
+                dummy_input, torch.device("cpu")
+            ),
             results_dir=self.results_dir,
-            strict_validation=strict_validation)
+            strict_validation=strict_validation,
+        )
 
         self._quant_scheme_candidates = _QUANT_SCHEME_CANDIDATES
         self._fp32_acc = None
@@ -865,7 +941,7 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
     @staticmethod
     @abc.abstractmethod
     def _get_adaround():
-        """ returns AdaRound """
+        """returns AdaRound"""
 
     def _evaluate_model_performance(self, model) -> float:
         """
@@ -874,11 +950,11 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         return self.eval_callback(model, NUM_SAMPLES_FOR_PERFORMANCE_EVALUATION)
 
     def run_inference(self) -> Tuple[_QuantizationSimModelInterface, float]:
-        '''
+        """
         Creates a quantization model and performs inference
 
         :return: QuantizationSimModel, model accuracy as float
-        '''
+        """
         model = self.fp32_model
 
         if self.model_prepare_required:
@@ -889,9 +965,11 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("Batchnorm Folding", ptq=True) as sess:
             model, _ = sess.wrap(self._apply_batchnorm_folding)(model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    applied_techniques=["batchnorm_folding"],
-                                    export_kwargs=self._export_kwargs)
+                sess.set_ptq_result(
+                    model=model,
+                    applied_techniques=["batchnorm_folding"],
+                    export_kwargs=self._export_kwargs,
+                )
 
         sim = self._create_quantsim_and_encodings(model)
 
@@ -904,7 +982,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
 
         return sim, acc
 
-    def optimize(self, allowed_accuracy_drop: float = 0.0) -> Tuple[torch.nn.Module, float, str]:
+    def optimize(
+        self, allowed_accuracy_drop: float = 0.0
+    ) -> Tuple[torch.nn.Module, float, str]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -912,9 +992,7 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         :return: Tuple of (best model, eval score, encoding path)
         """
         result = self._optimize_helper(self._optimize_main, allowed_accuracy_drop)
-        return result["model"],\
-               result["accuracy"],\
-               result["encoding_path"]
+        return result["model"], result["accuracy"], result["encoding_path"]
 
     def set_adaround_params(self, adaround_params) -> None:
         """
@@ -926,9 +1004,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         """
         self.adaround_params = adaround_params
 
-    def set_export_params(self,
-                          onnx_export_args: OnnxExportApiArgs = -1,
-                          propagate_encodings: bool = None) -> None:
+    def set_export_params(
+        self, onnx_export_args: OnnxExportApiArgs = -1, propagate_encodings: bool = None
+    ) -> None:
         """
         Set parameters for QuantizationSimModel.export.
 
@@ -946,10 +1024,10 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
             self._export_kwargs.update(propagate_encodings=propagate_encodings)
 
     def set_model_preparer_params(
-            self,
-            modules_to_exclude: Optional[List[torch.nn.Module]] = None,
-            module_classes_to_exclude: Optional[List[torch.nn.Module]] = None,
-            concrete_args: Optional[Dict[str, Any]] = None,
+        self,
+        modules_to_exclude: Optional[List[torch.nn.Module]] = None,
+        module_classes_to_exclude: Optional[List[torch.nn.Module]] = None,
+        concrete_args: Optional[Dict[str, Any]] = None,
     ):
         """
         Set parameters for model preparer.
@@ -961,22 +1039,26 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
             model has control flow, torch.fx won't be able to trace the model. Check
             torch.fx.symbolic_trace API in detail.
         """
-        self._model_preparer_kwargs["modules_to_exclude"] = copy.copy(modules_to_exclude)
-        self._model_preparer_kwargs["module_classes_to_exclude"] = copy.copy(module_classes_to_exclude)
+        self._model_preparer_kwargs["modules_to_exclude"] = copy.copy(
+            modules_to_exclude
+        )
+        self._model_preparer_kwargs["module_classes_to_exclude"] = copy.copy(
+            module_classes_to_exclude
+        )
         self._model_preparer_kwargs["concrete_args"] = copy.copy(concrete_args)
 
-    def _create_quantsim_and_encodings( # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
-            self,
-            model: torch.nn.Module,
-            rounding_mode: str = None,
-            output_bw: int = None,
-            output_quant_scheme: QuantScheme = None,
-            output_percentile: float = None,
-            param_bw: int = None,
-            param_quant_scheme: QuantScheme = None,
-            param_percentile: float = None,
-            config_file: str = None,
-            adaround_encoding_path: str = None,
+    def _create_quantsim_and_encodings(  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches
+        self,
+        model: torch.nn.Module,
+        rounding_mode: str = None,
+        output_bw: int = None,
+        output_quant_scheme: QuantScheme = None,
+        output_percentile: float = None,
+        param_bw: int = None,
+        param_quant_scheme: QuantScheme = None,
+        param_percentile: float = None,
+        config_file: str = None,
+        adaround_encoding_path: str = None,
     ) -> _QuantizationSimModelInterface:
         """
         Create a QuantizationSimModel and compute encoding. If `encoding_path` is not None,
@@ -1020,21 +1102,27 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
 
         default_quant_scheme = self._quantsim_params.get("quant_scheme")
         if default_quant_scheme is not None:
-            output_quant_scheme = output_quant_scheme or\
-                                  default_quant_scheme.output_quant_scheme
-            output_percentile = output_percentile or default_quant_scheme.output_percentile
-            param_quant_scheme = param_quant_scheme or\
-                                 default_quant_scheme.param_quant_scheme
+            output_quant_scheme = (
+                output_quant_scheme or default_quant_scheme.output_quant_scheme
+            )
+            output_percentile = (
+                output_percentile or default_quant_scheme.output_percentile
+            )
+            param_quant_scheme = (
+                param_quant_scheme or default_quant_scheme.param_quant_scheme
+            )
             param_percentile = param_percentile or default_quant_scheme.param_percentile
 
-        self._configure_quantsim(sim,
-                                 output_bw,
-                                 output_quant_scheme,
-                                 output_percentile,
-                                 param_bw,
-                                 param_quant_scheme,
-                                 param_percentile,
-                                 adaround_encoding_path)
+        self._configure_quantsim(
+            sim,
+            output_bw,
+            output_quant_scheme,
+            output_percentile,
+            param_bw,
+            param_quant_scheme,
+            param_percentile,
+            adaround_encoding_path,
+        )
 
         if self._has_enabled_quantizers(sim):
             sim.compute_encodings(self.forward_pass_callback, None)
@@ -1044,18 +1132,20 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
     @staticmethod
     @abc.abstractmethod
     def _get_quantsim(model, dummy_input, **kwargs):
-        """ Returns QuantizationSimModel(model, dummy_input, **kwargs) """
+        """Returns QuantizationSimModel(model, dummy_input, **kwargs)"""
 
     @abc.abstractmethod
-    def _configure_quantsim(self, # pylint: disable=too-many-arguments
-                            sim,
-                            output_bw,
-                            output_quant_scheme,
-                            output_percentile,
-                            param_bw,
-                            param_quant_scheme,
-                            param_percentile,
-                            adaround_encoding_path):
+    def _configure_quantsim(
+        self,  # pylint: disable=too-many-arguments
+        sim,
+        output_bw,
+        output_quant_scheme,
+        output_percentile,
+        param_bw,
+        param_quant_scheme,
+        param_percentile,
+        adaround_encoding_path,
+    ):
         """Configures quantizers in sim with given bitwidths, quantschemes, and percentiles then loads encodings
 
         Any 32 bit quantizers are disabled after loading and freezing encodings
@@ -1064,7 +1154,7 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
     @staticmethod
     @abc.abstractmethod
     def _has_enabled_quantizers(sim):
-        """ Returns True if any quantizer in sim is enabled """
+        """Returns True if any quantizer in sim is enabled"""
 
     def _prepare_model(self, model):
         prepared_model = prepare_model(model, **self._model_preparer_kwargs)
@@ -1081,8 +1171,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         return prepared_model
 
     @cache.mark("batchnorm_folding")
-    def _apply_batchnorm_folding(self, model: torch.nn.Module)\
-            -> Tuple[torch.nn.Module, List[Tuple]]:
+    def _apply_batchnorm_folding(
+        self, model: torch.nn.Module
+    ) -> Tuple[torch.nn.Module, List[Tuple]]:
         """
         Apply batchnorm folding.
 
@@ -1096,7 +1187,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         return model, folded_pairs
 
     @cache.mark("cle")
-    def _apply_cross_layer_equalization(self, model: torch.nn.Module) -> torch.nn.Module:
+    def _apply_cross_layer_equalization(
+        self, model: torch.nn.Module
+    ) -> torch.nn.Module:
         """
         Apply cross-layer equalization.
 
@@ -1127,27 +1220,33 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         # NOTE: We dont need to make a deepcopy of model here, since Adaround.apply_adaround
         # internally creates and returns a deepcopy of model.
         filename_prefix = "adaround_weight"
-        adaround_encoding_path = os.path.join(self.results_dir,
-                                              "{}.encodings".format(filename_prefix))
+        adaround_encoding_path = os.path.join(
+            self.results_dir, "{}.encodings".format(filename_prefix)
+        )
 
         sim = self._create_quantsim_and_encodings(model)
 
         self._disable_activation_quantizers(sim)
 
-        model = self._get_adaround()._apply_adaround(sim, model, self.dummy_input, self.adaround_params,
-                                                     path=self.results_dir, filename_prefix=filename_prefix)
+        model = self._get_adaround()._apply_adaround(
+            sim,
+            model,
+            self.dummy_input,
+            self.adaround_params,
+            path=self.results_dir,
+            filename_prefix=filename_prefix,
+        )
 
         return model, adaround_encoding_path
 
     @staticmethod
     @abc.abstractmethod
     def _disable_activation_quantizers(sim):
-        """ Disables all input and output quantizers in sim """
+        """Disables all input and output quantizers in sim"""
 
     def _optimize_helper(
-            self,
-            optimize_fn: Callable,
-            allowed_accuracy_drop: float) -> Tuple[torch.nn.Module, float, str]:
+        self, optimize_fn: Callable, allowed_accuracy_drop: float
+    ) -> Tuple[torch.nn.Module, float, str]:
         """
         Integrate and apply post-training quantization techniques.
 
@@ -1157,8 +1256,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         allowed_accuracy_drop = float(allowed_accuracy_drop)
         if allowed_accuracy_drop < 0:
             raise ValueError(
-                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}"
-                .format(allowed_accuracy_drop)
+                "`allowed_accuracy_drop` must be a positive value. Got {:.2f}".format(
+                    allowed_accuracy_drop
+                )
             )
 
         self.eval_manager.clear()
@@ -1230,7 +1330,8 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         # always use tf scheme
         if param_bw >= 16:
             candidates = [
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if candidate.param_quant_scheme == QuantScheme.post_training_tf
             ]
 
@@ -1238,7 +1339,8 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         # always use tf scheme
         if output_bw >= 16:
             candidates = [
-                candidate for candidate in candidates
+                candidate
+                for candidate in candidates
                 if candidate.output_quant_scheme == QuantScheme.post_training_tf
             ]
 
@@ -1252,7 +1354,7 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         # Find the quant scheme that yields the best eval score
         return max(candidates, key=eval_fn)
 
-    def _optimize_main(self, fp32_model: torch.nn.Module, target_acc: float): # pylint: disable=too-many-branches
+    def _optimize_main(self, fp32_model: torch.nn.Module, target_acc: float):  # pylint: disable=too-many-branches
         """
         Helper function of apply().
 
@@ -1273,12 +1375,17 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
 
         # Choose quant scheme automatically.
         with self.eval_manager.session("QuantScheme Selection") as sess:
-            self._quantsim_params["quant_scheme"] = sess.wrap(self._choose_default_quant_scheme)()
+            self._quantsim_params["quant_scheme"] = sess.wrap(
+                self._choose_default_quant_scheme
+            )()
 
         with self.eval_manager.session("W32 Evaluation") as sess:
             w32_eval_score = sess.wrap(sess.eval)(model=fp32_model, param_bw=32)
-            _logger.info("Evaluation finished: W32A%d (eval score: %f)",
-                         self._quantsim_params["output_bw"], w32_eval_score)
+            _logger.info(
+                "Evaluation finished: W32A%d (eval score: %f)",
+                self._quantsim_params["output_bw"],
+                w32_eval_score,
+            )
 
             # Early exit
             if w32_eval_score < target_acc:
@@ -1287,7 +1394,9 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
                     "than the target eval score (%f). This means it is unlikely that "
                     "the target eval score can be met using PTQ techniques. "
                     "Please consider finetuning the model using range learning.",
-                    self._quantsim_params["output_bw"], w32_eval_score, target_acc
+                    self._quantsim_params["output_bw"],
+                    w32_eval_score,
+                    target_acc,
                 )
 
                 # Since AutoQuant pipeline exited early, all the return values are set to None
@@ -1305,9 +1414,11 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("Batchnorm Folding", ptq=True) as sess:
             model, _ = sess.wrap(self._apply_batchnorm_folding)(fp32_model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    applied_techniques=["batchnorm_folding"],
-                                    export_kwargs=self._export_kwargs)
+                sess.set_ptq_result(
+                    model=model,
+                    applied_techniques=["batchnorm_folding"],
+                    export_kwargs=self._export_kwargs,
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result and best_result.accuracy >= target_acc:
@@ -1318,9 +1429,11 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("Cross-Layer Equalization", ptq=True) as sess:
             model = sess.wrap(self._apply_cross_layer_equalization)(fp32_model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    applied_techniques=["cross_layer_equalization"],
-                                    export_kwargs=self._export_kwargs)
+                sess.set_ptq_result(
+                    model=model,
+                    applied_techniques=["cross_layer_equalization"],
+                    export_kwargs=self._export_kwargs,
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result and best_result.accuracy >= target_acc:
@@ -1340,10 +1453,12 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
         with self.eval_manager.session("AdaRound", ptq=True) as sess:
             model, adaround_encoding_path = self._apply_adaround(model)
             if sess.ptq_result is None:
-                sess.set_ptq_result(model=model,
-                                    adaround_encoding_path=adaround_encoding_path,
-                                    applied_techniques=[*applied_techniques, "adaround"],
-                                    export_kwargs=self._export_kwargs)
+                sess.set_ptq_result(
+                    model=model,
+                    adaround_encoding_path=adaround_encoding_path,
+                    applied_techniques=[*applied_techniques, "adaround"],
+                    export_kwargs=self._export_kwargs,
+                )
 
         best_result = self.eval_manager.get_best_ptq_result()
         if best_result:
@@ -1353,8 +1468,10 @@ class AutoQuantBase(abc.ABC): # pylint: disable=too-many-instance-attributes
                 sess.result["target_satisfied"] = True
             return best_result.as_dict()
 
-        raise RuntimeError("None of batchnorm folding, CLE, or Adaround "
-                           "has been finished successfully.")
+        raise RuntimeError(
+            "None of batchnorm folding, CLE, or Adaround "
+            "has been finished successfully."
+        )
 
 
 @contextlib.contextmanager
@@ -1375,12 +1492,14 @@ def spy_auto_quant(auto_quant: AutoQuantBase):
         ...     model = result.load_model()
         ...     ...
     """
+
     # pylint: disable=protected-access
     class Spy:
         """
         Spy that collects the handles to the ptq result of
         each stage of AutoQuant.
         """
+
         def __init__(self, eval_manager):
             self._eval_manager = eval_manager
 
@@ -1388,8 +1507,11 @@ def spy_auto_quant(auto_quant: AutoQuantBase):
             """Return handles to the results of AutoQuant"""
             if self._eval_manager is None:
                 return []
-            return [sess.ptq_result for sess in self._eval_manager._all_sessions.values()
-                    if sess.ptq_result is not None]
+            return [
+                sess.ptq_result
+                for sess in self._eval_manager._all_sessions.values()
+                if sess.ptq_result is not None
+            ]
 
     spy = Spy(auto_quant.eval_manager)
 

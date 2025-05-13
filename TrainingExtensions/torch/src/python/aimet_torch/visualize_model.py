@@ -35,7 +35,8 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top level API for visualizing a pytorch model. """
+"""Top level API for visualizing a pytorch model."""
+
 import os
 from typing import List
 import torch
@@ -45,10 +46,10 @@ from aimet_torch import plotting_utils
 
 
 def visualize_changes_after_optimization(
-        old_model: torch.nn.Module,
-        new_model: torch.nn.Module,
-        results_dir: str,
-        selected_layers: List = None
+    old_model: torch.nn.Module,
+    new_model: torch.nn.Module,
+    results_dir: str,
+    selected_layers: List = None,
 ) -> List[plotting.figure]:
     """
     Visualizes changes before and after some optimization has been applied to a model.
@@ -60,7 +61,7 @@ def visualize_changes_after_optimization(
         all Linear and Conv layers will be visualized.
     :return: A list of bokeh plots
     """
-    file_path = os.path.join(results_dir, 'visualize_changes_after_optimization.html')
+    file_path = os.path.join(results_dir, "visualize_changes_after_optimization.html")
     plotting.output_file(file_path)
     subplots = []
     if selected_layers:
@@ -76,8 +77,9 @@ def visualize_changes_after_optimization(
 
     else:
         for name, module in new_model.named_modules():
-            if hasattr(module, "weight") and\
-                    isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)):
+            if hasattr(module, "weight") and isinstance(
+                module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)
+            ):
                 old_model_module = old_model.get_submodule(name)
                 new_model_module = module
                 subplots.append(
@@ -90,9 +92,7 @@ def visualize_changes_after_optimization(
 
 
 def visualize_weight_ranges(
-        model: torch.nn.Module,
-        results_dir: str,
-        selected_layers: List = None
+    model: torch.nn.Module, results_dir: str, selected_layers: List = None
 ) -> List[plotting.figure]:
     """
     Visualizes weight ranges for each layer through a scatter plot showing mean plotted against the standard deviation,
@@ -105,27 +105,30 @@ def visualize_weight_ranges(
     :return: A list of bokeh plots
     """
 
-    file_path = os.path.join(results_dir, 'visualize_weight_ranges.html')
+    file_path = os.path.join(results_dir, "visualize_weight_ranges.html")
     plotting.output_file(file_path)
     subplots = []
     if selected_layers:
         for name, module in model.named_modules():
             if name in selected_layers and hasattr(module, "weight"):
-                subplots.append(plotting_utils.visualize_weight_ranges_single_layer(module, name))
+                subplots.append(
+                    plotting_utils.visualize_weight_ranges_single_layer(module, name)
+                )
     else:
         for name, module in model.named_modules():
-            if hasattr(module, "weight") and\
-                    isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)):
-                subplots.append(plotting_utils.visualize_weight_ranges_single_layer(module, name))
+            if hasattr(module, "weight") and isinstance(
+                module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)
+            ):
+                subplots.append(
+                    plotting_utils.visualize_weight_ranges_single_layer(module, name)
+                )
 
     plotting.save(column(subplots))
     return subplots
 
 
 def visualize_relative_weight_ranges_to_identify_problematic_layers(
-        model: torch.nn.Module,
-        results_dir: str,
-        selected_layers: List = None
+    model: torch.nn.Module, results_dir: str, selected_layers: List = None
 ) -> List[plotting.figure]:
     """
     For each of the selected layers, publishes a line plot showing  weight ranges for each layer, summary statistics
@@ -139,21 +142,38 @@ def visualize_relative_weight_ranges_to_identify_problematic_layers(
     :return: A list of bokeh plots
     """
 
-    file_path = os.path.join(results_dir, 'visualize_relative_weight_ranges_to_identify_problematic_layers.html')
+    file_path = os.path.join(
+        results_dir,
+        "visualize_relative_weight_ranges_to_identify_problematic_layers.html",
+    )
     plotting.output_file(file_path)
     subplots = []
     # layer name -> module weights data frame mapping
     if not selected_layers:
         for name, module in model.named_modules():
-            if hasattr(module, "weight") and\
-                    isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)):
-                subplots.append(plotting_utils.visualize_relative_weight_ranges_single_layer(module, name))
+            if hasattr(module, "weight") and isinstance(
+                module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)
+            ):
+                subplots.append(
+                    plotting_utils.visualize_relative_weight_ranges_single_layer(
+                        module, name
+                    )
+                )
     else:
         for name, module in model.named_modules():
-            if hasattr(module, "weight") and\
-                    isinstance(module, (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear)) and\
-                    name in selected_layers:
-                subplots.append(plotting_utils.visualize_relative_weight_ranges_single_layer(module, name))
+            if (
+                hasattr(module, "weight")
+                and isinstance(
+                    module,
+                    (torch.nn.modules.conv.Conv2d, torch.nn.modules.linear.Linear),
+                )
+                and name in selected_layers
+            ):
+                subplots.append(
+                    plotting_utils.visualize_relative_weight_ranges_single_layer(
+                        module, name
+                    )
+                )
 
     plotting.save(column(subplots))
     return subplots

@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" MNIST model using Keras API"""
+"""MNIST model using Keras API"""
 
 import tensorflow as tf
 from tensorflow.keras import Sequential
@@ -55,40 +55,52 @@ from tensorflow.keras.layers import Reshape, MaxPool2D, Conv2D, Flatten, Dropout
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 def create_model(data_format):
-
     """Model to recognize digits in the MNIST data set.
-      Network structure is equivalent to:
-      https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/examples/tutorials/mnist/mnist_deep.py
-      and
-      https://github.com/tensorflow/models/blob/master/tutorials/image/mnist/convolutional.py
-      But uses the tf.keras API.
-      Args:
-        data_format: Either 'channels_first' or 'channels_last'. 'channels_first' is
-          typically faster on GPUs while 'channels_last' is typically faster on
-          CPUs. See
-          https://www.tensorflow.org/performance/performance_guide#data_formats
-      Returns:
-        A tf.keras.Model. """
+    Network structure is equivalent to:
+    https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/examples/tutorials/mnist/mnist_deep.py
+    and
+    https://github.com/tensorflow/models/blob/master/tutorials/image/mnist/convolutional.py
+    But uses the tf.keras API.
+    Args:
+      data_format: Either 'channels_first' or 'channels_last'. 'channels_first' is
+        typically faster on GPUs while 'channels_last' is typically faster on
+        CPUs. See
+        https://www.tensorflow.org/performance/performance_guide#data_formats
+    Returns:
+      A tf.keras.Model."""
 
     # pylint: disable=no-member
 
-    if data_format == 'channels_first':
+    if data_format == "channels_first":
         input_shape = [1, 28, 28]
     else:
-        assert data_format == 'channels_last'
+        assert data_format == "channels_last"
         input_shape = [28, 28, 1]
 
     return Sequential(
         [
             Reshape(target_shape=input_shape, input_shape=(28 * 28,)),
-            Conv2D(32, 5, padding='same', data_format=data_format, activation=tf.nn.relu,
-                   kernel_initializer='random_uniform'),
-            MaxPool2D((2, 2), (2, 2), padding='same', data_format=data_format),
-            Conv2D(64, 5, padding='same', data_format=data_format, activation=tf.nn.relu,
-                   kernel_initializer='random_uniform'),
-            MaxPool2D((2, 2), (2, 2), padding='same', data_format=data_format),
+            Conv2D(
+                32,
+                5,
+                padding="same",
+                data_format=data_format,
+                activation=tf.nn.relu,
+                kernel_initializer="random_uniform",
+            ),
+            MaxPool2D((2, 2), (2, 2), padding="same", data_format=data_format),
+            Conv2D(
+                64,
+                5,
+                padding="same",
+                data_format=data_format,
+                activation=tf.nn.relu,
+                kernel_initializer="random_uniform",
+            ),
+            MaxPool2D((2, 2), (2, 2), padding="same", data_format=data_format),
             Flatten(),
-            Dense(1024, activation=tf.nn.relu, kernel_initializer='random_uniform'),
+            Dense(1024, activation=tf.nn.relu, kernel_initializer="random_uniform"),
             Dropout(0.4),
-            Dense(10, kernel_initializer='random_uniform')
-        ])
+            Dense(10, kernel_initializer="random_uniform"),
+        ]
+    )

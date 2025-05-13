@@ -39,7 +39,7 @@
 # RecursionError: maximum recursion depth exceeded while calling a Python object
 # pylint: skip-file
 
-""" Sub-sample data for weight reconstruction for channel pruning feature """
+"""Sub-sample data for weight reconstruction for channel pruning feature"""
 
 from typing import Tuple
 import numpy as np
@@ -50,11 +50,12 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
 
 class InputMatchSearch:
-    """ Utilities to find a set of input pixels corresponding to an output pixel for weight reconstruction """
+    """Utilities to find a set of input pixels corresponding to an output pixel for weight reconstruction"""
 
     @staticmethod
-    def _check_and_update_pixel_sampled_from_output_data(input_data_shape: tuple, layer_attributes: tuple,
-                                                         pixel: tuple):
+    def _check_and_update_pixel_sampled_from_output_data(
+        input_data_shape: tuple, layer_attributes: tuple, pixel: tuple
+    ):
         """
         Function gets shape, layer, pixel indices (height, width) and first check if given height and width satisfy
          O = (I - F + 2P) / S + 1 formula, and then update them using stride and
@@ -82,7 +83,9 @@ class InputMatchSearch:
         output_width = (input_width - kernel_size[1] + 2 * padding[1]) / stride[1] + 1
 
         if not 0 <= height <= output_height or not 0 <= width <= output_width:
-            raise ValueError("input match can not exist for given height and width indices!")
+            raise ValueError(
+                "input match can not exist for given height and width indices!"
+            )
 
         # firstly, multiply strides to output data height and width indices
         height = stride[0] * height
@@ -96,7 +99,9 @@ class InputMatchSearch:
         return new_pixel
 
     @staticmethod
-    def _find_pixel_range_for_rectangle_input_match(shape: tuple, layer_attributes: tuple, pixel: tuple):
+    def _find_pixel_range_for_rectangle_input_match(
+        shape: tuple, layer_attributes: tuple, pixel: tuple
+    ):
         """
         Function gets input_data shape, layer, pixel (height, width) from output data and calculates
         corresponding input match height and width index ranges.
@@ -111,7 +116,9 @@ class InputMatchSearch:
         # assert if provided pixel is not of size (height, width)
         assert len(pixel) == 2
         # first check whether provided pixel (height, width) is valid and then update
-        new_pixel = InputMatchSearch._check_and_update_pixel_sampled_from_output_data(shape, layer_attributes, pixel)
+        new_pixel = InputMatchSearch._check_and_update_pixel_sampled_from_output_data(
+            shape, layer_attributes, pixel
+        )
 
         height, width = new_pixel
 
@@ -146,7 +153,9 @@ class InputMatchSearch:
         return height_range, width_range
 
     @staticmethod
-    def _find_pixel_range_for_input_data(input_data_shape: tuple, layer_attributes: tuple, pixel: tuple):
+    def _find_pixel_range_for_input_data(
+        input_data_shape: tuple, layer_attributes: tuple, pixel: tuple
+    ):
         """
         Function gets input_data shape, layer_attributes, pixel (height, width) and calculates
         corresponding input_data height and width index ranges.
@@ -163,8 +172,9 @@ class InputMatchSearch:
         assert len(pixel) == 2
 
         # first check whether provided pixel (height, width) is valid and then update
-        new_pixel = InputMatchSearch._check_and_update_pixel_sampled_from_output_data(input_data_shape,
-                                                                                      layer_attributes, pixel)
+        new_pixel = InputMatchSearch._check_and_update_pixel_sampled_from_output_data(
+            input_data_shape, layer_attributes, pixel
+        )
 
         height, width = new_pixel
         kernel_size = layer_attributes[0]
@@ -180,8 +190,12 @@ class InputMatchSearch:
         return height_range, width_range
 
     @staticmethod
-    def _find_input_match(input_data: np.ndarray, layer_attributes: tuple, pixel_range_for_data: tuple,
-                          pixel_range_for_match: tuple):
+    def _find_input_match(
+        input_data: np.ndarray,
+        layer_attributes: tuple,
+        pixel_range_for_data: tuple,
+        pixel_range_for_match: tuple,
+    ):
         """
         Function gets input_data, layer_attributes, pixel ranges for input data and input match, and return
         the input match.
@@ -198,7 +212,10 @@ class InputMatchSearch:
         kernel_size = layer_attributes[0]
 
         # create input match of size [Cin, k_h, k_w] filled with zeros
-        input_match = np.zeros([input_data.shape[0], kernel_size[0], kernel_size[1]], dtype=input_data.dtype)
+        input_match = np.zeros(
+            [input_data.shape[0], kernel_size[0], kernel_size[1]],
+            dtype=input_data.dtype,
+        )
 
         height_range = pixel_range_for_data[0]
         width_range = pixel_range_for_data[1]
@@ -208,7 +225,9 @@ class InputMatchSearch:
         assert width_range[0] <= width_range[1]
 
         # extract the appropriate data using height and width range
-        extracted_data = input_data[:, height_range[0]:height_range[1], width_range[0]:width_range[1]]
+        extracted_data = input_data[
+            :, height_range[0] : height_range[1], width_range[0] : width_range[1]
+        ]
 
         height_range = pixel_range_for_match[0]
         width_range = pixel_range_for_match[1]
@@ -218,12 +237,16 @@ class InputMatchSearch:
         assert width_range[0] <= width_range[1]
 
         # set extracted data appropriately in input match
-        input_match[:, height_range[0]:height_range[1], width_range[0]:width_range[1]] = extracted_data
+        input_match[
+            :, height_range[0] : height_range[1], width_range[0] : width_range[1]
+        ] = extracted_data
 
         return input_match
 
     @classmethod
-    def _find_input_match_for_output_pixel(cls, input_data: np.ndarray, layer_attributes: tuple, pixel: tuple):
+    def _find_input_match_for_output_pixel(
+        cls, input_data: np.ndarray, layer_attributes: tuple, pixel: tuple
+    ):
         """
         Function finds the input match that generated the output of a conv2d layer at that specified output pixel.
         It looks at one output pixel (height, width), and finds which input pixels (input match) corresponded to that,
@@ -236,20 +259,26 @@ class InputMatchSearch:
         """
 
         # calculate pixel (height and width) ranges for input data
-        pixel_range_for_data = cls._find_pixel_range_for_input_data(input_data.shape, layer_attributes, pixel)
+        pixel_range_for_data = cls._find_pixel_range_for_input_data(
+            input_data.shape, layer_attributes, pixel
+        )
 
         # calculate pixel (height and width) ranges for input match rectangle (place holder)
-        pixel_range_for_match = cls._find_pixel_range_for_rectangle_input_match(input_data.shape, layer_attributes,
-                                                                                pixel)
+        pixel_range_for_match = cls._find_pixel_range_for_rectangle_input_match(
+            input_data.shape, layer_attributes, pixel
+        )
 
         # calculate input match for corresponding output_data_pixel (height, width)
-        input_match = cls._find_input_match(input_data, layer_attributes, pixel_range_for_data, pixel_range_for_match)
+        input_match = cls._find_input_match(
+            input_data, layer_attributes, pixel_range_for_data, pixel_range_for_match
+        )
 
         return input_match
 
     @classmethod
-    def _determine_output_pixel_height_width_range_for_random_selection(cls, layer_attributes: tuple, out_shape: tuple)\
-            -> Tuple[tuple, tuple]:
+    def _determine_output_pixel_height_width_range_for_random_selection(
+        cls, layer_attributes: tuple, out_shape: tuple
+    ) -> Tuple[tuple, tuple]:
         """
         Function returns height range and width range based on the Kernel size and Padding size.
         If the Kernel size is bigger than or equal to the Padding size, this function returns the height range and
@@ -283,8 +312,13 @@ class InputMatchSearch:
         return height_range, width_range
 
     @classmethod
-    def subsample_data(cls, layer_attributes: tuple, input_data: np.ndarray, output_data: np.ndarray,
-                       samples_per_image: int) -> Tuple[np.ndarray, np.ndarray]:
+    def subsample_data(
+        cls,
+        layer_attributes: tuple,
+        input_data: np.ndarray,
+        output_data: np.ndarray,
+        samples_per_image: int,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Function takes layer_attributes, input data (collected from pruned model) and output data (collected from
         original layer) and returns sub sampled input and their corresponding sub sampled output
@@ -314,28 +348,36 @@ class InputMatchSearch:
         sampled_input = []
         sampled_output = []
 
-        height_range, width_range = cls._determine_output_pixel_height_width_range_for_random_selection(
-            layer_attributes=layer_attributes, out_shape=output_data.shape)
+        height_range, width_range = (
+            cls._determine_output_pixel_height_width_range_for_random_selection(
+                layer_attributes=layer_attributes, out_shape=output_data.shape
+            )
+        )
 
         # TODO: The PyLint RecursionError that needs to be investigated occurs from this code onwards
         # iterate over all images in one batch
         for image_index in range(batch_size):
-
             # randomly pick samples per image for height and width dimension
-            heights = np.random.choice(range(*height_range), size=[samples_per_image], replace=True)
-            widths = np.random.choice(range(*width_range), size=[samples_per_image], replace=True)
+            heights = np.random.choice(
+                range(*height_range), size=[samples_per_image], replace=True
+            )
+            widths = np.random.choice(
+                range(*width_range), size=[samples_per_image], replace=True
+            )
 
             # iterate over all samples
             for sample in range(samples_per_image):
-
                 # output pixel
                 output_pixel = (heights[sample], widths[sample])
 
                 # find input match for given output pixel
-                input_match = cls._find_input_match_for_output_pixel(input_data[image_index], layer_attributes,
-                                                                     output_pixel)
+                input_match = cls._find_input_match_for_output_pixel(
+                    input_data[image_index], layer_attributes, output_pixel
+                )
                 # find output match for given output pixel
-                output_match = output_data[image_index, :, heights[sample], widths[sample]]
+                output_match = output_data[
+                    image_index, :, heights[sample], widths[sample]
+                ]
 
                 sampled_input.append(input_match)
                 sampled_output.append(output_match)

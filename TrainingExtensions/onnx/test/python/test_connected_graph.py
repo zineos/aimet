@@ -37,26 +37,36 @@
 import itertools
 import pytest
 import torch
-from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops, get_all_ops_with_constant_inputs
-from aimet_onnx.meta.connectedgraph import ConnectedGraph, CONSTANT_TYPE, OPS_WITH_PARAMS
+from aimet_common.connected_graph.connectedgraph_utils import (
+    get_all_input_ops,
+    get_all_ops_with_constant_inputs,
+)
+from aimet_onnx.meta.connectedgraph import (
+    ConnectedGraph,
+    CONSTANT_TYPE,
+    OPS_WITH_PARAMS,
+)
 from aimet_onnx.utils import ParamUtils
 from .models import models_for_tests
 
 
 class TestConnectedGraph:
-
-    @pytest.mark.parametrize("model", (models_for_tests.build_dummy_model(),
-                                       models_for_tests.single_residual_model().model,
-                                       models_for_tests.multi_input_model().model,
-                                       models_for_tests.transposed_conv_model().model,
-                                       models_for_tests.concat_model().model,
-                                       models_for_tests.hierarchical_model().model,
-                                       models_for_tests.elementwise_op_model().model,
-                                       models_for_tests.instance_norm_model().model,
-                                       models_for_tests.layernorm_model(),
-                                       models_for_tests.matmul_with_constant_first_input(),
-                                       models_for_tests.model_with_split_matmul(),
-                                       ))
+    @pytest.mark.parametrize(
+        "model",
+        (
+            models_for_tests.build_dummy_model(),
+            models_for_tests.single_residual_model().model,
+            models_for_tests.multi_input_model().model,
+            models_for_tests.transposed_conv_model().model,
+            models_for_tests.concat_model().model,
+            models_for_tests.hierarchical_model().model,
+            models_for_tests.elementwise_op_model().model,
+            models_for_tests.instance_norm_model().model,
+            models_for_tests.layernorm_model(),
+            models_for_tests.matmul_with_constant_first_input(),
+            models_for_tests.model_with_split_matmul(),
+        ),
+    )
     def test_model_representation(self, model):
         """
         Given: A ConnectedGraph constructed for a given model
@@ -64,7 +74,12 @@ class TestConnectedGraph:
               2) All tensors should be represented as products in the CG
         """
         nodes = {node.name for node in model.graph.node if node.op_type != "Constant"}
-        tensors = {tensor for node in model.graph.node for tensor in itertools.chain(node.input, node.output) if tensor}
+        tensors = {
+            tensor
+            for node in model.graph.node
+            for tensor in itertools.chain(node.input, node.output)
+            if tensor
+        }
         cg = ConnectedGraph(model)
         ops = cg.get_all_ops()
         assert ops.keys() == nodes
@@ -112,7 +127,9 @@ class TestConnectedGraph:
             if not product.producer:
                 assert product.is_model_input or product.is_const or product.is_parm
             else:
-                assert not (product.is_model_input or product.is_const or product.is_parm)
+                assert not (
+                    product.is_model_input or product.is_const or product.is_parm
+                )
 
         for op_name, op in ops.items():
             node = op.get_module()
@@ -133,10 +150,14 @@ class TestConnectedGraph:
     def test_single_residual_model(self):
         model = models_for_tests.single_residual_model()
         conn_graph = ConnectedGraph(model)
-        operator_names = {node.name for node in model.nodes() if node.op_type not in CONSTANT_TYPE}
+        operator_names = {
+            node.name for node in model.nodes() if node.op_type not in CONSTANT_TYPE
+        }
         assert operator_names == conn_graph.get_all_ops().keys()
 
-        model_weights = {node.input[1] for node in model.graph().node if node.op_type == "Conv"}
+        model_weights = {
+            node.input[1] for node in model.graph().node if node.op_type == "Conv"
+        }
         products = conn_graph.get_all_products()
 
         for weight in model_weights:
@@ -158,7 +179,7 @@ class TestConnectedGraph:
         model = models_for_tests.concat_model()
         conn_graph = ConnectedGraph(model)
         ops = conn_graph.get_all_ops()
-        assert len(ops['/Concat'].inputs) == 3
+        assert len(ops["/Concat"].inputs) == 3
 
     def test_hierarchical_model(self):
         model = models_for_tests.hierarchical_model()
@@ -170,9 +191,12 @@ class TestConnectedGraph:
 
         # Check in the graph that if A & B are connected and A comes before B in the graph then that should be the case
         # in ordered graphs as well
-        assert name_to_index['/conv1/conv/Conv'] < name_to_index['/nm1/tm1/Reshape']
-        assert name_to_index['/sq/seq_list/seq_list.0/Conv'] < name_to_index['/sq/seq_list/seq_list.5/Conv']
-        assert name_to_index['/conv2/conv/Conv'] < name_to_index['/nm2/tm1/conv3/Conv']
+        assert name_to_index["/conv1/conv/Conv"] < name_to_index["/nm1/tm1/Reshape"]
+        assert (
+            name_to_index["/sq/seq_list/seq_list.0/Conv"]
+            < name_to_index["/sq/seq_list/seq_list.5/Conv"]
+        )
+        assert name_to_index["/conv2/conv/Conv"] < name_to_index["/nm2/tm1/conv3/Conv"]
 
     def test_matmul_layer_param_creation(self):
         torch.manual_seed(10)
@@ -182,18 +206,20 @@ class TestConnectedGraph:
 
         input_shape = (2, 10, 24, 24)
 
-        model = models_for_tests._convert_to_onnx_no_fold(torch_model, torch.randn(input_shape))
+        model = models_for_tests._convert_to_onnx_no_fold(
+            torch_model, torch.randn(input_shape)
+        )
 
         cg = ConnectedGraph(model)
         for op in cg.ordered_ops:
-            if op.type == 'MatMul':
-                assert 'fc2.weight' in op.parameters
+            if op.type == "MatMul":
+                assert "fc2.weight" in op.parameters
                 break
         else:
             assert False
 
     def test_constant_elementwise_inputs(self):
-        """ Test that constant inputs to elementwise ops are identified correctly """
+        """Test that constant inputs to elementwise ops are identified correctly"""
         model = models_for_tests.elementwise_op_model()
         cg = ConnectedGraph(model)
 
@@ -215,17 +241,19 @@ class TestConnectedGraph:
     def test_instance_norm_model(self):
         model = models_for_tests.instance_norm_model()
         cg = ConnectedGraph(model)
-        assert cg.ordered_ops[-2].type == 'InstanceNormalization'
+        assert cg.ordered_ops[-2].type == "InstanceNormalization"
 
     def test_layer_norm_model(self):
         model = models_for_tests.layernorm_model()
         cg = ConnectedGraph(model)
         layernorm_cg_op = cg.ordered_ops[-1]
-        assert layernorm_cg_op.type == 'LayerNormalization'
-        assert ['layernorm.scale', 'layernorm.bias'] == list(layernorm_cg_op.parameters.keys())
+        assert layernorm_cg_op.type == "LayerNormalization"
+        assert ["layernorm.scale", "layernorm.bias"] == list(
+            layernorm_cg_op.parameters.keys()
+        )
 
     def test_malformed_model(self):
         model = models_for_tests.layernorm_model()
-        model.graph.node.pop(1) # Remove constant node
+        model.graph.node.pop(1)  # Remove constant node
         with pytest.raises(RuntimeError):
             cg = ConnectedGraph(model)

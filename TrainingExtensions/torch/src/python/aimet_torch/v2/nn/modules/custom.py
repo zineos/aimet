@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Quantized definitions for custom modules of AIMET """
+"""Quantized definitions for custom modules of AIMET"""
 
 import copy
 from typing import Optional
@@ -42,7 +42,7 @@ import torch
 from torch import Tensor
 from torch import nn
 import torch.nn.functional as F
-from aimet_torch._base.nn.modules.custom import * # pylint: disable=wildcard-import, unused-wildcard-import
+from aimet_torch._base.nn.modules.custom import *  # pylint: disable=wildcard-import, unused-wildcard-import
 from aimet_torch.v2.quantization.tensor import QuantizedTensorBase
 from ..true_quant import (
     QuantizationMixin,
@@ -57,79 +57,91 @@ from ..true_quant import (
 
 @QuantizationMixin.implements(Sin)
 class QuantizedSin(_DispatchMixin, QuantizationMixin, Sin):
-    """ Quantized Sin """
+    """Quantized Sin"""
+
     _builtin_torch_fn = torch.sin
 
 
 @QuantizationMixin.implements(Cos)
 class QuantizedCos(_DispatchMixin, QuantizationMixin, Cos):
-    """ Quantized Cos """
+    """Quantized Cos"""
+
     _builtin_torch_fn = torch.cos
 
 
 @QuantizationMixin.implements(AvgPool2d)
 class QuantizedAvgPool2d(_DispatchMixin, QuantizationMixin, AvgPool2d):
-    """ Quantized AvgPool2d """
+    """Quantized AvgPool2d"""
+
     _builtin_torch_fn = F.avg_pool2d
 
 
 @QuantizationMixin.implements(Reshape)
 class QuantizedReshape(_DispatchMixin, QuantizationMixin, Reshape):
-    """ Quantized Reshape """
+    """Quantized Reshape"""
+
     _builtin_torch_fn = torch.reshape
 
 
 @QuantizationMixin.implements(RSqrt)
 class QuantizedRSqrt(_DispatchMixin, QuantizationMixin, RSqrt):
-    """ Quantized RSqrt """
+    """Quantized RSqrt"""
+
     _builtin_torch_fn = torch.rsqrt
 
 
 @QuantizationMixin.implements(MatMul)
 class QuantizedMatMul(_DispatchMixin, QuantizationMixin, MatMul):
-    """ Quantized MatMul """
+    """Quantized MatMul"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.matmul
 
 
 @QuantizationMixin.implements(Add)
 class QuantizedAdd(_DispatchMixin, QuantizationMixin, Add):
-    """ Quantized Add """
+    """Quantized Add"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.add
 
 
 @QuantizationMixin.implements(Multiply)
 class QuantizedMultiply(_DispatchMixin, QuantizationMixin, Multiply):
-    """ Quantized Multiply """
+    """Quantized Multiply"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.mul
 
 
 @QuantizationMixin.implements(Subtract)
 class QuantizedSubtract(_DispatchMixin, QuantizationMixin, Subtract):
-    """ Quantized Subtract """
+    """Quantized Subtract"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.sub
 
 
 @QuantizationMixin.implements(Divide)
 class QuantizedDivide(_DispatchMixin, QuantizationMixin, Divide):
-    """ Quantized Divide """
+    """Quantized Divide"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.div
 
 
 @QuantizationMixin.implements(Outer)
 class QuantizedOuter(_DispatchMixin, QuantizationMixin, Outer):
-    """ Quantized Outer """
+    """Quantized Outer"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.outer
 
 
 @QuantizationMixin.implements(Concat)
 class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
-    """ Quantized Concat """
+    """Quantized Concat"""
+
     _builtin_torch_fn = torch.cat
 
     # pylint: disable=attribute-defined-outside-init
@@ -143,25 +155,31 @@ class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
         """
         input_encodings = super().export_input_encodings(encoding_version)
         # Create separate encoding objects to avoid overriding of attributes added/updated later while exporting encodings
-        return [copy.deepcopy(encoding) for encoding in input_encodings * self._num_inputs]
+        return [
+            copy.deepcopy(encoding) for encoding in input_encodings * self._num_inputs
+        ]
 
-    def import_input_encodings(self,
-                               encodings,
-                               strict: bool,
-                               partial: bool,
-                               requires_grad: Optional[bool],
-                               allow_overwrite: bool):
+    def import_input_encodings(
+        self,
+        encodings,
+        strict: bool,
+        partial: bool,
+        requires_grad: Optional[bool],
+        allow_overwrite: bool,
+    ):
         """
         Extends super().import_input_encodings to set `self._num_inputs` based on length of encodings.
         """
         self._num_inputs = len(encodings)
-        super().import_input_encodings(encodings,
-                                       strict=strict,
-                                       partial=partial,
-                                       requires_grad=requires_grad,
-                                       allow_overwrite=allow_overwrite)
+        super().import_input_encodings(
+            encodings,
+            strict=strict,
+            partial=partial,
+            requires_grad=requires_grad,
+            allow_overwrite=allow_overwrite,
+        )
 
-    def forward(self, *x): # pylint: disable=arguments-differ
+    def forward(self, *x):  # pylint: disable=arguments-differ
         """
         Quantized forward impl for custom.Concat.
         """
@@ -171,7 +189,9 @@ class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
     def _builtin_torch_fn_helper(self, fn: Callable[..., Tensor]):
         def cat(tensors, dim=0, *, out=None):
             input_qtzr = self.input_quantizers[0]
-            tensors = tuple(_quantize_dequantize_if_applicable(x, input_qtzr) for x in tensors)
+            tensors = tuple(
+                _quantize_dequantize_if_applicable(x, input_qtzr) for x in tensors
+            )
             output = fn(tensors, dim=dim, out=out)
             return _quantize_dequantize_if_applicable(output, self.output_quantizers[0])
 
@@ -181,7 +201,11 @@ class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
         def cat(tensors, dim=0, *, out=None):
             input_qtzr = self.input_quantizers[0]
             tensors = tuple(_quantize_if_applicable(x, input_qtzr) for x in tensors)
-            output_encodings = self.output_quantizers[0].get_encodings() if self.output_quantizers[0] else None
+            output_encodings = (
+                self.output_quantizers[0].get_encodings()
+                if self.output_quantizers[0]
+                else None
+            )
             return fn(tensors, dim=dim, out=out, output_encodings=output_encodings)
 
         return cat
@@ -195,26 +219,32 @@ class QuantizedConcat(_DispatchMixin, QuantizationMixin, Concat):
 #
 @QuantizationMixin.implements(Norm)
 class QuantizedNorm(_DispatchMixin, QuantizationMixin, Norm):
-    """ Quantized Norm """
+    """Quantized Norm"""
+
     _builtin_torch_fn = torch.norm
 
 
 @QuantizationMixin.implements(Exponential)
 class QuantizedExponential(_DispatchMixin, QuantizationMixin, Exponential):
-    """ Quantized Exponential """
+    """Quantized Exponential"""
+
     _builtin_torch_fn = torch.exp
 
 
 @QuantizationMixin.implements(Erf)
 class QuantizedErf(_DispatchMixin, QuantizationMixin, Erf):
-    """ Quantized Erf """
+    """Quantized Erf"""
+
     _builtin_torch_fn = torch.erf
 
 
 @QuantizationMixin.implements(Sqrt)
 class QuantizedSqrt(_DispatchMixin, QuantizationMixin, Sqrt):
-    """ Quantized Sqrt """
+    """Quantized Sqrt"""
+
     _builtin_torch_fn = torch.sqrt
+
+
 #
 #
 # @QuantizationMixin.implements(Maximum)
@@ -295,14 +325,16 @@ class QuantizedSqrt(_DispatchMixin, QuantizationMixin, Sqrt):
 
 @QuantizationMixin.implements(Bmm)
 class QuantizedBmm(_DispatchMixin, QuantizationMixin, Bmm):
-    """ Quantized Bmm """
+    """Quantized Bmm"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.bmm
 
 
 @QuantizationMixin.implements(CumSum)
 class QuantizedCumSum(_DispatchMixin, QuantizationMixin, CumSum):
-    """ Quantized CumSum """
+    """Quantized CumSum"""
+
     _builtin_torch_fn = torch.cumsum
 
 
@@ -332,20 +364,25 @@ class QuantizedCumSum(_DispatchMixin, QuantizationMixin, CumSum):
 #
 @QuantizationMixin.implements(Log)
 class QuantizedLog(_DispatchMixin, QuantizationMixin, Log):
-    """ Quantized Log """
+    """Quantized Log"""
+
     _builtin_torch_fn = torch.log
 
 
 @QuantizationMixin.implements(Abs)
 class QuantizedAbs(_DispatchMixin, QuantizationMixin, Abs):
-    """ Quantized Abs """
+    """Quantized Abs"""
+
     _builtin_torch_fn = torch.abs
 
 
 @QuantizationMixin.implements(Neg)
 class QuantizedNeg(_DispatchMixin, QuantizationMixin, Neg):
-    """ Quantized Neg """
+    """Quantized Neg"""
+
     _builtin_torch_fn = torch.neg
+
+
 #
 #
 # @QuantizationMixin.implements(Argmin)
@@ -475,14 +512,16 @@ class QuantizedNeg(_DispatchMixin, QuantizationMixin, Neg):
 
 @QuantizationMixin.implements(Baddbmm)
 class QuantizedBaddbmm(_DispatchMixin, QuantizationMixin, Baddbmm):
-    """ Quantized Baddbmm """
+    """Quantized Baddbmm"""
+
     __quant_init__ = QuantizationMixin.__ternary__
     _builtin_torch_fn = torch.baddbmm
 
 
 @QuantizationMixin.implements(Addmm)
 class QuantizedAddmm(_DispatchMixin, QuantizationMixin, Addmm):
-    """ Quantized Addmm """
+    """Quantized Addmm"""
+
     __quant_init__ = QuantizationMixin.__ternary__
     _builtin_torch_fn = torch.addmm
 
@@ -490,6 +529,7 @@ class QuantizedAddmm(_DispatchMixin, QuantizationMixin, Addmm):
 @QuantizationMixin.implements(RmsNorm)
 class QuantizedRmsNorm(QuantizationMixin, RmsNorm):
     """Custom module for RmsNorm"""
+
     # pylint: disable=arguments-differ
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -541,7 +581,8 @@ class QuantizedRmsNorm(QuantizationMixin, RmsNorm):
 #
 @QuantizationMixin.implements(BatchNorm)
 class QuantizedBatchNorm(_DispatchMixin, QuantizationMixin, BatchNorm):
-    """ Quantized BatchNorm """
+    """Quantized BatchNorm"""
+
     _builtin_torch_fn = torch.nn.functional.batch_norm
 
     def __quant_init__(self):
@@ -562,18 +603,37 @@ class QuantizedBatchNorm(_DispatchMixin, QuantizationMixin, BatchNorm):
             eps: float = 1e-5,
         ) -> Tensor:
             if training:
-                if self.input_quantizers[1] is not None or self.input_quantizers[2] is not None:
-                    raise RuntimeError(f"{self.__class__} doesn't support quantizing running_mean or running_var in training mode")
+                if (
+                    self.input_quantizers[1] is not None
+                    or self.input_quantizers[2] is not None
+                ):
+                    raise RuntimeError(
+                        f"{self.__class__} doesn't support quantizing running_mean or running_var in training mode"
+                    )
 
             input = _quantize_dequantize_if_applicable(input, self.input_quantizers[0])
-            running_mean = _quantize_dequantize_if_applicable(running_mean, self.input_quantizers[1])
-            running_var = _quantize_dequantize_if_applicable(running_var, self.input_quantizers[2])
-            weight = _quantize_dequantize_if_applicable(weight, self.input_quantizers[3])
+            running_mean = _quantize_dequantize_if_applicable(
+                running_mean, self.input_quantizers[1]
+            )
+            running_var = _quantize_dequantize_if_applicable(
+                running_var, self.input_quantizers[2]
+            )
+            weight = _quantize_dequantize_if_applicable(
+                weight, self.input_quantizers[3]
+            )
             bias = _quantize_dequantize_if_applicable(bias, self.input_quantizers[4])
 
             # PyTorch doesn't support gradient calculation of running_mean/var
-            output = fn(input, running_mean.detach(), running_var.detach(),
-                        weight, bias, training, momentum, eps)
+            output = fn(
+                input,
+                running_mean.detach(),
+                running_var.detach(),
+                weight,
+                bias,
+                training,
+                momentum,
+                eps,
+            )
 
             return _quantize_dequantize_if_applicable(output, self.output_quantizers[0])
 
@@ -592,38 +652,62 @@ class QuantizedBatchNorm(_DispatchMixin, QuantizationMixin, BatchNorm):
             eps: float = 1e-5,
         ) -> Tensor:
             if training:
-                if self.input_quantizers[1] is not None or self.input_quantizers[2] is not None:
-                    raise RuntimeError(f"{self.__class__} doesn't support quantizing running_mean or running_var in training mode")
+                if (
+                    self.input_quantizers[1] is not None
+                    or self.input_quantizers[2] is not None
+                ):
+                    raise RuntimeError(
+                        f"{self.__class__} doesn't support quantizing running_mean or running_var in training mode"
+                    )
 
             input = _quantize_if_applicable(input, self.input_quantizers[0])
-            running_mean = _quantize_if_applicable(running_mean, self.input_quantizers[1])
+            running_mean = _quantize_if_applicable(
+                running_mean, self.input_quantizers[1]
+            )
             running_var = _quantize_if_applicable(running_var, self.input_quantizers[2])
             weight = _quantize_if_applicable(weight, self.input_quantizers[3])
             bias = _quantize_if_applicable(bias, self.input_quantizers[4])
 
             # PyTorch doesn't support gradient calculation of running_mean/var
-            output = fn(input, running_mean.detach(), running_var.detach(),
-                        weight, bias, training, momentum, eps)
+            output = fn(
+                input,
+                running_mean.detach(),
+                running_var.detach(),
+                weight,
+                bias,
+                training,
+                momentum,
+                eps,
+            )
             return _quantize_if_applicable(output, self.output_quantizers[0])
 
         return batch_norm_wrapper
+
+
 #
 #
 @QuantizationMixin.implements(GroupNorm)
 class QuantizedGroupNorm(_DispatchMixin, QuantizationMixin, GroupNorm):
-    """ Quantized GroupNorm """
+    """Quantized GroupNorm"""
+
     _builtin_torch_fn = torch.nn.functional.group_norm
+
+
 #
 #
 @QuantizationMixin.implements(Normalize)
 class QuantizedNormalize(_DispatchMixin, QuantizationMixin, Normalize):
-    """ Quantized Normalize """
+    """Quantized Normalize"""
+
     _builtin_torch_fn = torch.nn.functional.normalize
+
+
 #
 #
 @QuantizationMixin.implements(NullRequant)
 class QuantizedNullRequant(QuantizationMixin, NullRequant):
     """Quantized module for NullRequant"""
+
     # pylint: disable=arguments-differ
     def forward(self, x: torch.Tensor, shape: list) -> torch.Tensor:
         """
@@ -639,6 +723,8 @@ class QuantizedNullRequant(QuantizationMixin, NullRequant):
             out = self.output_quantizers[0](out)
 
         return out
+
+
 #
 #
 # @QuantizationMixin.implements(Pad)
@@ -649,7 +735,8 @@ class QuantizedNullRequant(QuantizationMixin, NullRequant):
 
 @QuantizationMixin.implements(GridSample)
 class QuantizedGridSample(_DispatchMixin, QuantizationMixin, GridSample):
-    """ Quantized GridSample """
+    """Quantized GridSample"""
+
     __quant_init__ = QuantizationMixin.__binary__
     _builtin_torch_fn = torch.nn.functional.grid_sample
 

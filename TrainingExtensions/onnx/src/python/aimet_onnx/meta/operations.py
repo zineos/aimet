@@ -1,4 +1,3 @@
-
 #  =============================================================================
 #
 #  @@-COPYRIGHT-START-@@
@@ -36,16 +35,24 @@
 #  @@-COPYRIGHT-END-@@
 #
 #  =============================================================================
-""" ONNX Operation class and utilities """
+"""ONNX Operation class and utilities"""
+
 from typing import Union
 import aimet_common.connected_graph.operation
 from aimet_onnx.meta.product import Product
 
-class Op(aimet_common.connected_graph.operation.Op):
-    """ Subclass Op inherited from aimet_common.connected_graph.operation.Op """
 
-    def __init__(self, name: str, dotted_name: str, output_shape,
-                 is_anonymous: bool, op_type: str):
+class Op(aimet_common.connected_graph.operation.Op):
+    """Subclass Op inherited from aimet_common.connected_graph.operation.Op"""
+
+    def __init__(
+        self,
+        name: str,
+        dotted_name: str,
+        output_shape,
+        is_anonymous: bool,
+        op_type: str,
+    ):
         """
         Initializer for Op
         :param name: name of the operation
@@ -59,10 +66,10 @@ class Op(aimet_common.connected_graph.operation.Op):
         self.transposed_params = False
 
     def add_param(self, param: str, product: Product, product_type: Union[str, None]):
-        """ Add a parameter product to parameters dictionary """
+        """Add a parameter product to parameters dictionary"""
         self._parameters[param] = (product, product_type)
 
     @property
     def parameters(self):
-        """ returns parameters of the op """
+        """returns parameters of the op"""
         return self._parameters

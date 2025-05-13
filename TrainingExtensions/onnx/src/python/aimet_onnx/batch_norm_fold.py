@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" ONNX Code to fold batch-norm layers """
+"""ONNX Code to fold batch-norm layers"""
 
 from typing import Dict, List, Tuple
 import contextlib
@@ -52,9 +52,20 @@ from aimet_common import libpymo
 from aimet_common.utils import AimetLogger
 
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
-from aimet_onnx.meta.connectedgraph import WEIGHT_INDEX, BIAS_INDEX, RUNNING_MEAN_INDEX, RUNNING_VAR_INDEX
+from aimet_onnx.meta.connectedgraph import (
+    WEIGHT_INDEX,
+    BIAS_INDEX,
+    RUNNING_MEAN_INDEX,
+    RUNNING_VAR_INDEX,
+)
 from aimet_onnx.meta.operations import Op
-from aimet_onnx.utils import get_node_attribute, remove_node, transpose_tensor, ParamUtils, retrieve_constant_input
+from aimet_onnx.utils import (
+    get_node_attribute,
+    remove_node,
+    transpose_tensor,
+    ParamUtils,
+    retrieve_constant_input,
+)
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
@@ -64,12 +75,14 @@ else:
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.BatchNormFolding)
 
-ConvType = ['Conv', 'ConvTranspose']
-LinearType = ['Gemm', 'MatMul']
-BatchNormType = ['BatchNormalization']
+ConvType = ["Conv", "ConvTranspose"]
+LinearType = ["Gemm", "MatMul"]
+BatchNormType = ["BatchNormalization"]
+
 
 class BNLayer:
-    """ Captures beta and gamma parameter for BatchNorm layers to be used during High Bias absorption """
+    """Captures beta and gamma parameter for BatchNorm layers to be used during High Bias absorption"""
+
     def __init__(self):
         self.bn_layer = None
         self.gamma = None
@@ -86,20 +99,30 @@ def _find_conv_bn_pairs(connected_graph: ConnectedGraph) -> Dict:
     # initialize all patterns to be matched and associated call back functions
     patterns_with_callbacks = []
     layer_select_handler = ConvBnPatternHandler()
-    preceding_linear_op_types = ['Flatten', 'Reshape']
+    preceding_linear_op_types = ["Flatten", "Reshape"]
 
     # Linear layer combinations
     for linear_op in LinearType:
         for preceding_linear_op_type in preceding_linear_op_types:
             # BN -> Linear
-            patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', preceding_linear_op_type, linear_op],
-                                                       action=layer_select_handler))
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=["BatchNormalization", preceding_linear_op_type, linear_op],
+                    action=layer_select_handler,
+                )
+            )
 
     for op_type in ConvType + LinearType:
-        patterns_with_callbacks.append(PatternType(pattern=['BatchNormalization', op_type],
-                                                   action=layer_select_handler))
-        patterns_with_callbacks.append(PatternType(pattern=[op_type, 'BatchNormalization'],
-                                                   action=layer_select_handler))
+        patterns_with_callbacks.append(
+            PatternType(
+                pattern=["BatchNormalization", op_type], action=layer_select_handler
+            )
+        )
+        patterns_with_callbacks.append(
+            PatternType(
+                pattern=[op_type, "BatchNormalization"], action=layer_select_handler
+            )
+        )
 
     # create graph searcher instance with connected graph and patterns to search
     graph_searcher = GraphSearcher(connected_graph, patterns_with_callbacks)
@@ -111,9 +134,9 @@ def _find_conv_bn_pairs(connected_graph: ConnectedGraph) -> Dict:
     return convs_bn_activation_dict
 
 
-def find_all_batch_norms_to_fold(connected_graph: ConnectedGraph,
-                                 ) -> Tuple[List[Tuple[NodeProto, NodeProto]],
-                                            List[Tuple[NodeProto, NodeProto]]]:
+def find_all_batch_norms_to_fold(
+    connected_graph: ConnectedGraph,
+) -> Tuple[List[Tuple[NodeProto, NodeProto]], List[Tuple[NodeProto, NodeProto]]]:
     """
     Find all possible batch norm layers that can be folded. Returns a list of pairs such that (bn, layer)
     means bn will be forward-folded into layer and (layer, bn) means bn will be backward-folded into layer
@@ -136,10 +159,15 @@ def find_all_batch_norms_to_fold(connected_graph: ConnectedGraph,
             bn_info = conv_linear_bn_activation_info_dict[node]
             if bn_info.output_bn and bn_info.output_bn not in bn_picked_for_folding:
                 if is_valid_bn_fold(node.get_module(), model, True):
-                    conv_bn_pairs.append((node.get_module(), bn_info.output_bn.get_module()))
+                    conv_bn_pairs.append(
+                        (node.get_module(), bn_info.output_bn.get_module())
+                    )
                     bn_picked_for_folding.add(bn_info.output_bn)
                 else:
-                    logger.info('...... invalid combination to fold %s', [node.name, bn_info.output_bn.name])
+                    logger.info(
+                        "...... invalid combination to fold %s",
+                        [node.name, bn_info.output_bn.name],
+                    )
 
     bn_conv_pairs = []
     for node in ordered_conv_fc_nodes:
@@ -148,10 +176,15 @@ def find_all_batch_norms_to_fold(connected_graph: ConnectedGraph,
             bn_info = conv_linear_bn_activation_info_dict[node]
             if bn_info.input_bn and bn_info.input_bn not in bn_picked_for_folding:
                 if is_valid_bn_fold(node.get_module(), model, False):
-                    bn_conv_pairs.append((bn_info.input_bn.get_module(), node.get_module()))
+                    bn_conv_pairs.append(
+                        (bn_info.input_bn.get_module(), node.get_module())
+                    )
                     bn_picked_for_folding.add(bn_info.input_bn)
                 else:
-                    logger.info('...... invalid combination to fold %s', [bn_info.input_bn.name, node.name])
+                    logger.info(
+                        "...... invalid combination to fold %s",
+                        [bn_info.input_bn.name, node.name],
+                    )
 
     return conv_bn_pairs, bn_conv_pairs
 
@@ -173,7 +206,9 @@ def get_ordered_conv_linears(conn_graph: ConnectedGraph) -> List[Op]:
     return ordered_convs
 
 
-def is_valid_bn_fold(conv_linear: NodeProto, model: ModelProto, fold_backward: bool) -> bool:
+def is_valid_bn_fold(
+    conv_linear: NodeProto, model: ModelProto, fold_backward: bool
+) -> bool:
     """
     Determine if a given layer can successfully absorb a BatchNorm given the layer type and parameters
     :param conv_linear: The Conv/Linear layer to fold a BatchNorm into.
@@ -189,16 +224,19 @@ def is_valid_bn_fold(conv_linear: NodeProto, model: ModelProto, fold_backward: b
             valid = False
     if not fold_backward:
         # Cannot fold BN -> Conv with padding. AIMET does not support forward folding to grouped or DW Conv
-        if conv_linear.op_type == 'Conv':
+        if conv_linear.op_type == "Conv":
             valid &= all(item == 0 for item in get_node_attribute(conv_linear, "pads"))
             valid &= get_node_attribute(conv_linear, "group") == 1
         # AIMET does not support forward folding to ConvTranspose
-        elif conv_linear.op_type == 'ConvTranspose':
+        elif conv_linear.op_type == "ConvTranspose":
             valid = False
     else:
         # AIMET does not support backwards folding to grouped ConvTranspose
-        if conv_linear.op_type == 'ConvTranspose':
-            valid &= get_node_attribute(conv_linear, "group") in (1, get_input_output_channels(conv_linear, model)[0])
+        if conv_linear.op_type == "ConvTranspose":
+            valid &= get_node_attribute(conv_linear, "group") in (
+                1,
+                get_input_output_channels(conv_linear, model)[0],
+            )
     return valid
 
 
@@ -231,10 +269,9 @@ def fold_all_batch_norms_to_weight(model: ModelProto) -> Tuple[List, List]:
     return conv_bns, bn_convs
 
 
-def _fold_to_weight(model: ModelProto,
-                    conv_linear: NodeProto,
-                    bn: NodeProto,
-                    fold_backward: bool):
+def _fold_to_weight(
+    model: ModelProto, conv_linear: NodeProto, bn: NodeProto, fold_backward: bool
+):
     """
     Fold BatchNorm into the weight and bias of the given layer.
 
@@ -266,7 +303,9 @@ def _fold_to_weight(model: ModelProto,
     if conv_linear.op_type == "ConvTranspose" and groups == 1:
         weight = transpose_tensor(weight, (1, 0, 2, 3))
     # Gemm layers may or may not need to have weights transposed depending on value of transB attribute
-    elif conv_linear.op_type in LinearType and not get_node_attribute(conv_linear, "transB"):
+    elif conv_linear.op_type in LinearType and not get_node_attribute(
+        conv_linear, "transB"
+    ):
         weight = transpose_tensor(weight, (1, 0))
 
     channels = weight.dims[0] if fold_backward else weight.dims[1]
@@ -278,7 +317,9 @@ def _fold_to_weight(model: ModelProto,
     # Transpose weight back to original configuration
     if conv_linear.op_type == "ConvTranspose" and groups == 1:
         weight = transpose_tensor(weight, (1, 0, 2, 3))
-    elif conv_linear.op_type in LinearType and not get_node_attribute(conv_linear, "transB"):
+    elif conv_linear.op_type in LinearType and not get_node_attribute(
+        conv_linear, "transB"
+    ):
         weight = transpose_tensor(weight, (1, 0))
 
     weight_param = ParamUtils.get_param(model, conv_linear, WEIGHT_INDEX)
@@ -311,10 +352,12 @@ def _matmul_to_gemm(node: NodeProto, model: ModelProto):
     node.input.append(bias_name)
 
 
-def _call_mo_batch_norm_fold(weight: TensorProto,
-                             bias: TensorProto,
-                             bn_params: libpymo.BNParams,
-                             fold_backward: bool):
+def _call_mo_batch_norm_fold(
+    weight: TensorProto,
+    bias: TensorProto,
+    bn_params: libpymo.BNParams,
+    fold_backward: bool,
+):
     """
     Calls C++ batch norm folding API.
 
@@ -335,7 +378,9 @@ def _call_mo_batch_norm_fold(weight: TensorProto,
     is_bias_valid = True
 
     with _expand_shape_to_4d(weight_tensor):
-        _bias = libpymo.fold(bn_params, weight_tensor, bias_tensor, is_bias_valid, fold_backward)
+        _bias = libpymo.fold(
+            bn_params, weight_tensor, bias_tensor, is_bias_valid, fold_backward
+        )
 
     bias.raw_data = np.asarray(_bias, dtype=np.float32).tobytes()
     weight.raw_data = np.asarray(weight_tensor.data, dtype=np.float32).tobytes()
@@ -352,18 +397,29 @@ def get_bn_params(model: ModelProto, bn: NodeProto, channels: int) -> libpymo.BN
     :return: libpymo.BNParams object for the input BatchNorm layer
     """
     bn_params = libpymo.BNParams()
-    gamma = numpy_helper.to_array(ParamUtils.get_param(model, bn, WEIGHT_INDEX)).reshape(-1)
+    gamma = numpy_helper.to_array(
+        ParamUtils.get_param(model, bn, WEIGHT_INDEX)
+    ).reshape(-1)
     # In the case of BatchNorm2d -> Flatten -> Gemm, must resize the BN parameters to the Gemm input feature length
     resize = channels / len(gamma)
     bn_params.gamma = np.repeat(gamma, resize)
-    bn_params.beta = np.repeat(numpy_helper.to_array(ParamUtils.get_param(model, bn, BIAS_INDEX)).reshape(-1), resize)
+    bn_params.beta = np.repeat(
+        numpy_helper.to_array(ParamUtils.get_param(model, bn, BIAS_INDEX)).reshape(-1),
+        resize,
+    )
     bn_params.runningMean = np.repeat(
-        numpy_helper.to_array(ParamUtils.get_param(model, bn, RUNNING_MEAN_INDEX)).reshape(-1), resize)
-    runningVar = numpy_helper.to_array(ParamUtils.get_param(model, bn, RUNNING_VAR_INDEX))
+        numpy_helper.to_array(
+            ParamUtils.get_param(model, bn, RUNNING_MEAN_INDEX)
+        ).reshape(-1),
+        resize,
+    )
+    runningVar = numpy_helper.to_array(
+        ParamUtils.get_param(model, bn, RUNNING_VAR_INDEX)
+    )
 
     epsilon = get_node_attribute(bn, "epsilon")
     if epsilon is None:
-        epsilon = 1e-5 # Default onnx epsilon value
+        epsilon = 1e-5  # Default onnx epsilon value
     sigma = np.sqrt(runningVar + epsilon)
     bn_params.runningVar = np.repeat(sigma.reshape(-1), resize)
 
@@ -386,7 +442,7 @@ def copy_bn_params_to_bn_layer(bn: NodeProto, bn_params: libpymo.BNParams) -> BN
 
 @contextlib.contextmanager
 def _expand_shape_to_4d(weight_tensor: libpymo.TensorParams):
-    """ Expand the shape of the weight into 4d.  """
+    """Expand the shape of the weight into 4d."""
     dims = len(weight_tensor.shape)
 
     if dims > 4:
@@ -397,7 +453,7 @@ def _expand_shape_to_4d(weight_tensor: libpymo.TensorParams):
 
     else:
         orig_shape = weight_tensor.shape
-        _4d_shape = np.append(orig_shape, [1 for _ in range(4-dims)]).astype(int)
+        _4d_shape = np.append(orig_shape, [1 for _ in range(4 - dims)]).astype(int)
         try:
             weight_tensor.shape = _4d_shape
             yield weight_tensor
@@ -446,14 +502,17 @@ def _update_standalone_batchnorm_ops(model: ModelProto):
 
     for node in model.graph.node:
         if node.op_type in BatchNormType:
-
             # get parameter names and indices
             weight_name, bias_name, running_mean_name, running_var_name = node.input[1:]
-            init_w, init_b, init_rm, init_rv = [ParamUtils.get_param(model, node, idx) for idx in range(1, 5)]
+            init_w, init_b, init_rm, init_rv = [
+                ParamUtils.get_param(model, node, idx) for idx in range(1, 5)
+            ]
 
             attr = [item for item in node.attribute if item.name == "epsilon"]
             if not attr:
-                attr = onnx.helper.make_attribute("epsilon", 1e-5) # Default epsilon value
+                attr = onnx.helper.make_attribute(
+                    "epsilon", 1e-5
+                )  # Default epsilon value
                 node.attribute.append(attr)
             else:
                 attr = attr[0]
@@ -470,7 +529,7 @@ def _update_standalone_batchnorm_ops(model: ModelProto):
             tensor_b = tensor_b - tensor_rm * tensor_w
             tensor_rm = np.zeros(tensor_w.shape, tensor_w.dtype)
             tensor_rv = np.ones(tensor_w.shape, tensor_w.dtype)
-            attr.f = 0.
+            attr.f = 0.0
 
             init_w_ = numpy_helper.from_array(tensor_w, weight_name)
             init_b_ = numpy_helper.from_array(tensor_b, bias_name)

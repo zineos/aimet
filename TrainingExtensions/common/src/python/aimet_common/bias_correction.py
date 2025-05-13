@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-"""  holds common code for bias correction """
+"""holds common code for bias correction"""
 
 import numpy as np
 from scipy.stats import norm
@@ -46,9 +46,21 @@ from aimet_common.connected_graph.operation import Op
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
-CONV_OP_TYPES = ['Conv1d', 'Conv2D', 'DepthwiseConv2dNative', 'Conv', 'ConvTranspose', 'Conv3d']
-LINEAR_OP_TYPES = ['Dense', 'Gemm', 'MatMul']
-BN_OP_TYPES = ['FusedBatchNormV3', 'FusedBatchNorm', 'BatchNormalization', 'BatchNorm3d']
+CONV_OP_TYPES = [
+    "Conv1d",
+    "Conv2D",
+    "DepthwiseConv2dNative",
+    "Conv",
+    "ConvTranspose",
+    "Conv3d",
+]
+LINEAR_OP_TYPES = ["Dense", "Gemm", "MatMul"]
+BN_OP_TYPES = [
+    "FusedBatchNormV3",
+    "FusedBatchNorm",
+    "BatchNormalization",
+    "BatchNorm3d",
+]
 
 
 class ConvBnInfoType:
@@ -56,11 +68,14 @@ class ConvBnInfoType:
     Type for hoding convs with bn info and activation types
     Activation types supported are Relu and Relu6
     """
-    def __init__(self,
-                 input_bn=None,
-                 output_bn=None,
-                 in_activation_type: ActivationType = ActivationType.no_activation,
-                 out_activation_type: ActivationType = ActivationType.no_activation):
+
+    def __init__(
+        self,
+        input_bn=None,
+        output_bn=None,
+        in_activation_type: ActivationType = ActivationType.no_activation,
+        out_activation_type: ActivationType = ActivationType.no_activation,
+    ):
         """
         :param input_bn: Reference to Input BatchNorm to layer
         :param output_bn: Reference to Output BatchNorm to layer
@@ -91,7 +106,7 @@ class ConvBnPatternHandler:
 
     def __call__(self, *args, **kwargs):
         """
-         custom pattern match handler that keeps a dictionary of convs/linears with bn and activation info.
+        custom pattern match handler that keeps a dictionary of convs/linears with bn and activation info.
         """
 
         _, op_subset = args
@@ -110,9 +125,9 @@ class ConvBnPatternHandler:
                     bn_activation_info = self.conv_linears_with_bn_dict[op_key]
             elif op.type in BN_OP_TYPES:
                 bn_op = op
-            elif op.type in ['Relu6', 'Clip']:
+            elif op.type in ["Relu6", "Clip"]:
                 activation_type = ActivationType.relu6
-            elif op.type in ['Relu']:
+            elif op.type in ["Relu"]:
                 activation_type = ActivationType.relu
 
         if len(op_subset) >= 2:
@@ -124,7 +139,7 @@ class ConvBnPatternHandler:
                 bn_activation_info.output_bn = bn_op
                 bn_activation_info.out_activation_type = activation_type
             # in tf linear layer has two ops together [flatten/reshape -- dense] , check for len 3
-            elif len(op_subset) >= 3 and op_subset[1].type in ['Dense']:
+            elif len(op_subset) >= 3 and op_subset[1].type in ["Dense"]:
                 bn_activation_info.output_bn = bn_op
                 bn_activation_info.out_activation_type = activation_type
         op_key = get_op_dict_key(conv_op)
@@ -146,7 +161,9 @@ def get_op_dict_key(op: Op):
     return module
 
 
-def empirical_bias_correction(reference_outputs: np.ndarray, quantized_outputs: np.ndarray, bias: np.ndarray) -> np.ndarray:
+def empirical_bias_correction(
+    reference_outputs: np.ndarray, quantized_outputs: np.ndarray, bias: np.ndarray
+) -> np.ndarray:
     """
     Empirical bias correction.
 
@@ -161,12 +178,14 @@ def empirical_bias_correction(reference_outputs: np.ndarray, quantized_outputs: 
     return _bias
 
 
-def analytical_bias_correction(fp_weight: np.ndarray,
-                               q_dq_weight: np.ndarray,
-                               bias: np.ndarray,
-                               beta: np.ndarray,
-                               gamma: np.ndarray,
-                               activation_type: ActivationType) -> np.ndarray:
+def analytical_bias_correction(
+    fp_weight: np.ndarray,
+    q_dq_weight: np.ndarray,
+    bias: np.ndarray,
+    beta: np.ndarray,
+    gamma: np.ndarray,
+    activation_type: ActivationType,
+) -> np.ndarray:
     """
     Analytical bias correction.
 
@@ -191,7 +210,7 @@ def analytical_bias_correction(fp_weight: np.ndarray,
         Z = norm.cdf((b - beta) / gamma) - norm.cdf(-beta / gamma)
         e_x = gamma * z + beta * Z + b * (1 - norm.cdf((b - beta) / gamma))
     else:
-        raise ValueError('Unsupported activation type: ', activation_type)
+        raise ValueError("Unsupported activation type: ", activation_type)
 
     if epsilon.shape[1] == 1:
         ep = epsilon.reshape(epsilon.shape[0])

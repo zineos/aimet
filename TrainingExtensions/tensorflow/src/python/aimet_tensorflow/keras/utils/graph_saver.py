@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" utilities for Tf graph save and load"""
+"""utilities for Tf graph save and load"""
 
 import datetime
 import os
@@ -51,19 +51,19 @@ def keras_wrapper_func(eval_func: EvalFunction):
 
     :return: wrapper function
     """
+
     # 'save_and_reload_keras_model' is a Wrapper function in which
     # the argument - 'eval_func' is called
     def save_and_reload_keras_model(*args, **kwargs):
-
         # convert to list to update arg
         args = list(args)
 
         # if it's empty or first arg not of type tf.keras.Model, raise error message
         if not args or not isinstance(args[0], tf.keras.Model):
-            raise ValueError('First argument to eval function should be keras model')
+            raise ValueError("First argument to eval function should be keras model")
 
         # In keras after making changes to the graph you must save and reload, then evaluate
-        tmp_dir = './data/saved_model'
+        tmp_dir = "./data/saved_model"
         model = keras_save_and_load_graph(tmp_dir, args[0])
 
         # update the argument with new session
@@ -78,7 +78,9 @@ def keras_wrapper_func(eval_func: EvalFunction):
     return save_and_reload_keras_model
 
 
-def keras_save_and_load_graph(directory_path: str, model: tf.keras.Model) -> tf.keras.Model:
+def keras_save_and_load_graph(
+    directory_path: str, model: tf.keras.Model
+) -> tf.keras.Model:
     """
     saves and loads a keras model and returns the new model obtained.
 
@@ -87,7 +89,7 @@ def keras_save_and_load_graph(directory_path: str, model: tf.keras.Model) -> tf.
     :return: new model after load and save
     """
 
-    unique_id = str(datetime.datetime.now()).replace(' ', '_')
+    unique_id = str(datetime.datetime.now()).replace(" ", "_")
 
     directory_path = directory_path + "_" + unique_id
     os.makedirs(directory_path, exist_ok=True)

@@ -34,42 +34,42 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Module for testing aimet common utils """
+"""Module for testing aimet common utils"""
 
 import os
 import tempfile
 from aimet_common.utils import profile, AimetLogger
 from aimet_common import utils
+
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
+
 def test_save_json_yaml():
-    test_dict = {'1': 1,
-                 '2': 2,
-                 '3': 3}
+    test_dict = {"1": 1, "2": 2, "3": 3}
     with tempfile.TemporaryDirectory() as tmpdir:
-        utils.save_json_yaml(os.path.join(tmpdir, 'saved_dict'), test_dict)
-        assert os.path.isfile(os.path.join(tmpdir, 'saved_dict'))
+        utils.save_json_yaml(os.path.join(tmpdir, "saved_dict"), test_dict)
+        assert os.path.isfile(os.path.join(tmpdir, "saved_dict"))
 
 
 def test_profile():
     with tempfile.TemporaryDirectory() as tmpdir:
-        file_path_and_name = os.path.join(tmpdir, 'temp_profile.txt')
-        with profile('profile 1', file_path_and_name, new_file=True, logger=logger):
+        file_path_and_name = os.path.join(tmpdir, "temp_profile.txt")
+        with profile("profile 1", file_path_and_name, new_file=True, logger=logger):
             _ = 1 + 1
-        with profile('profile 2', file_path_and_name, logger=logger):
+        with profile("profile 2", file_path_and_name, logger=logger):
             _ = 1 + 1
-        with open(file_path_and_name, 'r') as f:
+        with open(file_path_and_name, "r") as f:
             lines = f.readlines()
         assert len(lines) == 2
-        assert lines[0].startswith('profile 1: ')
-        assert lines[1].startswith('profile 2: ')
+        assert lines[0].startswith("profile 1: ")
+        assert lines[1].startswith("profile 2: ")
 
-        with profile('profile 3', file_path_and_name, new_file=True, logger=logger):
+        with profile("profile 3", file_path_and_name, new_file=True, logger=logger):
             _ = 1 + 1
-        with open(file_path_and_name, 'r') as f:
+        with open(file_path_and_name, "r") as f:
             lines = f.readlines()
         assert len(lines) == 1
-        assert lines[0].startswith('profile 3: ')
+        assert lines[0].startswith("profile 3: ")
 
-        with profile('profile 4'):
+        with profile("profile 4"):
             _ = 1 + 1

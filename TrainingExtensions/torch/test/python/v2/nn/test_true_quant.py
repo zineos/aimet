@@ -50,7 +50,11 @@ from torch.utils._pytree import tree_flatten
 from torch.overrides import get_ignored_functions
 import transformers
 
-from aimet_torch.v2.quantization.affine.backends import quantize, quantize_dequantize, dequantize
+from aimet_torch.v2.quantization.affine.backends import (
+    quantize,
+    quantize_dequantize,
+    dequantize,
+)
 from aimet_torch.v2.quantization.affine import (
     AffineEncoding,
     Quantize,
@@ -90,10 +94,9 @@ def manual_seed():
     torch.manual_seed(724)
 
 
-def affine_quantize(tensor: torch.Tensor,
-                    scale: torch.Tensor,
-                    offset: torch.Tensor,
-                    bitwidth: int) -> QuantizedTensor:
+def affine_quantize(
+    tensor: torch.Tensor, scale: torch.Tensor, offset: torch.Tensor, bitwidth: int
+) -> QuantizedTensor:
     """
     Quantizes the input tensor into a QuantizedTensor using the quantization parameters
     """
@@ -106,7 +109,7 @@ def affine_quantize(tensor: torch.Tensor,
 
 def _input(*shape):
     numel = functools.reduce(lambda x, y: x * y, shape)
-    return torch.arange(1,numel+1).view(*shape) / numel
+    return torch.arange(1, numel + 1).view(*shape) / numel
 
 
 @pytest.fixture
@@ -126,10 +129,12 @@ def register_int_linear():
         input = input.dequantize()
         weight = weight.dequantize()
 
-        return affine_quantize(input.mm(weight.t()) + bias,
-                               output_encodings.scale,
-                               output_encodings.offset,
-                               output_encodings.bitwidth)
+        return affine_quantize(
+            input.mm(weight.t()) + bias,
+            output_encodings.scale,
+            output_encodings.offset,
+            output_encodings.bitwidth,
+        )
 
     QuantizedLinear.set_default_kernel(int_linear)
     yield
@@ -138,7 +143,18 @@ def register_int_linear():
 
 @pytest.fixture
 def register_int_conv():
-    def int_convnd(kernel, input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1, *, output_encodings=None):
+    def int_convnd(
+        kernel,
+        input,
+        weight,
+        bias=None,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        *,
+        output_encodings=None,
+    ):
         # Implicit dequantization is not supported yet
         if not isinstance(input, QuantizedTensor):
             raise RuntimeError
@@ -148,10 +164,12 @@ def register_int_conv():
         input = input.dequantize()
         weight = weight.dequantize()
         output = kernel(input, weight, bias, stride, padding, dilation, groups)
-        return affine_quantize(output,
-                               output_encodings.scale,
-                               output_encodings.offset,
-                               output_encodings.bitwidth)
+        return affine_quantize(
+            output,
+            output_encodings.scale,
+            output_encodings.offset,
+            output_encodings.bitwidth,
+        )
 
     QuantizedConv1d.set_default_kernel(functools.partial(int_convnd, F.conv1d))
     QuantizedConv2d.set_default_kernel(functools.partial(int_convnd, F.conv2d))
@@ -164,7 +182,19 @@ def register_int_conv():
 
 @pytest.fixture
 def register_int_convtranspose():
-    def int_convtransposend(kernel, input, weight, bias=None, stride=1, padding=0, output_padding=0, groups=1, dilation=1, *, output_encodings=None):
+    def int_convtransposend(
+        kernel,
+        input,
+        weight,
+        bias=None,
+        stride=1,
+        padding=0,
+        output_padding=0,
+        groups=1,
+        dilation=1,
+        *,
+        output_encodings=None,
+    ):
         # Implicit dequantization is not supported yet
         if not isinstance(input, QuantizedTensor):
             raise RuntimeError
@@ -173,15 +203,25 @@ def register_int_convtranspose():
 
         input = input.dequantize()
         weight = weight.dequantize()
-        output = kernel(input, weight, bias, stride, padding, output_padding, groups, dilation)
-        return affine_quantize(output,
-                               output_encodings.scale,
-                               output_encodings.offset,
-                               output_encodings.bitwidth)
+        output = kernel(
+            input, weight, bias, stride, padding, output_padding, groups, dilation
+        )
+        return affine_quantize(
+            output,
+            output_encodings.scale,
+            output_encodings.offset,
+            output_encodings.bitwidth,
+        )
 
-    QConvTranspose1d.set_default_kernel(functools.partial(int_convtransposend, F.conv_transpose1d))
-    QConvTranspose2d.set_default_kernel(functools.partial(int_convtransposend, F.conv_transpose2d))
-    QConvTranspose3d.set_default_kernel(functools.partial(int_convtransposend, F.conv_transpose3d))
+    QConvTranspose1d.set_default_kernel(
+        functools.partial(int_convtransposend, F.conv_transpose1d)
+    )
+    QConvTranspose2d.set_default_kernel(
+        functools.partial(int_convtransposend, F.conv_transpose2d)
+    )
+    QConvTranspose3d.set_default_kernel(
+        functools.partial(int_convtransposend, F.conv_transpose3d)
+    )
     yield
     QConvTranspose1d.set_default_kernel(None)
     QConvTranspose2d.set_default_kernel(None)
@@ -197,7 +237,12 @@ def register_int_activation():
             if not isinstance(x, QuantizedTensor):
                 raise RuntimeError
             output = func(x.dequantize(), *others, **kwargs)
-            return affine_quantize(output, output_encodings.scale, output_encodings.offset, output_encodings.bitwidth)
+            return affine_quantize(
+                output,
+                output_encodings.scale,
+                output_encodings.offset,
+                output_encodings.bitwidth,
+            )
 
         return wrapped_func
 
@@ -213,7 +258,9 @@ def register_int_activation():
 @pytest.fixture
 def register_int_norm():
     def wrap_functional(func):
-        def int_norm(input, normalized_shape, weight, bias, eps, *, output_encodings=None):
+        def int_norm(
+            input, normalized_shape, weight, bias, eps, *, output_encodings=None
+        ):
             # Implicit dequantization is not supported yet
             if not isinstance(input, QuantizedTensor):
                 raise RuntimeError
@@ -224,7 +271,12 @@ def register_int_norm():
             weight = weight.dequantize()
 
             output = func(input, normalized_shape, weight, bias, eps)
-            return affine_quantize(output, output_encodings.scale, output_encodings.offset, output_encodings.bitwidth)
+            return affine_quantize(
+                output,
+                output_encodings.scale,
+                output_encodings.offset,
+                output_encodings.bitwidth,
+            )
 
         return int_norm
 
@@ -244,13 +296,28 @@ def register_int_custom():
         if not isinstance(y, QuantizedTensor):
             raise RuntimeError
         output = kernel(x.dequantize(), y.dequantize())
-        return affine_quantize(output, output_encodings.scale, output_encodings.offset, output_encodings.bitwidth)
+        return affine_quantize(
+            output,
+            output_encodings.scale,
+            output_encodings.offset,
+            output_encodings.bitwidth,
+        )
 
-    custom.QuantizedAdd.set_default_kernel(functools.partial(int_elementwise, torch.add))
-    custom.QuantizedMultiply.set_default_kernel(functools.partial(int_elementwise, torch.multiply))
-    custom.QuantizedSubtract.set_default_kernel(functools.partial(int_elementwise, torch.subtract))
-    custom.QuantizedDivide.set_default_kernel(functools.partial(int_elementwise, torch.div))
-    custom.QuantizedMatMul.set_default_kernel(functools.partial(int_elementwise, torch.matmul))
+    custom.QuantizedAdd.set_default_kernel(
+        functools.partial(int_elementwise, torch.add)
+    )
+    custom.QuantizedMultiply.set_default_kernel(
+        functools.partial(int_elementwise, torch.multiply)
+    )
+    custom.QuantizedSubtract.set_default_kernel(
+        functools.partial(int_elementwise, torch.subtract)
+    )
+    custom.QuantizedDivide.set_default_kernel(
+        functools.partial(int_elementwise, torch.div)
+    )
+    custom.QuantizedMatMul.set_default_kernel(
+        functools.partial(int_elementwise, torch.matmul)
+    )
     yield
     custom.QuantizedMultiply.set_default_kernel(None)
     custom.QuantizedSubtract.set_default_kernel(None)
@@ -259,9 +326,8 @@ def register_int_custom():
     custom.QuantizedMatMul.set_default_kernel(None)
 
 
-
 class TestTrueQuantLinear:
-    @pytest.mark.usefixtures('register_int_linear')
+    @pytest.mark.usefixtures("register_int_linear")
     def test_no_quantizers(self, input):
         """
         Given: TrueQuantLinear with no input, output, or param quantizers
@@ -290,15 +356,17 @@ class TestTrueQuantLinear:
         with pytest.raises(RuntimeError):
             quant_linear(input)
 
-    @pytest.mark.usefixtures('register_int_linear')
+    @pytest.mark.usefixtures("register_int_linear")
     def test_fully_specified_quantizers(self, input):
         """
         Given: TrueQuantLinear with input, output, and param quantizers
         """
         quant_linear = QuantizedLinear(10, input.shape[-1])
-        quant_linear.input_quantizers[0] = Quantize((1, ), bitwidth=8, symmetric=False)
-        quant_linear.output_quantizers[0] = Quantize((1, ), bitwidth=8, symmetric=False)
-        quant_linear.param_quantizers["weight"] = Quantize((10, ), bitwidth=8, symmetric=True)
+        quant_linear.input_quantizers[0] = Quantize((1,), bitwidth=8, symmetric=False)
+        quant_linear.output_quantizers[0] = Quantize((1,), bitwidth=8, symmetric=False)
+        quant_linear.param_quantizers["weight"] = Quantize(
+            (10,), bitwidth=8, symmetric=True
+        )
         """
         When: Call forward pass before computing encodings
         Then: raise RuntimeError
@@ -313,15 +381,21 @@ class TestTrueQuantLinear:
         with quant_linear.compute_encodings():
             output = quant_linear(input)
 
-        input_enc = (quant_linear.input_quantizers[0].get_scale(),
-                     quant_linear.input_quantizers[0].get_offset(),
-                     quant_linear.input_quantizers[0].bitwidth)
-        output_enc = (quant_linear.output_quantizers[0].get_scale(),
-                      quant_linear.output_quantizers[0].get_offset(),
-                      quant_linear.output_quantizers[0].bitwidth)
-        weight_enc = (quant_linear.param_quantizers["weight"].get_scale(),
-                      quant_linear.param_quantizers["weight"].get_offset(),
-                      quant_linear.param_quantizers["weight"].bitwidth)
+        input_enc = (
+            quant_linear.input_quantizers[0].get_scale(),
+            quant_linear.input_quantizers[0].get_offset(),
+            quant_linear.input_quantizers[0].bitwidth,
+        )
+        output_enc = (
+            quant_linear.output_quantizers[0].get_scale(),
+            quant_linear.output_quantizers[0].get_offset(),
+            quant_linear.output_quantizers[0].bitwidth,
+        )
+        weight_enc = (
+            quant_linear.param_quantizers["weight"].get_scale(),
+            quant_linear.param_quantizers["weight"].get_offset(),
+            quant_linear.param_quantizers["weight"].bitwidth,
+        )
         weight_qdq = quantize_dequantize(quant_linear.weight, *weight_enc, signed=True)
         output_expected = F.linear(input, weight_qdq, bias=quant_linear.bias)
         assert torch.equal(output, output_expected)
@@ -350,14 +424,16 @@ class TestTrueQuantLinear:
         output_expected = quantize_dequantize(output_fp, *output_enc)
         assert torch.allclose(output.dequantize(), output_expected)
 
-    @pytest.mark.usefixtures('register_int_linear')
+    @pytest.mark.usefixtures("register_int_linear")
     def test_no_input_quantizer(self, input):
         """
         Given: TrueQuantLinear with output and param quantizers and computed encodings
         """
         quant_linear = QuantizedLinear(10, input.shape[-1])
-        quant_linear.output_quantizers[0] = Quantize((1, ), bitwidth=8, symmetric=False)
-        quant_linear.param_quantizers["weight"] = Quantize((10, ), bitwidth=8, symmetric=True)
+        quant_linear.output_quantizers[0] = Quantize((1,), bitwidth=8, symmetric=False)
+        quant_linear.param_quantizers["weight"] = Quantize(
+            (10,), bitwidth=8, symmetric=True
+        )
         with quant_linear.compute_encodings():
             quant_linear(input)
         """
@@ -371,7 +447,7 @@ class TestTrueQuantLinear:
         When: Invoke forward pass with a quantized tensor
         Then: return a tensor quantized with quant_linear.output_quantizer[0].encoding
         """
-        quantizer = Quantize((1, ), bitwidth=8, symmetric=False)
+        quantizer = Quantize((1,), bitwidth=8, symmetric=False)
         with quantizer.compute_encodings():
             quantizer(input)
 
@@ -381,8 +457,7 @@ class TestTrueQuantLinear:
         assert output.encoding.scale == quant_linear.output_quantizers[0].get_scale()
         assert output.encoding.offset == quant_linear.output_quantizers[0].get_offset()
 
-
-    @pytest.mark.usefixtures('register_int_linear')
+    @pytest.mark.usefixtures("register_int_linear")
     def test_from_module(self, input):
         # Analogous to FakeQuantMixin.from_module test case
         """
@@ -430,17 +505,21 @@ class TestTrueQuantLinear:
 
 
 class TestQuantizedLayers:
-    @pytest.mark.usefixtures('register_int_norm', 'register_int_custom', 'register_int_activation')
+    @pytest.mark.usefixtures(
+        "register_int_norm", "register_int_custom", "register_int_activation"
+    )
     @pytest.mark.parametrize(
-        "module_factory,               input_factory", [
-        (lambda: nn.Softmax(dim=1),    lambda: _input(10, 10)),
-        (lambda: nn.Sigmoid(),         lambda: _input(10, 10)),
-        (lambda: nn.GELU(),            lambda: _input(10, 10)),
-        (lambda: custom.Add(),         lambda: (_input(10, 10), _input(10, 10))),
-        (lambda: custom.Multiply(),    lambda: (_input(10, 10), _input(10, 10))),
-        (lambda: custom.Subtract(),    lambda: (_input(10, 10), _input(10, 10))),
-        (lambda: custom.MatMul(),      lambda: (_input(10, 10), _input(10, 10))),
-        (lambda: custom.Divide(),      lambda: (_input(10, 10), _input(10, 10)))]
+        "module_factory,               input_factory",
+        [
+            (lambda: nn.Softmax(dim=1), lambda: _input(10, 10)),
+            (lambda: nn.Sigmoid(), lambda: _input(10, 10)),
+            (lambda: nn.GELU(), lambda: _input(10, 10)),
+            (lambda: custom.Add(), lambda: (_input(10, 10), _input(10, 10))),
+            (lambda: custom.Multiply(), lambda: (_input(10, 10), _input(10, 10))),
+            (lambda: custom.Subtract(), lambda: (_input(10, 10), _input(10, 10))),
+            (lambda: custom.MatMul(), lambda: (_input(10, 10), _input(10, 10))),
+            (lambda: custom.Divide(), lambda: (_input(10, 10), _input(10, 10))),
+        ],
     )
     def test_layers_no_params(self, module_factory, input_factory):
         layer = module_factory()
@@ -452,10 +531,16 @@ class TestQuantizedLayers:
         fq_layer = _legacy_impl.FakeQuantizationMixin.from_module(layer)
         tq_layer = QuantizationMixin.from_module(layer)
         for i, _ in enumerate(inputs):
-            fq_layer.input_quantizers[i] = QuantizeDequantize(shape=(), bitwidth=8, symmetric=False)
-            tq_layer.input_quantizers[i] = Quantize(shape=(), bitwidth=8, symmetric=False)
+            fq_layer.input_quantizers[i] = QuantizeDequantize(
+                shape=(), bitwidth=8, symmetric=False
+            )
+            tq_layer.input_quantizers[i] = Quantize(
+                shape=(), bitwidth=8, symmetric=False
+            )
 
-        fq_layer.output_quantizers[0] = QuantizeDequantize(shape=(1, ), bitwidth=8, symmetric=False)
+        fq_layer.output_quantizers[0] = QuantizeDequantize(
+            shape=(1,), bitwidth=8, symmetric=False
+        )
         tq_layer.output_quantizers[0] = Quantize(shape=(), bitwidth=8, symmetric=False)
 
         with fq_layer.compute_encodings():
@@ -469,38 +554,53 @@ class TestQuantizedLayers:
 
         assert torch.allclose(fq_output, tq_output.dequantize())
 
-    @pytest.mark.usefixtures('register_int_linear', 'register_int_norm', 'register_int_custom', 'register_int_activation',
-                             'register_int_conv', 'register_int_convtranspose')
+    @pytest.mark.usefixtures(
+        "register_int_linear",
+        "register_int_norm",
+        "register_int_custom",
+        "register_int_activation",
+        "register_int_conv",
+        "register_int_convtranspose",
+    )
     @pytest.mark.parametrize(
-        "module_factory,                      input_factory", [
-        (lambda: nn.Linear(10, 10),           lambda: _input(10, 10)),
-        (lambda: nn.LayerNorm(10),            lambda: _input(10, 10)),
-        (lambda: nn.GroupNorm(2, 10),         lambda: _input(10, 10)),
-        (lambda: nn.Conv1d(3, 3, 3),          lambda: _input(1, 3, 10)),
-        (lambda: nn.Conv2d(3, 3, 3),          lambda: _input(1, 3, 10, 10)),
-        (lambda: nn.Conv3d(3, 3, 3),          lambda: _input(1, 3, 10, 10, 10)),
-        (lambda: nn.ConvTranspose1d(3, 3, 3), lambda: _input(1, 3, 10)),
-        (lambda: nn.ConvTranspose2d(3, 3, 3), lambda: _input(1, 3, 10, 10)),
-        (lambda: nn.ConvTranspose3d(3, 3, 3), lambda: _input(1, 3, 10, 10, 10))
-    ])
+        "module_factory,                      input_factory",
+        [
+            (lambda: nn.Linear(10, 10), lambda: _input(10, 10)),
+            (lambda: nn.LayerNorm(10), lambda: _input(10, 10)),
+            (lambda: nn.GroupNorm(2, 10), lambda: _input(10, 10)),
+            (lambda: nn.Conv1d(3, 3, 3), lambda: _input(1, 3, 10)),
+            (lambda: nn.Conv2d(3, 3, 3), lambda: _input(1, 3, 10, 10)),
+            (lambda: nn.Conv3d(3, 3, 3), lambda: _input(1, 3, 10, 10, 10)),
+            (lambda: nn.ConvTranspose1d(3, 3, 3), lambda: _input(1, 3, 10)),
+            (lambda: nn.ConvTranspose2d(3, 3, 3), lambda: _input(1, 3, 10, 10)),
+            (lambda: nn.ConvTranspose3d(3, 3, 3), lambda: _input(1, 3, 10, 10, 10)),
+        ],
+    )
     def test_layers_with_weight(self, module_factory, input_factory):
         layer = module_factory()
         input = input_factory()
 
         fq_layer = _legacy_impl.FakeQuantizationMixin.from_module(layer)
         tq_layer = QuantizationMixin.from_module(layer)
-        fq_layer.input_quantizers[0] = QuantizeDequantize(shape=(), bitwidth=8, symmetric=False)
-        fq_layer.output_quantizers[0] = QuantizeDequantize(shape=(), bitwidth=8, symmetric=False)
-        fq_layer.param_quantizers["weight"] = QuantizeDequantize(shape=(), bitwidth=8, symmetric=True)
+        fq_layer.input_quantizers[0] = QuantizeDequantize(
+            shape=(), bitwidth=8, symmetric=False
+        )
+        fq_layer.output_quantizers[0] = QuantizeDequantize(
+            shape=(), bitwidth=8, symmetric=False
+        )
+        fq_layer.param_quantizers["weight"] = QuantizeDequantize(
+            shape=(), bitwidth=8, symmetric=True
+        )
         tq_layer.input_quantizers[0] = Quantize(shape=(), bitwidth=8, symmetric=False)
         tq_layer.output_quantizers[0] = Quantize(shape=(), bitwidth=8, symmetric=False)
-        tq_layer.param_quantizers["weight"] = Quantize(shape=(), bitwidth=8, symmetric=True)
+        tq_layer.param_quantizers["weight"] = Quantize(
+            shape=(), bitwidth=8, symmetric=True
+        )
 
         with fq_layer.compute_encodings():
             fq_layer(input)
 
         fq_output = fq_layer(input)
-
 
         with tq_layer.compute_encodings():
             tq_layer(input)
@@ -509,12 +609,14 @@ class TestQuantizedLayers:
         assert torch.allclose(fq_output, tq_output.dequantize())
 
     @pytest.mark.cuda
-    @pytest.mark.usefixtures('register_int_linear')
+    @pytest.mark.usefixtures("register_int_linear")
     def test_layers_with_recompute(self):
         qlinear = QuantizedLinear(4096, 4096)
         qlinear.input_quantizers[0] = Quantize(shape=(), bitwidth=8, symmetric=False)
         qlinear.output_quantizers[0] = Quantize(shape=(), bitwidth=8, symmetric=False)
-        qlinear.param_quantizers["weight"] = Quantize(shape=(), bitwidth=8, symmetric=True)
+        qlinear.param_quantizers["weight"] = Quantize(
+            shape=(), bitwidth=8, symmetric=True
+        )
         qlinear.cuda()
 
         # Using dummy backend is no good for testing memory saving in real life.
@@ -533,7 +635,9 @@ class TestQuantizedLayers:
         mem_with_recompute = torch.cuda.memory_allocated()
 
         out.backward(torch.ones_like(out))
-        grads_with_recompute = [param.grad.clone().detach().cpu() for param in qlinear.parameters()]
+        grads_with_recompute = [
+            param.grad.clone().detach().cpu() for param in qlinear.parameters()
+        ]
         for param in qlinear.parameters():
             param.grad = None
 
@@ -545,7 +649,9 @@ class TestQuantizedLayers:
         mem_without_recompute = torch.cuda.memory_allocated()
 
         out.backward(torch.ones_like(out))
-        grads_without_recompute = [param.grad.clone().detach().cpu() for param in qlinear.parameters()]
+        grads_without_recompute = [
+            param.grad.clone().detach().cpu() for param in qlinear.parameters()
+        ]
         for param in qlinear.parameters():
             param.grad = None
 
@@ -564,10 +670,10 @@ class TestQuantizedLayers:
         #      - mask of shape [100, 4096] * 1 byte
         #      - quantized uint8 tensor of shape [100, 4096] * 1 byte
         expected_memory_saving = 0
-        expected_memory_saving += (1 + 1) * x.numel() # input quantizer
-        expected_memory_saving += (1 + 1) * qlinear.weight.numel() # weight quantizer
-        expected_memory_saving += 4 * (qlinear.weight.numel() + x.numel()) # F.linear
-        expected_memory_saving += (4 + 1 + 1) * out.numel() # output quantizer
+        expected_memory_saving += (1 + 1) * x.numel()  # input quantizer
+        expected_memory_saving += (1 + 1) * qlinear.weight.numel()  # weight quantizer
+        expected_memory_saving += 4 * (qlinear.weight.numel() + x.numel())  # F.linear
+        expected_memory_saving += (4 + 1 + 1) * out.numel()  # output quantizer
         actual_memory_saving = mem_without_recompute - mem_with_recompute
 
         # Considering noise factors, actual memory saving should be no less than
@@ -579,9 +685,15 @@ class TestQuantizedLayers:
 
     def test_remove_quantizers(self, input):
         qlinear = QuantizedLinear(10, 10, bias=False)
-        qlinear.input_quantizers[0] = input_qtzr = Quantize(shape=(), bitwidth=8, symmetric=False)
-        qlinear.output_quantizers[0] = output_qtzr = Quantize(shape=(), bitwidth=8, symmetric=False)
-        qlinear.param_quantizers["weight"] = weight_qtzr = Quantize(shape=(), bitwidth=8, symmetric=True)
+        qlinear.input_quantizers[0] = input_qtzr = Quantize(
+            shape=(), bitwidth=8, symmetric=False
+        )
+        qlinear.output_quantizers[0] = output_qtzr = Quantize(
+            shape=(), bitwidth=8, symmetric=False
+        )
+        qlinear.param_quantizers["weight"] = weight_qtzr = Quantize(
+            shape=(), bitwidth=8, symmetric=True
+        )
         with qlinear.compute_encodings():
             qlinear(input)
 
@@ -595,27 +707,24 @@ class TestQuantizedLayers:
         with qlinear._remove_input_quantizers(0):
             assert qlinear.input_quantizers[0] is None
             expected_out = output_qtzr(
-                F.linear(
-                    input, weight_qtzr(qlinear.weight).dequantize()
-                )
+                F.linear(input, weight_qtzr(qlinear.weight).dequantize())
             ).dequantize()
             assert torch.equal(qlinear(input), expected_out)
         assert qlinear.input_quantizers[0] is input_qtzr
 
-        with qlinear._remove_param_quantizers('weight'):
-            assert qlinear.param_quantizers['weight'] is None
+        with qlinear._remove_param_quantizers("weight"):
+            assert qlinear.param_quantizers["weight"] is None
             expected_out = output_qtzr(
-                F.linear(
-                    input_qtzr(input).dequantize(), qlinear.weight
-                )
+                F.linear(input_qtzr(input).dequantize(), qlinear.weight)
             ).dequantize()
             assert torch.equal(qlinear(input), expected_out)
-        assert qlinear.param_quantizers['weight'] is weight_qtzr
+        assert qlinear.param_quantizers["weight"] is weight_qtzr
 
         with qlinear._remove_output_quantizers(0):
             assert qlinear.output_quantizers[0] is None
-            expected_out = F.linear(input_qtzr(input).dequantize(),
-                                    weight_qtzr(qlinear.weight).dequantize())
+            expected_out = F.linear(
+                input_qtzr(input).dequantize(), weight_qtzr(qlinear.weight).dequantize()
+            )
             assert torch.equal(qlinear(input), expected_out)
         assert qlinear.output_quantizers[0] is output_qtzr
 
@@ -630,12 +739,12 @@ class TestQuantizedLayers:
         with qlinear._remove_all_quantizers():
             assert qlinear.input_quantizers[0] is None
             assert qlinear.output_quantizers[0] is None
-            assert qlinear.param_quantizers['weight'] is None
+            assert qlinear.param_quantizers["weight"] is None
             expected_out = F.linear(input, qlinear.weight)
             assert torch.equal(qlinear(input), expected_out)
         assert qlinear.input_quantizers[0] is input_qtzr
         assert qlinear.output_quantizers[0] is output_qtzr
-        assert qlinear.param_quantizers['weight'] is weight_qtzr
+        assert qlinear.param_quantizers["weight"] is weight_qtzr
 
         """
         When: Call ``_remove_{input, param, output}_quantizers`` without ``with`` statement
@@ -643,8 +752,8 @@ class TestQuantizedLayers:
         """
         qlinear._remove_input_quantizers(0)
         assert qlinear.input_quantizers[0] is None
-        qlinear._remove_param_quantizers('weight')
-        assert qlinear.param_quantizers['weight'] is None
+        qlinear._remove_param_quantizers("weight")
+        assert qlinear.param_quantizers["weight"] is None
         qlinear._remove_output_quantizers(0)
         assert qlinear.output_quantizers[0] is None
 
@@ -692,7 +801,8 @@ def test_dispatch_sanity():
     for func in get_ignored_functions() - _dispatch_table.keys():
         dummy_impl = lambda *args, **kwargs: func(*args, **kwargs)
         with pytest.raises(RuntimeError):
-            with _dispatch(func, dummy_impl): pass
+            with _dispatch(func, dummy_impl):
+                pass
 
     """
     When: Dispatch custom_addmm in place of torch.addmm in which
@@ -745,278 +855,400 @@ def _create_quantized_module(module):
 
 
 @pytest.mark.parametrize(
-    "module_factory,                                  input_factory", itertools.chain([
-    (lambda: nn.AdaptiveAvgPool1d(2),                 lambda: randn(1, 100)),
-    (lambda: nn.AdaptiveAvgPool2d(2),                 lambda: randn(1, 10, 10)),
-    (lambda: nn.AdaptiveAvgPool3d(2),                 lambda: randn(1, 10, 10, 11)),
-    # (lambda: nn.AdaptiveLogSoftmaxWithLoss(...),    lambda: ...),
-    (lambda: nn.AdaptiveMaxPool1d(2),                 lambda: randn(1, 100)),
-    (lambda: nn.AdaptiveMaxPool2d(2),                 lambda: randn(1, 10, 10)),
-    (lambda: nn.AdaptiveMaxPool3d(2),                 lambda: randn(1, 10, 10, 11)),
-    (lambda: nn.AlphaDropout(),                       lambda: randn(100)),
-    (lambda: nn.AvgPool1d(2),                         lambda: randn(1, 100)),
-    (lambda: nn.AvgPool2d(2),                         lambda: randn(1, 10, 10)),
-    (lambda: nn.AvgPool3d(2),                         lambda: randn(1, 10, 10, 11)),
-    (lambda: nn.BCELoss(),                            lambda: (F.sigmoid(randn(100)), zeros(100))),
-    (lambda: nn.BCEWithLogitsLoss(),                  lambda: (randn(100), zeros(100))),
-    (lambda: nn.BatchNorm1d(10),                      lambda: randn(5, 10, 3)),
-    (lambda: nn.BatchNorm2d(10),                      lambda: randn(5, 10, 3, 2)),
-    (lambda: nn.BatchNorm3d(10),                      lambda: randn(5, 10, 3, 2, 1)),
-    (lambda: nn.Bilinear(20, 30, 40),                 lambda: (randn(10, 20), randn(10, 30))),
-    (lambda: nn.CELU(),                               lambda: randn(10, 10)),
-    (lambda: nn.CTCLoss(),                            lambda: (randn(10, 11, 12).log_softmax(2),
-                                                               randint(low=1, high=12, size=(11, 20)),
-                                                               full(size=(11,), fill_value=10, dtype=torch.long),
-                                                               randint(low=5, high=20, size=(11,), dtype=torch.long))),
-    (lambda: nn.ChannelShuffle(2),                    lambda: randn(1, 8, 4, 4)),
-    (lambda: nn.ConstantPad1d(2, 3.5),                lambda: randn(1, 10, 10)),
-    (lambda: nn.ConstantPad2d(2, 3.5),                lambda: randn(1, 10, 10)),
-    (lambda: nn.ConstantPad3d(2, 3.5),                lambda: randn(1, 10, 2, 5)),
-    # (lambda: nn.Container(...),                     lambda: ...),
-    (lambda: nn.Conv1d(3, 3, 3),                      lambda: randn(1, 3, 32)),
-    (lambda: nn.Conv2d(3, 3, 3),                      lambda: randn(1, 3, 16, 16)),
-    (lambda: nn.Conv3d(3, 3, 3),                      lambda: randn(1, 3, 16, 16, 16)),
-    (lambda: nn.ConvTranspose1d(3, 3, 3),             lambda: randn(1, 3, 32)),
-    (lambda: nn.ConvTranspose2d(3, 3, 3),             lambda: randn(1, 3, 16, 16)),
-    (lambda: nn.ConvTranspose3d(3, 3, 3),             lambda: randn(1, 3, 16, 16, 16)),
-    (lambda: nn.CosineEmbeddingLoss(),                lambda: (randn(10, 10),
-                                                               zeros(10, 10),
-                                                               randn(10).sign().long())),
-    (lambda: nn.CosineSimilarity(),                   lambda: (randn(10, 10), zeros(10, 10))),
-    (lambda: nn.CrossEntropyLoss(),                   lambda: (randn(10, 10), zeros(10, 10))),
-    # (lambda: nn.CrossMapLRN2d(...),                 lambda: ...),
-    (lambda: nn.Dropout(),                            lambda: randn(10, 10)),
-    (lambda: nn.Dropout2d(),                          lambda: randn(10, 10)),
-    (lambda: nn.Dropout3d(),                          lambda: randn(10, 10)),
-    (lambda: nn.ELU(),                                lambda: randn(10, 10)),
-    (lambda: nn.Embedding(100, 100),                  lambda: randint(100, (10,))),
-    (lambda: nn.EmbeddingBag(100, 100, mode='sum'),   lambda: (randint(100, (10,)), arange(10), randn(10))),
-    (lambda: nn.FeatureAlphaDropout(),                lambda: randn(10, 10)),
-    (lambda: nn.Flatten(),                            lambda: randn(10, 10)),
-    (lambda: nn.Fold((4, 5), (2, 2)),                 lambda: randn(1, 12, 12)),
-    (lambda: nn.FractionalMaxPool2d(3, (5, 5)),       lambda: randn(1, 10, 10)),
-    (lambda: nn.FractionalMaxPool3d(3, (5, 5, 5)),    lambda: randn(1, 10, 10, 10)),
-    (lambda: nn.GELU(),                               lambda: randn(100)),
-    (lambda: nn.GLU(),                                lambda: randn(100)),
-    (lambda: nn.GRU(10, 20, 2),                       lambda: (randn(5, 3, 10), randn(2, 3, 20))),
-    (lambda: nn.GRUCell(10, 20),                      lambda: (randn(3, 10), randn(3, 20))),
-    (lambda: nn.GaussianNLLLoss(),                    lambda: (randn(1, 100), zeros(1, 100), ones(1, 100))),
-    (lambda: nn.GroupNorm(2, 4),                      lambda: randn(1, 4, 25)),
-    (lambda: nn.Hardshrink(0),                        lambda: randn(100)),
-    (lambda: nn.Hardsigmoid(),                        lambda: randn(100)),
-    (lambda: nn.Hardswish(),                          lambda: randn(100)),
-    (lambda: nn.Hardtanh(),                           lambda: randn(100)),
-    (lambda: nn.HingeEmbeddingLoss(),                 lambda: (randn(10, 10), randn(10).sign().long())),
-    (lambda: nn.HuberLoss(),                          lambda: (randn(10, 10), zeros(10, 10))),
-    # (lambda: nn.Identity(...),                      lambda: ...),
-    (lambda: nn.InstanceNorm1d(10),                   lambda: randn(5, 10, 3)),
-    (lambda: nn.InstanceNorm2d(10),                   lambda: randn(5, 10, 3, 2)),
-    (lambda: nn.InstanceNorm3d(10),                   lambda: randn(5, 10, 3, 2, 1)),
-    (lambda: nn.KLDivLoss(reduction='batchmean'),     lambda: (F.log_softmax(randn(10, 10), dim=1),
-                                                               F.softmax(randn(10, 10), dim=1))),
-    (lambda: nn.L1Loss(),                             lambda: (randn(10, 10), zeros(10, 10))),
-    (lambda: nn.LPPool1d(2, 3),                       lambda: randn(1, 10, 10)),
-    (lambda: nn.LPPool2d(2, 3),                       lambda: randn(1, 10, 10, 10)),
-    (lambda: nn.LSTM(10, 20, 2),                      lambda: (randn(5, 3, 10), (randn(2, 3, 20), randn(2, 3, 20)))),
-    (lambda: nn.LSTMCell(10, 20),                     lambda: (randn(3, 10), (randn(3, 20), randn(3, 20)))),
-    (lambda: nn.LayerNorm((2, 3, 4)),                 lambda: randn(10, 2, 3, 4)),
-    # (lambda: nn.LazyBatchNorm1d(...),               lambda: ...),
-    # (lambda: nn.LazyBatchNorm2d(...),               lambda: ...),
-    # (lambda: nn.LazyBatchNorm3d(...),               lambda: ...),
-    # (lambda: nn.LazyConv1d(...),                    lambda: ...),
-    # (lambda: nn.LazyConv2d(...),                    lambda: ...),
-    # (lambda: nn.LazyConv3d(...),                    lambda: ...),
-    # (lambda: nn.LazyConvTranspose1d(...),           lambda: ...),
-    # (lambda: nn.LazyConvTranspose2d(...),           lambda: ...),
-    # (lambda: nn.LazyConvTranspose3d(...),           lambda: ...),
-    # (lambda: nn.LazyInstanceNorm1d(...),            lambda: ...),
-    # (lambda: nn.LazyInstanceNorm2d(...),            lambda: ...),
-    # (lambda: nn.LazyInstanceNorm3d(...),            lambda: ...),
-    # (lambda: nn.LazyLinear(...),                    lambda: ...),
-    (lambda: nn.LeakyReLU(),                          lambda: randn(100)),
-    (lambda: nn.Linear(10, 10),                       lambda: randn(10, 10)),
-    (lambda: nn.LocalResponseNorm(2),                 lambda: randn(1, 4, 5, 5)),
-    (lambda: nn.LogSigmoid(),                         lambda: randn(100)),
-    (lambda: nn.LogSoftmax(),                         lambda: randn(100)),
-    (lambda: nn.MSELoss(),                            lambda: (randn(10, 10), zeros(10, 10))),
-    (lambda: nn.MarginRankingLoss(),                  lambda: (randn(100), randn(100), randn(100).sign().long())),
-    (lambda: nn.MaxPool1d(3),                         lambda: randn(1, 10, 10)),
-    (lambda: nn.MaxPool2d(3),                         lambda: randn(1, 10, 10, 10)),
-    (lambda: nn.MaxPool3d(3),                         lambda: randn(1, 1, 10, 10, 10)),
-    (lambda: nn.MaxUnpool1d(2),                       lambda: nn.MaxPool1d(2, return_indices=True)(randn(1, 10, 10))),
-    (lambda: nn.MaxUnpool2d(2),                       lambda: nn.MaxPool2d(2, return_indices=True)(randn(1, 10, 10, 10))),
-    (lambda: nn.MaxUnpool3d(2),                       lambda: nn.MaxPool3d(2, return_indices=True)(randn(1, 1, 10, 10, 10))),
-    (lambda: nn.Mish(),                               lambda: randn(100)),
-    # (lambda: nn.Module(...),                        lambda: ...),
-    # (lambda: nn.ModuleDict(...),                    lambda: ...),
-    # (lambda: nn.ModuleList(...),                    lambda: ...),
-    (lambda: nn.MultiLabelMarginLoss(),               lambda: (randn(10, 10), randint(-1, 10, (10, 10)))),
-    (lambda: nn.MultiLabelSoftMarginLoss(),           lambda: (randn(10, 10), F.one_hot(arange(10)))),
-    (lambda: nn.MultiMarginLoss(),                    lambda: (randn(10, 10), randint(0, 10, (10,)))),
-    # (lambda: nn.MultiheadAttention(...),            lambda: ...),
-    (lambda: nn.NLLLoss(),                            lambda: (randn(10, 10), randint(10, (10,)))),
-    (lambda: nn.NLLLoss2d(),                          lambda: (randn(10, 10), randint(10, (10,)))),
-    (lambda: nn.PReLU(),                              lambda: randn(100)),
-    (lambda: nn.PairwiseDistance(),                   lambda: (randn(100, 10), randn(100, 10))),
-    # (lambda: nn.ParameterDict(...),                 lambda: ...),
-    # (lambda: nn.ParameterList(...),                 lambda: ...),
-    (lambda: nn.PixelShuffle(1),                      lambda: randn(1, 1, 10, 10)),
-    # (lambda: nn.PixelUnshuffle(...),                lambda: ...),
-    (lambda: nn.PoissonNLLLoss(),                     lambda: (randn(100), randn(100))),
-    (lambda: nn.RNN(10, 20, 2),                       lambda: (randn(5, 3, 10), randn(2, 3, 20))),
-    # (lambda: nn.RNNBase(...),                       lambda: ...),
-    (lambda: nn.RNNCell(10, 20),                      lambda: (randn(3, 10), randn(3, 20))),
-    # (lambda: nn.RNNCellBase(...),                   lambda: ...),
-    (lambda: nn.RReLU(),                              lambda: randn(100)),
-    (lambda: nn.ReLU(),                               lambda: randn(100)),
-    (lambda: nn.ReLU6(),                              lambda: randn(100)),
-    (lambda: nn.ReflectionPad1d(2),                   lambda: randn(1, 10, 10)),
-    (lambda: nn.ReflectionPad2d(2),                   lambda: randn(1, 10, 10)),
-    (lambda: nn.ReplicationPad1d(2),                  lambda: randn(1, 10, 10)),
-    (lambda: nn.ReplicationPad2d(2),                  lambda: randn(1, 10, 10)),
-    (lambda: nn.ReplicationPad3d(2),                  lambda: randn(1, 10, 2, 5)),
-    (lambda: nn.SELU(),                               lambda: randn(100)),
-    # (lambda: nn.Sequential(...),                         lambda: ...),
-    (lambda: nn.SiLU(),                               lambda: randn(100)),
-    (lambda: nn.Sigmoid(),                            lambda: randn(100)),
-    (lambda: nn.SmoothL1Loss(),                       lambda: (randn(100), zeros(100))),
-    (lambda: nn.SoftMarginLoss(),                     lambda: (randn(100), randn(100).sign().long())),
-    (lambda: nn.Softmax(),                            lambda: randn(100)),
-    (lambda: nn.Softmax2d(),                          lambda: randn(1, 4, 25)),
-    (lambda: nn.Softmin(),                            lambda: randn(100)),
-    (lambda: nn.Softplus(),                           lambda: randn(100)),
-    (lambda: nn.Softshrink(),                         lambda: randn(100)),
-    (lambda: nn.Softsign(),                           lambda: randn(100)),
-    # (lambda: nn.SyncBatchNorm(...),                      lambda: ...),
-    (lambda: nn.Tanh(),                               lambda: randn(100)),
-    (lambda: nn.Tanhshrink(),                         lambda: randn(100)),
-    (lambda: nn.Threshold(0.1, 20),                   lambda: randn(100)),
-    # (lambda: nn.Transformer(...),                   lambda: ...),
-    # (lambda: nn.TransformerDecoder(...),            lambda: ...),
-    # (lambda: nn.TransformerDecoderLayer(...),       lambda: ...),
-    # (lambda: nn.TransformerEncoder(...),            lambda: ...),
-    # (lambda: nn.TransformerEncoderLayer(...),       lambda: ...),
-    (lambda: nn.TripletMarginLoss(),                  lambda: (randn(100), randn(100), randn(100),)),
-    (lambda: nn.TripletMarginWithDistanceLoss(),      lambda: (randn(100), randn(100), randn(100),)),
-    (lambda: nn.Unflatten(1, (2, 5, 5)),              lambda: randn(2, 50)),
-    (lambda: nn.Unfold((2, 3)),                       lambda: randn(2, 5, 3, 4)),
-    (lambda: nn.Upsample(scale_factor=2),             lambda: randn(1, 1, 10, 10)),
-    (lambda: nn.UpsamplingBilinear2d(scale_factor=2), lambda: randn(1, 1, 10, 10)),
-    (lambda: nn.UpsamplingNearest2d(scale_factor=2),  lambda: randn(1, 1, 10, 10)),
-    (lambda: nn.ZeroPad2d(2),                         lambda: randn(1, 10, 10)),
-],
-[
-    (lambda: nn.ReflectionPad3d(2),                   lambda: randn(1, 5, 5, 5)),
-] if version.parse(torch.__version__) >= version.parse("1.10.0") else [],
-[
-    (lambda: nn.Dropout1d(),                          lambda: randn(10, 10)),
-] if version.parse(torch.__version__) >= version.parse("1.12.0") else [],
-[
-    (lambda: nn.CircularPad1d(2),                     lambda: randn(1, 10, 10)),
-    (lambda: nn.CircularPad2d(2),                     lambda: randn(1, 10, 10)),
-    (lambda: nn.CircularPad3d(2),                     lambda: randn(1, 10, 2, 5)),
-    (lambda: nn.ZeroPad1d(2),                         lambda: randn(1, 10, 10)),
-    (lambda: nn.ZeroPad3d(2),                         lambda: randn(1, 10, 2, 5))
-] if version.parse(torch.__version__) >= version.parse("2.1.0") else [],
-[
-    (lambda: custom.Sin(),                            lambda: randn(100)),
-    (lambda: custom.Cos(),                            lambda: randn(100)),
-    (lambda: custom.AvgPool2d(),                      lambda: (randn(1,10,10), (tensor(2),))),
-    (lambda: custom.Reshape(),                        lambda: (randn(10,10), (tensor(100), tensor(1)))),
-    (lambda: custom.RSqrt(),                          lambda: randn(100).abs()),
-    (lambda: custom.Add(),                            lambda: (randn(100), randn(100))),
-    (lambda: custom.Multiply(),                       lambda: (randn(100), randn(100))),
-    (lambda: custom.Subtract(),                       lambda: (randn(100), randn(100))),
-    (lambda: custom.Divide(),                         lambda: (randn(100), randn(100))),
-    (lambda: custom.Concat(),                         lambda: (randn(1, 100), randn(3, 100))),
-    (lambda: custom.Outer(),                          lambda: (randn(100), randn(50))),
-    # (lambda: custom.FloorDivide(),                  lambda: ...),
-    (lambda: custom.Norm(),                           lambda: randn(100)),
-    (lambda: custom.Exponential(),                    lambda: randn(100)),
-    (lambda: custom.Erf(),                            lambda: randn(100)),
-    (lambda: custom.Sqrt(),                           lambda: randn(100).abs()),
-    # (lambda: custom.Maximum(),                      lambda: ...),
-    # (lambda: custom.Max(),                          lambda: ...),
-    # (lambda: custom.AMax(),                         lambda: ...),
-    # (lambda: custom.Minimum(),                      lambda: ...),
-    # (lambda: custom.Min(),                          lambda: ...),
-    # (lambda: custom.AMin(),                         lambda: ...),
-    # (lambda: custom.Where(),                        lambda: ...),
-    # (lambda: custom.Greater(),                      lambda: ...),
-    # (lambda: custom.Less(),                         lambda: ...),
-    # (lambda: custom.GreaterEqual(),                 lambda: ...),
-    # (lambda: custom.LessEqual(),                    lambda: ...),
-    # (lambda: custom.NotEqual(),                     lambda: ...),
-    # (lambda: custom.Equal(),                        lambda: ...),
-    (lambda: custom.Bmm(),                            lambda: (randn(1, 100, 100), randn(1, 100, 100))),
-    (lambda: custom.CumSum(),                         lambda: (randn(10, 100), tensor(0))),
-    # (lambda: custom.MaskedFill(),                   lambda: ...),
-    # (lambda: custom.Mean(),                         lambda: ...),
-    # (lambda: custom.Sum(),                          lambda: ...),
-    # (lambda: custom.Prod(),                         lambda: ...),
-    (lambda: custom.Log(),                            lambda: randint(1, 1000, (10,10))),
-    (lambda: custom.Abs(),                            lambda: randn(100)),
-    (lambda: custom.Neg(),                            lambda: randn(100)),
-    # (lambda: custom.Argmin(),                       lambda: ...),
-    # (lambda: custom.Argmax(),                       lambda: ...),
-    # (lambda: custom.ElementwiseCeil(),              lambda: ...),
-    # (lambda: custom.ElementwiseFloor(),             lambda: ...),
-    # (lambda: custom.Asin(),                         lambda: ...),
-    # (lambda: custom.Atan(),                         lambda: ...),
-    # (lambda: custom.Round(),                        lambda: ...),
-    # (lambda: custom.Gather(),                       lambda: ...),
-    # (lambda: custom.LogicalOr(),                    lambda: ...),
-    # (lambda: custom.LogicalAnd(),                   lambda: ...),
-    # (lambda: custom.LogicalNot(),                   lambda: ...),
-    # (lambda: custom.Split(),                        lambda: ...),
-    # (lambda: custom.Permute(),                      lambda: ...),
-    # (lambda: custom.Remainder(),                    lambda: ...),
-    # (lambda: custom.IndexSelect(),                  lambda: ...),
-    # (lambda: custom.Fmod(),                         lambda: ...),
-    # (lambda: custom.NonZero(),                      lambda: ...),
-    # (lambda: custom.TopK(),                         lambda: ...),
-    # (lambda: custom.Shape(),                        lambda: ...),
-    # (lambda: custom.Tile(),                         lambda: ...),
-    # (lambda: custom.ElementwiseUnarySign(),         lambda: ...),
-    (lambda: custom.Baddbmm(),                        lambda: (randn(1, 100, 100), randn(1, 100, 100), randn(1, 100, 100))),
-    (lambda: custom.Addmm(),                          lambda: (randn(100, 100), randn(100, 100), randn(100, 100))),
-    # (lambda: custom.Square(),                       lambda: ...),
-    # (lambda: custom.Select(),                       lambda: ...),
-    # (lambda: custom.Interpolate(),                  lambda: ...),
-    # (lambda: custom.MaxPool2d(),                    lambda: ...),
-    # (lambda: custom.AdaptiveAvgPool2d(),            lambda: ...),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10), zeros(10).requires_grad_(), ones(10).requires_grad_())),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10, 3, 2), zeros(10).requires_grad_(), ones(10).requires_grad_())),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10, 3, 2, 5), zeros(10).requires_grad_(), ones(10).requires_grad_())),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10), zeros(10), ones(10))),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10, 3, 2), zeros(10), ones(10))),
-    (lambda: custom.BatchNorm(),                      lambda: (randn(5, 10, 3, 2, 5), zeros(10), ones(10))),
-    (lambda: custom.GroupNorm(),                      lambda: (randn(20, 6, 10, 10), tensor(6))),
-    (lambda: custom.Normalize(),                      lambda: randn(100, 100)),
-    # (lambda: custom.Pad(),                          lambda: ...),
-    (lambda: custom.GridSample(),                     lambda: (randn(1, 3, 30, 30), randn(1, 3, 5, 2))),
-    (lambda: custom.RmsNorm([5, 2, 3], [2], 1e-5),    lambda: (randn(5, 2, 3))),
-    # (lambda custom.DynamicConv2d(),                 lambda: ...),
-    # (lambda custom.Pow(),                           lambda: ...),
-    # (lambda custom.CustomSiLU(),                    lambda: ...),
-    # (lambda custom.StridedSlice(),                  lambda: ...),
-    # (lambda custom.ChannelShuffle(),                lambda: ...),
-    # (lambda custom.Cast(),                          lambda: ...),
-    # (lambda custom.CustomGather(),                  lambda: ...),
-    # (lambda custom.DepthToSpaceCRDMode(),           lambda: ...),
-    # (lambda custom.DepthToSpaceDCRMode(),           lambda: ...),
-    # (lambda custom.CustomSparseConv3DLayer(),       lambda: ...),
-    # (lambda custom.SparseTensorWrapper(),           lambda: ...),
-    # (lambda custom.ScatterDense(),                  lambda: ...),
-    # (lambda custom.ScatterND(),                     lambda: ...),
-    # (lambda custom.RoiAlign(),                      lambda: ...),
-    # (lambda custom.NonMaxSuppression(),             lambda: ...),
-    # (lambda custom.GatherNd(),                      lambda: ...),
-    # (lambda custom.ScatterElements(),               lambda: ...),
-    # (lambda custom.OneHot(),                        lambda: ...),
-    # (lambda custom.Expand(),                        lambda: ...),
-    # (lambda custom.DynamicLinear(),                 lambda: ...),
-]))
+    "module_factory,                                  input_factory",
+    itertools.chain(
+        [
+            (lambda: nn.AdaptiveAvgPool1d(2), lambda: randn(1, 100)),
+            (lambda: nn.AdaptiveAvgPool2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.AdaptiveAvgPool3d(2), lambda: randn(1, 10, 10, 11)),
+            # (lambda: nn.AdaptiveLogSoftmaxWithLoss(...),    lambda: ...),
+            (lambda: nn.AdaptiveMaxPool1d(2), lambda: randn(1, 100)),
+            (lambda: nn.AdaptiveMaxPool2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.AdaptiveMaxPool3d(2), lambda: randn(1, 10, 10, 11)),
+            (lambda: nn.AlphaDropout(), lambda: randn(100)),
+            (lambda: nn.AvgPool1d(2), lambda: randn(1, 100)),
+            (lambda: nn.AvgPool2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.AvgPool3d(2), lambda: randn(1, 10, 10, 11)),
+            (lambda: nn.BCELoss(), lambda: (F.sigmoid(randn(100)), zeros(100))),
+            (lambda: nn.BCEWithLogitsLoss(), lambda: (randn(100), zeros(100))),
+            (lambda: nn.BatchNorm1d(10), lambda: randn(5, 10, 3)),
+            (lambda: nn.BatchNorm2d(10), lambda: randn(5, 10, 3, 2)),
+            (lambda: nn.BatchNorm3d(10), lambda: randn(5, 10, 3, 2, 1)),
+            (lambda: nn.Bilinear(20, 30, 40), lambda: (randn(10, 20), randn(10, 30))),
+            (lambda: nn.CELU(), lambda: randn(10, 10)),
+            (
+                lambda: nn.CTCLoss(),
+                lambda: (
+                    randn(10, 11, 12).log_softmax(2),
+                    randint(low=1, high=12, size=(11, 20)),
+                    full(size=(11,), fill_value=10, dtype=torch.long),
+                    randint(low=5, high=20, size=(11,), dtype=torch.long),
+                ),
+            ),
+            (lambda: nn.ChannelShuffle(2), lambda: randn(1, 8, 4, 4)),
+            (lambda: nn.ConstantPad1d(2, 3.5), lambda: randn(1, 10, 10)),
+            (lambda: nn.ConstantPad2d(2, 3.5), lambda: randn(1, 10, 10)),
+            (lambda: nn.ConstantPad3d(2, 3.5), lambda: randn(1, 10, 2, 5)),
+            # (lambda: nn.Container(...),                     lambda: ...),
+            (lambda: nn.Conv1d(3, 3, 3), lambda: randn(1, 3, 32)),
+            (lambda: nn.Conv2d(3, 3, 3), lambda: randn(1, 3, 16, 16)),
+            (lambda: nn.Conv3d(3, 3, 3), lambda: randn(1, 3, 16, 16, 16)),
+            (lambda: nn.ConvTranspose1d(3, 3, 3), lambda: randn(1, 3, 32)),
+            (lambda: nn.ConvTranspose2d(3, 3, 3), lambda: randn(1, 3, 16, 16)),
+            (lambda: nn.ConvTranspose3d(3, 3, 3), lambda: randn(1, 3, 16, 16, 16)),
+            (
+                lambda: nn.CosineEmbeddingLoss(),
+                lambda: (randn(10, 10), zeros(10, 10), randn(10).sign().long()),
+            ),
+            (lambda: nn.CosineSimilarity(), lambda: (randn(10, 10), zeros(10, 10))),
+            (lambda: nn.CrossEntropyLoss(), lambda: (randn(10, 10), zeros(10, 10))),
+            # (lambda: nn.CrossMapLRN2d(...),                 lambda: ...),
+            (lambda: nn.Dropout(), lambda: randn(10, 10)),
+            (lambda: nn.Dropout2d(), lambda: randn(10, 10)),
+            (lambda: nn.Dropout3d(), lambda: randn(10, 10)),
+            (lambda: nn.ELU(), lambda: randn(10, 10)),
+            (lambda: nn.Embedding(100, 100), lambda: randint(100, (10,))),
+            (
+                lambda: nn.EmbeddingBag(100, 100, mode="sum"),
+                lambda: (randint(100, (10,)), arange(10), randn(10)),
+            ),
+            (lambda: nn.FeatureAlphaDropout(), lambda: randn(10, 10)),
+            (lambda: nn.Flatten(), lambda: randn(10, 10)),
+            (lambda: nn.Fold((4, 5), (2, 2)), lambda: randn(1, 12, 12)),
+            (lambda: nn.FractionalMaxPool2d(3, (5, 5)), lambda: randn(1, 10, 10)),
+            (
+                lambda: nn.FractionalMaxPool3d(3, (5, 5, 5)),
+                lambda: randn(1, 10, 10, 10),
+            ),
+            (lambda: nn.GELU(), lambda: randn(100)),
+            (lambda: nn.GLU(), lambda: randn(100)),
+            (lambda: nn.GRU(10, 20, 2), lambda: (randn(5, 3, 10), randn(2, 3, 20))),
+            (lambda: nn.GRUCell(10, 20), lambda: (randn(3, 10), randn(3, 20))),
+            (
+                lambda: nn.GaussianNLLLoss(),
+                lambda: (randn(1, 100), zeros(1, 100), ones(1, 100)),
+            ),
+            (lambda: nn.GroupNorm(2, 4), lambda: randn(1, 4, 25)),
+            (lambda: nn.Hardshrink(0), lambda: randn(100)),
+            (lambda: nn.Hardsigmoid(), lambda: randn(100)),
+            (lambda: nn.Hardswish(), lambda: randn(100)),
+            (lambda: nn.Hardtanh(), lambda: randn(100)),
+            (
+                lambda: nn.HingeEmbeddingLoss(),
+                lambda: (randn(10, 10), randn(10).sign().long()),
+            ),
+            (lambda: nn.HuberLoss(), lambda: (randn(10, 10), zeros(10, 10))),
+            # (lambda: nn.Identity(...),                      lambda: ...),
+            (lambda: nn.InstanceNorm1d(10), lambda: randn(5, 10, 3)),
+            (lambda: nn.InstanceNorm2d(10), lambda: randn(5, 10, 3, 2)),
+            (lambda: nn.InstanceNorm3d(10), lambda: randn(5, 10, 3, 2, 1)),
+            (
+                lambda: nn.KLDivLoss(reduction="batchmean"),
+                lambda: (
+                    F.log_softmax(randn(10, 10), dim=1),
+                    F.softmax(randn(10, 10), dim=1),
+                ),
+            ),
+            (lambda: nn.L1Loss(), lambda: (randn(10, 10), zeros(10, 10))),
+            (lambda: nn.LPPool1d(2, 3), lambda: randn(1, 10, 10)),
+            (lambda: nn.LPPool2d(2, 3), lambda: randn(1, 10, 10, 10)),
+            (
+                lambda: nn.LSTM(10, 20, 2),
+                lambda: (randn(5, 3, 10), (randn(2, 3, 20), randn(2, 3, 20))),
+            ),
+            (
+                lambda: nn.LSTMCell(10, 20),
+                lambda: (randn(3, 10), (randn(3, 20), randn(3, 20))),
+            ),
+            (lambda: nn.LayerNorm((2, 3, 4)), lambda: randn(10, 2, 3, 4)),
+            # (lambda: nn.LazyBatchNorm1d(...),               lambda: ...),
+            # (lambda: nn.LazyBatchNorm2d(...),               lambda: ...),
+            # (lambda: nn.LazyBatchNorm3d(...),               lambda: ...),
+            # (lambda: nn.LazyConv1d(...),                    lambda: ...),
+            # (lambda: nn.LazyConv2d(...),                    lambda: ...),
+            # (lambda: nn.LazyConv3d(...),                    lambda: ...),
+            # (lambda: nn.LazyConvTranspose1d(...),           lambda: ...),
+            # (lambda: nn.LazyConvTranspose2d(...),           lambda: ...),
+            # (lambda: nn.LazyConvTranspose3d(...),           lambda: ...),
+            # (lambda: nn.LazyInstanceNorm1d(...),            lambda: ...),
+            # (lambda: nn.LazyInstanceNorm2d(...),            lambda: ...),
+            # (lambda: nn.LazyInstanceNorm3d(...),            lambda: ...),
+            # (lambda: nn.LazyLinear(...),                    lambda: ...),
+            (lambda: nn.LeakyReLU(), lambda: randn(100)),
+            (lambda: nn.Linear(10, 10), lambda: randn(10, 10)),
+            (lambda: nn.LocalResponseNorm(2), lambda: randn(1, 4, 5, 5)),
+            (lambda: nn.LogSigmoid(), lambda: randn(100)),
+            (lambda: nn.LogSoftmax(), lambda: randn(100)),
+            (lambda: nn.MSELoss(), lambda: (randn(10, 10), zeros(10, 10))),
+            (
+                lambda: nn.MarginRankingLoss(),
+                lambda: (randn(100), randn(100), randn(100).sign().long()),
+            ),
+            (lambda: nn.MaxPool1d(3), lambda: randn(1, 10, 10)),
+            (lambda: nn.MaxPool2d(3), lambda: randn(1, 10, 10, 10)),
+            (lambda: nn.MaxPool3d(3), lambda: randn(1, 1, 10, 10, 10)),
+            (
+                lambda: nn.MaxUnpool1d(2),
+                lambda: nn.MaxPool1d(2, return_indices=True)(randn(1, 10, 10)),
+            ),
+            (
+                lambda: nn.MaxUnpool2d(2),
+                lambda: nn.MaxPool2d(2, return_indices=True)(randn(1, 10, 10, 10)),
+            ),
+            (
+                lambda: nn.MaxUnpool3d(2),
+                lambda: nn.MaxPool3d(2, return_indices=True)(randn(1, 1, 10, 10, 10)),
+            ),
+            (lambda: nn.Mish(), lambda: randn(100)),
+            # (lambda: nn.Module(...),                        lambda: ...),
+            # (lambda: nn.ModuleDict(...),                    lambda: ...),
+            # (lambda: nn.ModuleList(...),                    lambda: ...),
+            (
+                lambda: nn.MultiLabelMarginLoss(),
+                lambda: (randn(10, 10), randint(-1, 10, (10, 10))),
+            ),
+            (
+                lambda: nn.MultiLabelSoftMarginLoss(),
+                lambda: (randn(10, 10), F.one_hot(arange(10))),
+            ),
+            (
+                lambda: nn.MultiMarginLoss(),
+                lambda: (randn(10, 10), randint(0, 10, (10,))),
+            ),
+            # (lambda: nn.MultiheadAttention(...),            lambda: ...),
+            (lambda: nn.NLLLoss(), lambda: (randn(10, 10), randint(10, (10,)))),
+            (lambda: nn.NLLLoss2d(), lambda: (randn(10, 10), randint(10, (10,)))),
+            (lambda: nn.PReLU(), lambda: randn(100)),
+            (lambda: nn.PairwiseDistance(), lambda: (randn(100, 10), randn(100, 10))),
+            # (lambda: nn.ParameterDict(...),                 lambda: ...),
+            # (lambda: nn.ParameterList(...),                 lambda: ...),
+            (lambda: nn.PixelShuffle(1), lambda: randn(1, 1, 10, 10)),
+            # (lambda: nn.PixelUnshuffle(...),                lambda: ...),
+            (lambda: nn.PoissonNLLLoss(), lambda: (randn(100), randn(100))),
+            (lambda: nn.RNN(10, 20, 2), lambda: (randn(5, 3, 10), randn(2, 3, 20))),
+            # (lambda: nn.RNNBase(...),                       lambda: ...),
+            (lambda: nn.RNNCell(10, 20), lambda: (randn(3, 10), randn(3, 20))),
+            # (lambda: nn.RNNCellBase(...),                   lambda: ...),
+            (lambda: nn.RReLU(), lambda: randn(100)),
+            (lambda: nn.ReLU(), lambda: randn(100)),
+            (lambda: nn.ReLU6(), lambda: randn(100)),
+            (lambda: nn.ReflectionPad1d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.ReflectionPad2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.ReplicationPad1d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.ReplicationPad2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.ReplicationPad3d(2), lambda: randn(1, 10, 2, 5)),
+            (lambda: nn.SELU(), lambda: randn(100)),
+            # (lambda: nn.Sequential(...),                         lambda: ...),
+            (lambda: nn.SiLU(), lambda: randn(100)),
+            (lambda: nn.Sigmoid(), lambda: randn(100)),
+            (lambda: nn.SmoothL1Loss(), lambda: (randn(100), zeros(100))),
+            (
+                lambda: nn.SoftMarginLoss(),
+                lambda: (randn(100), randn(100).sign().long()),
+            ),
+            (lambda: nn.Softmax(), lambda: randn(100)),
+            (lambda: nn.Softmax2d(), lambda: randn(1, 4, 25)),
+            (lambda: nn.Softmin(), lambda: randn(100)),
+            (lambda: nn.Softplus(), lambda: randn(100)),
+            (lambda: nn.Softshrink(), lambda: randn(100)),
+            (lambda: nn.Softsign(), lambda: randn(100)),
+            # (lambda: nn.SyncBatchNorm(...),                      lambda: ...),
+            (lambda: nn.Tanh(), lambda: randn(100)),
+            (lambda: nn.Tanhshrink(), lambda: randn(100)),
+            (lambda: nn.Threshold(0.1, 20), lambda: randn(100)),
+            # (lambda: nn.Transformer(...),                   lambda: ...),
+            # (lambda: nn.TransformerDecoder(...),            lambda: ...),
+            # (lambda: nn.TransformerDecoderLayer(...),       lambda: ...),
+            # (lambda: nn.TransformerEncoder(...),            lambda: ...),
+            # (lambda: nn.TransformerEncoderLayer(...),       lambda: ...),
+            (
+                lambda: nn.TripletMarginLoss(),
+                lambda: (
+                    randn(100),
+                    randn(100),
+                    randn(100),
+                ),
+            ),
+            (
+                lambda: nn.TripletMarginWithDistanceLoss(),
+                lambda: (
+                    randn(100),
+                    randn(100),
+                    randn(100),
+                ),
+            ),
+            (lambda: nn.Unflatten(1, (2, 5, 5)), lambda: randn(2, 50)),
+            (lambda: nn.Unfold((2, 3)), lambda: randn(2, 5, 3, 4)),
+            (lambda: nn.Upsample(scale_factor=2), lambda: randn(1, 1, 10, 10)),
+            (
+                lambda: nn.UpsamplingBilinear2d(scale_factor=2),
+                lambda: randn(1, 1, 10, 10),
+            ),
+            (
+                lambda: nn.UpsamplingNearest2d(scale_factor=2),
+                lambda: randn(1, 1, 10, 10),
+            ),
+            (lambda: nn.ZeroPad2d(2), lambda: randn(1, 10, 10)),
+        ],
+        [
+            (lambda: nn.ReflectionPad3d(2), lambda: randn(1, 5, 5, 5)),
+        ]
+        if version.parse(torch.__version__) >= version.parse("1.10.0")
+        else [],
+        [
+            (lambda: nn.Dropout1d(), lambda: randn(10, 10)),
+        ]
+        if version.parse(torch.__version__) >= version.parse("1.12.0")
+        else [],
+        [
+            (lambda: nn.CircularPad1d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.CircularPad2d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.CircularPad3d(2), lambda: randn(1, 10, 2, 5)),
+            (lambda: nn.ZeroPad1d(2), lambda: randn(1, 10, 10)),
+            (lambda: nn.ZeroPad3d(2), lambda: randn(1, 10, 2, 5)),
+        ]
+        if version.parse(torch.__version__) >= version.parse("2.1.0")
+        else [],
+        [
+            (lambda: custom.Sin(), lambda: randn(100)),
+            (lambda: custom.Cos(), lambda: randn(100)),
+            (lambda: custom.AvgPool2d(), lambda: (randn(1, 10, 10), (tensor(2),))),
+            (
+                lambda: custom.Reshape(),
+                lambda: (randn(10, 10), (tensor(100), tensor(1))),
+            ),
+            (lambda: custom.RSqrt(), lambda: randn(100).abs()),
+            (lambda: custom.Add(), lambda: (randn(100), randn(100))),
+            (lambda: custom.Multiply(), lambda: (randn(100), randn(100))),
+            (lambda: custom.Subtract(), lambda: (randn(100), randn(100))),
+            (lambda: custom.Divide(), lambda: (randn(100), randn(100))),
+            (lambda: custom.Concat(), lambda: (randn(1, 100), randn(3, 100))),
+            (lambda: custom.Outer(), lambda: (randn(100), randn(50))),
+            # (lambda: custom.FloorDivide(),                  lambda: ...),
+            (lambda: custom.Norm(), lambda: randn(100)),
+            (lambda: custom.Exponential(), lambda: randn(100)),
+            (lambda: custom.Erf(), lambda: randn(100)),
+            (lambda: custom.Sqrt(), lambda: randn(100).abs()),
+            # (lambda: custom.Maximum(),                      lambda: ...),
+            # (lambda: custom.Max(),                          lambda: ...),
+            # (lambda: custom.AMax(),                         lambda: ...),
+            # (lambda: custom.Minimum(),                      lambda: ...),
+            # (lambda: custom.Min(),                          lambda: ...),
+            # (lambda: custom.AMin(),                         lambda: ...),
+            # (lambda: custom.Where(),                        lambda: ...),
+            # (lambda: custom.Greater(),                      lambda: ...),
+            # (lambda: custom.Less(),                         lambda: ...),
+            # (lambda: custom.GreaterEqual(),                 lambda: ...),
+            # (lambda: custom.LessEqual(),                    lambda: ...),
+            # (lambda: custom.NotEqual(),                     lambda: ...),
+            # (lambda: custom.Equal(),                        lambda: ...),
+            (lambda: custom.Bmm(), lambda: (randn(1, 100, 100), randn(1, 100, 100))),
+            (lambda: custom.CumSum(), lambda: (randn(10, 100), tensor(0))),
+            # (lambda: custom.MaskedFill(),                   lambda: ...),
+            # (lambda: custom.Mean(),                         lambda: ...),
+            # (lambda: custom.Sum(),                          lambda: ...),
+            # (lambda: custom.Prod(),                         lambda: ...),
+            (lambda: custom.Log(), lambda: randint(1, 1000, (10, 10))),
+            (lambda: custom.Abs(), lambda: randn(100)),
+            (lambda: custom.Neg(), lambda: randn(100)),
+            # (lambda: custom.Argmin(),                       lambda: ...),
+            # (lambda: custom.Argmax(),                       lambda: ...),
+            # (lambda: custom.ElementwiseCeil(),              lambda: ...),
+            # (lambda: custom.ElementwiseFloor(),             lambda: ...),
+            # (lambda: custom.Asin(),                         lambda: ...),
+            # (lambda: custom.Atan(),                         lambda: ...),
+            # (lambda: custom.Round(),                        lambda: ...),
+            # (lambda: custom.Gather(),                       lambda: ...),
+            # (lambda: custom.LogicalOr(),                    lambda: ...),
+            # (lambda: custom.LogicalAnd(),                   lambda: ...),
+            # (lambda: custom.LogicalNot(),                   lambda: ...),
+            # (lambda: custom.Split(),                        lambda: ...),
+            # (lambda: custom.Permute(),                      lambda: ...),
+            # (lambda: custom.Remainder(),                    lambda: ...),
+            # (lambda: custom.IndexSelect(),                  lambda: ...),
+            # (lambda: custom.Fmod(),                         lambda: ...),
+            # (lambda: custom.NonZero(),                      lambda: ...),
+            # (lambda: custom.TopK(),                         lambda: ...),
+            # (lambda: custom.Shape(),                        lambda: ...),
+            # (lambda: custom.Tile(),                         lambda: ...),
+            # (lambda: custom.ElementwiseUnarySign(),         lambda: ...),
+            (
+                lambda: custom.Baddbmm(),
+                lambda: (randn(1, 100, 100), randn(1, 100, 100), randn(1, 100, 100)),
+            ),
+            (
+                lambda: custom.Addmm(),
+                lambda: (randn(100, 100), randn(100, 100), randn(100, 100)),
+            ),
+            # (lambda: custom.Square(),                       lambda: ...),
+            # (lambda: custom.Select(),                       lambda: ...),
+            # (lambda: custom.Interpolate(),                  lambda: ...),
+            # (lambda: custom.MaxPool2d(),                    lambda: ...),
+            # (lambda: custom.AdaptiveAvgPool2d(),            lambda: ...),
+            (
+                lambda: custom.BatchNorm(),
+                lambda: (
+                    randn(5, 10),
+                    zeros(10).requires_grad_(),
+                    ones(10).requires_grad_(),
+                ),
+            ),
+            (
+                lambda: custom.BatchNorm(),
+                lambda: (
+                    randn(5, 10, 3, 2),
+                    zeros(10).requires_grad_(),
+                    ones(10).requires_grad_(),
+                ),
+            ),
+            (
+                lambda: custom.BatchNorm(),
+                lambda: (
+                    randn(5, 10, 3, 2, 5),
+                    zeros(10).requires_grad_(),
+                    ones(10).requires_grad_(),
+                ),
+            ),
+            (lambda: custom.BatchNorm(), lambda: (randn(5, 10), zeros(10), ones(10))),
+            (
+                lambda: custom.BatchNorm(),
+                lambda: (randn(5, 10, 3, 2), zeros(10), ones(10)),
+            ),
+            (
+                lambda: custom.BatchNorm(),
+                lambda: (randn(5, 10, 3, 2, 5), zeros(10), ones(10)),
+            ),
+            (lambda: custom.GroupNorm(), lambda: (randn(20, 6, 10, 10), tensor(6))),
+            (lambda: custom.Normalize(), lambda: randn(100, 100)),
+            # (lambda: custom.Pad(),                          lambda: ...),
+            (
+                lambda: custom.GridSample(),
+                lambda: (randn(1, 3, 30, 30), randn(1, 3, 5, 2)),
+            ),
+            (lambda: custom.RmsNorm([5, 2, 3], [2], 1e-5), lambda: (randn(5, 2, 3))),
+            # (lambda custom.DynamicConv2d(),                 lambda: ...),
+            # (lambda custom.Pow(),                           lambda: ...),
+            # (lambda custom.CustomSiLU(),                    lambda: ...),
+            # (lambda custom.StridedSlice(),                  lambda: ...),
+            # (lambda custom.ChannelShuffle(),                lambda: ...),
+            # (lambda custom.Cast(),                          lambda: ...),
+            # (lambda custom.CustomGather(),                  lambda: ...),
+            # (lambda custom.DepthToSpaceCRDMode(),           lambda: ...),
+            # (lambda custom.DepthToSpaceDCRMode(),           lambda: ...),
+            # (lambda custom.CustomSparseConv3DLayer(),       lambda: ...),
+            # (lambda custom.SparseTensorWrapper(),           lambda: ...),
+            # (lambda custom.ScatterDense(),                  lambda: ...),
+            # (lambda custom.ScatterND(),                     lambda: ...),
+            # (lambda custom.RoiAlign(),                      lambda: ...),
+            # (lambda custom.NonMaxSuppression(),             lambda: ...),
+            # (lambda custom.GatherNd(),                      lambda: ...),
+            # (lambda custom.ScatterElements(),               lambda: ...),
+            # (lambda custom.OneHot(),                        lambda: ...),
+            # (lambda custom.Expand(),                        lambda: ...),
+            # (lambda custom.DynamicLinear(),                 lambda: ...),
+        ],
+    ),
+)
 def test_default_kernels(module_factory, input_factory):
     module = module_factory()
     inputs = input_factory()
@@ -1037,7 +1269,6 @@ def test_default_kernels(module_factory, input_factory):
     with legacy_qmodule.compute_encodings():
         torch.manual_seed(0)
         _ = legacy_qmodule(*inputs)
-
 
     with qmodule.compute_encodings():
         torch.manual_seed(0)
@@ -1065,14 +1296,17 @@ def test_default_kernels(module_factory, input_factory):
         assert torch.equal(out_, tout_)
 
 
-@pytest.mark.parametrize('module_cls', [
-    transformers.pytorch_utils.Conv1D,
-    # transformers.models.llama.modeling_llama.LlamaRotaryEmbedding, # requires latest transformer
-    # transformers.models.llama.modeling_llama.LlamaRMSNorm, # requires latest transformer
-    torch.nn.Linear,
-    custom.Multiply,
-    custom.MatMul,
-])
+@pytest.mark.parametrize(
+    "module_cls",
+    [
+        transformers.pytorch_utils.Conv1D,
+        # transformers.models.llama.modeling_llama.LlamaRotaryEmbedding, # requires latest transformer
+        # transformers.models.llama.modeling_llama.LlamaRMSNorm, # requires latest transformer
+        torch.nn.Linear,
+        custom.Multiply,
+        custom.MatMul,
+    ],
+)
 def test_code_example(module_cls):
     """
     Given: A torch.nn.Module class defined with return annotation
@@ -1099,11 +1333,12 @@ def test_subclassing():
     """
 
     # Trivial subclass. Should behave same as parent
-    class MyQuantizedLinear(QuantizedLinear):
-        ...
+    class MyQuantizedLinear(QuantizedLinear): ...
 
     qlinear = QuantizedLinear(10, 10)
-    my_qlinear = MyQuantizedLinear(10, 10) # Shouldn't run into infinite recursion error
+    my_qlinear = MyQuantizedLinear(
+        10, 10
+    )  # Shouldn't run into infinite recursion error
     x = torch.randn(10, 10)
 
     my_qlinear.weight.copy_(qlinear.weight)
@@ -1112,32 +1347,35 @@ def test_subclassing():
     assert torch.equal(qlinear(x), my_qlinear(x))
 
 
-@pytest.mark.parametrize("indices", [
-    torch.tensor(2),                      # scalar index
-    torch.tensor([0, 1, 3, 5, 7, 9]),     # 1D indices
-    torch.tensor([[1, 3, 5], [8, 6, 4]]), # 2D indices
-])
 @pytest.mark.parametrize(
-    "scale_shape,  block_size", [
-    ((),           None),    # per-tensor
-    ((10, 1),      None),    # per-channel with axis=0
-    ((1, 10),      None),    # per-channel with axis=1
-    ((10,),        None),    # per-channel with axis=1
-    ((10,),        (-1,)),   # per-channel with axis=1
-    ((10, 2),      (-1, 5)), # per-block with channel_axis=0, block_axis=1
-    ((2, 10),      (5, -1)), # per-block with channel_axis=1, block_axis=0
-])
+    "indices",
+    [
+        torch.tensor(2),  # scalar index
+        torch.tensor([0, 1, 3, 5, 7, 9]),  # 1D indices
+        torch.tensor([[1, 3, 5], [8, 6, 4]]),  # 2D indices
+    ],
+)
+@pytest.mark.parametrize(
+    "scale_shape,  block_size",
+    [
+        ((), None),  # per-tensor
+        ((10, 1), None),  # per-channel with axis=0
+        ((1, 10), None),  # per-channel with axis=1
+        ((10,), None),  # per-channel with axis=1
+        ((10,), (-1,)),  # per-channel with axis=1
+        ((10, 2), (-1, 5)),  # per-block with channel_axis=0, block_axis=1
+        ((2, 10), (5, -1)),  # per-block with channel_axis=1, block_axis=0
+    ],
+)
 def test_qembedding_output_encoding(scale_shape, block_size, indices):
     """
     Given: QuantizedEmbedding with weight-only quantization
     """
     qembedding = QuantizedEmbedding(10, 10)
-    weight_qtzr = QuantizeDequantize(scale_shape,
-                                     qmin=-128,
-                                     qmax=127,
-                                     symmetric=True,
-                                     block_size=block_size)
-    qembedding.param_quantizers['weight'] = weight_qtzr
+    weight_qtzr = QuantizeDequantize(
+        scale_shape, qmin=-128, qmax=127, symmetric=True, block_size=block_size
+    )
+    qembedding.param_quantizers["weight"] = weight_qtzr
     qembedding.compute_param_encodings()
 
     """
@@ -1153,11 +1391,13 @@ def test_qembedding_output_encoding(scale_shape, block_size, indices):
 
 
 @pytest.mark.parametrize(
-    "qmodule_factory,                     input_shape", [
-    (lambda: QuantizedConv2d(16, 16, 3),  (1, 16, 3, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3), (1, 16, 3, 3)),
-    (lambda: QuantizedLinear(16, 16),     (1, 9, 16)),
-])
+    "qmodule_factory,                     input_shape",
+    [
+        (lambda: QuantizedConv2d(16, 16, 3), (1, 16, 3, 3)),
+        (lambda: QConvTranspose2d(16, 16, 3), (1, 16, 3, 3)),
+        (lambda: QuantizedLinear(16, 16), (1, 9, 16)),
+    ],
+)
 def test_create_int32_bias_quantizer_trivial(qmodule_factory, input_shape):
     """
     Given: Quantized module without input or weight quantizer
@@ -1178,59 +1418,130 @@ def test_create_int32_bias_quantizer_trivial(qmodule_factory, input_shape):
 
 
 @pytest.mark.parametrize(
-    "qmodule_factory,                     scale_shape,      block_size,      block_grouping,  input_shape", [
-    (lambda: QuantizedConv1d(16, 16, 3),  (),               None,            None,            (16, 3)),
-    (lambda: QuantizedConv1d(16, 16, 3),  (16, 1, 1),       None,            None,            (16, 3)),
-    (lambda: QuantizedConv1d(16, 16, 3),  (16, 4, 1),       (1, 4, 3),       None,            (16, 3)),
-    (lambda: QuantizedConv1d(16, 16, 3),  (16, 4, 1),       (1, 4, 3),       (1, 4,  1),      (16, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),  (),               None,            None,            (16, 3, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),  (16, 1, 1, 1),    None,            None,            (16, 3, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),  (16, 4, 1, 1),    (1, 4, 3, 3),    None,            (16, 3, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),  (16, 4, 1, 1),    (1, 4, 3, 3),    (1, 4, 1, 1),    (16, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),  (),               None,            None,            (16, 3, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),  (16, 1, 1, 1, 1), None,            None,            (16, 3, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),  (16, 4, 1, 1, 1), (1, 4, 3, 3, 3), None,            (16, 3, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),  (16, 4, 1, 1, 1), (1, 4, 3, 3, 3), (1, 4, 1, 1, 1), (16, 3, 3, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3), (),               None,            None,            (16, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3), (1, 16, 1),       None,            None,            (16, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3), (4, 16, 1),       (4, 1, 3),       None,            (16, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3), (4, 16, 1),       (4, 1, 3),       (4, 1, 1),       (16, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3), (),               None,            None,            (16, 3, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3), (1, 16, 1, 1),    None,            None,            (16, 3, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3), (4, 16, 1, 1),    (4, 1, 3, 3),    None,            (16, 3, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3), (4, 16, 1, 1),    (4, 1, 3, 3),    (4, 1, 1, 1),    (16, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3), (),               None,            None,            (16, 3, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3), (1, 16, 1, 1, 1), None,            None,            (16, 3, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3), (4, 16, 1, 1, 1), (4, 1, 3, 3, 3), None,            (16, 3, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3), (4, 16, 1, 1, 1), (4, 1, 3, 3, 3), (4, 1, 1, 1, 1), (16, 3, 3, 3)),
-    (lambda: QuantizedLinear(16, 16),     (),               None,            None,            (9, 16)),
-    (lambda: QuantizedLinear(16, 16),     (16, 1),          None,            None,            (9, 16)),
-    (lambda: QuantizedLinear(16, 16),     (16, 4),          (1, 4),          None,            (9, 16)),
-    (lambda: QuantizedLinear(16, 16),     (16, 4),          (1, 4),          (1, 4),          (9, 16)),
-])
-def test_create_int32_bias_quantizer_analytic(qmodule_factory, scale_shape, block_size,
-                                              block_grouping, input_shape):
+    "qmodule_factory,                     scale_shape,      block_size,      block_grouping,  input_shape",
+    [
+        (lambda: QuantizedConv1d(16, 16, 3), (), None, None, (16, 3)),
+        (lambda: QuantizedConv1d(16, 16, 3), (16, 1, 1), None, None, (16, 3)),
+        (lambda: QuantizedConv1d(16, 16, 3), (16, 4, 1), (1, 4, 3), None, (16, 3)),
+        (lambda: QuantizedConv1d(16, 16, 3), (16, 4, 1), (1, 4, 3), (1, 4, 1), (16, 3)),
+        (lambda: QuantizedConv2d(16, 16, 3), (), None, None, (16, 3, 3)),
+        (lambda: QuantizedConv2d(16, 16, 3), (16, 1, 1, 1), None, None, (16, 3, 3)),
+        (
+            lambda: QuantizedConv2d(16, 16, 3),
+            (16, 4, 1, 1),
+            (1, 4, 3, 3),
+            None,
+            (16, 3, 3),
+        ),
+        (
+            lambda: QuantizedConv2d(16, 16, 3),
+            (16, 4, 1, 1),
+            (1, 4, 3, 3),
+            (1, 4, 1, 1),
+            (16, 3, 3),
+        ),
+        (lambda: QuantizedConv3d(16, 16, 3), (), None, None, (16, 3, 3, 3)),
+        (
+            lambda: QuantizedConv3d(16, 16, 3),
+            (16, 1, 1, 1, 1),
+            None,
+            None,
+            (16, 3, 3, 3),
+        ),
+        (
+            lambda: QuantizedConv3d(16, 16, 3),
+            (16, 4, 1, 1, 1),
+            (1, 4, 3, 3, 3),
+            None,
+            (16, 3, 3, 3),
+        ),
+        (
+            lambda: QuantizedConv3d(16, 16, 3),
+            (16, 4, 1, 1, 1),
+            (1, 4, 3, 3, 3),
+            (1, 4, 1, 1, 1),
+            (16, 3, 3, 3),
+        ),
+        (lambda: QConvTranspose1d(16, 16, 3), (), None, None, (16, 3)),
+        (lambda: QConvTranspose1d(16, 16, 3), (1, 16, 1), None, None, (16, 3)),
+        (lambda: QConvTranspose1d(16, 16, 3), (4, 16, 1), (4, 1, 3), None, (16, 3)),
+        (
+            lambda: QConvTranspose1d(16, 16, 3),
+            (4, 16, 1),
+            (4, 1, 3),
+            (4, 1, 1),
+            (16, 3),
+        ),
+        (lambda: QConvTranspose2d(16, 16, 3), (), None, None, (16, 3, 3)),
+        (lambda: QConvTranspose2d(16, 16, 3), (1, 16, 1, 1), None, None, (16, 3, 3)),
+        (
+            lambda: QConvTranspose2d(16, 16, 3),
+            (4, 16, 1, 1),
+            (4, 1, 3, 3),
+            None,
+            (16, 3, 3),
+        ),
+        (
+            lambda: QConvTranspose2d(16, 16, 3),
+            (4, 16, 1, 1),
+            (4, 1, 3, 3),
+            (4, 1, 1, 1),
+            (16, 3, 3),
+        ),
+        (lambda: QConvTranspose3d(16, 16, 3), (), None, None, (16, 3, 3, 3)),
+        (
+            lambda: QConvTranspose3d(16, 16, 3),
+            (1, 16, 1, 1, 1),
+            None,
+            None,
+            (16, 3, 3, 3),
+        ),
+        (
+            lambda: QConvTranspose3d(16, 16, 3),
+            (4, 16, 1, 1, 1),
+            (4, 1, 3, 3, 3),
+            None,
+            (16, 3, 3, 3),
+        ),
+        (
+            lambda: QConvTranspose3d(16, 16, 3),
+            (4, 16, 1, 1, 1),
+            (4, 1, 3, 3, 3),
+            (4, 1, 1, 1, 1),
+            (16, 3, 3, 3),
+        ),
+        (lambda: QuantizedLinear(16, 16), (), None, None, (9, 16)),
+        (lambda: QuantizedLinear(16, 16), (16, 1), None, None, (9, 16)),
+        (lambda: QuantizedLinear(16, 16), (16, 4), (1, 4), None, (9, 16)),
+        (lambda: QuantizedLinear(16, 16), (16, 4), (1, 4), (1, 4), (9, 16)),
+    ],
+)
+def test_create_int32_bias_quantizer_analytic(
+    qmodule_factory, scale_shape, block_size, block_grouping, input_shape
+):
     """
     Given: Quantized module with input and weight quantizer
     """
     qmodule = qmodule_factory()
 
     if block_grouping:
-        weight_qtzr = GroupedBlockQuantizeDequantize(scale_shape,
-                                                     bitwidth=4,
-                                                     decompressed_bw=8,
-                                                     symmetric=True,
-                                                     block_size=block_size,
-                                                     block_grouping=block_grouping)
+        weight_qtzr = GroupedBlockQuantizeDequantize(
+            scale_shape,
+            bitwidth=4,
+            decompressed_bw=8,
+            symmetric=True,
+            block_size=block_size,
+            block_grouping=block_grouping,
+        )
     else:
-        weight_qtzr = QuantizeDequantize(scale_shape,
-                                         qmin=-128,
-                                         qmax=127,
-                                         symmetric=True,
-                                         block_size=block_size)
+        weight_qtzr = QuantizeDequantize(
+            scale_shape, qmin=-128, qmax=127, symmetric=True, block_size=block_size
+        )
 
     input = torch.randn(input_shape)
-    qmodule.input_quantizers[0] = QuantizeDequantize((), qmin=0, qmax=255, symmetric=False)
+    qmodule.input_quantizers[0] = QuantizeDequantize(
+        (), qmin=0, qmax=255, symmetric=False
+    )
     qmodule.param_quantizers["weight"] = copy.deepcopy(weight_qtzr)
 
     with qmodule.compute_encodings():
@@ -1257,7 +1568,9 @@ def test_create_int32_bias_quantizer_analytic(qmodule_factory, scale_shape, bloc
         expected_bias_scale = expected_bias_scale.squeeze()
     else:
         channel_axis = 1 if isinstance(qmodule, nn.modules.conv._ConvTransposeNd) else 0
-        non_channel_axes = [axis for axis, _ in enumerate(qmodule.weight.shape) if axis != channel_axis]
+        non_channel_axes = [
+            axis for axis, _ in enumerate(qmodule.weight.shape) if axis != channel_axis
+        ]
         expected_bias_scale = expected_bias_scale.amax(dim=non_channel_axes)
 
     assert bias_qtzr.get_scale().shape == expected_bias_scale.shape
@@ -1271,9 +1584,13 @@ def test_create_int32_bias_quantizer_analytic(qmodule_factory, scale_shape, bloc
     qmodule = qmodule_factory()
 
     input = torch.randn(input_shape).as_subclass(DequantizedTensor)
-    input.encoding = AffineEncoding(scale=(input.max() - input.min()) / 255,
-                                    offset=torch.zeros(()),
-                                    qmin=0, qmax=255, symmetry=False)
+    input.encoding = AffineEncoding(
+        scale=(input.max() - input.min()) / 255,
+        offset=torch.zeros(()),
+        qmin=0,
+        qmax=255,
+        symmetry=False,
+    )
     qmodule.input_quantizers[0] = None
     qmodule.param_quantizers["weight"] = copy.deepcopy(weight_qtzr)
 
@@ -1300,41 +1617,66 @@ def test_create_int32_bias_quantizer_analytic(qmodule_factory, scale_shape, bloc
         expected_bias_scale = expected_bias_scale.flatten()
     else:
         channel_axis = 1 if isinstance(qmodule, nn.modules.conv._ConvTransposeNd) else 0
-        non_channel_axes = [axis for axis, _ in enumerate(qmodule.weight.shape) if axis != channel_axis]
+        non_channel_axes = [
+            axis for axis, _ in enumerate(qmodule.weight.shape) if axis != channel_axis
+        ]
         expected_bias_scale = expected_bias_scale.amax(dim=non_channel_axes)
 
     assert torch.allclose(bias_qtzr.get_scale(), expected_bias_scale)
 
 
-
 @pytest.mark.parametrize(
-    "qmodule_factory,                                 scale_shape,      block_size,          input_shape", [
-    (lambda: QuantizedConv1d(16, 16, 3),              (1, 16, 1),       None,                (1, 16, 3)),
-    (lambda: QuantizedConv1d(16, 16, 3),              (4, 16, 1),       (4, -1, -1),         (1, 16, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),              (1, 16, 1, 1),    None,                (1, 16, 3, 3)),
-    (lambda: QuantizedConv2d(16, 16, 3),              (4, 16, 1, 1),    (4, -1, -1, -1),     (1, 16, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),              (1, 16, 1, 1, 1), None,                (1, 16, 3, 3, 3)),
-    (lambda: QuantizedConv3d(16, 16, 3),              (4, 16, 1, 1, 1), (4, -1, -1, -1, -1), (1, 16, 3, 3, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3),             (16, 1, 1),       None,                (1, 16, 3)),
-    (lambda: QConvTranspose1d(16, 16, 3),             (16, 4, 1),       (-1, 4, -1),         (1, 16, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3),             (16, 1, 1, 1),    None,                (1, 16, 3, 3)),
-    (lambda: QConvTranspose2d(16, 16, 3),             (16, 4, 1, 1),    (-1, 4, -1, -1),     (1, 16, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3),             (16, 1, 1, 1, 1), None,                (1, 16, 3, 3, 3)),
-    (lambda: QConvTranspose3d(16, 16, 3),             (16, 4, 1, 1, 1), (-1, 4, -1, -1, -1), (1, 16, 3, 3, 3)),
-    (lambda: QuantizedLinear(16, 16),                 (1, 16),          None,                (1, 9, 16)),
-    (lambda: QuantizedLinear(16, 16),                 (4, 16),          (4, -1),             (1, 9, 16)),
-    (lambda: QuantizedLayerNorm(9),                   (),               None,                (1, 4, 9)),
-    (lambda: QuantizedLayerNorm(9),                   (9,),             None,                (1, 4, 9)),
-    (lambda: QuantizedGroupNorm(3, 9),                (),               None,                (1, 9, 4)),
-    (lambda: QuantizedGroupNorm(3, 9),                (9,),             None,                (1, 9, 4)),
-    (lambda: QuantizedInstanceNorm1d(9, affine=True), (),               None,                (1, 9, 4)),
-    (lambda: QuantizedInstanceNorm1d(9, affine=True), (9,),             None,                (1, 9, 4)),
-    (lambda: QuantizedInstanceNorm2d(9, affine=True), (),               None,                (1, 9, 4, 4)),
-    (lambda: QuantizedInstanceNorm2d(9, affine=True), (9,),             None,                (1, 9, 4, 4)),
-    (lambda: QuantizedInstanceNorm3d(9, affine=True), (),               None,                (1, 9, 4, 4, 4)),
-    (lambda: QuantizedInstanceNorm3d(9, affine=True), (9,),             None,                (1, 9, 4, 4, 4)),
-])
-def test_create_int32_bias_quantizer_statistical(qmodule_factory, scale_shape, block_size, input_shape):
+    "qmodule_factory,                                 scale_shape,      block_size,          input_shape",
+    [
+        (lambda: QuantizedConv1d(16, 16, 3), (1, 16, 1), None, (1, 16, 3)),
+        (lambda: QuantizedConv1d(16, 16, 3), (4, 16, 1), (4, -1, -1), (1, 16, 3)),
+        (lambda: QuantizedConv2d(16, 16, 3), (1, 16, 1, 1), None, (1, 16, 3, 3)),
+        (
+            lambda: QuantizedConv2d(16, 16, 3),
+            (4, 16, 1, 1),
+            (4, -1, -1, -1),
+            (1, 16, 3, 3),
+        ),
+        (lambda: QuantizedConv3d(16, 16, 3), (1, 16, 1, 1, 1), None, (1, 16, 3, 3, 3)),
+        (
+            lambda: QuantizedConv3d(16, 16, 3),
+            (4, 16, 1, 1, 1),
+            (4, -1, -1, -1, -1),
+            (1, 16, 3, 3, 3),
+        ),
+        (lambda: QConvTranspose1d(16, 16, 3), (16, 1, 1), None, (1, 16, 3)),
+        (lambda: QConvTranspose1d(16, 16, 3), (16, 4, 1), (-1, 4, -1), (1, 16, 3)),
+        (lambda: QConvTranspose2d(16, 16, 3), (16, 1, 1, 1), None, (1, 16, 3, 3)),
+        (
+            lambda: QConvTranspose2d(16, 16, 3),
+            (16, 4, 1, 1),
+            (-1, 4, -1, -1),
+            (1, 16, 3, 3),
+        ),
+        (lambda: QConvTranspose3d(16, 16, 3), (16, 1, 1, 1, 1), None, (1, 16, 3, 3, 3)),
+        (
+            lambda: QConvTranspose3d(16, 16, 3),
+            (16, 4, 1, 1, 1),
+            (-1, 4, -1, -1, -1),
+            (1, 16, 3, 3, 3),
+        ),
+        (lambda: QuantizedLinear(16, 16), (1, 16), None, (1, 9, 16)),
+        (lambda: QuantizedLinear(16, 16), (4, 16), (4, -1), (1, 9, 16)),
+        (lambda: QuantizedLayerNorm(9), (), None, (1, 4, 9)),
+        (lambda: QuantizedLayerNorm(9), (9,), None, (1, 4, 9)),
+        (lambda: QuantizedGroupNorm(3, 9), (), None, (1, 9, 4)),
+        (lambda: QuantizedGroupNorm(3, 9), (9,), None, (1, 9, 4)),
+        (lambda: QuantizedInstanceNorm1d(9, affine=True), (), None, (1, 9, 4)),
+        (lambda: QuantizedInstanceNorm1d(9, affine=True), (9,), None, (1, 9, 4)),
+        (lambda: QuantizedInstanceNorm2d(9, affine=True), (), None, (1, 9, 4, 4)),
+        (lambda: QuantizedInstanceNorm2d(9, affine=True), (9,), None, (1, 9, 4, 4)),
+        (lambda: QuantizedInstanceNorm3d(9, affine=True), (), None, (1, 9, 4, 4, 4)),
+        (lambda: QuantizedInstanceNorm3d(9, affine=True), (9,), None, (1, 9, 4, 4, 4)),
+    ],
+)
+def test_create_int32_bias_quantizer_statistical(
+    qmodule_factory, scale_shape, block_size, input_shape
+):
     """
     Given: Quantized module whose bias encodings should NOT be derived from input and weight encodings.
            Notable among them are:
@@ -1349,10 +1691,12 @@ def test_create_int32_bias_quantizer_statistical(qmodule_factory, scale_shape, b
     qmodule = qmodule_factory()
 
     input = torch.randn(input_shape)
-    qmodule.input_quantizers[0] = QuantizeDequantize((), qmin=0, qmax=255, symmetric=False)
-    qmodule.param_quantizers["weight"] = QuantizeDequantize(scale_shape,
-                                                            qmin=-128, qmax=127, symmetric=True,
-                                                            block_size=block_size)
+    qmodule.input_quantizers[0] = QuantizeDequantize(
+        (), qmin=0, qmax=255, symmetric=False
+    )
+    qmodule.param_quantizers["weight"] = QuantizeDequantize(
+        scale_shape, qmin=-128, qmax=127, symmetric=True, block_size=block_size
+    )
 
     with qmodule.compute_encodings():
         _ = qmodule(input)
@@ -1376,7 +1720,9 @@ def test_fold_param_quantizers(device, requires_grad):
     """
     qlinear = QuantizedLinear(10, 10).to(device)
     qlinear.weight.requires_grad_(requires_grad)
-    weight_qtzr = QuantizeDequantize(shape=(10, 1), qmin=-8, qmax=7, symmetric=True).to(device)
+    weight_qtzr = QuantizeDequantize(shape=(10, 1), qmin=-8, qmax=7, symmetric=True).to(
+        device
+    )
     qlinear.param_quantizers["weight"] = weight_qtzr
     original_weight = qlinear.weight.clone()
     original_bias = qlinear.bias.clone()

@@ -45,11 +45,15 @@ from aimet_torch.winnow.mask_propagation_winnower import MaskPropagationWinnower
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Winnow)
 
 
-def winnow_model(model: torch.nn.Module, input_shape: Tuple,
-                 list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List]] = None,
-                 reshape=True, in_place=False, verbose=False):
-
-    """ This API is used to winnow a model with Conv2d modules that each have a list of channels to be winnowed.
+def winnow_model(
+    model: torch.nn.Module,
+    input_shape: Tuple,
+    list_of_modules_to_winnow: List[Tuple[torch.nn.Module, List]] = None,
+    reshape=True,
+    in_place=False,
+    verbose=False,
+):
+    """This API is used to winnow a model with Conv2d modules that each have a list of channels to be winnowed.
     There is no need to zero out the modules' input channels before calling this API.
 
     :param model: The model to be winnowed.
@@ -64,8 +68,9 @@ def winnow_model(model: torch.nn.Module, input_shape: Tuple,
     :return: If winnowing is successful, a winnowed model is returned. Otherwise, returns None.
     """
 
-    mask_winnower = MaskPropagationWinnower(model, input_shape, list_of_modules_to_winnow, reshape,
-                                            in_place, verbose)
+    mask_winnower = MaskPropagationWinnower(
+        model, input_shape, list_of_modules_to_winnow, reshape, in_place, verbose
+    )
     new_model, ordered_modules_list = mask_winnower.propagate_masks_and_winnow()
 
     return new_model, ordered_modules_list

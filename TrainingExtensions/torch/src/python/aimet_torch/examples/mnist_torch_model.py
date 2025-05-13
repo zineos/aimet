@@ -35,8 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" MNIST model: Including train and test code """
-
+"""MNIST model: Including train and test code"""
 
 import torch
 from torch import nn
@@ -44,7 +43,12 @@ from torch.nn import functional
 from torch import optim
 from torchvision import datasets, transforms
 
-from aimet_common.data_cache_utility import is_cache_env_set, is_mnist_cache_present, copy_mnist_to_cache, copy_cache_mnist_to_local_build
+from aimet_common.data_cache_utility import (
+    is_cache_env_set,
+    is_mnist_cache_present,
+    copy_mnist_to_cache,
+    copy_cache_mnist_to_local_build,
+)
 from aimet_common.utils import AimetLogger
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
@@ -63,7 +67,7 @@ args = {
 
 
 class DataLoaderMnist:
-    """ A dataloader for the MNIST dataset """
+    """A dataloader for the MNIST dataset"""
 
     def __init__(self, cuda, seed, shuffle, train_batch_size=64, test_batch_size=100):
         """
@@ -85,7 +89,7 @@ class DataLoaderMnist:
         # to allocate data on GPU or CPU
         self._use_cuda = self._cuda and torch.cuda.is_available()
         self.device = torch.device("cuda" if self._use_cuda else "cpu")
-        self._kwargs = {'num_workers': 1, 'pin_memory': True} if self._use_cuda else {}
+        self._kwargs = {"num_workers": 1, "pin_memory": True} if self._use_cuda else {}
         # set the seed value
         torch.manual_seed(self._seed)
         mnist_download = True
@@ -95,27 +99,45 @@ class DataLoaderMnist:
             mnist_download = False
 
         # train loader
-        self.train_loader = torch.utils.data.DataLoader(datasets.MNIST('../data', train=True, download=mnist_download,
-                                                                       transform=transforms.Compose([transforms.ToTensor(),
-                                                                                                     transforms.Normalize((0.5307,), (0.9081,))])),
-                                                        batch_size=self._train_batch_size, shuffle=self._shuffle, **self._kwargs)
+        self.train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST(
+                "../data",
+                train=True,
+                download=mnist_download,
+                transform=transforms.Compose(
+                    [transforms.ToTensor(), transforms.Normalize((0.5307,), (0.9081,))]
+                ),
+            ),
+            batch_size=self._train_batch_size,
+            shuffle=self._shuffle,
+            **self._kwargs,
+        )
 
         # test loader
-        self.test_loader = torch.utils.data.DataLoader(datasets.MNIST('../data', train=False,
-                                                                      transform=transforms.Compose([transforms.ToTensor(),
-                                                                                                    transforms.Normalize((0.5307,), (0.9081,))])),
-                                                       batch_size=self._test_batch_size, shuffle=self._shuffle, **self._kwargs)
+        self.test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST(
+                "../data",
+                train=False,
+                transform=transforms.Compose(
+                    [transforms.ToTensor(), transforms.Normalize((0.5307,), (0.9081,))]
+                ),
+            ),
+            batch_size=self._test_batch_size,
+            shuffle=self._shuffle,
+            **self._kwargs,
+        )
 
         if not is_mnist_cache_present() and is_cache_env_set():
             copy_mnist_to_cache()
 
 
 class Net(nn.Module):
-    """ Mnist Model """
+    """Mnist Model"""
+
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self):
-        """ Constructor """
+        """Constructor"""
 
         super().__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5, padding=(2, 2))
@@ -127,7 +149,7 @@ class Net(nn.Module):
         self.maxpool2 = nn.MaxPool2d(2)
         self.relu3 = nn.ReLU()
         self.dropout2 = nn.Dropout2d()
-        self.fc1 = nn.Linear(7*7*64, 1024)
+        self.fc1 = nn.Linear(7 * 7 * 64, 1024)
         self.fc2 = nn.Linear(1024, 10)
         self.log_softmax = nn.LogSoftmax(1)
 
@@ -148,17 +170,17 @@ class Net(nn.Module):
 
 
 class ExtendedNet(nn.Module):
-    """ Mnist Model """
+    """Mnist Model"""
 
     def __init__(self):
-        """ Constructor """
+        """Constructor"""
 
         super().__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5, padding=(2, 2))
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5, padding=(2, 2), bias=False)
         self.conv2_drop = nn.Dropout2d()
         self.conv3 = nn.Conv2d(64, 64, kernel_size=5, padding=(2, 2))
-        self.fc1 = nn.Linear(3*3*64, 1024, bias=False)
+        self.fc1 = nn.Linear(3 * 3 * 64, 1024, bias=False)
         self.fc2 = nn.Linear(1024, 10)
 
     def forward(self, *inputs):
@@ -178,7 +200,9 @@ class ExtendedNet(nn.Module):
         return functional.log_softmax(x, dim=1)
 
 
-def train(model, epochs, num_batches=0, batch_size=50, batch_callback=None, use_cuda=False):
+def train(
+    model, epochs, num_batches=0, batch_size=50, batch_callback=None, use_cuda=False
+):
     """
     Train the MNIST model
     :param model: Model
@@ -189,10 +213,11 @@ def train(model, epochs, num_batches=0, batch_size=50, batch_callback=None, use_
     :return: None
     """
 
-    data_loader = DataLoaderMnist(cuda=use_cuda, seed=1, shuffle=False,
-                                  train_batch_size=batch_size)
+    data_loader = DataLoaderMnist(
+        cuda=use_cuda, seed=1, shuffle=False, train_batch_size=batch_size
+    )
 
-    optimizer = optim.SGD(model.parameters(), lr=args['lr'], momentum=args['momentum'])
+    optimizer = optim.SGD(model.parameters(), lr=args["lr"], momentum=args["momentum"])
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -211,11 +236,17 @@ def train(model, epochs, num_batches=0, batch_size=50, batch_callback=None, use_
             if batch_callback is not None:
                 batch_callback(model, batch_idx)
 
-            if batch_idx % args['log_interval'] == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch, batch_idx * len(data),
-                                                                               len(data_loader.train_loader.dataset),
-                                                                               100. * batch_idx / len(data_loader.train_loader),
-                                                                               loss.item()))
+            if batch_idx % args["log_interval"] == 0:
+                print(
+                    "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
+                        epoch,
+                        batch_idx * len(data),
+                        len(data_loader.train_loader.dataset),
+                        100.0 * batch_idx / len(data_loader.train_loader),
+                        loss.item(),
+                    )
+                )
+
 
 def evaluate(model, iterations, use_cuda=False):
     """
@@ -229,7 +260,9 @@ def evaluate(model, iterations, use_cuda=False):
     logger.debug("Allocating input and target tensors on GPU : %r", use_cuda)
 
     # create the instance of data loader
-    data_loader = DataLoaderMnist(cuda=use_cuda, seed=1, shuffle=False, train_batch_size=64, test_batch_size=100)
+    data_loader = DataLoaderMnist(
+        cuda=use_cuda, seed=1, shuffle=False, train_batch_size=64, test_batch_size=100
+    )
 
     model.eval()
     total = 0
@@ -238,7 +271,10 @@ def evaluate(model, iterations, use_cuda=False):
 
     with torch.no_grad():
         for inputs, labels in data_loader.test_loader:
-            inputs, labels = inputs.to(data_loader.device), labels.to(data_loader.device)
+            inputs, labels = (
+                inputs.to(data_loader.device),
+                labels.to(data_loader.device),
+            )
             output = model(inputs)
             current_iterations += 1
             _, predicted = torch.max(output.data, dim=1)

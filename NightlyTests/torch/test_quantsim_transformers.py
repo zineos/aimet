@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" contains unit tests to validate transformer quantization support """
+"""contains unit tests to validate transformer quantization support"""
 
 import unittest
 import torch
@@ -47,6 +47,7 @@ from aimet_torch.transformers.utils import get_quantizable_pt_transformer_model
 class TestQuantizationSimTransformers(unittest.TestCase):
     def test_word_langauge_model(self):
         from transformer_models.word_language_model import TransformerModel
+
         n_layers = 2
         model = TransformerModel(33278, 200, 2, 200, n_layers)
 
@@ -61,14 +62,39 @@ class TestQuantizationSimTransformers(unittest.TestCase):
             model.eval()
             with torch.no_grad():
                 model(dummy_input)
+
         sim.compute_encodings(forward_pass, None)
 
         for i in range(n_layers):
             # validate MHA layers have quantizers
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.linear_Q.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.linear_K.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.linear_V.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.matmul_1.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.matmul_2.output_quantizers[0].encoding)
-            self.assertTrue(sim.model.transformer_encoder.layers[i].self_attn.softmax.output_quantizers[0].encoding)
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.linear_Q.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.linear_K.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.linear_V.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.matmul_1.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.matmul_2.output_quantizers[0]
+                .encoding
+            )
+            self.assertTrue(
+                sim.model.transformer_encoder.layers[i]
+                .self_attn.softmax.output_quantizers[0]
+                .encoding
+            )
         del sim

@@ -54,7 +54,8 @@ from aimet_torch.batch_norm_fold import find_standalone_batchnorm_ops
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
 
-def _check_conv_channel_32_base(node: torch.nn.Module)-> bool:
+
+def _check_conv_channel_32_base(node: torch.nn.Module) -> bool:
     """
     Channels should be mutilple of 32 for better performance.
     :param node: torch node to be checked.
@@ -64,7 +65,8 @@ def _check_conv_channel_32_base(node: torch.nn.Module)-> bool:
         return True
     return False
 
-def _check_conv_channel_larger_than_32(node: torch.nn.Module)-> bool:
+
+def _check_conv_channel_larger_than_32(node: torch.nn.Module) -> bool:
     """
     Channels should be at least 32 for better performance.
     :param node: torch node to be checked.
@@ -74,19 +76,23 @@ def _check_conv_channel_larger_than_32(node: torch.nn.Module)-> bool:
         return True
     return False
 
-def _activation_checks(node: torch.nn.Module)-> bool:
+
+def _activation_checks(node: torch.nn.Module) -> bool:
     """
     Common checkes for all torch activations.
     Prelu and swish (SiLU) degenerates the quantization performance.
     :param node: torch node to be checked.
     :return True if not a activation with bad bad quantization performance activations function.
     """
-    _degenerating_activation_tuple = (torch.nn.modules.activation.SiLU,
-                                      torch.nn.modules.activation.PReLU)
+    _degenerating_activation_tuple = (
+        torch.nn.modules.activation.SiLU,
+        torch.nn.modules.activation.PReLU,
+    )
 
     if isinstance(node, _degenerating_activation_tuple):
         return False
     return True
+
 
 def _check_batch_norm_fold(connected_graph: ConnectedGraph) -> List:
     """
@@ -98,6 +104,7 @@ def _check_batch_norm_fold(connected_graph: ConnectedGraph) -> List:
 
     return list(stand_alone_bn_ops)
 
+
 def _check_intermediate_padding(connected_graph: ConnectedGraph) -> List:
     """
     Checks is there intermediate padding in conv2 sequence: [Conv -> Activation -> (Optionally) BN -> Conv].
@@ -105,6 +112,7 @@ def _check_intermediate_padding(connected_graph: ConnectedGraph) -> List:
     :param connected_graph: Connected_graph object.
     :return: List of conv Ops contains intermediate padding in connected_graph.
     """
+
     def _examine_intermediate_padding_in_op_subset(op_subset):
         """
         Check is there intermediate padding in the second conv in op_subset.
@@ -129,9 +137,33 @@ def _check_intermediate_padding(connected_graph: ConnectedGraph) -> List:
     patterns_with_callbacks = []
     for _act_op_type in _support_activation_op_type:
         for _conv_op_type in _support_conv_op_type:
-            patterns_with_callbacks.append(PatternType(pattern=[_conv_op_type, _act_op_type, "BatchNormalization", _conv_op_type], action=handler))
-            patterns_with_callbacks.append(PatternType(pattern=[_conv_op_type, "BatchNormalization", _act_op_type, _conv_op_type], action=handler))
-            patterns_with_callbacks.append(PatternType(pattern=[_conv_op_type, _act_op_type, _conv_op_type], action=handler))
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=[
+                        _conv_op_type,
+                        _act_op_type,
+                        "BatchNormalization",
+                        _conv_op_type,
+                    ],
+                    action=handler,
+                )
+            )
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=[
+                        _conv_op_type,
+                        "BatchNormalization",
+                        _act_op_type,
+                        _conv_op_type,
+                    ],
+                    action=handler,
+                )
+            )
+            patterns_with_callbacks.append(
+                PatternType(
+                    pattern=[_conv_op_type, _act_op_type, _conv_op_type], action=handler
+                )
+            )
 
     graph_searcher = GraphSearcher(connected_graph, patterns_with_callbacks)
     graph_searcher.find_all_patterns_in_graph_apply_actions()
@@ -145,6 +177,7 @@ def _find_all_split_bn_in_graph(connected_graph: ConnectedGraph):
     :param connected_graph: ConnectedGraph object.
     :return conv_bn_pair_list: Captured patterns.
     """
+
     def _examine_split_bn(op_subset):
         """
         :param op_subset: found subset pattern [split, bn]
@@ -158,13 +191,18 @@ def _find_all_split_bn_in_graph(connected_graph: ConnectedGraph):
 
     patterns_with_callbacks = []
     for _split_op in _support_split_op:
-        patterns_with_callbacks.append(PatternType(pattern=[_split_op, "BatchNormalization"], action=handler))
-    patterns_with_callbacks.append(PatternType(pattern=[_split_op, 'BatchNorm3d'], action=handler))
+        patterns_with_callbacks.append(
+            PatternType(pattern=[_split_op, "BatchNormalization"], action=handler)
+        )
+    patterns_with_callbacks.append(
+        PatternType(pattern=[_split_op, "BatchNorm3d"], action=handler)
+    )
 
     graph_searcher = GraphSearcher(connected_graph, patterns_with_callbacks)
     graph_searcher.find_all_patterns_in_graph_apply_actions()
 
     return split_bn_pair_list
+
 
 def _check_foldable_bn_with_split(connected_graph: ConnectedGraph) -> List[List]:
     """
@@ -172,13 +210,13 @@ def _check_foldable_bn_with_split(connected_graph: ConnectedGraph) -> List[List]
     :param connected_graph: ConnectedGraph object.
     :return not_foldable_pattern: List of List:[unfoldable node, split_node, bn_node ]
     """
-    foldable_type = ['Conv1d', 'Conv', 'ConvTranspose'] + ['Gemm']
+    foldable_type = ["Conv1d", "Conv", "ConvTranspose"] + ["Gemm"]
     split_bn_pair_list = _find_all_split_bn_in_graph(connected_graph)
     not_foldable_pattern = []
 
     # exam each branch through the split node.
-    for (split, bn) in split_bn_pair_list:
-        if bn.type == 'BatchNorm3d':
+    for split, bn in split_bn_pair_list:
+        if bn.type == "BatchNorm3d":
             _foldable_type = ["Conv3d"]
         else:
             _foldable_type = foldable_type
@@ -189,6 +227,7 @@ def _check_foldable_bn_with_split(connected_graph: ConnectedGraph) -> List[List]
                 not_foldable_pattern.append([input_ops_tuple, split, bn])
 
     return not_foldable_pattern
+
 
 def _get_split_point_input(input_ops: List):
     """
@@ -203,23 +242,29 @@ def _get_split_point_input(input_ops: List):
         input_ops_list.append(op)
     return tuple(input_ops_list)
 
+
 class CheckType(type):
-    """ Metaclass to overwrite __instancecheck__. """
+    """Metaclass to overwrite __instancecheck__."""
+
     def __instancecheck__(cls, obj):
         return cls._test(obj)
+
 
 # A type class to put all torch activations together.
 # pylint: disable=too-few-public-methods
 class TorchActivations(metaclass=CheckType):
-    """ Type class for all torch activations. """
+    """Type class for all torch activations."""
+
     @classmethod
     def _test(cls, module):
-        if module.__module__ == 'torch.nn.modules.activation':
+        if module.__module__ == "torch.nn.modules.activation":
             return True
         return False
 
-class PatternHandler():
-    """ Object to handle pattern checkes. """
+
+class PatternHandler:
+    """Object to handle pattern checkes."""
+
     def __init__(self, check: Callable):
         self.check = check
 
@@ -230,7 +275,16 @@ class PatternHandler():
         _, op_subset = args
         self.check(op_subset)
 
-NODE_CHECK_DICT = {torch.nn.modules.conv.Conv2d: [_check_conv_channel_32_base,
-                                                  _check_conv_channel_larger_than_32],
-                   TorchActivations: [_activation_checks],}
-PATTERN_CHECK_LIST = [_check_batch_norm_fold, _check_intermediate_padding, _check_foldable_bn_with_split]
+
+NODE_CHECK_DICT = {
+    torch.nn.modules.conv.Conv2d: [
+        _check_conv_channel_32_base,
+        _check_conv_channel_larger_than_32,
+    ],
+    TorchActivations: [_activation_checks],
+}
+PATTERN_CHECK_LIST = [
+    _check_batch_norm_fold,
+    _check_intermediate_padding,
+    _check_foldable_bn_with_split,
+]

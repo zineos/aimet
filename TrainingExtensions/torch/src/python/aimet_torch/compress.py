@@ -35,30 +35,45 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Top-level API to AIMET compression library """
+"""Top-level API to AIMET compression library"""
 
 from typing import Union, Tuple
 import torch
 
-from aimet_common.defs import CostMetric, CompressionScheme, EvalFunction, CompressionStats
+from aimet_common.defs import (
+    CostMetric,
+    CompressionScheme,
+    EvalFunction,
+    CompressionStats,
+)
 from aimet_common.bokeh_plots import BokehServerSession
 
-from aimet_torch.defs import SpatialSvdParameters, WeightSvdParameters, ChannelPruningParameters
+from aimet_torch.defs import (
+    SpatialSvdParameters,
+    WeightSvdParameters,
+    ChannelPruningParameters,
+)
 from aimet_torch.compression_factory import CompressionFactory
 
 
 class ModelCompressor:
-    """ AIMET model compressor: Enables model compression using various schemes """
+    """AIMET model compressor: Enables model compression using various schemes"""
+
     # Too many arguments in this function, disabling pylint for now
     @staticmethod
-    def compress_model(model: torch.nn.Module, eval_callback: EvalFunction, eval_iterations,
-                       input_shape: Tuple,
-                       compress_scheme: CompressionScheme, cost_metric: CostMetric,
-                       parameters: Union[SpatialSvdParameters,
-                                         WeightSvdParameters,
-                                         ChannelPruningParameters],
-                       trainer=None, visualization_url=None) -> Tuple[torch.nn.Module, CompressionStats]:
-
+    def compress_model(
+        model: torch.nn.Module,
+        eval_callback: EvalFunction,
+        eval_iterations,
+        input_shape: Tuple,
+        compress_scheme: CompressionScheme,
+        cost_metric: CostMetric,
+        parameters: Union[
+            SpatialSvdParameters, WeightSvdParameters, ChannelPruningParameters
+        ],
+        trainer=None,
+        visualization_url=None,
+    ) -> Tuple[torch.nn.Module, CompressionStats]:
         """
         Compress a given model using the specified parameters
 
@@ -82,7 +97,9 @@ class ModelCompressor:
             bokeh_session = None
         else:
             # create a bokeh session to publish visualizations to the server document for compression
-            bokeh_session = BokehServerSession(url=visualization_url, session_id="compression")
+            bokeh_session = BokehServerSession(
+                url=visualization_url, session_id="compression"
+            )
 
         # put model in eval mode. This is important because otherwise running a forward pass can change module buffers
         # e.g. for batchnorm layers that can affect model evaluation results
@@ -92,22 +109,45 @@ class ModelCompressor:
         model = model.eval()
 
         if parameters.multiplicity < 1:
-            raise ValueError('Rounding Multiplicity should be greater than 1')
+            raise ValueError("Rounding Multiplicity should be greater than 1")
 
         if compress_scheme == CompressionScheme.spatial_svd:
-            algo = CompressionFactory.create_spatial_svd_algo(model, eval_callback, eval_iterations,
-                                                              input_shape, cost_metric, parameters, bokeh_session)
+            algo = CompressionFactory.create_spatial_svd_algo(
+                model,
+                eval_callback,
+                eval_iterations,
+                input_shape,
+                cost_metric,
+                parameters,
+                bokeh_session,
+            )
 
         elif compress_scheme == CompressionScheme.weight_svd:
-            algo = CompressionFactory.create_weight_svd_algo(model, eval_callback, eval_iterations,
-                                                             input_shape, cost_metric, parameters, bokeh_session)
+            algo = CompressionFactory.create_weight_svd_algo(
+                model,
+                eval_callback,
+                eval_iterations,
+                input_shape,
+                cost_metric,
+                parameters,
+                bokeh_session,
+            )
 
         elif compress_scheme == CompressionScheme.channel_pruning:
-            algo = CompressionFactory.create_channel_pruning_algo(model, eval_callback, eval_iterations,
-                                                                  input_shape, cost_metric, parameters, bokeh_session)
+            algo = CompressionFactory.create_channel_pruning_algo(
+                model,
+                eval_callback,
+                eval_iterations,
+                input_shape,
+                cost_metric,
+                parameters,
+                bokeh_session,
+            )
 
         else:
-            raise ValueError("Compression scheme not supported: {}".format(compress_scheme))
+            raise ValueError(
+                "Compression scheme not supported: {}".format(compress_scheme)
+            )
 
         compressed_layer_db, stats = algo.compress_model(cost_metric, trainer)
         return compressed_layer_db.model, stats

@@ -1,4 +1,4 @@
-#==============================================================================
+# ==============================================================================
 #  @@-COPYRIGHT-START-@@
 #
 #  Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
@@ -32,12 +32,13 @@
 #  SPDX-License-Identifier: BSD-3-Clause
 #
 #  @@-COPYRIGHT-END-@@
-#==============================================================================
+# ==============================================================================
 
-""" Import verification for Aimet Torch """
+"""Import verification for Aimet Torch"""
 
 from aimet_common.defs import QuantScheme
 import aimet_common.defs as aimet_common_defs
+
 ## import aimet_common.AimetTensorQuantizer
 import aimet_common.libpymo as libpymo
 

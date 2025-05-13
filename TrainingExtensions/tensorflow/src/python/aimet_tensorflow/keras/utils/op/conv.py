@@ -34,7 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" utilities for conv op """
+"""utilities for conv op"""
 
 from typing import Tuple
 

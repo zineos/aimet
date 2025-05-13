@@ -36,7 +36,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Sequential MSE implementation """
+"""Sequential MSE implementation"""
 
 import contextlib
 from typing import Optional, Union, List
@@ -49,15 +49,19 @@ from aimet_common import libpymo
 
 from aimet_torch._base.seq_mse import SequentialMseBase, SeqMseParams
 from aimet_torch.v1.qc_quantize_op import QcQuantizeWrapper, QcQuantizeOpMode
-from aimet_torch.v1.tensor_quantizer import TensorQuantizer, StaticGridPerTensorQuantizer, StaticGridPerChannelQuantizer
+from aimet_torch.v1.tensor_quantizer import (
+    TensorQuantizer,
+    StaticGridPerTensorQuantizer,
+    StaticGridPerChannelQuantizer,
+)
 from aimet_torch.v1.quantsim import QuantizationSimModel
 
 __all__ = [
-    'SequentialMse',
-    'SeqMseParams',
-    'apply_seq_mse',
-    'get_candidates',
-    'optimize_module',
+    "SequentialMse",
+    "SeqMseParams",
+    "apply_seq_mse",
+    "get_candidates",
+    "optimize_module",
 ]
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
@@ -67,28 +71,34 @@ class SequentialMse(SequentialMseBase):
     """
     Sequentially minimizing activation MSE loss in layer-wise way to decide optimal param quantization encodings.
     """
+
     @classmethod
-    def apply_seq_mse(cls,
-                      model: torch.nn.Module,
-                      sim: QuantizationSimModel,
-                      data_loader: DataLoader,
-                      params: SeqMseParams,
-                      modules_to_exclude: Optional[List[torch.nn.Module]] = None,
-                      checkpoints_config: Optional[str] = None):
+    def apply_seq_mse(
+        cls,
+        model: torch.nn.Module,
+        sim: QuantizationSimModel,
+        data_loader: DataLoader,
+        params: SeqMseParams,
+        modules_to_exclude: Optional[List[torch.nn.Module]] = None,
+        checkpoints_config: Optional[str] = None,
+    ):
         # pylint: disable=protected-access
-        assert sim._quant_scheme in (QuantScheme.post_training_tf, QuantScheme.training_range_learning_with_tf_init), \
-            "Use TF quant-scheme with sequential MSE."
+        assert sim._quant_scheme in (
+            QuantScheme.post_training_tf,
+            QuantScheme.training_range_learning_with_tf_init,
+        ), "Use TF quant-scheme with sequential MSE."
 
-        return super().apply_seq_mse(model, sim, data_loader, params, modules_to_exclude, checkpoints_config)
-
+        return super().apply_seq_mse(
+            model, sim, data_loader, params, modules_to_exclude, checkpoints_config
+        )
 
     @classmethod
     @contextlib.contextmanager
     def temporarily_disable_quantizers(
-            cls,
-            model: torch.nn.Module,
-            sim: QuantizationSimModel,
-            modules_to_exclude: Optional[List[torch.nn.Module]],
+        cls,
+        model: torch.nn.Module,
+        sim: QuantizationSimModel,
+        modules_to_exclude: Optional[List[torch.nn.Module]],
     ):
         """
         For given quantsim model, disable quantizers needed to be disabled before applying sequential MSE.
@@ -98,7 +108,9 @@ class SequentialMse(SequentialMseBase):
         :param modules_to_exclude: List of supported modules to exclude when applying Sequential MSE
         :return: List of quantizers to be disabled.
         """
-        quantizers_to_be_disabled = cls._get_quantizers_to_be_disabled(model, sim, modules_to_exclude)
+        quantizers_to_be_disabled = cls._get_quantizers_to_be_disabled(
+            model, sim, modules_to_exclude
+        )
 
         for quantizer in quantizers_to_be_disabled:
             quantizer.enabled = False
@@ -124,11 +136,13 @@ class SequentialMse(SequentialMseBase):
             quant_wrapper.set_mode(QcQuantizeOpMode.ACTIVE)
 
     @classmethod
-    def optimize_module(cls,
-                        quant_module: QcQuantizeWrapper,
-                        x: torch.Tensor,
-                        xq: torch.Tensor,
-                        params: SeqMseParams):
+    def optimize_module(
+        cls,
+        quant_module: QcQuantizeWrapper,
+        x: torch.Tensor,
+        xq: torch.Tensor,
+        params: SeqMseParams,
+    ):
         """
         Find and freeze optimal parameter encodings candidate for given module.
 
@@ -139,34 +153,51 @@ class SequentialMse(SequentialMseBase):
         """
         # pylint: disable=too-many-locals
         per_channel_min, per_channel_max = cls.get_per_channel_min_and_max(quant_module)
-        candidates = cls.get_candidates(params.num_candidates, per_channel_max, per_channel_min)
+        candidates = cls.get_candidates(
+            params.num_candidates, per_channel_max, per_channel_min
+        )
 
         total_loss = []
         for cand_max, cand_min in candidates:
-            cls.compute_param_encodings(quant_module.param_quantizers['weight'], cand_min, cand_max)
+            cls.compute_param_encodings(
+                quant_module.param_quantizers["weight"], cand_min, cand_max
+            )
             w = quant_module.weight
             wq = cls._get_quantized_weight(quant_module)
             loss = torch.zeros(len(cand_max), device=w.device)
             with torch.no_grad():
                 for batch_idx in range(params.num_batches):
-                    xqwq, xw = cls.compute_outputs(quant_module, x[batch_idx], xq[batch_idx], w, wq)
+                    xqwq, xw = cls.compute_outputs(
+                        quant_module, x[batch_idx], xq[batch_idx], w, wq
+                    )
                     loss += cls.compute_recon_loss(xqwq, xw, params)
                 total_loss.append(loss)
 
         best_indices = torch.stack(total_loss).min(0, keepdim=True)[1]
-        _logger.debug("Indices of optimal candidate: %s", best_indices.squeeze(0)[:params.num_candidates].tolist())
-        best_max = torch.stack([cand_max for cand_max, _ in candidates]).gather(0, best_indices)[0]
-        best_min = torch.stack([cand_min for _, cand_min in candidates]).gather(0, best_indices)[0]
+        _logger.debug(
+            "Indices of optimal candidate: %s",
+            best_indices.squeeze(0)[: params.num_candidates].tolist(),
+        )
+        best_max = torch.stack([cand_max for cand_max, _ in candidates]).gather(
+            0, best_indices
+        )[0]
+        best_min = torch.stack([cand_min for _, cand_min in candidates]).gather(
+            0, best_indices
+        )[0]
 
         # Compute and freeze parameter encodings using best candidate
-        cls.compute_param_encodings(quant_module.param_quantizers['weight'], best_min, best_max)
-        cls._freeze_quantizer_encoding(quant_module.param_quantizers['weight'])
+        cls.compute_param_encodings(
+            quant_module.param_quantizers["weight"], best_min, best_max
+        )
+        cls._freeze_quantizer_encoding(quant_module.param_quantizers["weight"])
 
     @classmethod
-    def compute_param_encodings(cls,
-                                quantizer: Union[StaticGridPerTensorQuantizer, StaticGridPerChannelQuantizer],
-                                x_min: torch.Tensor,
-                                x_max: torch.Tensor):
+    def compute_param_encodings(
+        cls,
+        quantizer: Union[StaticGridPerTensorQuantizer, StaticGridPerChannelQuantizer],
+        x_min: torch.Tensor,
+        x_max: torch.Tensor,
+    ):
         """
         Compute encodings for parameter quantizer using given x_min and x_max values.
 
@@ -190,7 +221,9 @@ class SequentialMse(SequentialMseBase):
     @classmethod
     def _get_quantized_weight(cls, quant_module: QcQuantizeWrapper):
         w = quant_module.weight
-        return quant_module.param_quantizers['weight'].quantize_dequantize(w, libpymo.RoundingMode.ROUND_NEAREST)
+        return quant_module.param_quantizers["weight"].quantize_dequantize(
+            w, libpymo.RoundingMode.ROUND_NEAREST
+        )
 
     @classmethod
     def _get_original_module(cls, quant_module: QcQuantizeWrapper):

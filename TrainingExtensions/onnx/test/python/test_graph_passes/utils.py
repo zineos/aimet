@@ -39,7 +39,9 @@ from aimet_onnx.qc_quantize_op import QcQuantizeOp
 from typing import Dict, List
 
 
-def assert_on_const_quantizers(ops: List[Op], qc_quantize_op_dict: Dict[str, QcQuantizeOp], enabled: bool = False):
+def assert_on_const_quantizers(
+    ops: List[Op], qc_quantize_op_dict: Dict[str, QcQuantizeOp], enabled: bool = False
+):
     """
     Assert on all constant inputs for provided list of ops with given condition
 
@@ -53,7 +55,10 @@ def assert_on_const_quantizers(ops: List[Op], qc_quantize_op_dict: Dict[str, QcQ
             if op_input.is_const and op_input.name in qc_quantize_op_dict:
                 assert qc_quantize_op_dict[op_input.name].enabled == enabled
 
-def assert_on_output_quantizers(ops: List[Op], qc_quantize_op_dict: Dict[str, QcQuantizeOp], enabled: bool = False):
+
+def assert_on_output_quantizers(
+    ops: List[Op], qc_quantize_op_dict: Dict[str, QcQuantizeOp], enabled: bool = False
+):
     """
     Assert on all output quantizers for provided list of ops with given condition
 

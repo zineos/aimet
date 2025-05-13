@@ -35,4 +35,4 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" GenAI datasets, metrics, quantization recipes, profiling utils """
+"""GenAI datasets, metrics, quantization recipes, profiling utils"""

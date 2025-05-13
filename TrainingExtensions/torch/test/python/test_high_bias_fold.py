@@ -48,7 +48,6 @@ from .models.test_models import TransposedConvModel
 
 
 class TestTrainingExtensionHighBiasFold(unittest.TestCase):
-
     def test_high_bias_fold(self):
         np.random.seed(1)
         torch.random.manual_seed(10)
@@ -60,8 +59,9 @@ class TestTrainingExtensionHighBiasFold(unittest.TestCase):
 
         output_channels = model.layer1[0].conv1.weight.shape[0]
         scale_factor = np.array(np.random.randn(output_channels))
-        cls_pair_info = ClsSetInfo.ClsSetLayerPairInfo(model.layer1[0].conv1, model.layer1[0].conv2,
-                                                       scale_factor, True)
+        cls_pair_info = ClsSetInfo.ClsSetLayerPairInfo(
+            model.layer1[0].conv1, model.layer1[0].conv2, scale_factor, True
+        )
         cls_set_info = ClsSetInfo(cls_pair_info)
 
         model.layer1[0].conv1.bias = torch.nn.Parameter(torch.rand(output_channels))
@@ -82,8 +82,9 @@ class TestTrainingExtensionHighBiasFold(unittest.TestCase):
         fold_all_batch_norms(model, (10, 10, 4, 4))
 
         scale_factor = np.array(np.random.randn(10))
-        cls_pair_info = ClsSetInfo.ClsSetLayerPairInfo(model.conv1, model.conv2,
-                                                       scale_factor, True)
+        cls_pair_info = ClsSetInfo.ClsSetLayerPairInfo(
+            model.conv1, model.conv2, scale_factor, True
+        )
         cls_set_info = ClsSetInfo(cls_pair_info)
         bias = copy.deepcopy(model.conv1.bias.data)
 

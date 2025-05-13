@@ -44,48 +44,47 @@ from aimet_onnx.quantsim import QuantizationSimModel, QuantSimConfigurator
 from .models import models_for_tests
 import tempfile
 
+
 class TestQuantSimConfig:
     """Tests for applying config to QuantizationSimModel"""
+
     def test_qs_config_dummy_model(self):
         model = models_for_tests.build_dummy_model()
         sim = QuantizationSimModel(model, providers=["CPUExecutionProvider"])
-        assert sim.qc_quantize_op_dict['conv_w'].enabled == True
-        assert sim.qc_quantize_op_dict['conv_b'].enabled == False
-        assert sim.qc_quantize_op_dict['fc_w'].enabled == True
-        assert sim.qc_quantize_op_dict['fc_b'].enabled == False
-        assert sim.qc_quantize_op_dict['input'].enabled == True
-        assert sim.qc_quantize_op_dict['3'].enabled == False
-        assert sim.qc_quantize_op_dict['4'].enabled == True
-        assert sim.qc_quantize_op_dict['5'].enabled == True
-        assert sim.qc_quantize_op_dict['output'].enabled == True
+        assert sim.qc_quantize_op_dict["conv_w"].enabled == True
+        assert sim.qc_quantize_op_dict["conv_b"].enabled == False
+        assert sim.qc_quantize_op_dict["fc_w"].enabled == True
+        assert sim.qc_quantize_op_dict["fc_b"].enabled == False
+        assert sim.qc_quantize_op_dict["input"].enabled == True
+        assert sim.qc_quantize_op_dict["3"].enabled == False
+        assert sim.qc_quantize_op_dict["4"].enabled == True
+        assert sim.qc_quantize_op_dict["5"].enabled == True
+        assert sim.qc_quantize_op_dict["output"].enabled == True
 
     def test_default_config(self):
         model = models_for_tests.build_dummy_model()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
-            "op_type": {
-            },
+            "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
-        for name in ['3', '4', '5', 'output']:
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
+        for name in ["3", "4", "5", "output"]:
             assert sim.qc_quantize_op_dict[name].enabled == True
             assert sim.qc_quantize_op_dict[name].use_symmetric_encodings == False
 
@@ -94,38 +93,31 @@ class TestQuantSimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
-            "params":
-                {
-                    "weight": {
-                        "is_quantized": "True",
-                        "is_symmetric": "True"
-                    },
-                },
-            "op_type": {
+            "params": {
+                "weight": {"is_quantized": "True", "is_symmetric": "True"},
             },
+            "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
-        for name in ['conv_w', 'fc_w']:
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
+        for name in ["conv_w", "fc_w"]:
             assert sim.qc_quantize_op_dict[name].enabled == True
             assert sim.qc_quantize_op_dict[name].use_symmetric_encodings == True
 
-        for name in ['conv_b', 'fc_b']:
+        for name in ["conv_b", "fc_b"]:
             assert sim.qc_quantize_op_dict[name].enabled == False
             assert sim.qc_quantize_op_dict[name].use_symmetric_encodings == True
 
@@ -134,14 +126,8 @@ class TestQuantSimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
@@ -149,10 +135,7 @@ class TestQuantSimConfig:
                     "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        }
+                        "weight": {"is_quantized": "True", "is_symmetric": "False"}
                     },
                 }
             },
@@ -160,88 +143,88 @@ class TestQuantSimConfig:
             "model_input": {},
             "model_output": {
                 "is_output_quantized": "True",
-            }
+            },
         }
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
 
-        assert sim.qc_quantize_op_dict['conv_w'].enabled == True
-        assert sim.qc_quantize_op_dict['conv_w'].use_symmetric_encodings == False
-        assert sim.qc_quantize_op_dict['input'].enabled == True
-        assert sim.qc_quantize_op_dict['input'].use_symmetric_encodings == False
-        assert sim.qc_quantize_op_dict['output'].enabled == True
+        assert sim.qc_quantize_op_dict["conv_w"].enabled == True
+        assert sim.qc_quantize_op_dict["conv_w"].use_symmetric_encodings == False
+        assert sim.qc_quantize_op_dict["input"].enabled == True
+        assert sim.qc_quantize_op_dict["input"].use_symmetric_encodings == False
+        assert sim.qc_quantize_op_dict["output"].enabled == True
 
     def test_config_for_model_input(self):
         model = models_for_tests.build_dummy_model()
 
         quantsim_config = {
-            "defaults": {
-                "ops": {},
-                "params": {}
-            },
+            "defaults": {"ops": {}, "params": {}},
             "params": {},
             "op_type": {},
             "supergroups": [],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
-        assert sim.qc_quantize_op_dict['input'].enabled == True
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
+        assert sim.qc_quantize_op_dict["input"].enabled == True
 
     def test_parse_config_file_supergroups(self):
-        """ Test that supergroup quantization parameters are set correctly when using json config file """
+        """Test that supergroup quantization parameters are set correctly when using json config file"""
         model = models_for_tests.build_dummy_model()
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "False"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroups": [
-                {
-                    "op_list": ["Conv", "Relu"]
-                },
-                {
-                    "op_list": ["Relu", "MaxPool"]
-                },
+                {"op_list": ["Conv", "Relu"]},
+                {"op_list": ["Relu", "MaxPool"]},
             ],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
 
         # 3 in conv output, 4 is relu output (even though it was not touched with Conv, relu pattern, it was disabled for
         # relu maxpool pattern
-        for name in ['3', '4',]:
+        for name in [
+            "3",
+            "4",
+        ]:
             assert sim.qc_quantize_op_dict[name].enabled == False
 
-        assert sim.qc_quantize_op_dict['5'].enabled == True
+        assert sim.qc_quantize_op_dict["5"].enabled == True
 
-        if os.path.exists('./data/quantsim_config.json'):
-            os.remove('./data/quantsim_config.json')
+        if os.path.exists("./data/quantsim_config.json"):
+            os.remove("./data/quantsim_config.json")
 
     def test_parse_config_file_supergroups_pass_list(self):
         """
@@ -251,69 +234,64 @@ class TestQuantSimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "False"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "False"},
             },
             "params": {},
             "op_type": {},
             "supergroup_pass_list": ["LayerNormalization"],
             "supergroups": [
-                {
-                    "op_list": ["Conv", "Relu"]
-                },
-                {
-                    "op_list": ["Relu", "MaxPool"]
-                },
+                {"op_list": ["Conv", "Relu"]},
+                {"op_list": ["Relu", "MaxPool"]},
             ],
-            "model_input": {
-                "is_input_quantized": "True"
-            },
-            "model_output": {}
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
         }
 
-        with tempfile.NamedTemporaryFile(prefix="quantsim_config", suffix=".json") as config_file:
-            with open(config_file.name, 'w') as f:
+        with tempfile.NamedTemporaryFile(
+            prefix="quantsim_config", suffix=".json"
+        ) as config_file:
+            with open(config_file.name, "w") as f:
                 json.dump(quantsim_config, f)
 
-            qsim_config = QuantSimConfigurator(model, ConnectedGraph(model), config_file=config_file.name, quantsim_output_bw=8,
-                                               quantsim_param_bw=8, quantsim_data_type=QuantizationDataType.int)
+            qsim_config = QuantSimConfigurator(
+                model,
+                ConnectedGraph(model),
+                config_file=config_file.name,
+                quantsim_output_bw=8,
+                quantsim_param_bw=8,
+                quantsim_data_type=QuantizationDataType.int,
+            )
             assert qsim_config._get_supergroup_pass_list() == ["LayerNormalization"]
 
     @pytest.mark.parametrize("strict, unsigned", ((True, False), (False, True)))
     def test_parse_config_file_symmetric_modes(self, strict, unsigned):
-        """ Test that model output quantization parameters are set correctly when using json config file """
+        """Test that model output quantization parameters are set correctly when using json config file"""
         model = models_for_tests.build_dummy_model()
 
         quantsim_config = {
-            "defaults":
-            {
+            "defaults": {
                 "ops": {},
-                "params":
-                {
-                    "is_symmetric": "True"
-                },
+                "params": {"is_symmetric": "True"},
                 "per_channel_quantization": "True",
                 "strict_symmetric": str(strict),
-                "unsigned_symmetric": str(unsigned)
+                "unsigned_symmetric": str(unsigned),
             },
             "params": {},
             "op_type": {},
             "supergroups": [],
             "model_input": {},
-            "model_output": {
-            }
+            "model_output": {},
         }
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
 
         for quantizer in sim.qc_quantize_op_dict.values():
             assert quantizer.use_strict_symmetric == strict
@@ -324,14 +302,8 @@ class TestQuantSimConfig:
 
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                }
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
             },
             "params": {},
             "op_type": {
@@ -339,10 +311,7 @@ class TestQuantSimConfig:
                     "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
-                        "weight": {
-                            "is_quantized": "True",
-                            "is_symmetric": "False"
-                        }
+                        "weight": {"is_quantized": "True", "is_symmetric": "False"}
                     },
                     "per_channel_quantization": "True",
                 }
@@ -351,16 +320,19 @@ class TestQuantSimConfig:
             "model_input": {},
             "model_output": {
                 "is_output_quantized": "True",
-            }
+            },
         }
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
-        with open('./data/quantsim_config.json', 'w') as f:
+        if not os.path.exists("./data"):
+            os.makedirs("./data")
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json', providers=["CPUExecutionProvider"])
-        assert sim.qc_quantize_op_dict['conv_w'].quant_info.usePerChannelMode == True
-        assert sim.qc_quantize_op_dict['fc_w'].quant_info.usePerChannelMode == False
-
+        sim = QuantizationSimModel(
+            model,
+            config_file="./data/quantsim_config.json",
+            providers=["CPUExecutionProvider"],
+        )
+        assert sim.qc_quantize_op_dict["conv_w"].quant_info.usePerChannelMode == True
+        assert sim.qc_quantize_op_dict["fc_w"].quant_info.usePerChannelMode == False
 
     def test_supported_kernels(self):
         """
@@ -369,42 +341,24 @@ class TestQuantSimConfig:
         model = models_for_tests.single_residual_model()
         quantsim_config = {
             "defaults": {
-                "ops": {
-                    "is_output_quantized": "True",
-                    "is_symmetric": "False"
-                },
-                "params": {
-                    "is_quantized": "False",
-                    "is_symmetric": "True"
-                },
+                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
+                "params": {"is_quantized": "False", "is_symmetric": "True"},
                 "hw_version": "V01",
                 "supported_kernels": [
                     {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        },
-                        "param": {
-                            "bitwidth": 16,
-                            "dtype": "float"
-                        }
+                        "activation": {"bitwidth": 16, "dtype": "float"},
+                        "param": {"bitwidth": 16, "dtype": "float"},
                     }
                 ],
                 "per_channel_quantization": "True",
             },
             "params": {},
             "op_type": {
-                'Conv':{
+                "Conv": {
                     "supported_kernels": [
                         {
-                            "activation": {
-                                "bitwidth": 16,
-                                "dtype": "int"
-                            },
-                            "param": {
-                                "bitwidth": 8,
-                                "dtype": "int"
-                            }
+                            "activation": {"bitwidth": 16, "dtype": "int"},
+                            "param": {"bitwidth": 8, "dtype": "int"},
                         }
                     ],
                     "per_channel_quantization": "False",
@@ -412,36 +366,33 @@ class TestQuantSimConfig:
             },
             "supergroups": [],
             "model_input": {},
-            "model_output": {}
+            "model_output": {},
         }
 
-        with open('./data/quantsim_config.json', 'w') as f:
+        with open("./data/quantsim_config.json", "w") as f:
             json.dump(quantsim_config, f)
-        sim = QuantizationSimModel(model, config_file='./data/quantsim_config.json')
+        sim = QuantizationSimModel(model, config_file="./data/quantsim_config.json")
         op_to_supported_kernels = sim._op_to_supported_kernel
         for op_name in op_to_supported_kernels:
-                assert len(op_to_supported_kernels[op_name]) == 1
-                if 'Conv' in op_name:
-                    assert op_to_supported_kernels[op_name] == [((16, QuantizationDataType.int), (8, QuantizationDataType.int))]
-                else:
-                    assert op_to_supported_kernels[op_name] == [((16, QuantizationDataType.float), (16, QuantizationDataType.float))]
+            assert len(op_to_supported_kernels[op_name]) == 1
+            if "Conv" in op_name:
+                assert op_to_supported_kernels[op_name] == [
+                    ((16, QuantizationDataType.int), (8, QuantizationDataType.int))
+                ]
+            else:
+                assert op_to_supported_kernels[op_name] == [
+                    ((16, QuantizationDataType.float), (16, QuantizationDataType.float))
+                ]
 
         expected_supported_kernels = [
-                    {
-                        "activation": {
-                            "bitwidth": 16,
-                            "dtype": QuantizationDataType.int
-                        },
-                        "param": {
-                            "bitwidth": 8,
-                            "dtype": QuantizationDataType.int
-                        }
-                    }
-                ]
+            {
+                "activation": {"bitwidth": 16, "dtype": QuantizationDataType.int},
+                "param": {"bitwidth": 8, "dtype": QuantizationDataType.int},
+            }
+        ]
         supported_kernels_conv = sim.get_supported_kernels()["Conv"]
         assert len(supported_kernels_conv) == 1
         assert supported_kernels_conv == expected_supported_kernels
-
 
     def test_matmul_perchannel_config(self, tmp_path):
         model = models_for_tests.weight_matmul_model(in_features=10, out_features=20)

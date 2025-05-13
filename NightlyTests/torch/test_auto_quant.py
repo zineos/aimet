@@ -54,6 +54,7 @@ from aimet_torch.v2.quantsim import QuantizationSimModel as V2QuantizationSimMod
 
 from test_quantize_resnet18 import model_train, _get_data_loader
 
+
 class _UnlabeledDatasetWrapper(Dataset):
     def __init__(self, dataset):
         super().__init__()
@@ -68,10 +69,11 @@ class _UnlabeledDatasetWrapper(Dataset):
 
 
 class TestAutoQuant:
-
     @pytest.mark.cuda
-    @pytest.mark.parametrize("qsim, autoquant", [(V1QuantizationSimModel, V1AutoQuant),
-                                                 (V2QuantizationSimModel, V2AutoQuant)])
+    @pytest.mark.parametrize(
+        "qsim, autoquant",
+        [(V1QuantizationSimModel, V1AutoQuant), (V2QuantizationSimModel, V2AutoQuant)],
+    )
     def test_autoquant_resnet18(self, qsim, autoquant):
         # Train the model using tiny imagenet data
         model = models.resnet18(pretrained=False).cuda()
@@ -79,8 +81,10 @@ class TestAutoQuant:
 
         dummy_input = torch.randn((1, 3, 224, 224)).cuda()
         val_data_loader = _get_data_loader().val_loader
-        unlabeled_data_loader = DataLoader(_UnlabeledDatasetWrapper(val_data_loader.dataset),
-                                           batch_size=val_data_loader.batch_size)
+        unlabeled_data_loader = DataLoader(
+            _UnlabeledDatasetWrapper(val_data_loader.dataset),
+            batch_size=val_data_loader.batch_size,
+        )
 
         def eval_callback(model, _):
             correct = 0
@@ -94,10 +98,18 @@ class TestAutoQuant:
             return int(correct) / len(val_data_loader.dataset)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            autoquant = autoquant(model, dummy_input, unlabeled_data_loader, eval_callback, results_dir=temp_dir)
+            autoquant = autoquant(
+                model,
+                dummy_input,
+                unlabeled_data_loader,
+                eval_callback,
+                results_dir=temp_dir,
+            )
             model, acc, encoding_path = autoquant.optimize(allowed_accuracy_drop=0)
 
-            sim = qsim(model, default_param_bw=8, default_output_bw=8, dummy_input=dummy_input)
+            sim = qsim(
+                model, default_param_bw=8, default_output_bw=8, dummy_input=dummy_input
+            )
             sim.compute_encodings(autoquant.forward_pass_callback, None)
             vanilla_accuracy = eval_callback(sim.model, None)
         assert acc >= vanilla_accuracy

@@ -1,4 +1,3 @@
-
 #  =============================================================================
 #
 #  @@-COPYRIGHT-START-@@
@@ -50,7 +49,10 @@ from onnxruntime.quantization.onnx_quantizer import ONNXModel
 import onnx
 from packaging import version
 
-from aimet_common.connected_graph.connectedgraph import ConnectedGraph as AimetCommonConnectedGraph, get_ordered_ops
+from aimet_common.connected_graph.connectedgraph import (
+    ConnectedGraph as AimetCommonConnectedGraph,
+    get_ordered_ops,
+)
 from aimet_common.utils import AimetLogger
 from aimet_common.model_module import ONNXModelModule
 from aimet_onnx.meta.operations import Op
@@ -71,8 +73,17 @@ BIAS_INDEX = 2
 RECURRENT_WEIGHT_INDEX = 2
 RUNNING_MEAN_INDEX = 3
 RUNNING_VAR_INDEX = 4
-OPS_WITH_PARAMS = ["Conv", "Gemm", "ConvTranspose", "BatchNormalization", "MatMul", "RNN", "LSTM", "GRU"]
-CONSTANT_TYPE = ['Constant', 'ConstantOfShape']
+OPS_WITH_PARAMS = [
+    "Conv",
+    "Gemm",
+    "ConvTranspose",
+    "BatchNormalization",
+    "MatMul",
+    "RNN",
+    "LSTM",
+    "GRU",
+]
+CONSTANT_TYPE = ["Constant", "ConstantOfShape"]
 
 
 class ConnectedGraph(AimetCommonConnectedGraph):
@@ -109,18 +120,24 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         Creates connected graphs internal representation Op
         :param node: ONNX proto node for which Op needs to be created
         """
-        op = Op(name=node.name, dotted_name=node.name, output_shape=None, is_anonymous=False, op_type=node.op_type)
+        op = Op(
+            name=node.name,
+            dotted_name=node.name,
+            output_shape=None,
+            is_anonymous=False,
+            op_type=node.op_type,
+        )
         # Add corresponding node to op
         op.model_module = ONNXModelModule(node)
 
-        if op.type in ['Conv', 'ConvTranspose']:
-            op.groups = get_op_attributes(node, 'group')
+        if op.type in ["Conv", "ConvTranspose"]:
+            op.groups = get_op_attributes(node, "group")
 
-        if op.type == 'MatMul':
+        if op.type == "MatMul":
             op.transposed_params = False
 
-        if op.type == 'Gemm':
-            op.transposed_params = bool(get_op_attributes(node, 'transB'))
+        if op.type == "Gemm":
+            op.transposed_params = bool(get_op_attributes(node, "transB"))
 
         return op
 
@@ -140,9 +157,13 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         product.is_model_input = True
         return product
 
-    def _create_product_for_activations(self, producer: onnx.NodeProto, tensor_name: str):
+    def _create_product_for_activations(
+        self, producer: onnx.NodeProto, tensor_name: str
+    ):
         if producer.op_type == "Constant":
-            return self._create_constant_product(tensor_name, producer.attribute[0].t.dims)
+            return self._create_constant_product(
+                tensor_name, producer.attribute[0].t.dims
+            )
         return Product(tensor_name, None)
 
     @staticmethod
@@ -167,16 +188,22 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         # Add products for all tensors in initializer
         for tensor in self.model.graph.initializer:
-            self._products[tensor.name] = self._create_constant_product(tensor.name, tensor.dims)
+            self._products[tensor.name] = self._create_constant_product(
+                tensor.name, tensor.dims
+            )
 
         # Add products for all model inputs
         for input_info in self.model.graph.input:
-            self._products[input_info.name] = self._create_product_for_inputs(input_info)
+            self._products[input_info.name] = self._create_product_for_inputs(
+                input_info
+            )
 
         # Create products for all intermediate tensors
         for node in self.model.graph.node:
             for output in node.output:
-                self._products[output] = self._create_product_for_activations(node, output)
+                self._products[output] = self._create_product_for_activations(
+                    node, output
+                )
 
         # Create ops and link with products
         for node in self.model.graph.node:
@@ -187,15 +214,19 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             self._ops[node.name] = op
             for inp in node.input:
                 if not inp:
-                    continue # Empty string indicates omitted optional input
+                    continue  # Empty string indicates omitted optional input
                 if inp not in self._products:
-                    raise RuntimeError(f"Input tensor {inp} to node {node.name} was not found as a graph input, "
-                                       "initializer, or as the output of another node. Please verify that the input "
-                                       "model is properly defined.")
+                    raise RuntimeError(
+                        f"Input tensor {inp} to node {node.name} was not found as a graph input, "
+                        "initializer, or as the output of another node. Please verify that the input "
+                        "model is properly defined."
+                    )
                 product = self._products[inp]
                 op.add_input(product)
                 product.add_consumer(op)
-                product.tensor_dict[op] = inp # TODO: Delete Product.tensor_dict attribute
+                product.tensor_dict[op] = (
+                    inp  # TODO: Delete Product.tensor_dict attribute
+                )
 
             for output in node.output:
                 product = self._products[output]
@@ -206,10 +237,12 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         self._identify_param_products()
 
     def _identify_param_products(self):
-        """ Identify products which are parameters of select modules """
+        """Identify products which are parameters of select modules"""
 
-        def set_as_param(param_tensor: TensorProto, my_op: Op, product_type: Union[str, None]):
-            """ Create product with given name, shape, and corresponding tensor.  Connect product to my_op. """
+        def set_as_param(
+            param_tensor: TensorProto, my_op: Op, product_type: Union[str, None]
+        ):
+            """Create product with given name, shape, and corresponding tensor.  Connect product to my_op."""
             param_name = param_tensor.name
             product_shape = param_tensor.dims
             product = self._products[param_name]
@@ -219,19 +252,19 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             # TODO: Delete Product.tensor_dict, Product.tensor attributes
             product.tensor_dict[my_op] = param_tensor
             product.tensor = param_tensor
-            product.is_const = False # Backward compatibility
+            product.is_const = False  # Backward compatibility
 
         def create_weight_bias_params(my_op: Op):
-            """ Create products for conv2d, dense, depthwise conv2d, and similar """
+            """Create products for conv2d, dense, depthwise conv2d, and similar"""
             op = my_op.get_module()
 
             weight_tensor = ParamUtils.get_param(self.model, op, WEIGHT_INDEX)
             if weight_tensor:
-                set_as_param(weight_tensor, my_op, 'weight')
+                set_as_param(weight_tensor, my_op, "weight")
 
             bias_tensor = ParamUtils.get_param(self.model, op, BIAS_INDEX)
             if bias_tensor:
-                set_as_param(bias_tensor, my_op, 'bias')
+                set_as_param(bias_tensor, my_op, "bias")
 
         def create_matmul_params(my_op: Op):
             """
@@ -242,7 +275,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             op = my_op.get_module()
             weight_tensor, _ = retrieve_constant_input(op, self.model, WEIGHT_INDEX)
             if weight_tensor:
-                set_as_param(weight_tensor, my_op, 'weight')
+                set_as_param(weight_tensor, my_op, "weight")
 
         def create_bias_add_params(my_op: Op):
             """
@@ -258,7 +291,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                 return
 
             bias_tensor, _ = retrieve_constant_input(op, self.model, bias_idx)
-            set_as_param(bias_tensor, my_op, 'bias')
+            set_as_param(bias_tensor, my_op, "bias")
 
         def create_recurrent_type_params(my_op: Op):
             """
@@ -269,34 +302,40 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             op = my_op.get_module()
             weight_tensor = ParamUtils.get_param(self.model, op, WEIGHT_INDEX)
             if weight_tensor:
-                set_as_param(weight_tensor, my_op, 'weight_x')
+                set_as_param(weight_tensor, my_op, "weight_x")
 
-            recurrent_weight_tensor = ParamUtils.get_param(self.model, op, RECURRENT_WEIGHT_INDEX)
+            recurrent_weight_tensor = ParamUtils.get_param(
+                self.model, op, RECURRENT_WEIGHT_INDEX
+            )
             if recurrent_weight_tensor:
-                set_as_param(recurrent_weight_tensor, my_op, 'weight_r')
+                set_as_param(recurrent_weight_tensor, my_op, "weight_r")
 
         def create_batchnorm_params(my_op: Op):
-            """ Create products for fusedbatchnorm """
+            """Create products for fusedbatchnorm"""
             op = my_op.get_module()
 
             gamma_tensor = ParamUtils.get_param(self.model, op, WEIGHT_INDEX)
             if gamma_tensor:
-                set_as_param(gamma_tensor, my_op, 'weight')
+                set_as_param(gamma_tensor, my_op, "weight")
 
             beta_tensor = ParamUtils.get_param(self.model, op, BIAS_INDEX)
             if beta_tensor:
-                set_as_param(beta_tensor, my_op, 'bias')
+                set_as_param(beta_tensor, my_op, "bias")
 
-            moving_mean_tensor = ParamUtils.get_param(self.model, op, RUNNING_MEAN_INDEX)
+            moving_mean_tensor = ParamUtils.get_param(
+                self.model, op, RUNNING_MEAN_INDEX
+            )
             if moving_mean_tensor:
                 set_as_param(moving_mean_tensor, my_op, "running_mean")
 
-            moving_variance_tensor = ParamUtils.get_param(self.model, op, RUNNING_VAR_INDEX)
+            moving_variance_tensor = ParamUtils.get_param(
+                self.model, op, RUNNING_VAR_INDEX
+            )
             if moving_variance_tensor:
                 set_as_param(moving_variance_tensor, my_op, "running_var")
 
         def handle_default(my_op: Op):
-            """ Handler for other modules """
+            """Handler for other modules"""
             logger.debug("Nothing to handle for op %s", my_op.name)
 
         switcher = {
@@ -325,7 +364,7 @@ def _get_matmul_add_bias_idx(cg_op: Op, model: ModelProto) -> Optional[int]:
 
     if cg_op.type == "MatMul":
         if len(cg_op.outputs[0].consumers) == 1:
-            consumer, = cg_op.outputs[0].consumers
+            (consumer,) = cg_op.outputs[0].consumers
             return _get_matmul_add_bias_idx(consumer, model)
         return None
 

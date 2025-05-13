@@ -35,66 +35,83 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Datasets for GenAI testing """
+"""Datasets for GenAI testing"""
 
 from abc import ABC, abstractmethod
 from datasets import load_dataset
 import torch
 from transformers import PreTrainedTokenizer
 
+
 class Dataset(ABC):
-    """ Generic GenAI Dataset class """
+    """Generic GenAI Dataset class"""
+
     @staticmethod
     @abstractmethod
     def load_dataset(split: str):
-        """ Load dataset from huggingface """
+        """Load dataset from huggingface"""
 
     @classmethod
     @abstractmethod
-    def load_encoded_dataset(cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str):
-        """ Load encoded and chunked dataset """
+    def load_encoded_dataset(
+        cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str
+    ):
+        """Load encoded and chunked dataset"""
 
 
 class ChunkedDataset(torch.utils.data.Dataset):
-    """ Internal helper class to chunk input IDs to static graph context length """
+    """Internal helper class to chunk input IDs to static graph context length"""
+
     def __init__(self, tokenized_data: dict[str, torch.Tensor], size_per_chunk: int):
         self.tokenized_data = tokenized_data
         self.size_per_chunk = size_per_chunk
 
     def __len__(self):
-        return len(self.tokenized_data['input_ids'][0]) // self.size_per_chunk
+        return len(self.tokenized_data["input_ids"][0]) // self.size_per_chunk
 
     def __getitem__(self, index: int):
         start_index = index * self.size_per_chunk
         end_index = (index + 1) * self.size_per_chunk
-        return {'input_ids': self.tokenized_data['input_ids'][:, start_index:end_index],
-                'attention_mask': self.tokenized_data['attention_mask'][:, start_index:end_index]}
+        return {
+            "input_ids": self.tokenized_data["input_ids"][:, start_index:end_index],
+            "attention_mask": self.tokenized_data["attention_mask"][
+                :, start_index:end_index
+            ],
+        }
+
 
 class Wikitext(Dataset):
-    """ Wikitest dataset """
+    """Wikitest dataset"""
+
     @staticmethod
     def load_dataset(split: str):
         return load_dataset("wikitext", "wikitext-2-raw-v1", split=split)
 
     @classmethod
-    def load_encoded_dataset(cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str):
+    def load_encoded_dataset(
+        cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str
+    ):
         dataset_split = cls.load_dataset(split)
         encoded_dataset_split = tokenizer(
             "\n\n".join(dataset_split["text"]),
             return_tensors="pt",
-            add_special_tokens=True
+            add_special_tokens=True,
         )
 
         return ChunkedDataset(encoded_dataset_split, context_length)
 
+
 class TinyMMLU(Dataset):
-    """ TinyMMLU dataset"""
+    """TinyMMLU dataset"""
+
     @staticmethod
     def load_dataset(split: str):
         return load_dataset("tinyBenchmarks/tinyMMLU", split=split)
 
     @classmethod
-    def load_encoded_dataset(cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str):
+    def load_encoded_dataset(
+        cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str
+    ):
         dataset_split = cls.load_dataset(split)
 
         def tokenize(samples):
@@ -130,16 +147,21 @@ class TinyMMLU(Dataset):
                 "choices",
                 "answer",
                 "input_formatted",
-            ])
+            ],
+        )
+
 
 class MMLU(Dataset):
-    """ MMLU Dataset """
+    """MMLU Dataset"""
+
     @classmethod
     def _format_question(cls, question: str, choices: list[str]):
         return f"{question.strip()}\nA. {choices[0]}\nB. {choices[1]}\nC. {choices[2]}\nD. {choices[3]}\nAnswer:"
 
     @classmethod
-    def _format_question_and_answer(cls, question: str, choices: list[str], answer: str):
+    def _format_question_and_answer(
+        cls, question: str, choices: list[str], answer: str
+    ):
         return cls._format_question(question, choices) + f" {answer}"
 
     @classmethod
@@ -162,13 +184,17 @@ class MMLU(Dataset):
             if subject not in grouped_fewshot_questions:
                 grouped_fewshot_questions[subject] = []
 
-            grouped_fewshot_questions[subject].append(cls._format_question_and_answer(question, choices, answer))
+            grouped_fewshot_questions[subject].append(
+                cls._format_question_and_answer(question, choices, answer)
+            )
 
         fewshot_split.map(group_fewshot_questions)
 
         for subject, questions in grouped_fewshot_questions.items():
             if len(questions) < num_fewshot:
-                raise ValueError(f"Not enough samples available in split {fewshot_split} to satisfy {num_fewshot} fewshot samples.")
+                raise ValueError(
+                    f"Not enough samples available in split {fewshot_split} to satisfy {num_fewshot} fewshot samples."
+                )
 
         def combine_questions(subject, questions):
             formatted_subject = subject.replace("_", " ")
@@ -178,9 +204,11 @@ class MMLU(Dataset):
                 formatted_string += "\n\n"
             return formatted_string
 
-        formatted_fewshot_questions = {subject: combine_questions(subject, questions) for subject, questions in grouped_fewshot_questions.items()}
+        formatted_fewshot_questions = {
+            subject: combine_questions(subject, questions)
+            for subject, questions in grouped_fewshot_questions.items()
+        }
         return formatted_fewshot_questions
-
 
     @staticmethod
     def load_dataset(split: str = "test"):
@@ -189,7 +217,14 @@ class MMLU(Dataset):
         return load_dataset("cais/mmlu", name="all", split=split)
 
     @classmethod
-    def load_encoded_dataset(cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str, num_fewshot: int = 5, fewshot_split: str = "dev"):
+    def load_encoded_dataset(
+        cls,
+        tokenizer: PreTrainedTokenizer,
+        context_length: int,
+        split: str,
+        num_fewshot: int = 5,
+        fewshot_split: str = "dev",
+    ):
         dataset_split = cls.load_dataset(split)
         fewshot_subject_headers = cls.load_fewshot(num_fewshot, fewshot_split)
 
@@ -198,8 +233,26 @@ class MMLU(Dataset):
             choices = sample["choices"]
             subject = sample["subject"]
 
-            formatted_question = list(map(lambda question, choices: cls._format_question(question, choices), question, choices))
-            fewshot_formatted_question = list(map(lambda subject, question: str(fewshot_subject_headers[subject] + question), subject, formatted_question)) if num_fewshot > 0 else formatted_question
+            formatted_question = list(
+                map(
+                    lambda question, choices: cls._format_question(question, choices),
+                    question,
+                    choices,
+                )
+            )
+            fewshot_formatted_question = (
+                list(
+                    map(
+                        lambda subject, question: str(
+                            fewshot_subject_headers[subject] + question
+                        ),
+                        subject,
+                        formatted_question,
+                    )
+                )
+                if num_fewshot > 0
+                else formatted_question
+            )
 
             tokenized_question = tokenizer(
                 fewshot_formatted_question,
@@ -232,17 +285,21 @@ class MMLU(Dataset):
                 "subject",
                 "choices",
                 "answer",
-            ])
+            ],
+        )
 
 
 class MMMLU(Dataset):
-    """ MMLU Dataset """
+    """MMLU Dataset"""
+
     @classmethod
     def _format_question(cls, question: str, choices: tuple[str]):
         return f"{question.strip()}\nA. {choices[0]}\nB. {choices[1]}\nC. {choices[2]}\nD. {choices[3]}\nAnswer:"
 
     @classmethod
-    def _format_question_and_answer(cls, question: str, choices: list[str], answer: str):
+    def _format_question_and_answer(
+        cls, question: str, choices: list[str], answer: str
+    ):
         return cls._format_question(question, choices) + f" {answer}"
 
     @classmethod
@@ -266,7 +323,9 @@ class MMMLU(Dataset):
             if subject not in grouped_fewshot_questions:
                 grouped_fewshot_questions[subject] = []
 
-            grouped_fewshot_questions[subject].append(cls._format_question_and_answer(question, choices, answer))
+            grouped_fewshot_questions[subject].append(
+                cls._format_question_and_answer(question, choices, answer)
+            )
 
         dataset_split.map(group_fewshot_questions)
 
@@ -278,13 +337,18 @@ class MMMLU(Dataset):
 
         return grouped_fewshot_questions
 
-
     @staticmethod
     def load_dataset(split: str = "default"):
         return load_dataset("openai/MMMLU", name=split, split="test")
 
     @classmethod
-    def load_encoded_dataset(cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str, num_fewshot: int = 5):
+    def load_encoded_dataset(
+        cls,
+        tokenizer: PreTrainedTokenizer,
+        context_length: int,
+        split: str,
+        num_fewshot: int = 5,
+    ):
         dataset_split = cls.load_dataset(split)
         grouped_fewshot_questions = cls.load_fewshot(dataset_split, num_fewshot)
 
@@ -297,7 +361,16 @@ class MMMLU(Dataset):
             subject = sample["Subject"]
 
             formatted_question = list(
-                map(lambda question, A, B, C, D: cls._format_question(question, (A, B, C, D)), question, A, B, C, D)
+                map(
+                    lambda question, A, B, C, D: cls._format_question(
+                        question, (A, B, C, D)
+                    ),
+                    question,
+                    A,
+                    B,
+                    C,
+                    D,
+                )
             )
 
             def assemble_fewshot_question(formatted_question: str, subject: str):

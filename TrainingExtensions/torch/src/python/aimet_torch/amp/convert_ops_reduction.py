@@ -34,5 +34,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Alias to aimet_torch._base.amp.convert_ops_reduction """
-from .._base.amp.convert_ops_reduction import * # pylint: disable=wildcard-import, unused-wildcard-import
+"""Alias to aimet_torch._base.amp.convert_ops_reduction"""
+
+from .._base.amp.convert_ops_reduction import *  # pylint: disable=wildcard-import, unused-wildcard-import

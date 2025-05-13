@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-""" Cross Layer Equalization
+"""Cross Layer Equalization
 
 Some terminology for this code.
 CLS set: Set of layers (2 or 3) that can be used for cross-layer scaling
@@ -49,27 +49,47 @@ import numpy as np
 import torch
 
 from aimet_common.utils import AimetLogger, _red
-from aimet_common.cross_layer_equalization import ClsLayerType, ClsSetInfo, ClsImpl, HbfImpl
+from aimet_common.cross_layer_equalization import (
+    ClsLayerType,
+    ClsSetInfo,
+    ClsImpl,
+    HbfImpl,
+)
 from aimet_torch import utils
 from aimet_torch.meta.connectedgraph import ConnectedGraph
 from aimet_torch.batch_norm_fold import fold_all_batch_norms
-from aimet_torch.utils import (get_device, get_ordered_list_of_modules, create_rand_tensors_given_shapes,
-                               place_model)
+from aimet_torch.utils import (
+    get_device,
+    get_ordered_list_of_modules,
+    create_rand_tensors_given_shapes,
+    place_model,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.CrosslayerEqualization)
 
-ClsSet = Union[Tuple[torch.nn.Conv2d, torch.nn.Conv2d],
-               Tuple[torch.nn.Conv2d, torch.nn.Conv2d, torch.nn.Conv2d]]
+ClsSet = Union[
+    Tuple[torch.nn.Conv2d, torch.nn.Conv2d],
+    Tuple[torch.nn.Conv2d, torch.nn.Conv2d, torch.nn.Conv2d],
+]
 
-ClsSupportedLayer = Union[torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d]
+ClsSupportedLayer = Union[
+    torch.nn.Conv1d, torch.nn.Conv2d, torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d
+]
 
 ScaleFactor = Union[np.ndarray, Tuple[np.ndarray]]
 
-cls_supported_layers = (torch.nn.Conv2d, torch.nn.ConvTranspose2d, torch.nn.Conv1d, torch.nn.ConvTranspose1d)
+cls_supported_layers = (
+    torch.nn.Conv2d,
+    torch.nn.ConvTranspose2d,
+    torch.nn.Conv1d,
+    torch.nn.ConvTranspose1d,
+)
 cls_supported_activations = (torch.nn.ReLU, torch.nn.PReLU)
 
 
-def get_ordered_list_of_conv_modules(model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]) -> List:
+def get_ordered_list_of_conv_modules(
+    model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]
+) -> List:
     """
     Finds order of nodes in graph
     :param model: model
@@ -77,7 +97,11 @@ def get_ordered_list_of_conv_modules(model: torch.nn.Module, dummy_input: Union[
     :return: List of names in graph in order
     """
     module_list = get_ordered_list_of_modules(model, dummy_input)
-    module_list = [[name, module] for name, module in module_list if isinstance(module, cls_supported_layers)]
+    module_list = [
+        [name, module]
+        for name, module in module_list
+        if isinstance(module, cls_supported_layers)
+    ]
     return module_list
 
 
@@ -86,8 +110,12 @@ class GraphSearchUtils:
     Code to search a model graph to find nodes to use for cross-layer-scaling and high-bias-fold
     """
 
-    def __init__(self, model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]],
-                 dummy_input: Union[torch.Tensor, List[torch.Tensor]] = None):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        input_shapes: Union[Tuple, List[Tuple]],
+        dummy_input: Union[torch.Tensor, List[torch.Tensor]] = None,
+    ):
         """
 
         :param model: PyTorch model.
@@ -96,15 +124,20 @@ class GraphSearchUtils:
          on the same device as model.
         """
         if dummy_input is None:
-            inp_tensor_list = tuple(utils.create_rand_tensors_given_shapes(input_shapes, get_device(model)))
+            inp_tensor_list = tuple(
+                utils.create_rand_tensors_given_shapes(input_shapes, get_device(model))
+            )
         else:
             inp_tensor_list = dummy_input
         self._connected_graph = ConnectedGraph(model, inp_tensor_list)
-        self._ordered_module_list = get_ordered_list_of_conv_modules(model, inp_tensor_list)
-
+        self._ordered_module_list = get_ordered_list_of_conv_modules(
+            model, inp_tensor_list
+        )
 
     @staticmethod
-    def find_downstream_layer_groups_to_scale(op, layer_groups, current_group=None, visited_nodes=None):
+    def find_downstream_layer_groups_to_scale(
+        op, layer_groups, current_group=None, visited_nodes=None
+    ):
         """
         Recursive function to find cls layer groups downstream from a given op
         :param op: Starting op to search from
@@ -125,20 +158,24 @@ class GraphSearchUtils:
         # print("Visiting node: {}".format(op.dotted_name))
 
         # If current node is Conv2D, add to the current group
-        if op.model_module and isinstance(op.model_module.get_module(), cls_supported_layers):
+        if op.model_module and isinstance(
+            op.model_module.get_module(), cls_supported_layers
+        ):
             current_group.append(op.model_module.get_module())
 
         # Terminating condition for current group
-        if not op.model_module or not isinstance(op.model_module.get_module(),
-                                                 cls_supported_layers + cls_supported_activations):
-
+        if not op.model_module or not isinstance(
+            op.model_module.get_module(),
+            cls_supported_layers + cls_supported_activations,
+        ):
             if (len(current_group) > 1) and (current_group not in layer_groups):
                 layer_groups.append(current_group)
             current_group = []
 
         for consumer in op.output_ops:
-            GraphSearchUtils.find_downstream_layer_groups_to_scale(consumer, layer_groups,
-                                                                   current_group, visited_nodes)
+            GraphSearchUtils.find_downstream_layer_groups_to_scale(
+                consumer, layer_groups, current_group, visited_nodes
+            )
 
         # Reached a leaf.. See if the current group has something to grab
         if (len(current_group) > 1) and (current_group not in layer_groups):
@@ -173,7 +210,9 @@ class GraphSearchUtils:
         """
 
         # pylint: disable=too-many-branches
-        def convert_to_cls_layer_type(layer: ClsSupportedLayer) -> Tuple[ClsLayerType, ClsSupportedLayer]:
+        def convert_to_cls_layer_type(
+            layer: ClsSupportedLayer,
+        ) -> Tuple[ClsLayerType, ClsSupportedLayer]:
             """
             Given the layer, check if its supported in CLS
             :param layer: layer to check
@@ -181,14 +220,19 @@ class GraphSearchUtils:
             """
             if layer.groups == 1:
                 layer_type = ClsLayerType.Conv
-            elif layer.groups == layer.in_channels and layer.in_channels == layer.out_channels:
+            elif (
+                layer.groups == layer.in_channels
+                and layer.in_channels == layer.out_channels
+            ):
                 # depthwiseConv layer with depth multiplier = 1
                 layer_type = ClsLayerType.DepthwiseConv
             else:
                 layer_type = ClsLayerType.Unsupported
             return layer_type, layer
 
-        def get_next_layer() -> Union[Tuple[ClsLayerType, Union[ClsSupportedLayer, None]]]:
+        def get_next_layer() -> Union[
+            Tuple[ClsLayerType, Union[ClsSupportedLayer, None]]
+        ]:
             """
             :return: Tuple of ClsLayerType and the next layer in layer_group
             """
@@ -204,7 +248,10 @@ class GraphSearchUtils:
             while layer_group and first_layer_to_scale[0] is ClsLayerType.Unsupported:
                 first_layer_to_scale = get_next_layer()
                 if first_layer_to_scale[0] is ClsLayerType.Unsupported:
-                    logger.info('Layer %s is not supported. Ignoring for cls', first_layer_to_scale[1])
+                    logger.info(
+                        "Layer %s is not supported. Ignoring for cls",
+                        first_layer_to_scale[1],
+                    )
 
             second_layer_to_scale = get_next_layer()
             if first_layer_to_scale[0] == ClsLayerType.Conv:
@@ -217,21 +264,32 @@ class GraphSearchUtils:
                         third_layer_to_scale = convert_to_cls_layer_type(layer_group[0])
                         if third_layer_to_scale[0] == ClsLayerType.Conv:
                             cls_sets.append(
-                                (first_layer_to_scale[1], second_layer_to_scale[1], third_layer_to_scale[1]))
+                                (
+                                    first_layer_to_scale[1],
+                                    second_layer_to_scale[1],
+                                    third_layer_to_scale[1],
+                                )
+                            )
                             # adding third_layer_to_scale for the next round of CLS set determination
                             first_layer_to_scale = get_next_layer()
                         else:
                             # unsupported combination encountered
                             first_layer_to_scale = second_layer_to_scale
                 else:
-                    logger.info('Layer %s is not supported. Ignoring for cls', second_layer_to_scale[1])
+                    logger.info(
+                        "Layer %s is not supported. Ignoring for cls",
+                        second_layer_to_scale[1],
+                    )
                     first_layer_to_scale = (ClsLayerType.Unsupported, None)
             elif first_layer_to_scale[0] == ClsLayerType.DepthwiseConv:
                 if second_layer_to_scale[0] == ClsLayerType.Conv:
                     cls_sets.append((first_layer_to_scale[1], second_layer_to_scale[1]))
                 first_layer_to_scale = second_layer_to_scale
             else:
-                logger.info('Layer %s is not supported. Ignoring for cls', first_layer_to_scale[1])
+                logger.info(
+                    "Layer %s is not supported. Ignoring for cls",
+                    first_layer_to_scale[1],
+                )
                 first_layer_to_scale = second_layer_to_scale
 
         return cls_sets
@@ -261,7 +319,9 @@ class GraphSearchUtils:
         return ordered_layer_groups
 
     @staticmethod
-    def does_module_have_relu_activation(connected_graph: ConnectedGraph, module: torch.nn.Module) -> bool:
+    def does_module_have_relu_activation(
+        connected_graph: ConnectedGraph, module: torch.nn.Module
+    ) -> bool:
         """
         Finds if a given module has a ReLU activation
         :param connected_graph: Reference to ConnectedGraph instance
@@ -270,11 +330,12 @@ class GraphSearchUtils:
         """
 
         for op in connected_graph.get_all_ops().values():
-
             if op.model_module and op.model_module.get_module() is module:
                 assert len(op.output_ops) == 1
-                is_relu_activation = isinstance(op.output_ops[0].model_module.get_module(),
-                                                (torch.nn.ReLU, torch.nn.PReLU))
+                is_relu_activation = isinstance(
+                    op.output_ops[0].model_module.get_module(),
+                    (torch.nn.ReLU, torch.nn.PReLU),
+                )
                 return is_relu_activation
 
         return False
@@ -287,15 +348,17 @@ class GraphSearchUtils:
 
         is_relu_activation_in_cls_sets = []
         for cls_set in cls_sets:
-
             # We need to check activation functions for all layers but the last one in the set
             # Because we are only interested in checking activation functions between the layers we will scale
             cls_set = cls_set[:-1]
 
             is_relu_activation_in_cls_set = ()
             for module in cls_set:
-                is_relu_activation_in_cls_set += (self.does_module_have_relu_activation(self._connected_graph,
-                                                                                        module), )
+                is_relu_activation_in_cls_set += (
+                    self.does_module_have_relu_activation(
+                        self._connected_graph, module
+                    ),
+                )
 
             if len(is_relu_activation_in_cls_set) == 1:
                 is_relu_activation_in_cls_set = is_relu_activation_in_cls_set[0]
@@ -332,7 +395,9 @@ class CrossLayerScaling:
         :return: Scaling factor calculated and applied
         """
         if len(cls_set) == 3:
-            scale_factor = CrossLayerScaling.scale_cls_set_with_depthwise_layers(cls_set)
+            scale_factor = CrossLayerScaling.scale_cls_set_with_depthwise_layers(
+                cls_set
+            )
         else:
             scale_factor = CrossLayerScaling.scale_cls_set_with_conv_layers(cls_set)
 
@@ -349,8 +414,10 @@ class CrossLayerScaling:
         on_gpu = False
         for module in cls_set:
             if not isinstance(module, cls_supported_layers):
-                raise ValueError(f"Only Conv or Transposed Conv layers are supported for cross layer equalization."
-                                 f" Layer class {str(module.__class__)} is not supported.")
+                raise ValueError(
+                    f"Only Conv or Transposed Conv layers are supported for cross layer equalization."
+                    f" Layer class {str(module.__class__)} is not supported."
+                )
             if module.weight.is_cuda:
                 on_gpu = True
                 module.cpu()
@@ -365,7 +432,9 @@ class CrossLayerScaling:
         return scaling_factor
 
     @classmethod
-    def scale_cls_set_with_depthwise_layers(cls, cls_set: ClsSet) -> Tuple[np.ndarray, np.ndarray]:
+    def scale_cls_set_with_depthwise_layers(
+        cls, cls_set: ClsSet
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -376,8 +445,10 @@ class CrossLayerScaling:
         on_gpu = False
         for module in cls_set:
             if not isinstance(module, cls_supported_layers):
-                raise ValueError(f"Only Conv or Transposed Conv layers are supported for cross layer equalization."
-                                 f" Layer class {str(module.__class__)} is not supported.")
+                raise ValueError(
+                    f"Only Conv or Transposed Conv layers are supported for cross layer equalization."
+                    f" Layer class {str(module.__class__)} is not supported."
+                )
             if module.weight.is_cuda:
                 on_gpu = True
                 module.cpu()
@@ -392,8 +463,11 @@ class CrossLayerScaling:
         return scaling_factors
 
     @staticmethod
-    def create_cls_set_info_list(cls_sets: List[ClsSet], scale_factors: List[ScaleFactor],
-                                 is_relu_activation_in_cls_sets):
+    def create_cls_set_info_list(
+        cls_sets: List[ClsSet],
+        scale_factors: List[ScaleFactor],
+        is_relu_activation_in_cls_sets,
+    ):
         """
         Binds information from there separate lists into one [ClsInfoSet] data-structure
         :param cls_sets: List of CLS sets
@@ -402,26 +476,43 @@ class CrossLayerScaling:
         :return: List of ClsSetInfo
         """
         cls_set_info_list = []
-        assert len(cls_sets) == len(scale_factors) == len(is_relu_activation_in_cls_sets)
+        assert (
+            len(cls_sets) == len(scale_factors) == len(is_relu_activation_in_cls_sets)
+        )
 
         for index, cls_set in enumerate(cls_sets):
-
             if isinstance(scale_factors[index], tuple):
                 # If we are dealing with a triplet of layers, then we should have 2 scale factors and 2 relu flags
                 # Assert that this is true
                 assert len(cls_set) == 3
-                assert len(scale_factors[index]) == len(is_relu_activation_in_cls_sets[index]) == 2
+                assert (
+                    len(scale_factors[index])
+                    == len(is_relu_activation_in_cls_sets[index])
+                    == 2
+                )
 
-                cls_pair_1 = ClsSetInfo.ClsSetLayerPairInfo(cls_set[0], cls_set[1], scale_factors[index][0],
-                                                            is_relu_activation_in_cls_sets[index][0])
-                cls_pair_2 = ClsSetInfo.ClsSetLayerPairInfo(cls_set[1], cls_set[2], scale_factors[index][1],
-                                                            is_relu_activation_in_cls_sets[index][1])
+                cls_pair_1 = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[0],
+                    cls_set[1],
+                    scale_factors[index][0],
+                    is_relu_activation_in_cls_sets[index][0],
+                )
+                cls_pair_2 = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[1],
+                    cls_set[2],
+                    scale_factors[index][1],
+                    is_relu_activation_in_cls_sets[index][1],
+                )
 
                 cls_set_info = ClsSetInfo(cls_pair_1, cls_pair_2)
 
             else:
-                cls_pair = ClsSetInfo.ClsSetLayerPairInfo(cls_set[0], cls_set[1], scale_factors[index],
-                                                          is_relu_activation_in_cls_sets[index])
+                cls_pair = ClsSetInfo.ClsSetLayerPairInfo(
+                    cls_set[0],
+                    cls_set[1],
+                    scale_factors[index],
+                    is_relu_activation_in_cls_sets[index],
+                )
 
                 cls_set_info = ClsSetInfo(cls_pair)
 
@@ -430,8 +521,11 @@ class CrossLayerScaling:
         return cls_set_info_list
 
     @staticmethod
-    def scale_model(model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]] = None,
-                    dummy_input: Union[torch.Tensor, List[torch.Tensor]] = None) -> List[ClsSetInfo]:
+    def scale_model(
+        model: torch.nn.Module,
+        input_shapes: Union[Tuple, List[Tuple]] = None,
+        dummy_input: Union[torch.Tensor, List[torch.Tensor]] = None,
+    ) -> List[ClsSetInfo]:
         """
         Uses cross-layer scaling to scale all applicable layers in the given model
 
@@ -442,20 +536,28 @@ class CrossLayerScaling:
         :return: CLS information for each CLS set
         """
         if isinstance(model, torch.nn.DataParallel):
-            return CrossLayerScaling.scale_model(model.module, input_shapes, dummy_input=dummy_input)
+            return CrossLayerScaling.scale_model(
+                model.module, input_shapes, dummy_input=dummy_input
+            )
 
         # The use of input_shapes will be removed in the future release. It is maintained now for backward compatibility.
         if input_shapes and dummy_input is None:
-            dummy_input = create_rand_tensors_given_shapes(input_shapes, torch.device('cpu'))
+            dummy_input = create_rand_tensors_given_shapes(
+                input_shapes, torch.device("cpu")
+            )
         if input_shapes is None and dummy_input is None:
             raise ValueError("Both input_shapes and dummy_input can't be None")
 
         # Place model and dummy input on the cpu.
         with place_model(model, torch.device("cpu")):
-            dummy_input = utils.change_tensor_device_placement(dummy_input, device=torch.device('cpu'))
+            dummy_input = utils.change_tensor_device_placement(
+                dummy_input, device=torch.device("cpu")
+            )
 
             # Find layer groups
-            graph_search = GraphSearchUtils(model, input_shapes, dummy_input=dummy_input)
+            graph_search = GraphSearchUtils(
+                model, input_shapes, dummy_input=dummy_input
+            )
             layer_groups = graph_search.find_layer_groups_to_scale()
 
             # Find cls sets from the layer groups
@@ -468,11 +570,14 @@ class CrossLayerScaling:
             scale_factors = CrossLayerScaling.scale_cls_sets(cls_sets)
 
             # Find if there were relu activations between layers of each cls set
-            is_relu_activation_in_cls_sets = graph_search.is_relu_activation_present_in_cls_sets(cls_sets)
+            is_relu_activation_in_cls_sets = (
+                graph_search.is_relu_activation_present_in_cls_sets(cls_sets)
+            )
 
             # Convert to a list of cls-set-info elements
-            cls_set_info_list = CrossLayerScaling.create_cls_set_info_list(cls_sets, scale_factors,
-                                                                           is_relu_activation_in_cls_sets)
+            cls_set_info_list = CrossLayerScaling.create_cls_set_info_list(
+                cls_sets, scale_factors, is_relu_activation_in_cls_sets
+            )
         return cls_set_info_list
 
 
@@ -480,7 +585,10 @@ class PythonClsImpl(ClsImpl):
     """
     This class implements the CLS algorithm using Python version while following the base Implementation interface.
     """
-    def scale_cls_set_with_depthwise_layers(self, cls_set) -> Tuple[np.ndarray, np.ndarray]:
+
+    def scale_cls_set_with_depthwise_layers(
+        self, cls_set
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
 
@@ -504,9 +612,14 @@ class PythonClsImpl(ClsImpl):
             bias_1 = cls_set[1].bias.detach().cpu().numpy()
 
         # compute scaling factors and folded parameters.
-        s_12, s_23 = self.compute_scaling_params_for_depthwise_conv(weight_0, weight_1, weight_2)
+        s_12, s_23 = self.compute_scaling_params_for_depthwise_conv(
+            weight_0, weight_1, weight_2
+        )
         _weight_0, _weight_1, _weight_2, _bias_0, _bias_1 = (
-            self.fold_scaling_params_for_depthwise_conv(weight_0, weight_1, weight_2, bias_0, bias_1, s_12, s_23))
+            self.fold_scaling_params_for_depthwise_conv(
+                weight_0, weight_1, weight_2, bias_0, bias_1, s_12, s_23
+            )
+        )
 
         with torch.no_grad():
             self._restore_params(cls_set[0], torch.from_numpy(_weight_0))
@@ -514,11 +627,13 @@ class PythonClsImpl(ClsImpl):
             self._restore_params(cls_set[2], torch.from_numpy(_weight_2))
 
             if cls_set[0].bias is not None:
-                cls_set[0].bias.copy_(torch.from_numpy(_bias_0).reshape_as(cls_set[0].bias)).to(device=cls_set[0].bias.device,
-                                                                                                dtype=cls_set[0].bias.dtype)
+                cls_set[0].bias.copy_(
+                    torch.from_numpy(_bias_0).reshape_as(cls_set[0].bias)
+                ).to(device=cls_set[0].bias.device, dtype=cls_set[0].bias.dtype)
             if cls_set[1].bias is not None:
-                cls_set[1].bias.copy_(torch.from_numpy(_bias_1).reshape_as(cls_set[1].bias)).to(device=cls_set[1].bias.device,
-                                                                                                dtype=cls_set[1].bias.dtype)
+                cls_set[1].bias.copy_(
+                    torch.from_numpy(_bias_1).reshape_as(cls_set[1].bias)
+                ).to(device=cls_set[1].bias.device, dtype=cls_set[1].bias.dtype)
         return s_12, s_23
 
     def scale_cls_set_with_conv_layers(self, cls_set) -> np.ndarray:
@@ -539,19 +654,23 @@ class PythonClsImpl(ClsImpl):
 
         # compute scaling factors and folded parameters.
         scale_factor = self.compute_scaling_params_for_conv(weight_0, weight_1)
-        _weight_0, _weight_1, _bias_0 = (
-            self.fold_scaling_params_for_conv(weight_0, weight_1, bias_0, scale_factor))
+        _weight_0, _weight_1, _bias_0 = self.fold_scaling_params_for_conv(
+            weight_0, weight_1, bias_0, scale_factor
+        )
 
         with torch.no_grad():
             self._restore_params(cls_set[0], torch.from_numpy(_weight_0))
             self._restore_params(cls_set[1], torch.from_numpy(_weight_1))
             if cls_set[0].bias is not None:
-                cls_set[0].bias.copy_(torch.from_numpy(_bias_0).reshape_as(cls_set[0].bias)).to(device=cls_set[0].bias.device,
-                                                                                                dtype=cls_set[0].bias.dtype)
+                cls_set[0].bias.copy_(
+                    torch.from_numpy(_bias_0).reshape_as(cls_set[0].bias)
+                ).to(device=cls_set[0].bias.device, dtype=cls_set[0].bias.dtype)
         return scale_factor
 
     @staticmethod
-    def _transpose_tensor(module: torch.nn.Module, tensor: torch.Tensor) -> torch.Tensor:
+    def _transpose_tensor(
+        module: torch.nn.Module, tensor: torch.Tensor
+    ) -> torch.Tensor:
         """
         During preparation:
         For TransposeConv2d, Transpose tensor in the common format [Noc, Nin, Kh, Kw].
@@ -609,8 +728,9 @@ class PythonClsImpl(ClsImpl):
             tensor = torch.squeeze(tensor, dim=-1)
 
         _weight_0 = self._transpose_tensor(module, tensor)
-        module.weight.copy_(_weight_0.reshape_as(module.weight)).to(device=module.weight.device,
-                                                                    dtype=module.weight.dtype)
+        module.weight.copy_(_weight_0.reshape_as(module.weight)).to(
+            device=module.weight.device, dtype=module.weight.dtype
+        )
 
 
 class HighBiasFold:
@@ -622,8 +742,13 @@ class HighBiasFold:
     ScaleForFirstModule = np.ndarray
 
     @classmethod
-    def bias_fold(cls, cls_set_info_list: List[ClsSetInfo],
-                  bn_layers: Dict[Union[torch.nn.Conv2d, torch.nn.ConvTranspose2d], torch.nn.BatchNorm2d]):
+    def bias_fold(
+        cls,
+        cls_set_info_list: List[ClsSetInfo],
+        bn_layers: Dict[
+            Union[torch.nn.Conv2d, torch.nn.ConvTranspose2d], torch.nn.BatchNorm2d
+        ],
+    ):
         """
         Folds bias values greater than 3 * sigma to next layer's bias
 
@@ -632,14 +757,18 @@ class HighBiasFold:
         :return: None
         """
         if not bn_layers:
-            logger.info('High Bias folding is not supported for models without BatchNorm Layers')
+            logger.info(
+                "High Bias folding is not supported for models without BatchNorm Layers"
+            )
             return
 
         for cls_set_info in cls_set_info_list:
             for cls_pair_info in cls_set_info.cls_pair_info_list:
-
-                if (cls_pair_info.layer1.bias is None) or (cls_pair_info.layer2.bias is None) or \
-                        (cls_pair_info.layer1 not in bn_layers):
+                if (
+                    (cls_pair_info.layer1.bias is None)
+                    or (cls_pair_info.layer2.bias is None)
+                    or (cls_pair_info.layer1 not in bn_layers)
+                ):
                     continue
 
                 hbf_impl = PythonHbfImpl()
@@ -650,6 +779,7 @@ class PythonHbfImpl(HbfImpl):
     """
     This class implements the HBF algorithm using python version while following the base Implementation interface.
     """
+
     def bias_fold(self, cls_pair_info, bn_layers):
         """
         Bias fold implementation using python version.
@@ -658,51 +788,78 @@ class PythonHbfImpl(HbfImpl):
         :param bn_layers: Dictionary with Key being Conv/Linear layer and value being corresponding folded BN layer.
         """
         weight = cls_pair_info.layer2.weight.detach().cpu()
-        if isinstance(cls_pair_info.layer2, (torch.nn.Conv1d, torch.nn.ConvTranspose1d)):
+        if isinstance(
+            cls_pair_info.layer2, (torch.nn.Conv1d, torch.nn.ConvTranspose1d)
+        ):
             weight = torch.unsqueeze(weight, dim=-1)
         # Transpose weights to C, N, H, W from N, C, H, W since axis are flipped for transposed conv
-        if isinstance(cls_pair_info.layer2, (torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d)) and \
-                cls_pair_info.layer2.groups == 1:
+        if (
+            isinstance(
+                cls_pair_info.layer2,
+                (torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d),
+            )
+            and cls_pair_info.layer2.groups == 1
+        ):
             weight = weight.permute(1, 0, 2, 3)
         weight = weight.numpy()
 
         activation_is_relu = cls_pair_info.relu_activation_between_layers
 
-        beta = bn_layers[cls_pair_info.layer1].bias.detach().cpu().numpy() / cls_pair_info.scale_factor
-        gamma = bn_layers[cls_pair_info.layer1].weight.detach().cpu().numpy() / cls_pair_info.scale_factor
+        beta = (
+            bn_layers[cls_pair_info.layer1].bias.detach().cpu().numpy()
+            / cls_pair_info.scale_factor
+        )
+        gamma = (
+            bn_layers[cls_pair_info.layer1].weight.detach().cpu().numpy()
+            / cls_pair_info.scale_factor
+        )
 
         bias_prev_layer = cls_pair_info.layer1.bias.detach().cpu().numpy()
         bias_curr_layer = cls_pair_info.layer2.bias.detach().cpu().numpy()
 
         # Absorb high biases
-        _bias_prev_layer, _bias_curr_layer = (
-            self._absorb_bias(activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer))
+        _bias_prev_layer, _bias_curr_layer = self._absorb_bias(
+            activation_is_relu, beta, gamma, weight, bias_curr_layer, bias_prev_layer
+        )
 
         with torch.no_grad():
-            cls_pair_info.layer1.bias.copy_(torch.from_numpy(_bias_prev_layer).reshape_as(cls_pair_info.layer1.bias)).to(
-                device=cls_pair_info.layer1.bias.device, dtype=cls_pair_info.layer1.bias.dtype)
-            cls_pair_info.layer2.bias.copy_(torch.from_numpy(_bias_curr_layer).reshape_as(cls_pair_info.layer2.bias)).to(
-                device=cls_pair_info.layer2.bias.device, dtype=cls_pair_info.layer2.bias.dtype)
+            cls_pair_info.layer1.bias.copy_(
+                torch.from_numpy(_bias_prev_layer).reshape_as(cls_pair_info.layer1.bias)
+            ).to(
+                device=cls_pair_info.layer1.bias.device,
+                dtype=cls_pair_info.layer1.bias.dtype,
+            )
+            cls_pair_info.layer2.bias.copy_(
+                torch.from_numpy(_bias_curr_layer).reshape_as(cls_pair_info.layer2.bias)
+            ).to(
+                device=cls_pair_info.layer2.bias.device,
+                dtype=cls_pair_info.layer2.bias.dtype,
+            )
 
 
 def _warn_relu6(model: torch.nn.Module):
     if not any(isinstance(module, torch.nn.ReLU6) for module in model.modules()):
         return
 
-    msg = " ".join([
-        "Cross Layer Scaling (CLS) technique works for combination of conv-conv or conv-relu-conv layers.",
-        "Specifically, CLS does not work for combination of conv-relu6-conv layers.",
-        "For aimet-torch<2.4, AIMET was force changing relu6 layers to relu in the model."
-        "Since aimet-torch==2.4, AIMET will no longer do this."
-        "As a result, combination of conv-relu6-conv layers won't be scaled."
-        "User can modify their model to change relu6 to relu before invoking AIMET,"
-        "if this transformation does not impact floating point accuracy of the model."
-    ])
+    msg = " ".join(
+        [
+            "Cross Layer Scaling (CLS) technique works for combination of conv-conv or conv-relu-conv layers.",
+            "Specifically, CLS does not work for combination of conv-relu6-conv layers.",
+            "For aimet-torch<2.4, AIMET was force changing relu6 layers to relu in the model."
+            "Since aimet-torch==2.4, AIMET will no longer do this."
+            "As a result, combination of conv-relu6-conv layers won't be scaled."
+            "User can modify their model to change relu6 to relu before invoking AIMET,"
+            "if this transformation does not impact floating point accuracy of the model.",
+        ]
+    )
     warnings.warn(_red(msg), DeprecationWarning, stacklevel=3)
 
 
-def equalize_model(model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple]] = None,
-                   dummy_input: Union[torch.Tensor, Tuple] = None):
+def equalize_model(
+    model: torch.nn.Module,
+    input_shapes: Union[Tuple, List[Tuple]] = None,
+    dummy_input: Union[torch.Tensor, Tuple] = None,
+):
     """
     High-level API to perform Cross-Layer Equalization (CLE) on the given model. The model is equalized in place.
 
@@ -718,25 +875,33 @@ def equalize_model(model: torch.nn.Module, input_shapes: Union[Tuple, List[Tuple
     else:
         # The use of input_shapes will be removed in the future release. It is maintained now for backward compatibility.
         if input_shapes and dummy_input is None:
-            dummy_input = create_rand_tensors_given_shapes(input_shapes, torch.device('cpu'))
+            dummy_input = create_rand_tensors_given_shapes(
+                input_shapes, torch.device("cpu")
+            )
         if input_shapes is None and dummy_input is None:
             raise ValueError("Both input_shapes and dummy_input can't be None")
 
         # Place model and dummy input on the cpu.
-        with place_model(model, torch.device('cpu')):
-            dummy_input = utils.change_tensor_device_placement(dummy_input, device=torch.device('cpu'))
+        with place_model(model, torch.device("cpu")):
+            dummy_input = utils.change_tensor_device_placement(
+                dummy_input, device=torch.device("cpu")
+            )
 
             # fold batchnorm layers and perform CLE on the folded model.
-            folded_pairs = fold_all_batch_norms(model, input_shapes, dummy_input=dummy_input)
-            equalize_bn_folded_model(model, input_shapes, folded_pairs,
-                                     dummy_input=dummy_input)
+            folded_pairs = fold_all_batch_norms(
+                model, input_shapes, dummy_input=dummy_input
+            )
+            equalize_bn_folded_model(
+                model, input_shapes, folded_pairs, dummy_input=dummy_input
+            )
 
 
-def equalize_bn_folded_model(model: torch.nn.Module,
-                             input_shapes: Union[Tuple, List[Tuple]],
-                             folded_pairs: List[Tuple[torch.nn.Module, torch.nn.BatchNorm2d]],
-                             dummy_input: Union[torch.Tensor, Tuple] = None
-                             ):
+def equalize_bn_folded_model(
+    model: torch.nn.Module,
+    input_shapes: Union[Tuple, List[Tuple]],
+    folded_pairs: List[Tuple[torch.nn.Module, torch.nn.BatchNorm2d]],
+    dummy_input: Union[torch.Tensor, Tuple] = None,
+):
     """
     Perform Cross-Layer Scaling (CLS) and High Bias Folding (HBF) on a batchnorm-folded model.
     The model is equalized in place.
@@ -750,15 +915,19 @@ def equalize_bn_folded_model(model: torch.nn.Module,
     _warn_relu6(model)
 
     if isinstance(model, torch.nn.DataParallel):
-        equalize_bn_folded_model(model.module, input_shapes, folded_pairs, dummy_input=dummy_input)
+        equalize_bn_folded_model(
+            model.module, input_shapes, folded_pairs, dummy_input=dummy_input
+        )
     else:
         bn_dict = {}
         for conv_bn in folded_pairs:
             bn_dict[conv_bn[0]] = conv_bn[1]
 
-        with place_model(model, torch.device('cpu')):
+        with place_model(model, torch.device("cpu")):
             # perform cross-layer scaling on applicable layer sets
-            cls_set_info_list = CrossLayerScaling.scale_model(model, input_shapes, dummy_input=dummy_input)
+            cls_set_info_list = CrossLayerScaling.scale_model(
+                model, input_shapes, dummy_input=dummy_input
+            )
 
             # high-bias fold
             HighBiasFold.bias_fold(cls_set_info_list, bn_dict)

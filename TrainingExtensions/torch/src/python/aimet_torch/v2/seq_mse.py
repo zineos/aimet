@@ -35,7 +35,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-""" Sequential MSE implementation """
+"""Sequential MSE implementation"""
 
 from typing import List, Optional, Tuple
 import contextlib
@@ -46,20 +46,25 @@ from torch.utils.data import DataLoader
 from aimet_common.utils import AimetLogger
 from aimet_torch._base.seq_mse import SequentialMseBase, SeqMseParams, SUPPORTED_MODULES
 from aimet_torch.v2.quantization.base import QuantizerBase
-from aimet_torch.v2.quantization.affine import AffineQuantizerBase, QuantizeDequantize, GroupedBlockQuantizeDequantize
+from aimet_torch.v2.quantization.affine import (
+    AffineQuantizerBase,
+    QuantizeDequantize,
+    GroupedBlockQuantizeDequantize,
+)
 from aimet_torch.v2.nn.base import BaseQuantizationMixin
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.deepspeed_utils import SafeGatheredParameters
 
 __all__ = [
-    'SequentialMse',
-    'SeqMseParams',
-    'apply_seq_mse',
-    'get_candidates',
-    'optimize_module',
+    "SequentialMse",
+    "SeqMseParams",
+    "apply_seq_mse",
+    "get_candidates",
+    "optimize_module",
 ]
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
+
 
 class SequentialMse(SequentialMseBase):
     """
@@ -67,46 +72,56 @@ class SequentialMse(SequentialMseBase):
     """
 
     @classmethod
-    def apply_seq_mse(cls,
-                      model: torch.nn.Module,
-                      sim: QuantizationSimModel,
-                      data_loader: DataLoader,
-                      params: SeqMseParams,
-                      modules_to_exclude: Optional[List[torch.nn.Module]] = None,
-                      checkpoints_config: Optional[str] = None):
+    def apply_seq_mse(
+        cls,
+        model: torch.nn.Module,
+        sim: QuantizationSimModel,
+        data_loader: DataLoader,
+        params: SeqMseParams,
+        modules_to_exclude: Optional[List[torch.nn.Module]] = None,
+        checkpoints_config: Optional[str] = None,
+    ):
         if not modules_to_exclude:
             modules_to_exclude = []
-        modules_to_exclude.extend(cls._get_grouped_convs_with_blockwise_quantization(sim))
+        modules_to_exclude.extend(
+            cls._get_grouped_convs_with_blockwise_quantization(sim)
+        )
         with cls._handle_grouped_block_quantizers(sim):
-            super().apply_seq_mse(model, sim, data_loader, params, modules_to_exclude, checkpoints_config)
+            super().apply_seq_mse(
+                model, sim, data_loader, params, modules_to_exclude, checkpoints_config
+            )
 
     @staticmethod
     def _get_grouped_convs_with_blockwise_quantization(sim):
-        """ Return a list of all grouped conv modules using blockwise quantization for weights """
+        """Return a list of all grouped conv modules using blockwise quantization for weights"""
         grouped_convs_with_blockwise_quantization = []
         for module in sim.model.modules():
-            if isinstance(module, torch.nn.Conv2d) and \
-                    isinstance(module, BaseQuantizationMixin) and \
-                    module.groups != 1 and \
-                    module.param_quantizers['weight'].block_size is not None and \
-                    module.param_quantizers['weight'].block_size[1] != module.weight.shape[1]:
+            if (
+                isinstance(module, torch.nn.Conv2d)
+                and isinstance(module, BaseQuantizationMixin)
+                and module.groups != 1
+                and module.param_quantizers["weight"].block_size is not None
+                and module.param_quantizers["weight"].block_size[1]
+                != module.weight.shape[1]
+            ):
                 grouped_convs_with_blockwise_quantization.append(module)
         return grouped_convs_with_blockwise_quantization
 
     @staticmethod
     @contextlib.contextmanager
     def _handle_grouped_block_quantizers(sim: QuantizationSimModel):
-        """ Set all grouped block quantizers to regular blockwise quantization for the duration of the context manager
-        """
+        """Set all grouped block quantizers to regular blockwise quantization for the duration of the context manager"""
         grouped_block_quantize_dequantizers = []
         for module in sim.model.modules():
             if isinstance(module, GroupedBlockQuantizeDequantize):
-                grouped_block_quantize_dequantizers.append((module, module.block_grouping))
+                grouped_block_quantize_dequantizers.append(
+                    (module, module.block_grouping)
+                )
                 module.block_grouping = tuple(1 for _ in enumerate(module.shape))
 
         yield
 
-        for (module, block_grouping) in grouped_block_quantize_dequantizers:
+        for module, block_grouping in grouped_block_quantize_dequantizers:
             module.block_grouping = block_grouping
 
     @classmethod
@@ -117,15 +132,15 @@ class SequentialMse(SequentialMseBase):
         :param sim: Quant sim
         """
         for _, qmodule in sim.named_qmodules():
-            qmodule._compute_param_encodings(overwrite=True) # pylint: disable=protected-access
+            qmodule._compute_param_encodings(overwrite=True)  # pylint: disable=protected-access
 
     @classmethod
     @contextlib.contextmanager
     def temporarily_disable_quantizers(
-            cls,
-            model: torch.nn.Module,
-            sim: QuantizationSimModel,
-            modules_to_exclude: Optional[List[torch.nn.Module]],
+        cls,
+        model: torch.nn.Module,
+        sim: QuantizationSimModel,
+        modules_to_exclude: Optional[List[torch.nn.Module]],
     ):
         """
         For given quantsim model, disable quantizers needed to be diabled before applying sequential MSE.
@@ -146,12 +161,18 @@ class SequentialMse(SequentialMseBase):
         for name, qmodule in sim.named_qmodules():
             original_input_quantizers[name] = qmodule.input_quantizers
             original_output_quantizers[name] = qmodule.output_quantizers
-            qmodule.input_quantizers = nn.ModuleList([None for _ in qmodule.input_quantizers])
-            qmodule.output_quantizers = nn.ModuleList([None for _ in qmodule.output_quantizers])
+            qmodule.input_quantizers = nn.ModuleList(
+                [None for _ in qmodule.input_quantizers]
+            )
+            qmodule.output_quantizers = nn.ModuleList(
+                [None for _ in qmodule.output_quantizers]
+            )
 
             if not isinstance(qmodule, SUPPORTED_MODULES):
                 original_param_quantizers[name] = qmodule.param_quantizers
-                qmodule.param_quantizers = nn.ModuleDict({key: None for key in qmodule.param_quantizers.keys()})
+                qmodule.param_quantizers = nn.ModuleDict(
+                    {key: None for key in qmodule.param_quantizers.keys()}
+                )
 
             # disable param quantizers from exclusion list
             if modules_to_exclude:
@@ -159,7 +180,9 @@ class SequentialMse(SequentialMseBase):
                     fp32_module = name_to_fp32_module_dict[name]
                     if fp32_module in modules_to_exclude:
                         original_param_quantizers[name] = qmodule.param_quantizers
-                        qmodule.param_quantizers = nn.ModuleDict({key: None for key in qmodule.param_quantizers.keys()})
+                        qmodule.param_quantizers = nn.ModuleDict(
+                            {key: None for key in qmodule.param_quantizers.keys()}
+                        )
 
         yield
 
@@ -171,10 +194,9 @@ class SequentialMse(SequentialMseBase):
                 qmodule.param_quantizers = original_param_quantizers[name]
 
     @classmethod
-    def compute_param_encodings(cls,
-                                quantizer: QuantizerBase,
-                                x_min: torch.Tensor,
-                                x_max: torch.Tensor):
+    def compute_param_encodings(
+        cls, quantizer: QuantizerBase, x_min: torch.Tensor, x_max: torch.Tensor
+    ):
         """
         Compute encodings for parameter quantizer using given x_min and x_max values.
 
@@ -182,8 +204,12 @@ class SequentialMse(SequentialMseBase):
         :param x_min: min values
         :param x_max: max values
         """
-        quantize_dequantize = QuantizeDequantize(quantizer.shape, quantizer.bitwidth, quantizer.symmetric,
-                                                 block_size=quantizer.block_size).to(x_min.device)
+        quantize_dequantize = QuantizeDequantize(
+            quantizer.shape,
+            quantizer.bitwidth,
+            quantizer.symmetric,
+            block_size=quantizer.block_size,
+        ).to(x_min.device)
 
         min_tensor = x_min
         max_tensor = x_max
@@ -194,10 +220,9 @@ class SequentialMse(SequentialMseBase):
                 min_tensor = min_tensor.repeat_interleave(blk_size, axis)
                 max_tensor = max_tensor.repeat_interleave(blk_size, axis)
 
-
         with quantize_dequantize.compute_encodings():
-            _ = quantize_dequantize(torch.stack([min_tensor, max_tensor])) # pylint: disable=not-callable
-                                                                 # (pylint throws a false alarm)
+            _ = quantize_dequantize(torch.stack([min_tensor, max_tensor]))  # pylint: disable=not-callable
+            # (pylint throws a false alarm)
 
         quantizer.set_range(quantize_dequantize.min, quantize_dequantize.max)
 
@@ -215,7 +240,7 @@ class SequentialMse(SequentialMseBase):
     @classmethod
     def _get_quantized_weight(cls, quant_module: BaseQuantizationMixin):
         w = quant_module.weight
-        return quant_module.param_quantizers['weight'](w)
+        return quant_module.param_quantizers["weight"](w)
 
     @classmethod
     def _get_original_module(cls, quant_module: BaseQuantizationMixin):
@@ -224,11 +249,14 @@ class SequentialMse(SequentialMseBase):
     @staticmethod
     def _get_input_channel_block_size(quant_module):
         if not isinstance(quant_module, (torch.nn.Linear, torch.nn.Conv2d)):
-            raise NotImplementedError('Unsupported module type: ', type(quant_module))
-        if quant_module.param_quantizers['weight'].block_size is None:
+            raise NotImplementedError("Unsupported module type: ", type(quant_module))
+        if quant_module.param_quantizers["weight"].block_size is None:
             # Per tensor or per channel case. For either one, treat loss computation as per channel
             return quant_module.weight.shape[1]
-        return quant_module.weight.shape[1] // quant_module.param_quantizers['weight'].shape[1]
+        return (
+            quant_module.weight.shape[1]
+            // quant_module.param_quantizers["weight"].shape[1]
+        )
 
     @staticmethod
     def _get_indices_to_reduce(block_size, reshaped_weight):
@@ -242,8 +270,9 @@ class SequentialMse(SequentialMseBase):
         return indices_to_reduce
 
     @classmethod
-    def get_min_and_max_for_candidate_selection(cls, quant_module: BaseQuantizationMixin) -> \
-            Tuple[torch.Tensor, torch.Tensor]:
+    def get_min_and_max_for_candidate_selection(
+        cls, quant_module: BaseQuantizationMixin
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get min/max values for candidate selection.
 
@@ -251,18 +280,23 @@ class SequentialMse(SequentialMseBase):
         :return: Tuple of min and max values for candidate selection.
         """
         # pylint: disable=protected-access
-        assert hasattr(quant_module.param_quantizers['weight'], 'block_size')
+        assert hasattr(quant_module.param_quantizers["weight"], "block_size")
         if not isinstance(quant_module, (torch.nn.Conv2d, torch.nn.Linear)):
-            raise ValueError('Unsupported module: ', quant_module)
+            raise ValueError("Unsupported module: ", quant_module)
 
-        max_tensor = quant_module.param_quantizers['weight'].get_max()
-        min_tensor = quant_module.param_quantizers['weight'].get_min()
+        max_tensor = quant_module.param_quantizers["weight"].get_max()
+        min_tensor = quant_module.param_quantizers["weight"].get_min()
 
         return min_tensor, max_tensor
 
     @classmethod
-    def _get_candidate(cls, candidate_idx: int, num_candidates: int, min_tensor: torch.Tensor,
-                       max_tensor: torch.Tensor):
+    def _get_candidate(
+        cls,
+        candidate_idx: int,
+        num_candidates: int,
+        min_tensor: torch.Tensor,
+        max_tensor: torch.Tensor,
+    ):
         """
         Get candidate min and max tensors
         """
@@ -271,13 +305,15 @@ class SequentialMse(SequentialMseBase):
         return cand_min, cand_max
 
     @classmethod
-    def _compute_loss(cls,
-                      quant_module: BaseQuantizationMixin,
-                      x: torch.Tensor,
-                      xq: torch.Tensor,
-                      w: torch.Tensor,
-                      wq: torch.Tensor,
-                      params: SeqMseParams) -> torch.Tensor:
+    def _compute_loss(
+        cls,
+        quant_module: BaseQuantizationMixin,
+        x: torch.Tensor,
+        xq: torch.Tensor,
+        w: torch.Tensor,
+        wq: torch.Tensor,
+        params: SeqMseParams,
+    ) -> torch.Tensor:
         """
         Compute loss for the given (x, w) and (xq, wq) input/weight pairs. Assumes that block size will be on
         input_channel dimension.
@@ -313,7 +349,11 @@ class SequentialMse(SequentialMseBase):
             xw = xw.permute(1, 2, 0)
             xqwq = xqwq.permute(1, 2, 0)
 
-            loss = params.get_loss_fn()(xw, xqwq, reduction="none").sum(0).view(out_channels, num_blocks)
+            loss = (
+                params.get_loss_fn()(xw, xqwq, reduction="none")
+                .sum(0)
+                .view(out_channels, num_blocks)
+            )
             return loss
 
         # General strategy (Conv):
@@ -332,18 +372,22 @@ class SequentialMse(SequentialMseBase):
 
         block_losses = []
         for idx, x_block in enumerate(x_blocks):
-            xqwq, xw = cls.compute_outputs(quant_module, x_block, xq_blocks[idx], w_blocks[idx], wq_blocks[idx])
+            xqwq, xw = cls.compute_outputs(
+                quant_module, x_block, xq_blocks[idx], w_blocks[idx], wq_blocks[idx]
+            )
             block_losses.append(cls.compute_recon_loss(xqwq, xw, params))
         # Stack losses in the input channel dimension
         block_losses = torch.stack(block_losses, dim=-1)
         return block_losses
 
     @classmethod
-    def optimize_module(cls,
-                        quant_module: BaseQuantizationMixin,
-                        x: torch.Tensor,
-                        xq: torch.Tensor,
-                        params: SeqMseParams):
+    def optimize_module(
+        cls,
+        quant_module: BaseQuantizationMixin,
+        x: torch.Tensor,
+        xq: torch.Tensor,
+        params: SeqMseParams,
+    ):
         """
         Find and freeze optimal parameter encodings candidate for given module.
 
@@ -354,20 +398,30 @@ class SequentialMse(SequentialMseBase):
         """
         # pylint: disable=too-many-locals
         with SafeGatheredParameters(quant_module.parameters(recurse=True)):
-            min_tensor, max_tensor = cls.get_min_and_max_for_candidate_selection(quant_module)
+            min_tensor, max_tensor = cls.get_min_and_max_for_candidate_selection(
+                quant_module
+            )
 
             total_loss = []
             for i in range(params.num_candidates):
-                cand_min, cand_max = cls._get_candidate(i, params.num_candidates, min_tensor, max_tensor)
-                cls.compute_param_encodings(quant_module.param_quantizers['weight'], cand_min, cand_max)
+                cand_min, cand_max = cls._get_candidate(
+                    i, params.num_candidates, min_tensor, max_tensor
+                )
+                cls.compute_param_encodings(
+                    quant_module.param_quantizers["weight"], cand_min, cand_max
+                )
                 w = quant_module.weight
                 wq = cls._get_quantized_weight(quant_module)
                 with torch.no_grad():
                     for batch_idx in range(params.num_batches):
                         if batch_idx == 0:
-                            loss = cls._compute_loss(quant_module, x[batch_idx], xq[batch_idx], w, wq, params)
+                            loss = cls._compute_loss(
+                                quant_module, x[batch_idx], xq[batch_idx], w, wq, params
+                            )
                         else:
-                            loss += cls._compute_loss(quant_module, x[batch_idx], xq[batch_idx], w, wq, params)
+                            loss += cls._compute_loss(
+                                quant_module, x[batch_idx], xq[batch_idx], w, wq, params
+                            )
                     total_loss.append(loss)
 
             best_indices = torch.stack(total_loss).min(0)[1]
@@ -376,11 +430,16 @@ class SequentialMse(SequentialMseBase):
         while best_indices.dim() < max_tensor.dim():
             best_indices = best_indices[..., None]
 
-        min_tensor, max_tensor = cls._get_candidate(best_indices, params.num_candidates, min_tensor, max_tensor)
+        min_tensor, max_tensor = cls._get_candidate(
+            best_indices, params.num_candidates, min_tensor, max_tensor
+        )
 
         # Compute and freeze parameter encodings using best candidate
-        cls.compute_param_encodings(quant_module.param_quantizers['weight'], min_tensor, max_tensor)
-        cls._freeze_quantizer_encoding(quant_module.param_quantizers['weight'])
+        cls.compute_param_encodings(
+            quant_module.param_quantizers["weight"], min_tensor, max_tensor
+        )
+        cls._freeze_quantizer_encoding(quant_module.param_quantizers["weight"])
+
 
 # Global variables for compatibility
 apply_seq_mse = SequentialMse.apply_seq_mse
