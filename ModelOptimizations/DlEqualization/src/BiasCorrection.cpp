@@ -132,7 +132,7 @@ void BnBasedBiasCorrection::correctBias(TensorParam& bias, TensorParam& quantize
     else
         errorMat = epsilon * exMat;
 
-    for (uint i = 0; i < errorMat.total(); i++)
+    for (size_t i = 0; i < errorMat.total(); i++)
     {
         bias.data[i] -= errorMat.at<float>(i);
     }
@@ -141,10 +141,10 @@ void BnBasedBiasCorrection::correctBias(TensorParam& bias, TensorParam& quantize
 
 void BiasCorrection::storePreActivationOutput(TensorParam& outputActivation)
 {
-    uint outputLengthBatch =
+    size_t outputLengthBatch =
         outputActivation.shape[0] * outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
 
-    uint outputLength = outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
+    size_t outputLength = outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
 
     std::vector<double> doubleBatchAct;
     doubleBatchAct.assign(outputActivation.data, outputActivation.data + outputLengthBatch);
@@ -180,10 +180,10 @@ void BiasCorrection::storePreActivationOutput(TensorParam& outputActivation)
 
 void BiasCorrection::storeQuantizedPreActivationOutput(TensorParam& outputActivation)
 {
-    uint outputLengthBatch =
+    size_t outputLengthBatch =
         outputActivation.shape[0] * outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
 
-    uint outputLength = outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
+    size_t outputLength = outputActivation.shape[1] * outputActivation.shape[2] * outputActivation.shape[3];
 
     std::vector<double> doubleBatchAct;
     doubleBatchAct.assign(outputActivation.data, outputActivation.data + outputLengthBatch);
@@ -240,7 +240,7 @@ void BiasCorrection::correctBias(TensorParam& bias)
     cv::Mat errorMat = summedErrorMat * (1.0 / divisor);
 
     // Converting bias float vector to double vector to match type while subtraction
-    for (uint i = 0; i < errorMat.total(); i++)
+    for (size_t i = 0; i < errorMat.total(); i++)
     {
         bias.data[i] -= errorMat.at<double>(i);
     }
