@@ -48,7 +48,7 @@ from transformers.models.qwen2.modeling_qwen2 import Qwen2Model, Qwen2DecoderLay
 
 from aimet_common.utils import AimetLogger
 from aimet_torch import QuantizationSimModel
-from aimet_torch.v2.nn import QuantizedLinear, compute_param_encodings
+from aimet_torch.v2.nn import QuantizedLinear, compute_param_encodings, QuantizedConv2d
 from aimet_torch.v2.utils import (
     default_forward_fn,
     remove_all_quantizers,
@@ -57,6 +57,8 @@ from aimet_torch.v2.utils import (
 )
 from aimet_torch.experimental.adascale.adascale_quantizer import (
     AdaScaleQuantizeDequantize,
+    AdaScaleLinearQuantizeDequantize,
+    AdaScaleConv2dQuantizeDequantize,
 )
 from aimet_torch.blockwise_sampler import (
     BlockwiseSampler,
@@ -74,7 +76,7 @@ model_to_block_mapping = {
     Qwen2Model: Qwen2DecoderLayer,
 }
 
-supported_modules: List = [QuantizedLinear]
+supported_modules: List = [QuantizedLinear, QuantizedConv2d]
 
 
 class AdaScale:
@@ -247,15 +249,15 @@ class AdaScale:
             ]
         return target_modules
 
-    @staticmethod
-    def _replace_with_adascale_weight_quantizers(adascale_blocks: List):
+    @classmethod
+    def _replace_with_adascale_weight_quantizers(cls, adascale_blocks: List):
         """Replace all the weight quantizers in supported modules with adascale quantizers"""
         for block in adascale_blocks:
             for layer in block.modules():
                 if isinstance(layer, tuple(supported_modules)):
-                    layer.param_quantizers["weight"] = AdaScaleQuantizeDequantize(
-                        layer.param_quantizers["weight"], layer.weight.shape
-                    )
+                    layer.param_quantizers["weight"] = cls._get_adascale_qdq_mapping()[
+                        type(layer)
+                    ](layer.param_quantizers["weight"], layer.weight.shape)
 
     @classmethod
     @torch.no_grad()
@@ -267,11 +269,7 @@ class AdaScale:
             for layer in block.modules():
                 if isinstance(layer, tuple(supported_modules)):
                     layer.weight.copy_(
-                        layer.weight
-                        / (
-                            torch.exp(layer.param_quantizers["weight"].s2)
-                            * torch.exp(layer.param_quantizers["weight"].s3)
-                        )
+                        layer.param_quantizers["weight"].get_folded_weight(layer.weight)
                     )
                     layer.param_quantizers["weight"] = layer.param_quantizers[
                         "weight"
@@ -299,6 +297,13 @@ class AdaScale:
         """Helper to update requires_grad to the input `val` for all the params in `adascale_params`"""
         for p in adascale_params:
             p.requires_grad = val
+
+    @staticmethod
+    def _get_adascale_qdq_mapping() -> dict:
+        return {
+            QuantizedLinear: AdaScaleLinearQuantizeDequantize,
+            QuantizedConv2d: AdaScaleConv2dQuantizeDequantize,
+        }
 
 
 apply_adascale = AdaScale.apply_adascale

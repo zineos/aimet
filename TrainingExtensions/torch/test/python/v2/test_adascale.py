@@ -38,6 +38,7 @@
 
 from unittest.mock import patch
 
+import pytest
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -50,14 +51,24 @@ from aimet_torch.experimental.adascale.adascale_optimizer import (
 )
 from aimet_torch.experimental.adascale.adascale_quantizer import (
     AdaScaleQuantizeDequantize,
+    AdaScaleLinearQuantizeDequantize,
+    AdaScaleConv2dQuantizeDequantize,
 )
+from aimet_torch.v2.nn import QuantizedLinear, QuantizedConv2d
 from aimet_torch.v2.quantization.affine import QuantizeDequantize
 from aimet_torch.v2.utils import remove_all_quantizers, remove_activation_quantizers
 
 from .models_ import test_models
 
 
-def test_adascale_compute_encodings():
+@pytest.mark.parametrize(
+    "ada_module_and_shape",
+    [
+        (AdaScaleLinearQuantizeDequantize, (1, 3, 224, 224), (1, 3, 1, 1)),
+        (AdaScaleConv2dQuantizeDequantize, (10, 20, 4, 4), (10, 1, 1, 1)),
+    ],
+)
+def test_adascale_compute_encodings(ada_module_and_shape):
     """
     Given:
     - Create QDQ module, store initial scale and create adascale equivalent with the QDQ module
@@ -70,8 +81,7 @@ def test_adascale_compute_encodings():
     - Compare original scale with new scale
     """
 
-    weight_shape = (1, 3, 224, 224)
-    qdq_shape = (1, 3, 1, 1)
+    ada_module_type, weight_shape, qdq_shape = ada_module_and_shape
     torch.manual_seed(0)
     input_tensor = torch.rand(*weight_shape)
 
@@ -83,7 +93,7 @@ def test_adascale_compute_encodings():
     with qdq.compute_encodings():
         _ = qdq(input_tensor)
 
-    adascale_qdq = AdaScaleQuantizeDequantize(qdq, weight_shape)
+    adascale_qdq = ada_module_type(qdq, weight_shape)
     assert torch.equal(adascale_qdq.min, qdq.min)
     assert torch.equal(adascale_qdq.max, qdq.max)
     assert torch.equal(qdq(input_tensor), adascale_qdq(input_tensor))
@@ -106,10 +116,9 @@ def test_adascale_compute_encodings():
 
     modified_q = adascale_qdq.get_qdq()
     adascale_out = adascale_qdq(input_tensor)
-    input_with_s2_s3_folded = input_tensor / (
-        torch.exp(adascale_qdq.s2) * torch.exp(adascale_qdq.s3)
-    )
-    modified_out = modified_q(input_with_s2_s3_folded)
+    input_with_adascale_params_folded = adascale_qdq.get_folded_weight(input_tensor)
+
+    modified_out = modified_q(input_with_adascale_params_folded)
 
     assert torch.equal(adascale_qdq.get_max(), modified_q.get_max())
     assert torch.equal(adascale_qdq.get_min(), modified_q.get_min())
@@ -131,16 +140,23 @@ class CustomDataset(Dataset):
 
 
 class TestAdascale:
-    def test_adascale_1(self):
+    @pytest.mark.parametrize(
+        "model_and_shape",
+        [
+            (test_models.ModelWithConsecutiveLinearBlocks(), (1, 3, 32, 64)),
+            (test_models.ModelWithConsecutiveConv2dBlocks(), (1, 64, 4, 4)),
+        ],
+    )
+    def test_adascale_1(self, model_and_shape: tuple):
         """Test basic flow"""
-        model = test_models.ModelWithConsecutiveLinearBlocks()
-
-        num_samples = 1
+        model, shape = model_and_shape
         batch_size = 1
         num_epochs = 1
 
         torch.manual_seed(0)
-        dummy_input = torch.rand(num_samples, 3, 32, 64)
+        dummy_input = torch.rand(shape)
+        _ = model(dummy_input)
+
         data_set = CustomDataset(dummy_input)
         data_loader = DataLoader(data_set, batch_size=batch_size, shuffle=True)
 
@@ -149,30 +165,37 @@ class TestAdascale:
         with patch.dict(
             model_to_block_mapping,
             {
-                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
-                    test_models.ModelWithLinears()
-                )
+                test_models.ModelWithConsecutiveLinearBlocks: test_models.ModelWithLinears,
+                test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
             apply_adascale(sim, data_loader, None, num_epochs)
 
-        for block in sim.model.linear_blocks:
-            assert type(block.fc1.param_quantizers["weight"]) == QuantizeDequantize
-            assert type(block.fc2.param_quantizers["weight"]) == QuantizeDequantize
+        for block in sim.model.blocks:
+            for module in block.modules():
+                if isinstance(module, (QuantizedLinear, QuantizedConv2d)):
+                    assert type(module.param_quantizers["weight"]) == QuantizeDequantize
+                    assert type(module.param_quantizers["weight"]) == QuantizeDequantize
 
-    def test_adascale_2(self):
+    @pytest.mark.parametrize(
+        "model_and_shape",
+        [
+            (test_models.ModelWithConsecutiveLinearBlocks(), (1, 3, 32, 64)),
+            (test_models.ModelWithConsecutiveConv2dBlocks(), (1, 64, 4, 4)),
+        ],
+    )
+    def test_adascale_2(self, model_and_shape):
         """validate QDQ is replaced correctly with AdascaleQDQ"""
-        model = test_models.ModelWithConsecutiveLinearBlocks()
-        dummy_input = torch.rand(1, 10, 64)
+        model, shape = model_and_shape
+        dummy_input = torch.rand(shape)
 
         sim = QuantizationSimModel(model, dummy_input)
         sim.model.requires_grad_(False)
         with patch.dict(
             model_to_block_mapping,
             {
-                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
-                    test_models.ModelWithLinears()
-                )
+                test_models.ModelWithConsecutiveLinearBlocks: test_models.ModelWithLinears,
+                test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
             blocks = AdaScale._get_blocks(sim)
@@ -181,9 +204,11 @@ class TestAdascale:
             AdaScale._replace_with_adascale_weight_quantizers(blocks)
 
             for block in blocks:
-                assert (
-                    type(block.fc1.param_quantizers["weight"])
-                    == AdaScaleQuantizeDequantize
+                assert isinstance(
+                    block.layer1.param_quantizers["weight"], AdaScaleQuantizeDequantize
+                )
+                assert isinstance(
+                    block.layer2.param_quantizers["weight"], AdaScaleQuantizeDequantize
                 )
 
                 trainable_params = AdaScale._get_adascale_trainable_params(block)
@@ -191,14 +216,16 @@ class TestAdascale:
 
                 for name, param in block.named_parameters():
                     if name in [
-                        "fc1.param_quantizers.weight.beta",
-                        "fc1.param_quantizers.weight.gamma",
-                        "fc1.param_quantizers.weight.s2",
-                        "fc1.param_quantizers.weight.s3",
-                        "fc2.param_quantizers.weight.beta",
-                        "fc2.param_quantizers.weight.gamma",
-                        "fc2.param_quantizers.weight.s2",
-                        "fc2.param_quantizers.weight.s3",
+                        "layer1.param_quantizers.weight.beta",
+                        "layer1.param_quantizers.weight.gamma",
+                        "layer1.param_quantizers.weight.s2",
+                        "layer1.param_quantizers.weight.s3",
+                        "layer1.param_quantizers.weight.s4",
+                        "layer2.param_quantizers.weight.beta",
+                        "layer2.param_quantizers.weight.gamma",
+                        "layer2.param_quantizers.weight.s2",
+                        "layer2.param_quantizers.weight.s3",
+                        "layer2.param_quantizers.weight.s4",
                     ]:
                         assert param.requires_grad, (
                             "Trainable param is not set to train mode"
@@ -208,19 +235,25 @@ class TestAdascale:
                             "Only adascale params are trainable"
                         )
 
-    def test_adascale_3(self):
+    @pytest.mark.parametrize(
+        "model_and_shape",
+        [
+            (test_models.ModelWithConsecutiveLinearBlocks(), (1, 3, 32, 64)),
+            (test_models.ModelWithConsecutiveConv2dBlocks(), (1, 64, 4, 4)),
+        ],
+    )
+    def test_adascale_3(self, model_and_shape):
         """test removing quantizers"""
-        model = test_models.ModelWithConsecutiveLinearBlocks()
-        dummy_input = torch.rand(1, 10, 64)
+        model, shape = model_and_shape
+        dummy_input = torch.rand(shape)
 
         sim = QuantizationSimModel(model, dummy_input)
         sim.model.requires_grad_(False)
         with patch.dict(
             model_to_block_mapping,
             {
-                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
-                    test_models.ModelWithLinears()
-                )
+                test_models.ModelWithConsecutiveLinearBlocks: test_models.ModelWithLinears,
+                test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
             blocks = AdaScale._get_blocks(sim)
@@ -230,10 +263,10 @@ class TestAdascale:
                 with remove_all_quantizers(block):
                     for name, param in block.named_parameters():
                         assert name in [
-                            "fc1.weight",
-                            "fc1.bias",
-                            "fc2.weight",
-                            "fc2.bias",
+                            "layer1.weight",
+                            "layer1.bias",
+                            "layer2.weight",
+                            "layer2.bias",
                         ]
 
                 trainable_params = AdaScale._get_adascale_trainable_params(block)
@@ -241,30 +274,36 @@ class TestAdascale:
                 with remove_activation_quantizers(block):
                     for name, param in block.named_parameters():
                         if name in [
-                            "fc1.weight",
-                            "fc1.bias",
-                            "fc2.weight",
-                            "fc2.bias",
-                            "fc1.param_quantizers.weight.min",
-                            "fc1.param_quantizers.weight.max",
-                            "fc2.param_quantizers.weight.min",
-                            "fc2.param_quantizers.weight.max",
+                            "layer1.weight",
+                            "layer1.bias",
+                            "layer2.weight",
+                            "layer2.bias",
+                            "layer1.param_quantizers.weight.min",
+                            "layer1.param_quantizers.weight.max",
+                            "layer2.param_quantizers.weight.min",
+                            "layer2.param_quantizers.weight.max",
                         ]:
                             assert param.requires_grad == False
                         else:
                             assert param.requires_grad == True
             AdaScale._fold_weights_and_replace_with_qdq(blocks)
 
-    def test_adascale_4(self):
+    @pytest.mark.parametrize(
+        "model_and_shape",
+        [
+            (test_models.ModelWithConsecutiveLinearBlocks(), (200, 3, 32, 64)),
+            (test_models.ModelWithConsecutiveConv2dBlocks(), (200, 64, 4, 4)),
+        ],
+    )
+    def test_adascale_4(self, model_and_shape):
         """test training of adascale weights"""
-        model = test_models.ModelWithConsecutiveLinearBlocks()
+        model, shape = model_and_shape
 
-        num_samples = 200
         batch_size = 16
         num_epochs = 10
 
         torch.manual_seed(0)
-        dummy_input = torch.rand(num_samples, 3, 32, 64)
+        dummy_input = torch.rand(shape)
         data_set = CustomDataset(dummy_input)
         data_loader = DataLoader(data_set, batch_size=batch_size, shuffle=True)
 
@@ -278,9 +317,8 @@ class TestAdascale:
         with patch.dict(
             model_to_block_mapping,
             {
-                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
-                    test_models.ModelWithLinears()
-                )
+                test_models.ModelWithConsecutiveLinearBlocks: test_models.ModelWithLinears,
+                test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
             apply_adascale(sim, data_loader, None, num_epochs)
@@ -299,9 +337,8 @@ class TestAdascale:
         with patch.dict(
             model_to_block_mapping,
             {
-                type(test_models.ModelWithConsecutiveLinearBlocks()): type(
-                    test_models.ModelWithLinears()
-                )
+                test_models.ModelWithConsecutiveLinearBlocks: test_models.ModelWithLinears,
+                test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
             adascale_blocks = AdaScale._get_blocks(sim)

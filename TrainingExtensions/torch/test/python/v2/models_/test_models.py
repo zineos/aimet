@@ -1414,25 +1414,53 @@ class ModelWithLinears(nn.Module):
     def __init__(self):
         super(ModelWithLinears, self).__init__()
 
-        self.fc1 = nn.Linear(64, 32)
+        self.layer1 = nn.Linear(64, 32)
         self.relu1 = nn.ReLU()
         self.dropout = nn.Dropout()
-        self.fc2 = nn.Linear(32, 64)
+        self.layer2 = nn.Linear(32, 64)
 
     def forward(self, x):
-        x = self.relu1(self.fc1(x))
+        x = self.relu1(self.layer1(x))
         x = self.dropout(x)
-        return self.fc2(x)
+        return self.layer2(x)
 
 
 class ModelWithConsecutiveLinearBlocks(torch.nn.Module):
     def __init__(self):
         super(ModelWithConsecutiveLinearBlocks, self).__init__()
-        self.linear_blocks = torch.nn.ModuleList(ModelWithLinears() for _ in range(5))
+        self.blocks = torch.nn.ModuleList(ModelWithLinears() for _ in range(5))
         self.softmax = torch.nn.Softmax(dim=1)
 
     def forward(self, x):
-        for linear_block in self.linear_blocks:
+        for linear_block in self.blocks:
             x = linear_block(x)
+        x = self.softmax(x)
+        return x
+
+
+class ModelWithConvs(nn.Module):
+    def __init__(self):
+        super(ModelWithConvs, self).__init__()
+
+        self.layer1 = nn.Conv2d(64, 32, (1, 1))
+        self.relu1 = nn.ReLU()
+        self.dropout = nn.Dropout()
+        self.layer2 = nn.Conv2d(32, 64, (1, 1))
+
+    def forward(self, x):
+        x = self.relu1(self.layer1(x))
+        x = self.dropout(x)
+        return self.layer2(x)
+
+
+class ModelWithConsecutiveConv2dBlocks(torch.nn.Module):
+    def __init__(self):
+        super(ModelWithConsecutiveConv2dBlocks, self).__init__()
+        self.blocks = torch.nn.ModuleList(ModelWithConvs() for _ in range(5))
+        self.softmax = torch.nn.Softmax(dim=1)
+
+    def forward(self, x):
+        for conv_block in self.blocks:
+            x = conv_block(x)
         x = self.softmax(x)
         return x
