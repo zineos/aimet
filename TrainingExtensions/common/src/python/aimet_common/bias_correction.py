@@ -156,8 +156,11 @@ def get_op_dict_key(op: Op):
     """
     module = op.get_module()
     # ONNX NodeProto objects are not hashable, return the original Op object instead
-    if module.__hash__ is None:
+    try:
+        hash(module)
+    except TypeError:
         return op
+
     return module
 
 

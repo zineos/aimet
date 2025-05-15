@@ -2933,7 +2933,7 @@ def gather_op_with_int_data_model():
             ],
             initializer=[
                 numpy_helper.from_array(
-                    np.array([1, 3, 224, 224]), name="gather_weight"
+                    np.array([1, 3, 224, 224], dtype=np.int64), name="gather_weight"
                 )
             ],
             nodes=[
@@ -3620,9 +3620,11 @@ def model_with_split_matmul():
                     np.random.randn(128, 128, 1, 1).astype("float32"),
                     name="conv_weight",
                 ),
-                numpy_helper.from_array(np.array([32, 32, 32, 32]), name="split_input"),
                 numpy_helper.from_array(
-                    np.array([1, 1, 32, 6000]), name="reshape_input"
+                    np.array([32, 32, 32, 32], dtype=np.int64), name="split_input"
+                ),
+                numpy_helper.from_array(
+                    np.array([1, 1, 32, 6000], dtype=np.int64), name="reshape_input"
                 ),
                 numpy_helper.from_array(
                     np.random.randn(1, 15, 60, 32).astype("float32"),
