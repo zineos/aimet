@@ -57,6 +57,11 @@ public:
                      IAllocator* allocator) override;
 
     /**
+     * @brief Reset running stats
+     */
+    void resetStats() override;
+
+    /**
      * @brief Given a number distribution in CPU memory, compute the TensorFlow
      * encoding with the highest possible SQNR.
      *

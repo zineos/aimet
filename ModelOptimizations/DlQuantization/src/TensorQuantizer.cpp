@@ -361,10 +361,9 @@ BlockTensorQuantizer::BlockTensorQuantizer(TensorDims shape, int bitwidth, Quant
 
 void BlockTensorQuantizer::resetEncodingStats()
 {
-    // TODO: _encodingAnalyzer->resetStats();
     _validStats       = false;
     isEncodingValid   = false;
-    _encodingAnalyzer = getBlockEncodingAnalyzerInstance<float>(_quantScheme, _shape);
+    _encodingAnalyzer->resetStats();
 }
 
 void BlockTensorQuantizer::updateStats(const float* tensor, const TensorDims& tensorShape, bool useCuda,

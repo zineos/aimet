@@ -77,6 +77,14 @@ void MseEncodingAnalyzer<DTYPE>::updateStats(const DTYPE* tensor, const size_t t
 }
 
 template <typename DTYPE>
+void MseEncodingAnalyzer<DTYPE>::resetStats()
+{
+    this->_stats.xLeft.clear();
+    this->_stats.pdf.clear();
+    this->_stats.iterations = 0;
+}
+
+template <typename DTYPE>
 TfEncoding MseEncodingAnalyzer<DTYPE>::computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
                                                        bool useUnsignedSymmetric) const
 {

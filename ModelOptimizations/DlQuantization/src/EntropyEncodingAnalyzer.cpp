@@ -95,6 +95,15 @@ void EntropyEncodingAnalyzer<DTYPE>::updateStats(const DTYPE* tensor, const size
 }
 
 template <typename DTYPE>
+void EntropyEncodingAnalyzer<DTYPE>::resetStats()
+{
+    this->_tensorProfilingParams.min = 0.0;
+    this->_tensorProfilingParams.max = 0.0;
+    this->_tensorProfilingParams.histogram.clear();
+    this->_tensorProfilingParams.iterations = 0;
+}
+
+template <typename DTYPE>
 TfEncoding EntropyEncodingAnalyzer<DTYPE>::computeEncoding(uint8_t bw, bool useSymmetricEncodings,
                                                            bool useStrictSymmetric, bool useUnsignedSymmetric) const
 {

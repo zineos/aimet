@@ -123,6 +123,15 @@ void EncodingAnalyzerWrapper<DTYPE>::_updateStatsContiguous(const DTYPE* tensor,
 }
 
 template <typename DTYPE>
+void EncodingAnalyzerWrapper<DTYPE>::resetStats()
+{
+    for (auto& encodingAnalyzer: _encodingAnalyzers)
+    {
+        encodingAnalyzer->resetStats();
+    }
+}
+
+template <typename DTYPE>
 std::vector<TfEncoding> EncodingAnalyzerWrapper<DTYPE>::computeEncoding(uint8_t bw, bool useSymmetricEncodings,
                                                                         bool useStrictSymmetric,
                                                                         bool useUnsignedSymmetric) const

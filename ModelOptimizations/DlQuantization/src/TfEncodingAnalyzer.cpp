@@ -79,6 +79,13 @@ void TfEncodingAnalyzer<DTYPE>::updateStats(const DTYPE* tensor, const size_t te
 }
 
 template <typename DTYPE>
+void TfEncodingAnalyzer<DTYPE>::resetStats()
+{
+    this->_accumulatedStats.min = 0.0;
+    this->_accumulatedStats.max = 0.0;
+}
+
+template <typename DTYPE>
 TfEncoding TfEncodingAnalyzer<DTYPE>::computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
                                                       bool useUnsignedSymmetric) const
 {

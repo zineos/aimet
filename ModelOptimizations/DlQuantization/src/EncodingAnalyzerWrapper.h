@@ -60,6 +60,8 @@ public:
     void updateStats(const DTYPE* tensor, const TensorDims& tensorShape, ComputationMode tensorCpuGpuMode,
                      IAllocator* allocator = nullptr, void* stream = nullptr) override;
 
+    void resetStats() override;
+
     std::vector<TfEncoding> computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
                                             bool useUnsignedSymmetric) const override;
 

@@ -76,6 +76,14 @@ void PercentileEncodingAnalyzer<DTYPE>::updateStats(const DTYPE* tensor, const s
 }
 
 template <typename DTYPE>
+void PercentileEncodingAnalyzer<DTYPE>::resetStats()
+{
+    this->_stats.xLeft.clear();
+    this->_stats.pdf.clear();
+    this->_stats.iterations = 0;
+}
+
+template <typename DTYPE>
 TfEncoding PercentileEncodingAnalyzer<DTYPE>::computeEncoding(uint8_t bw, bool useSymmetricEncodings,
                                                               bool useStrictSymmetric, bool useUnsignedSymmetric) const
 {

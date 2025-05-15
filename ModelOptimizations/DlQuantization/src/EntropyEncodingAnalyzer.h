@@ -59,6 +59,11 @@ public:
     void updateStats(const DTYPE* tensor, const size_t tensorSize, ComputationMode tensorCpuGpuMode,
                      IAllocator* allocator) override;
 
+    /**
+     * @brief Reset running stats
+     */
+    void resetStats() override;
+
     /***
      * Compute the encodings using the collected histogram stats by minimizing the mean square
      * error due to quantization of the tensor.

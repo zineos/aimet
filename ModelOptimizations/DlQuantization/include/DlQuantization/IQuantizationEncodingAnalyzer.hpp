@@ -71,6 +71,11 @@ public:
                              IAllocator* allocator) = 0;
 
     /**
+     * @brief Reset running stats
+     */
+    virtual void resetStats() = 0;
+
+    /**
      * @brief Given a number distribution in CPU memory, compute the TensorFlow
      * encoding with the highest possible SQNR.
      *
@@ -141,7 +146,10 @@ public:
     virtual void updateStats(const DTYPE* tensor, const TensorDims& tensorShape, ComputationMode tensorCpuGpuMode,
                              IAllocator* allocator = nullptr, void* stream = nullptr) = 0;
 
-    // virtual void resetStats();
+    /**
+     * @brief Reset running stats
+     */
+    virtual void resetStats() = 0;
 
     /**
      * @brief Given the observed stats, compute a list of encodings with length determined by _shape
