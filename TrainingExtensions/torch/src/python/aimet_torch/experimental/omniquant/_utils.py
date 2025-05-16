@@ -51,6 +51,9 @@ from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
 from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
     QuantizedGemma3RMSNorm,
 )
+from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import (
+    QuantizedQwen2RMSNorm,
+)
 
 import torch
 import numpy as np
@@ -62,6 +65,7 @@ _SUPPORTED_QUANTIZED_MODULES = (
     QuantizedConv2d,
     QuantizedLlamaRMSNorm,
     QuantizedGemma3RMSNorm,
+    QuantizedQwen2RMSNorm,
 )
 
 
@@ -71,8 +75,8 @@ def _convert_sim_to_letsim(sim):
         # TODO: Adding this hardcoding check here for llama. Need to remove it
         if (
             isinstance(module, _SUPPORTED_QUANTIZED_MODULES)
-            and name != "lm_head"
-            and name != "model.norm"
+            and "lm_head" not in name
+            and "model.norm" not in name
         ):
             let_module = LETModule.get_let_module(module)
             parent_module_name = ".".join(name.split(".")[:-1])

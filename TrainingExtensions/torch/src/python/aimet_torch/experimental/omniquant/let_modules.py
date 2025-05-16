@@ -50,7 +50,9 @@ from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
 from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
     QuantizedGemma3RMSNorm,
 )
-
+from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import (
+    QuantizedQwen2RMSNorm,
+)
 import torch
 import copy
 from abc import abstractmethod
@@ -202,6 +204,8 @@ class LETModule:
             return LETQuantizedLlamaRMSNorm(mdl)
         if isinstance(mdl, QuantizedGemma3RMSNorm):
             return LETQuantizedGemmaNorm(mdl)
+        if isinstance(mdl, QuantizedQwen2RMSNorm):
+            return LETQuantizedLlamaRMSNorm(mdl)
         assert False, "Let Quantized module is not implemented"
 
 

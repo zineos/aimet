@@ -36,20 +36,32 @@
 # =============================================================================
 """Process transformer models to get decoder list and LET pair modules for supporting models only"""
 
-from abc import ABC, abstractmethod
 from transformers import LlamaModel, LlamaForCausalLM
+from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.qwen2.modeling_qwen2 import (
+    Qwen2Model,
+    Qwen2DecoderLayer,
+    Qwen2ForCausalLM,
+)
+from aimet_torch import QuantizationSimModel
 from typing import List
 import torch
 
 from .defs import _LetPair
 
 LlamaModelGroup = (LlamaModel, LlamaForCausalLM)
+QwenModelGroup = (Qwen2Model, Qwen2ForCausalLM)
+model_to_block_mapping = {
+    LlamaModel: LlamaDecoderLayer,
+    Qwen2Model: Qwen2DecoderLayer,
+}
 
 
-def get_transformer_processor(model):
+def get_transformer_processor(qsim: QuantizationSimModel):
     """Return transformer_processor based on model class family."""
-    if isinstance(model, LlamaModelGroup):
-        return LlamaProcessor
+    for module in qsim.model.modules():
+        if isinstance(module, (LlamaModelGroup, QwenModelGroup)):
+            return TransformerProcessor(qsim.model)
 
     def _get_supporting_model_class():
         """Helping function to pretty print supporting model classes."""
@@ -61,30 +73,55 @@ def get_transformer_processor(model):
 
     raise ValueError(
         f"AIMET Omniquant only support class: {_get_supporting_model_class()} from transformer package,\
-but got class {model.__class__}"
+but got class {qsim.model.__class__}"
     )
 
 
-# pylint: disable=unnecessary-pass
-class TransformerProcessor(ABC):
-    """Abstract class for transformer processors."""
+class TransformerProcessor:
+    def __init__(self, model):
+        self._screen_for_target_type(model)
 
-    transformer_block_list_path = ""
+    def _screen_for_target_type(self, model):
+        for module in model.modules():
+            for target in model_to_block_mapping:
+                if isinstance(module, target):
+                    self.target_type = target
+                    return
 
-    @classmethod
-    @abstractmethod
-    def get_decoder_list(cls, model):
-        """Method to get decoder module list."""
-        pass
+        assert False, "No targets found in provided model"
 
-    @classmethod
-    @abstractmethod
-    def get_let_module_pair(cls, decoder_block):
+    def get_decoder_list(self, model):
+        """helper to get all the blocks in the model represented by model_to_block_mapping"""
+        target_type = model_to_block_mapping.get(self.target_type)
+        target_modules = []
+        if target_type is not None:
+            target_modules = [
+                m for m in model.model.modules() if isinstance(m, target_type)
+            ]
+        return target_modules
+
+    def get_let_module_pair(self, decoder_block) -> List:
         """Method to get a list of let module pairs in a decoder_block."""
-        pass
+        if isinstance(decoder_block, LlamaDecoderLayer) or isinstance(
+            decoder_block, Qwen2DecoderLayer
+        ):
+            input_layernorm = decoder_block.get_submodule("input_layernorm")
+            q_proj = decoder_block.get_submodule("self_attn.q_proj")
+            k_proj = decoder_block.get_submodule("self_attn.k_proj")
+            v_proj = decoder_block.get_submodule("self_attn.v_proj")
+            o_proj = decoder_block.get_submodule("self_attn.o_proj")
+            gate_proj = decoder_block.get_submodule("mlp.gate_proj")
+            up_proj = decoder_block.get_submodule("mlp.up_proj")
+            down_proj = decoder_block.get_submodule("mlp.down_proj")
+            output_layernorm = decoder_block.get_submodule("post_attention_layernorm")
+            return [
+                _LetPair([input_layernorm], [q_proj, k_proj, v_proj]),
+                _LetPair([v_proj], [o_proj]),
+                _LetPair([output_layernorm], [gate_proj, up_proj]),
+                _LetPair([up_proj], [down_proj]),
+            ]
 
-    @classmethod
-    def init_let_params(cls, let_pair_list: List[_LetPair], num_repeats):
+    def init_let_params(self, let_pair_list: List[_LetPair], num_repeats):
         """Register let params to LET pairs."""
         for _let_pair in let_pair_list:
             prev_modules, foll_modules = _let_pair.prev, _let_pair.follow
@@ -106,47 +143,3 @@ class TransformerProcessor(ABC):
             # Currently only one module is expected in prev_list
             assert len(prev_modules) == 1
             prev_modules[0].register_let_params(prev_scale)
-
-
-class LlamaProcessor(TransformerProcessor):
-    """
-    Transformer Procesor for LlamaModelGroup = (LlamaModel, LlamaForCausalLM)
-    LlamaModel has transformer_block_list_path = "layers"
-    LlamaForCausalLM has transformer_block_list_path = "model.layers"
-    """
-
-    transformer_block_list_path = "layers"  # Used for get_block_inputs
-
-    @classmethod
-    def get_decoder_list(cls, model) -> torch.nn.ModuleList:
-        """Method to get decoder module list."""
-        if isinstance(model, LlamaForCausalLM):
-            model = getattr(model, "model", model)
-            cls.transformer_block_list_path = "model.layers"
-
-        transformer_block_list = model.get_submodule("layers")
-
-        assert isinstance(transformer_block_list, torch.nn.ModuleList), (
-            f"transformer_block_list: {transformer_block_list} is not a ModuleList"
-        )
-        return transformer_block_list
-
-    @classmethod
-    def get_let_module_pair(cls, decoder_block) -> List:
-        """Method to get a list of let module pairs in a decoder_block."""
-        input_layernorm = decoder_block.get_submodule("input_layernorm")
-        q_proj = decoder_block.get_submodule("self_attn.q_proj")
-        k_proj = decoder_block.get_submodule("self_attn.k_proj")
-        v_proj = decoder_block.get_submodule("self_attn.v_proj")
-        o_proj = decoder_block.get_submodule("self_attn.o_proj")
-        gate_proj = decoder_block.get_submodule("mlp.gate_proj")
-        up_proj = decoder_block.get_submodule("mlp.up_proj")
-        down_proj = decoder_block.get_submodule("mlp.down_proj")
-        output_layernorm = decoder_block.get_submodule("post_attention_layernorm")
-
-        return [
-            _LetPair([input_layernorm], [q_proj, k_proj, v_proj]),
-            _LetPair([v_proj], [o_proj]),
-            _LetPair([output_layernorm], [gate_proj, up_proj]),
-            _LetPair([up_proj], [down_proj]),
-        ]

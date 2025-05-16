@@ -54,6 +54,7 @@ from aimet_torch.v2.utils import remove_all_quantizers
 from aimet_torch import QuantizationSimModel
 from aimet_torch.utils import place_model
 from aimet_torch.v2.seq_mse import apply_seq_mse, SeqMseParams
+from aimet_torch.experimental.omniquant import Omniquant
 
 
 def _compute_encodings(
@@ -209,3 +210,47 @@ class AdaScale(QuantizationTechnique):
         )
 
         _compute_encodings(quantsim, dataloader, num_iterations=20)
+
+
+class OmniQuant(QuantizationTechnique):
+    """Apply OmniQuant to model"""
+
+    @staticmethod
+    @torch.no_grad()
+    def apply(
+        quantsim: QuantizationSimModel,
+        dataloader: DataLoader,
+        num_batches: int = 40,
+        num_epochs: int = 20,
+    ):
+        class LimitedBatchDataLoader:
+            """Internal helper class to reduce number of accessible batches in Dataloader"""
+
+            def __init__(self, dataloader, num_batches):
+                self.dataloader = dataloader
+                self.num_batches = num_batches
+                self.current_batch = 0
+
+            def __iter__(self):
+                # pylint: disable=attribute-defined-outside-init
+                self.iterator = iter(self.dataloader)
+                self.current_batch = 0
+                return self
+
+            def __next__(self):
+                if self.current_batch < self.num_batches:
+                    self.current_batch += 1
+                    return next(self.iterator)
+                raise StopIteration
+
+            def __len__(self):
+                return min(len(self.dataloader), self.num_batches)
+
+        Omniquant.apply_omniquant(
+            quant_sim=quantsim,
+            dataloader=LimitedBatchDataLoader(dataloader, num_batches=num_batches),
+            forward_fn=lambda model, input: model.forward(**input),
+            num_epoch=num_epochs,
+        )
+
+        _compute_encodings(quantsim, dataloader, num_iterations=40)

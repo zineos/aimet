@@ -53,6 +53,7 @@ from peft import (
 )
 from peft.tuners.lora.layer import Linear as LoraLinear
 import pytest
+from aimet_torch.experimental.omniquant.defs import _LetPair
 
 from aimet_torch.experimental.omniquant import decoder_processor
 from aimet_torch.experimental.omniquant import omniquant_optimizer
@@ -76,6 +77,37 @@ def add_custom_model_class_to_support_model_group(model_class, target_group_name
     setattr(decoder_processor, target_group_name, target_group)
 
 
+@contextlib.contextmanager
+def add_custom_model_block_to_support_block_type(target_support_block_map):
+    block_map = getattr(decoder_processor, target_support_block_map)
+    new_map = block_map
+    new_map.update({FakeLlamaModel: FakeDecoderBlock})
+    setattr(decoder_processor, target_support_block_map, new_map)
+
+    yield
+
+    setattr(decoder_processor, target_support_block_map, block_map)
+
+
+def get_let_module_pair(decoder_block):
+    """Method to get a list of let module pairs in a FakeDecoderBlock."""
+    input_layernorm = decoder_block.get_submodule("input_layernorm")
+    q_proj = decoder_block.get_submodule("self_attn.q_proj")
+    k_proj = decoder_block.get_submodule("self_attn.k_proj")
+    v_proj = decoder_block.get_submodule("self_attn.v_proj")
+    o_proj = decoder_block.get_submodule("self_attn.o_proj")
+    gate_proj = decoder_block.get_submodule("mlp.gate_proj")
+    up_proj = decoder_block.get_submodule("mlp.up_proj")
+    down_proj = decoder_block.get_submodule("mlp.down_proj")
+    output_layernorm = decoder_block.get_submodule("post_attention_layernorm")
+    return [
+        _LetPair([input_layernorm], [q_proj, k_proj, v_proj]),
+        _LetPair([v_proj], [o_proj]),
+        _LetPair([output_layernorm], [gate_proj, up_proj]),
+        _LetPair([up_proj], [down_proj]),
+    ]
+
+
 class FakeLlamaModel(torch.nn.Module):
     """Toy model for test"""
 
@@ -83,7 +115,7 @@ class FakeLlamaModel(torch.nn.Module):
         super().__init__()
         assert emb_dim % head_num == 0, "emb_dim need to be dividable by head_num."
         self.layers = torch.nn.ModuleList(
-            [FakeDecoderBlcok(seq_len, head_num, emb_dim) for _ in range(layer_num)]
+            [FakeDecoderBlock(seq_len, head_num, emb_dim) for _ in range(layer_num)]
         )
         self.out_linear = torch.nn.Linear(emb_dim, 5)
 
@@ -95,7 +127,7 @@ class FakeLlamaModel(torch.nn.Module):
         return x
 
 
-class FakeDecoderBlcok(torch.nn.Module):
+class FakeDecoderBlock(torch.nn.Module):
     """Toy model for test"""
 
     def __init__(self, seq_len, head_num, emb_dim):
@@ -184,6 +216,7 @@ class TestOmniquant:
         emb_dim = 10
         dummy_input = torch.randn(1, seq_len, emb_dim)
         fake_llama_model = FakeLlamaModel(layer_num, seq_len, head_num, emb_dim)
+        qsim = QuantizationSimModel(fake_llama_model, dummy_input)
         with torch.no_grad():
             # Make sure model is runnable.
             fake_llama_model(dummy_input)
@@ -191,22 +224,20 @@ class TestOmniquant:
         with add_custom_model_class_to_support_model_group(
             FakeLlamaModel, "LlamaModelGroup"
         ):
-            llama_processor = decoder_processor.get_transformer_processor(
-                fake_llama_model
-            )
-            assert llama_processor.__name__ == "LlamaProcessor"
+            with add_custom_model_block_to_support_block_type("model_to_block_mapping"):
+                llama_processor = decoder_processor.get_transformer_processor(qsim)
 
-            decoder_list = llama_processor.get_decoder_list(fake_llama_model)
-            assert len(decoder_list) == layer_num
+                decoder_list = llama_processor.get_decoder_list(qsim)
+                assert len(decoder_list) == layer_num
 
-            for _decoder_block in decoder_list:
-                let_module_pair = llama_processor.get_let_module_pair(_decoder_block)
-                assert (
-                    len(let_module_pair) == 4
-                )  # Llama Model Group should have 4 let pairs.
+                for _decoder_block in decoder_list:
+                    let_module_pair = get_let_module_pair(_decoder_block)
+                    assert (
+                        len(let_module_pair) == 4
+                    )  # Llama Model Group should have 4 let pairs.
 
         with pytest.raises(ValueError):
-            decoder_processor.get_transformer_processor(fake_llama_model)
+            decoder_processor.get_transformer_processor(qsim)
 
     # pylint: disable=too-many-locals
     def test_dump_meta_data(self):
@@ -224,55 +255,52 @@ class TestOmniquant:
         with add_custom_model_class_to_support_model_group(
             FakeLlamaModel, "LlamaModelGroup"
         ):
-            with torch.no_grad():
-                llama_processor = decoder_processor.get_transformer_processor(
-                    fake_llama_model
-                )
-                decoder_list = llama_processor.get_decoder_list(qsim.model)
+            with add_custom_model_block_to_support_block_type("model_to_block_mapping"):
+                with torch.no_grad():
+                    llama_processor = decoder_processor.get_transformer_processor(qsim)
+                    decoder_list = llama_processor.get_decoder_list(qsim)
 
-                for _decoder_block in decoder_list:
-                    qt_let_pair_list = llama_processor.get_let_module_pair(
-                        _decoder_block
-                    )
-                    llama_processor.init_let_params(qt_let_pair_list, num_repeats=1)
+                    for _decoder_block in decoder_list:
+                        qt_let_pair_list = get_let_module_pair(_decoder_block)
+                        llama_processor.init_let_params(qt_let_pair_list, num_repeats=1)
 
-                    # Manual apply scale to Let Module
-                    for let_pair in qt_let_pair_list:
-                        prev, foll = let_pair.prev, let_pair.follow
-                        scale = torch.randn(emb_dim)
-                        prev[0].prev_scale = torch.nn.Parameter(
-                            prev[0].prev_scale * scale
-                        )
-                        for _foll in foll:
-                            _foll.foll_scale = torch.nn.Parameter(
-                                _foll.foll_scale * scale
+                        # Manual apply scale to Let Module
+                        for let_pair in qt_let_pair_list:
+                            prev, foll = let_pair.prev, let_pair.follow
+                            scale = torch.randn(emb_dim)
+                            prev[0].prev_scale = torch.nn.Parameter(
+                                prev[0].prev_scale * scale
                             )
+                            for _foll in foll:
+                                _foll.foll_scale = torch.nn.Parameter(
+                                    _foll.foll_scale * scale
+                                )
 
-                    for module in _decoder_block.modules():
-                        if isinstance(module, LETModule):
-                            module.fold_let_params()
-                # pylint: disable=protected-access
-                with tempfile.TemporaryDirectory() as tempdir:
-                    omniquant._dump_meta_data(qsim.model, Path(tempdir))
-                    metadata_path = os.path.join(
-                        tempdir, "aimet_omniquant_metadata.safetensor"
-                    )
-                    metadata = load_file(metadata_path)
-                    assert len(metadata) == 55  # There should be 55 scales dumped.
+                        for module in _decoder_block.modules():
+                            if isinstance(module, LETModule):
+                                module.fold_let_params()
+                    # pylint: disable=protected-access
+                    with tempfile.TemporaryDirectory() as tempdir:
+                        omniquant._dump_meta_data(qsim.model, Path(tempdir))
+                        metadata_path = os.path.join(
+                            tempdir, "aimet_omniquant_metadata.safetensor"
+                        )
+                        metadata = load_file(metadata_path)
+                        assert len(metadata) == 55  # There should be 55 scales dumped.
 
-                for k, metadata_scale in metadata.items():
-                    module_name = ".".join(k.split(".")[:-1])
-                    prev_foll = k.split(".")[-1]
-                    let_module = qsim.model.get_submodule(module_name)
-                    cached_scale = getattr(
-                        let_module, "_cached_" + prev_foll + "_scale"
-                    )
-                    print(cached_scale)
-                    print(metadata_scale)
-                    print(np.equal(cached_scale, metadata_scale))
-                    assert (
-                        np.equal(cached_scale, metadata_scale)
-                    ).all()  # metadata_scale is numpy array
+                    for k, metadata_scale in metadata.items():
+                        module_name = ".".join(k.split(".")[:-1])
+                        prev_foll = k.split(".")[-1]
+                        let_module = qsim.model.get_submodule(module_name)
+                        cached_scale = getattr(
+                            let_module, "_cached_" + prev_foll + "_scale"
+                        )
+                        print(cached_scale)
+                        print(metadata_scale)
+                        print(np.equal(cached_scale, metadata_scale))
+                        assert (
+                            np.equal(cached_scale, metadata_scale)
+                        ).all()  # metadata_scale is numpy array
 
     # pylint: disable=too-many-locals
     def test_load_lora_model(self):

@@ -157,6 +157,7 @@ class Omniquant:
         :param output_path: Path where to store artifacts.
         """
         _convert_sim_to_letsim(quant_sim)
+
         device = quant_sim.model.device
         if quant_sim.model.device.type != "cuda":
             _logger.info(
@@ -167,17 +168,19 @@ class Omniquant:
         # Disable param quantizers except for linear and conv during LET blockwise training, and restore after optimization.
         with disable_quantizers_for_omq(quant_sim.model):
             compute_param_encodings(quant_sim.model)
-            transformer_processor = get_transformer_processor(quant_sim.model)
+            # transformer_processor = get_transformer_processor(quant_sim.model)
+            # qt_transformer_block_list = transformer_processor.get_decoder_list(
+            #     quant_sim.model
+            # )
+            transformer_processor = get_transformer_processor(quant_sim)
             qt_transformer_block_list = transformer_processor.get_decoder_list(
-                quant_sim.model
+                quant_sim
             )
-
             # num_repeats is used for setting the foll_scale shape for GQA pair (self_attn.v_proj, self.attn_o_proj)
             num_repeats = (
                 quant_sim.model.config.num_attention_heads
                 // quant_sim.model.config.num_key_value_heads
             )
-
             sampler = BlockwiseSampler(
                 sim=quant_sim,
                 blocks=qt_transformer_block_list,
@@ -193,7 +196,6 @@ class Omniquant:
             ):
                 qt_let_pair_list = transformer_processor.get_let_module_pair(qt_block)
                 transformer_processor.init_let_params(qt_let_pair_list, num_repeats)
-
                 qt_block = qt_block.to(device)
 
                 def _set_qt_params_trainable(qt_block):
@@ -225,17 +227,18 @@ class Omniquant:
                     sqnr_list, loss_list = [], []
                     for batch_num in range(num_batch):
                         # Do block-wise training.
-                        with fp_block_inputs[batch_num].load():
-                            with qt_block_inputs[batch_num].load():
-                                loss, sqnr = cls._block_wise_training_step(
-                                    fp_block_inputs[batch_num],
-                                    qt_block_inputs[batch_num],
-                                    qt_block,
-                                    qt_let_pair_list,
-                                    optimizer,
-                                    loss_fn,
-                                    device,
-                                )
+                        with torch.set_grad_enabled(True):
+                            with fp_block_inputs[batch_num].load():
+                                with qt_block_inputs[batch_num].load():
+                                    loss, sqnr = cls._block_wise_training_step(
+                                        fp_block_inputs[batch_num],
+                                        qt_block_inputs[batch_num],
+                                        qt_block,
+                                        qt_let_pair_list,
+                                        optimizer,
+                                        loss_fn,
+                                        device,
+                                    )
 
                         sqnr_list.append(sqnr)
                         loss_list.append(loss)
@@ -247,7 +250,7 @@ class Omniquant:
                         sqnr_mean = torch.stack(sqnr_list).mean()
                         log_msg = f"{log_msg} | sqnr: {sqnr_mean:.3f}"
 
-                    _logger.info(log_msg)
+                _logger.info(log_msg)
 
                 # Reset scale to restore to true FP model for blockwise sampler to sampler correctly.
                 for module in qt_block.modules():
@@ -257,8 +260,6 @@ class Omniquant:
 
                 # Freeze the param quantizers for LET optimized modules
                 freeze_let_optimized_param_quantizers(qt_block)
-                # TODO if should call compute_param_encodings after blockwise training
-
             # fold_let_params
             for module in quant_sim.model.modules():
                 if isinstance(module, LETModule):
@@ -331,11 +332,9 @@ class Omniquant:
         with reset_let_scale(qt_block):
             with disable_all_quantizers(qt_block):
                 target_outputs = qt_block(*_args, **_kwargs)[0]
-
         # Get model output (prediction)
         model_input = fp_input
         _qt_args, _qt_kwargs = _process_block_input(model_input)
-
         qt_output = qt_block(*_qt_args, **_qt_kwargs)[0]
 
         with torch.no_grad():
