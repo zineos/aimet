@@ -182,7 +182,7 @@ jobs:
           git remote add public-origin https://${{ secrets.AIMET_CI }}@github.com/${{ env.DOCS_REPO }}.git
           git config user.email "aimetci@quicinc.com"
           git config user.name "AIMET CI"
-          git commit -m 'Release docs ${tag}' -s
+          git commit -m "Release docs ${tag}" -s
 
           # TODO: for point-releases, consider adding -f
           git push public-origin ${{ github.ref_name }}
