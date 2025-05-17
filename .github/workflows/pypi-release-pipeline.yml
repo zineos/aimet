@@ -144,7 +144,7 @@ jobs:
   publish:
     name: Publish the wheel packages
     runs-on: k8s-gpu
-    needs: [ call-run-unit-tests, call-run-acceptance-tests ]
+    needs: [ variants, call-run-unit-tests, call-run-acceptance-tests ]
     # Unit tests must pass before publishing wheels to PyPI
     # Acceptance tests are optional when running via release workflow
     if: ${{ always() && needs.call-run-unit-tests.result == 'success' &&
