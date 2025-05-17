@@ -169,7 +169,6 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install twine
           python3 -m pip install --force-reinstall wheel
-          ls -al downloads/wheelhouse
       - name: Push to testpypi
         run: |
           # PyPI release does NOT have +cpu or +cu suffix
