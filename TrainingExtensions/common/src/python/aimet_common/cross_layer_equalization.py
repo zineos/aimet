@@ -49,7 +49,6 @@ import numpy as np
 
 from aimet_common.utils import AimetLogger
 from aimet_common.connected_graph.connectedgraph_utils import get_all_input_ops
-from aimet_common import libpymo
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
@@ -377,6 +376,7 @@ class CrossLayerScaling(ABC):
 
         return scale_factor
 
+    @abstractmethod
     def scale_cls_set_with_conv_layers(self, cls_set) -> np.ndarray:
         """
         API to invoke equalize layer params (update for weights and bias is in place)
@@ -385,21 +385,7 @@ class CrossLayerScaling(ABC):
         :return: Scaling factor S_12 for each conv layer pair: numpy array
         """
 
-        # Create structs for holding layer weights and bias parameters
-        prev_layer_params = libpymo.EqualizationParams()
-        curr_layer_params = libpymo.EqualizationParams()
-
-        # Prepare and pack data structures for cls set.
-        self._pack_params_for_conv(cls_set, prev_layer_params, curr_layer_params)
-
-        # Scales weights and bias for consecutive layers and updates data structures in-place.
-        scaling_factor = libpymo.scaleLayerParams(prev_layer_params, curr_layer_params)
-
-        # Update weight and biases for cls set using updated data structures.
-        self._update_params_for_conv(cls_set, prev_layer_params, curr_layer_params)
-
-        return scaling_factor
-
+    @abstractmethod
     def scale_cls_set_with_depthwise_layers(
         self, cls_set
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -410,27 +396,6 @@ class CrossLayerScaling(ABC):
                         Second Conv layer is a depth-wise conv and third conv layer is point-wise conv
         :return: Scaling factors S_12 and S_23 : numpy arrays
         """
-        # Create structs for holding layer weights and bias parameters
-        prev_layer_params = libpymo.EqualizationParams()
-        curr_layer_params = libpymo.EqualizationParams()
-        next_layer_params = libpymo.EqualizationParams()
-
-        # Prepare and pack data structures for cls set.
-        self._pack_params_for_depthwise_conv(
-            cls_set, prev_layer_params, curr_layer_params, next_layer_params
-        )
-
-        # Scales weights and bias for consecutive layers and updates data structures in-place.
-        scaling_params = libpymo.scaleDepthWiseSeparableLayer(
-            prev_layer_params, curr_layer_params, next_layer_params
-        )
-
-        # Update weight and biases for cls set using updated data structures.
-        self._update_params_for_depthwise_conv(
-            cls_set, prev_layer_params, curr_layer_params, next_layer_params
-        )
-
-        return scaling_params.scalingMatrix12, scaling_params.scalingMatrix23
 
     @staticmethod
     def create_cls_set_info_list(
@@ -487,199 +452,6 @@ class CrossLayerScaling(ABC):
             cls_set_info_list.append(cls_set_info)
 
         return cls_set_info_list
-
-    @abstractmethod
-    def _pack_params_for_conv(
-        self,
-        cls_set,
-        prev_layer_params: libpymo.EqualizationParams,
-        curr_layer_params: libpymo.EqualizationParams,
-    ):
-        """
-        Prepare and pack data structure for previous and current layer in given cls set.
-
-        :param cls_set: Consecutive Conv layers Tuple whose weights and biases need to be equalized.
-        :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
-        :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
-        """
-
-    @abstractmethod
-    def _update_params_for_conv(
-        self,
-        cls_set,
-        prev_layer_params: libpymo.EqualizationParams,
-        curr_layer_params: libpymo.EqualizationParams,
-    ):
-        """
-        Update weight and biases for cls set using updated data structures.
-
-        :param cls_set: Consecutive Conv layers Tuple whose weights and biases need to be equalized.
-        :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
-        :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
-        """
-
-    @abstractmethod
-    def _pack_params_for_depthwise_conv(
-        self,
-        cls_set,
-        prev_layer_params: libpymo.EqualizationParams,
-        curr_layer_params: libpymo.EqualizationParams,
-        next_layer_params: libpymo.EqualizationParams,
-    ):
-        """
-        Prepare and pack data structure for previous, current and next layer in given cls set.
-
-        :param cls_set: Consecutive Conv layers Tuple whose weights and biases need to be equalized.
-        :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
-        :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
-        :param next_layer_params: Data structure holding weight and bias for next layer in cls set.
-        :param model: Model
-        """
-
-    @abstractmethod
-    def _update_params_for_depthwise_conv(
-        self,
-        cls_set,
-        prev_layer_params: libpymo.EqualizationParams,
-        curr_layer_params: libpymo.EqualizationParams,
-        next_layer_params: libpymo.EqualizationParams,
-    ):
-        """
-        Update weight and biases for cls set using updated data structures.
-
-        :param cls_set: Consecutive Conv layers Tuple whose weights and biases need to be equalized.
-        :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
-        :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
-        :param next_layer_params: Data structure holding weight and bias for next layer in cls set.
-        """
-
-
-class HighBiasFold(ABC):
-    """
-    Code to apply the high-bias-fold technique to a model
-    """
-
-    ActivationIsReluForFirstModule = bool
-    ScaleForFirstModule = np.ndarray
-
-    @abstractmethod
-    def _check_if_bias_is_none(self, layer) -> bool:
-        """Returns if bias is a None for a layer. True if bias is None"""
-
-    def bias_fold(self, cls_set_info_list: List[ClsSetInfo], bn_layers: Dict):
-        """
-        Folds bias values greater than 3 * sigma to next layer's bias
-
-        :param cls_set_info_list: List of info elements for each cls set
-        :param bn_layers: Key: Conv/Linear layer Value: Corresponding folded BN layer
-        :return: None
-        """
-        if not bn_layers:
-            logger.info(
-                "High Bias folding is not supported for models without BatchNorm Layers"
-            )
-            return
-
-        for cls_set_info in cls_set_info_list:
-            for cls_pair_info in cls_set_info.cls_pair_info_list:
-                if (
-                    self._check_if_bias_is_none(cls_pair_info.layer1)
-                    or self._check_if_bias_is_none(cls_pair_info.layer2)
-                    or (cls_pair_info.layer1.dotted_name not in bn_layers)
-                ):
-                    continue
-
-                # Create data structures for holding layer weights and bias parameters.
-                prev_layer_params = libpymo.LayerParams()
-                curr_layer_params = libpymo.LayerParams()
-                prev_layer_bn_params = libpymo.BNParamsHighBiasFold()
-
-                # Prepare and pack data structures for high bias fold.
-                self._pack_bn_layer_params(
-                    cls_pair_info, bn_layers, prev_layer_bn_params
-                )
-                self._pack_previous_and_current_layer_params(
-                    cls_pair_info, prev_layer_params, curr_layer_params
-                )
-
-                # Update bias for previous and current layer and data structures in-place.
-                libpymo.updateBias(
-                    prev_layer_params, curr_layer_params, prev_layer_bn_params
-                )
-
-                # Set updated biases for previous and current layer.
-                self._update_previous_and_current_layer_bias(
-                    cls_pair_info, prev_layer_params, curr_layer_params
-                )
-
-    @abstractmethod
-    def _populate_bn_params_in_libpymo_obj(
-        self, prev_layer_bn_params: libpymo.BNParamsHighBiasFold, bn_layer
-    ):
-        """
-        Populates BatchNorm params in the libpymo object
-        :param prev_layer_bn_params: Data structure to pack batch norm parameter
-        :param bn_layer: BatchNorm layer
-        """
-
-    def _pack_bn_layer_params(
-        self,
-        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-        bn_layers: Dict,
-        prev_layer_bn_params: libpymo.BNParamsHighBiasFold,
-    ):
-        """
-        Helper method to pack batch norm layer parameter for high bias fold.
-
-        :param cls_pair_info: Layer pairs that were scaled using CLS and related information.
-        :param bn_layers: Dictionary with Key being Conv/Linear layer and value being corresponding folded BN layer.
-        :param prev_layer_bn_params: Data structure to pack batch norm parameter.
-        """
-        scaling_parameter = cls_pair_info.scale_factor
-
-        self._populate_bn_params_in_libpymo_obj(
-            prev_layer_bn_params, bn_layers[cls_pair_info.layer1.dotted_name]
-        )
-
-        if len(scaling_parameter) != len(prev_layer_bn_params.gamma) or len(
-            scaling_parameter
-        ) != len(prev_layer_bn_params.beta):
-            raise ValueError(
-                "High Bias absorption is not supported for networks with fold-forward BatchNorms"
-            )
-        prev_layer_bn_params.gamma = np.divide(
-            prev_layer_bn_params.gamma, scaling_parameter
-        )
-        prev_layer_bn_params.beta = np.divide(
-            prev_layer_bn_params.beta, scaling_parameter
-        )
-
-    @abstractmethod
-    def _pack_previous_and_current_layer_params(
-        self, cls_pair_info, prev_layer_params, curr_layer_params
-    ):
-        """
-        Helper method to pack information of previous and current layer.
-
-        :param cls_pair_info: Layer pairs that were scaled using CLS and related information.
-        :param prev_layer_params: Data structure to pack previous layer parameters.
-        :param curr_layer_params: Data structure to pack current layer parameters.
-        """
-
-    @abstractmethod
-    def _update_previous_and_current_layer_bias(
-        self,
-        cls_pair_info: ClsSetInfo.ClsSetLayerPairInfo,
-        prev_layer_params: libpymo.LayerParams,
-        curr_layer_params: libpymo.LayerParams,
-    ):
-        """
-        Update biases for previous and current layer.
-
-        :param cls_pair_info: Layer pairs that were scaled using CLS and related information.
-        :param prev_layer_params: Data structure holding weight and bias for previous layer in cls set.
-        :param curr_layer_params: Data structure holding weight and bias for current layer in cls set.
-        """
 
 
 class ClsImpl(ABC):

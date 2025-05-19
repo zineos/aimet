@@ -182,7 +182,7 @@ class TestTrainingExtensionsCrossLayerScaling:
             param.clone()
             for param in chain(model.conv1.parameters(), model.conv1.parameters())
         ]
-        CrossLayerScaling.scale_cls_set_with_conv_layers((model.conv1, model.conv2))
+        CrossLayerScaling().scale_cls_set_with_conv_layers((model.conv1, model.conv2))
         params_after = [
             param.clone()
             for param in chain(model.conv1.parameters(), model.conv1.parameters())
@@ -214,7 +214,7 @@ class TestTrainingExtensionsCrossLayerScaling:
 
         folded_pairs = batch_norm_fold.fold_all_batch_norms(model, [input_shape])
 
-        cls_sets = CrossLayerScaling.scale_model(model, input_shape, random_input)
+        cls_sets = CrossLayerScaling().scale_model(model, input_shape, random_input)
         # cls_sets is empty!
         pass
 
@@ -232,7 +232,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         w2 = model.conv2.weight.clone()
         w3 = model.conv3.weight.clone()
 
-        CrossLayerScaling.scale_cls_sets(consecutive_layer_list)
+        CrossLayerScaling().scale_cls_sets(consecutive_layer_list)
 
         # check if weights are updating
         assert not torch.equal(model.conv1.weight, w1)
@@ -269,7 +269,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         ]
 
         for consecutive_layer in consecutive_layer_list:
-            CrossLayerScaling.scale_cls_set_with_depthwise_layers(consecutive_layer)
+            CrossLayerScaling().scale_cls_set_with_depthwise_layers(consecutive_layer)
             r1 = np.amax(
                 np.abs(consecutive_layer[0].weight.detach().cpu().numpy()),
                 axis=(1, 2, 3),
@@ -305,7 +305,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         w2 = model.model[1][3].weight.clone()
         w3 = model.model[2][3].weight.clone()
 
-        CrossLayerScaling.scale_cls_sets(consecutive_layer_list)
+        CrossLayerScaling().scale_cls_sets(consecutive_layer_list)
 
         assert not torch.equal(model.model[0][0].weight, w1)
         assert not torch.equal(model.model[1][3].weight, w2)
@@ -596,7 +596,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         # BN fold
         fold_all_batch_norms(model, (1, 3, 224, 224))
         random_input = torch.rand((1, 3, 224, 224))
-        scale_factors = CrossLayerScaling.scale_model(
+        scale_factors = CrossLayerScaling().scale_model(
             model, (1, 3, 224, 224), random_input
         )
         assert 8 == len(scale_factors)
@@ -611,7 +611,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         # BN fold
         fold_all_batch_norms(model, (2, 10, 24, 24))
 
-        scale_factors = CrossLayerScaling.scale_model(
+        scale_factors = CrossLayerScaling().scale_model(
             model, (2, 10, 24, 24), random_input
         )
         assert 8 == len(scale_factors)
@@ -635,7 +635,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         # BN fold
         fold_all_batch_norms(model, (2, 10, 24, 24))
 
-        scale_factors = CrossLayerScaling.scale_model(
+        scale_factors = CrossLayerScaling().scale_model(
             model, (2, 10, 24, 24), random_input
         )
 
@@ -697,7 +697,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         random_input = torch.rand((10, 10, 4, 4))
 
         baseline_output = model(random_input).detach().numpy()
-        scale_factors = CrossLayerScaling.scale_model(
+        scale_factors = CrossLayerScaling().scale_model(
             model, (10, 10, 4, 4), random_input
         )
 
@@ -720,7 +720,7 @@ class TestTrainingExtensionsCrossLayerScaling:
         random_input = torch.rand((1, 5, 32, 32))
 
         baseline_output = model(random_input).detach().numpy()
-        scale_factors = CrossLayerScaling.scale_model(
+        scale_factors = CrossLayerScaling().scale_model(
             model, (1, 5, 32, 32), random_input
         )
 
@@ -778,7 +778,7 @@ class TestTrainingExtensionsCrossLayerScalingPythonOnly:
         # original outputs
         output = model(random_input)
 
-        CrossLayerScaling.scale_cls_set_with_conv_layers((model.conv1, model.conv2))
+        CrossLayerScaling().scale_cls_set_with_conv_layers((model.conv1, model.conv2))
         output_using_python = model(random_input)
 
         # Verify the outputs.
@@ -796,7 +796,9 @@ class TestTrainingExtensionsCrossLayerScalingPythonOnly:
             model[0].weight *= model[0].weight * 100
 
         dummy_input = torch.rand((1, 10, 32, 32))
-        py_scale_factors = CrossLayerScaling.scale_model(model, dummy_input=dummy_input)
+        py_scale_factors = CrossLayerScaling().scale_model(
+            model, dummy_input=dummy_input
+        )
 
         def _verify_ranges(module_0, module_1):
             if isinstance(module_0, torch.nn.ConvTranspose2d) and module_0.groups == 1:
@@ -823,7 +825,7 @@ class TestTrainingExtensionsCrossLayerScalingPythonOnly:
         dummy_input = torch.rand((1, 10, 32, 32))
         with torch.no_grad():
             model[0].weight[0, :, :, :] = 0
-        CrossLayerScaling.scale_model(model, dummy_input=dummy_input)
+        CrossLayerScaling().scale_model(model, dummy_input=dummy_input)
         assert not torch.isnan(model[0].weight).any()
 
     def test_divide_by_zero_with_depthwise(self):
@@ -841,7 +843,7 @@ class TestTrainingExtensionsCrossLayerScalingPythonOnly:
             model[2].weight[0, :, :, :] = 0
 
         model_copy = copy.deepcopy(model).eval()
-        CrossLayerScaling.scale_model(model, dummy_input=dummy_input)
+        CrossLayerScaling().scale_model(model, dummy_input=dummy_input)
 
         assert not torch.isnan(model[0].weight).any()
         assert not torch.isnan(model[2].weight).any()

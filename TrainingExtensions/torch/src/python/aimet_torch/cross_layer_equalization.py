@@ -53,6 +53,7 @@ from aimet_common.cross_layer_equalization import (
     ClsLayerType,
     ClsSetInfo,
     ClsImpl,
+    CrossLayerScaling as CLS,
     HbfImpl,
 )
 from aimet_torch import utils
@@ -368,43 +369,12 @@ class GraphSearchUtils:
         return is_relu_activation_in_cls_sets
 
 
-class CrossLayerScaling:
+class CrossLayerScaling(CLS):
     """
     Code to apply the cross-layer-scaling technique to a model
     """
 
-    @staticmethod
-    def scale_cls_sets(cls_sets: List[ClsSet]) -> List[ScaleFactor]:
-        """
-        Scale multiple CLS sets
-
-        :param cls_sets: List of CLS sets
-        :return: Scaling factors calculated and applied for each CLS set in order
-        """
-        scale_factor_list = []
-        for cls_set in cls_sets:
-            scale_factor = CrossLayerScaling.scale_cls_set(cls_set)
-            scale_factor_list.append(scale_factor)
-        return scale_factor_list
-
-    @staticmethod
-    def scale_cls_set(cls_set: ClsSet) -> ScaleFactor:
-        """
-        Scale a CLS set
-        :param cls_set: Either a pair or regular conv layers or a triplet of depthwise separable layers
-        :return: Scaling factor calculated and applied
-        """
-        if len(cls_set) == 3:
-            scale_factor = CrossLayerScaling.scale_cls_set_with_depthwise_layers(
-                cls_set
-            )
-        else:
-            scale_factor = CrossLayerScaling.scale_cls_set_with_conv_layers(cls_set)
-
-        return scale_factor
-
-    @classmethod
-    def scale_cls_set_with_conv_layers(cls, cls_set: ClsSet) -> np.ndarray:
+    def scale_cls_set_with_conv_layers(self, cls_set: ClsSet) -> np.ndarray:
         """
         API to invoke equalize layer params (update for weights and bias is in place)
 
@@ -431,9 +401,8 @@ class CrossLayerScaling:
 
         return scaling_factor
 
-    @classmethod
     def scale_cls_set_with_depthwise_layers(
-        cls, cls_set: ClsSet
+        self, cls_set: ClsSet
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         API to invoke equalize layer params for depth wise separable layers(update for weights and bias is in place)
@@ -463,64 +432,6 @@ class CrossLayerScaling:
         return scaling_factors
 
     @staticmethod
-    def create_cls_set_info_list(
-        cls_sets: List[ClsSet],
-        scale_factors: List[ScaleFactor],
-        is_relu_activation_in_cls_sets,
-    ):
-        """
-        Binds information from there separate lists into one [ClsInfoSet] data-structure
-        :param cls_sets: List of CLS sets
-        :param scale_factors: Scale-factors for each cls-set
-        :param is_relu_activation_in_cls_sets: Information if there is relu activation in each cls-set
-        :return: List of ClsSetInfo
-        """
-        cls_set_info_list = []
-        assert (
-            len(cls_sets) == len(scale_factors) == len(is_relu_activation_in_cls_sets)
-        )
-
-        for index, cls_set in enumerate(cls_sets):
-            if isinstance(scale_factors[index], tuple):
-                # If we are dealing with a triplet of layers, then we should have 2 scale factors and 2 relu flags
-                # Assert that this is true
-                assert len(cls_set) == 3
-                assert (
-                    len(scale_factors[index])
-                    == len(is_relu_activation_in_cls_sets[index])
-                    == 2
-                )
-
-                cls_pair_1 = ClsSetInfo.ClsSetLayerPairInfo(
-                    cls_set[0],
-                    cls_set[1],
-                    scale_factors[index][0],
-                    is_relu_activation_in_cls_sets[index][0],
-                )
-                cls_pair_2 = ClsSetInfo.ClsSetLayerPairInfo(
-                    cls_set[1],
-                    cls_set[2],
-                    scale_factors[index][1],
-                    is_relu_activation_in_cls_sets[index][1],
-                )
-
-                cls_set_info = ClsSetInfo(cls_pair_1, cls_pair_2)
-
-            else:
-                cls_pair = ClsSetInfo.ClsSetLayerPairInfo(
-                    cls_set[0],
-                    cls_set[1],
-                    scale_factors[index],
-                    is_relu_activation_in_cls_sets[index],
-                )
-
-                cls_set_info = ClsSetInfo(cls_pair)
-
-            cls_set_info_list.append(cls_set_info)
-
-        return cls_set_info_list
-
-    @staticmethod
     def scale_model(
         model: torch.nn.Module,
         input_shapes: Union[Tuple, List[Tuple]] = None,
@@ -536,7 +447,7 @@ class CrossLayerScaling:
         :return: CLS information for each CLS set
         """
         if isinstance(model, torch.nn.DataParallel):
-            return CrossLayerScaling.scale_model(
+            return CrossLayerScaling().scale_model(
                 model.module, input_shapes, dummy_input=dummy_input
             )
 
@@ -567,7 +478,7 @@ class CrossLayerScaling:
                 cls_sets += cls_set
 
             # Scale the CLS sets
-            scale_factors = CrossLayerScaling.scale_cls_sets(cls_sets)
+            scale_factors = CrossLayerScaling().scale_cls_sets(cls_sets)
 
             # Find if there were relu activations between layers of each cls set
             is_relu_activation_in_cls_sets = (
@@ -575,7 +486,7 @@ class CrossLayerScaling:
             )
 
             # Convert to a list of cls-set-info elements
-            cls_set_info_list = CrossLayerScaling.create_cls_set_info_list(
+            cls_set_info_list = CrossLayerScaling().create_cls_set_info_list(
                 cls_sets, scale_factors, is_relu_activation_in_cls_sets
             )
         return cls_set_info_list
@@ -925,7 +836,7 @@ def equalize_bn_folded_model(
 
         with place_model(model, torch.device("cpu")):
             # perform cross-layer scaling on applicable layer sets
-            cls_set_info_list = CrossLayerScaling.scale_model(
+            cls_set_info_list = CrossLayerScaling().scale_model(
                 model, input_shapes, dummy_input=dummy_input
             )
 
