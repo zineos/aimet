@@ -40,7 +40,6 @@
 from typing import Tuple
 
 import tensorflow as tf
-from aimet_common import libpymo as pymo
 
 from aimet_common.utils import AimetLogger
 from aimet_common import cost_calculator
@@ -48,7 +47,6 @@ from aimet_common.defs import CostMetric
 import aimet_common.svd_pruner
 from aimet_common.pruner import Pruner
 
-from aimet_tensorflow.keras.utils import pymo_utils
 from aimet_tensorflow.keras.layer_database import LayerDatabase, Layer
 from aimet_tensorflow.keras.svd_spiltter import (
     SpatialSvdModuleSplitter,
@@ -133,16 +131,10 @@ class WeightSvdPruner(Pruner):
             )
         )
 
-        # Create a new instance of libpymo and register layers with it
-        svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
-            [layer], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
-        )
-
         # Split module using Weight SVD
         logger.info("Splitting module: %s with rank: %r", layer.name, rank)
         module_a, module_b = WeightSvdModuleSplitter.split_module(
-            comp_layer_db.model, layer.module, rank, svd_lib_ref
+            comp_layer_db.model, layer.module, rank
         )
 
         # get the output activation shape for first conv/fc op

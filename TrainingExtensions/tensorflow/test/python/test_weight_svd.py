@@ -43,8 +43,6 @@ from aimet_common.defs import CostMetric
 from aimet_tensorflow.keras.layer_database import *
 from aimet_tensorflow.keras.svd_spiltter import WeightSvdModuleSplitter
 from aimet_tensorflow.keras.svd_pruner import WeightSvdPruner
-from aimet_tensorflow.keras.utils import pymo_utils
-import aimet_common.libpymo as pymo
 
 
 def get_model(model_type="Sequential"):
@@ -100,13 +98,8 @@ class TestWeightSvdLayerSplitandSVDPrunner:
 
         layer1 = Layer(orig_conv_op, orig_conv_op.name, output_shape=org_conv_op_shape)
 
-        svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
-            [layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
-        )
-
         split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(
-            model, layer1.module, rank, svd_lib_ref
+            model, layer1.module, rank
         )
 
         split_conv_output = split_conv_op2.output_shape
@@ -144,13 +137,8 @@ class TestWeightSvdLayerSplitandSVDPrunner:
             layer1, 0.5, cost_metric
         )
 
-        svd_lib_ref = pymo.GetSVDInstance()
-        pymo_utils.PymoSvdUtils.configure_layers_in_pymo_svd(
-            [layer1], cost_metric, svd_lib_ref, pymo.TYPE_SINGLE
-        )
-
         split_conv_op1, split_conv_op2 = WeightSvdModuleSplitter.split_module(
-            model, layer1.module, rank, svd_lib_ref
+            model, layer1.module, rank
         )
 
         split_conv_output = split_conv_op2.output_shape

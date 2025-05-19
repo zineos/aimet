@@ -41,16 +41,14 @@ import torch.nn as nn
 import torch.nn.functional as functional
 import pytest
 import copy
-from contextlib import contextmanager
 
 import aimet_common.defs
 from aimet_common.defs import LayerCompRatioPair
 from aimet_common.utils import AimetLogger
 from .models import mnist_torch_model as mnist_model
-import aimet_torch.compression_factory as cf_svd
 from aimet_torch.utils import create_rand_tensors_given_shapes, get_device
 from aimet_torch.layer_database import LayerDatabase, Layer
-from aimet_torch.svd.svd_pruner import WeightSvdPruner, PyWeightSvdPruner
+from aimet_torch.svd.svd_pruner import WeightSvdPruner
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Test)
 
@@ -315,7 +313,7 @@ class TestWeightSvdPruning:
             trainer=None,
         )
         # Using python implementation
-        pruner = PyWeightSvdPruner()
+        pruner = WeightSvdPruner()
         py_layer_db = pruner.prune_model(
             layer_db,
             layer_comp_ratio_list,
@@ -367,7 +365,7 @@ class TestWeightSvdPruning:
             trainer=None,
         )
         # Using python implementation
-        pruner = PyWeightSvdPruner()
+        pruner = WeightSvdPruner()
         py_layer_db = pruner.prune_model(
             layer_db,
             layer_comp_ratio_list,

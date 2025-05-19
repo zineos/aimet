@@ -71,7 +71,7 @@ from aimet_torch.layer_selector import (
     ManualLayerSelector,
 )
 from aimet_torch.layer_database import LayerDatabase
-from aimet_torch.svd.svd_pruner import SpatialSvdPruner, PyWeightSvdPruner
+from aimet_torch.svd.svd_pruner import SpatialSvdPruner, WeightSvdPruner
 from aimet_torch.channel_pruning.channel_pruner import (
     InputChannelPruner,
     ChannelPruningCostCalculator,
@@ -301,7 +301,7 @@ class CompressionFactory:
         use_cuda = next(model.parameters()).is_cuda
 
         # Create a pruner
-        pruner = PyWeightSvdPruner()
+        pruner = WeightSvdPruner()
         cost_calculator = WeightSvdCostCalculator()
         comp_ratio_rounding_algo = RankRounder(params.multiplicity, cost_calculator)
 
