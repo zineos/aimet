@@ -35,10 +35,10 @@ jobs:
         id: select
         env:
           ALL_CHANGED_FILES: ${{ steps.diff.outputs.changed_files }}
-          AIMET_TORCH_SRC_CODE: "TrainingExtensions/torch/*"
-          AIMET_ONNX_SRC_CODE:  "TrainingExtensions/onnx/*"
-          AIMET_TF_SRC_CODE:    "TrainingExtensions/tensorflow/*"
-          DOC_SRC_CODE:         "Docs/*"
+          AIMET_TORCH_SRC_CODE: "TrainingExtensions/torch/"
+          AIMET_ONNX_SRC_CODE:  "TrainingExtensions/onnx/"
+          AIMET_TF_SRC_CODE:    "TrainingExtensions/tensorflow/"
+          DOC_SRC_CODE:         "Docs/"
         shell: bash
         run: |
           set -x
