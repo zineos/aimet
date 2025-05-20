@@ -1555,13 +1555,13 @@ class QuantizationSimModel:
             product.name
             for op in self.connected_graph.get_all_ops().values()
             for product, _ in op.parameters.values()
-            if self.qc_quantize_op_dict[product.name].bitwidth <= 16
+            if self.qc_quantize_op_dict[product.name].bitwidth <= 32
         }
         qdq_params = {
             f"{product.name}_qdq": product
             for op in self.connected_graph.get_all_ops().values()
             for product, _ in op.parameters.values()
-            if self.qc_quantize_op_dict[product.name].bitwidth <= 16
+            if self.qc_quantize_op_dict[product.name].bitwidth <= 32
         }
 
         partial_model = onnx.helper.make_model(

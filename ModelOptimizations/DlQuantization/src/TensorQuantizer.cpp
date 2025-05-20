@@ -466,6 +466,7 @@ void BlockTensorQuantizer::setEncodings(const Encodings& encodings)
     }
     isEncodingValid = true;
     _encodings      = encodings;
+    bitwidth        = encodings[0].bw;
 }
 
 }   // namespace DlQuantization
