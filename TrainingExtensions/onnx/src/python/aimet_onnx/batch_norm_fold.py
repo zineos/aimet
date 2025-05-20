@@ -37,18 +37,17 @@
 """ONNX Code to fold batch-norm layers"""
 
 from typing import Dict, List, Tuple
-import contextlib
 import numpy as np
 import onnx
 from onnx import numpy_helper
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from packaging import version
 
+from aimet_common.batch_norm_fold import batch_norm_fold
 from aimet_common.bias_correction import ConvBnPatternHandler
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.graph_searcher import GraphSearcher
 from aimet_common.connected_graph.connectedgraph_utils import get_ordered_ops
-from aimet_common import libpymo
 from aimet_common.utils import AimetLogger
 
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
@@ -69,9 +68,9 @@ from aimet_onnx.utils import (
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
-    from onnx import NodeProto, TensorProto, ModelProto
+    from onnx import NodeProto, ModelProto
 else:
-    from onnx.onnx_pb import NodeProto, TensorProto, ModelProto
+    from onnx.onnx_pb import NodeProto, ModelProto
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.BatchNormFolding)
 
@@ -83,10 +82,10 @@ BatchNormType = ["BatchNormalization"]
 class BNLayer:
     """Captures beta and gamma parameter for BatchNorm layers to be used during High Bias absorption"""
 
-    def __init__(self):
-        self.bn_layer = None
-        self.gamma = None
-        self.beta = None
+    def __init__(self, bn_layer=None, gamma=None, beta=None):
+        self.bn_layer = bn_layer
+        self.gamma = gamma
+        self.beta = beta
 
 
 def _find_conv_bn_pairs(connected_graph: ConnectedGraph) -> Dict:
@@ -287,44 +286,68 @@ def _fold_to_weight(
     weight = ParamUtils.get_param(model, conv_linear, WEIGHT_INDEX)
     bias = ParamUtils.get_param(model, conv_linear, BIAS_INDEX)
     groups = get_node_attribute(conv_linear, "group")
+    _, num_out_channels = get_input_output_channels(conv_linear, model)
 
     # If layer doesn't have bias, create a bias initializer and add it to the model, then retrieve it
     if not bias:
-        bias_data = np.zeros(get_input_output_channels(conv_linear, model)[1])
+        bias_data = np.zeros(num_out_channels)
         bias_name = conv_linear.name + ".bias"
         bias = numpy_helper.from_array(bias_data.astype(np.float32), name=bias_name)
         model.graph.initializer.append(bias)
         conv_linear.input.append(bias_name)
         bias = ParamUtils.get_param(model, conv_linear, BIAS_INDEX)
 
+    weight_np = numpy_helper.to_array(weight)
+    weight_np = np.expand_dims(weight_np, axis=tuple(range(weight_np.ndim, 4)))
+    bias_np = numpy_helper.to_array(bias)
+
     # Transpose weights to C, N, H, W from N, C, H, W since axis are flipped for transposed conv
     # However depthwise conv layers are always N, 1, H, W whether transposed-conv or not, so no need to transpose
     # if conv_linear.type == "ConvTranspose" and conv_linear groups == 1:
     if conv_linear.op_type == "ConvTranspose" and groups == 1:
-        weight = transpose_tensor(weight, (1, 0, 2, 3))
+        weight_np = weight_np.transpose(1, 0, 2, 3)
     # Gemm layers may or may not need to have weights transposed depending on value of transB attribute
     elif conv_linear.op_type in LinearType and not get_node_attribute(
         conv_linear, "transB"
     ):
-        weight = transpose_tensor(weight, (1, 0))
+        weight_np = weight_np.transpose(1, 0, 2, 3)
 
-    channels = weight.dims[0] if fold_backward else weight.dims[1]
-    bn_param = get_bn_params(model, bn, channels)
-    bn_layer = copy_bn_params_to_bn_layer(bn, bn_param)
+    gamma = ParamUtils.get_param(model, bn, WEIGHT_INDEX)
+    beta = ParamUtils.get_param(model, bn, BIAS_INDEX)
+    mu = ParamUtils.get_param(model, bn, RUNNING_MEAN_INDEX)
+    running_var = ParamUtils.get_param(model, bn, RUNNING_VAR_INDEX)
 
-    _call_mo_batch_norm_fold(weight, bias, bn_param, fold_backward=fold_backward)
+    gamma_np = numpy_helper.to_array(gamma)
+    beta_np = numpy_helper.to_array(beta)
+    mu_np = numpy_helper.to_array(mu)
+    epsilon = get_node_attribute(bn, "epsilon") or 1e-5
+    sigma_np = np.sqrt(numpy_helper.to_array(running_var) + epsilon)
+
+    # In the case of BatchNorm2d -> Flatten -> Gemm, must resize the BN parameters to the Gemm input feature length
+    channels = weight_np.shape[0] if fold_backward else weight_np.shape[1]
+    gamma_np = gamma_np.repeat(channels / gamma_np.size)
+    beta_np = beta_np.repeat(channels / beta_np.size)
+    mu_np = mu_np.repeat(channels / mu_np.size)
+    sigma_np = sigma_np.repeat(channels / sigma_np.size)
+
+    weight_np, bias_np = batch_norm_fold(
+        weight_np, bias_np, gamma_np, beta_np, mu_np, sigma_np, fold_backward
+    )
 
     # Transpose weight back to original configuration
     if conv_linear.op_type == "ConvTranspose" and groups == 1:
-        weight = transpose_tensor(weight, (1, 0, 2, 3))
+        weight_np = weight_np.transpose(1, 0, 2, 3)
     elif conv_linear.op_type in LinearType and not get_node_attribute(
         conv_linear, "transB"
     ):
-        weight = transpose_tensor(weight, (1, 0))
+        weight_np = weight_np.transpose(1, 0, 2, 3)
 
-    weight_param = ParamUtils.get_param(model, conv_linear, WEIGHT_INDEX)
-    weight_param.raw_data = weight.raw_data
-    return bn_layer
+    weight_np = weight_np.astype(onnx.helper.tensor_dtype_to_np_dtype(weight.data_type))
+    bias_np = bias_np.astype(onnx.helper.tensor_dtype_to_np_dtype(bias.data_type))
+    weight.raw_data = weight_np.tobytes()
+    bias.raw_data = bias_np.tobytes()
+
+    return BNLayer(bn, gamma_np, beta_np)
 
 
 def _matmul_to_gemm(node: NodeProto, model: ModelProto):
@@ -352,113 +375,19 @@ def _matmul_to_gemm(node: NodeProto, model: ModelProto):
     node.input.append(bias_name)
 
 
-def _call_mo_batch_norm_fold(
-    weight: TensorProto,
-    bias: TensorProto,
-    bn_params: libpymo.BNParams,
-    fold_backward: bool,
-):
-    """
-    Calls C++ batch norm folding API.
-
-    :param weight: Weight or scale tensor to fold BN into.
-    :param bias: Bias tensor to fold BN into.
-    :param bn_params: Batch Norm layer
-    :param fold_backward: True if BatchNorm comes after Conv/Linear layer
-    """
-    weight_tensor = libpymo.TensorParams()
-
-    weight_tensor.data = numpy_helper.to_array(weight).reshape(-1)
-    weight_tensor.shape = np.array(weight.dims)
-
-    bias_tensor = libpymo.TensorParams()
-
-    bias_tensor.data = numpy_helper.to_array(bias).reshape(-1)
-    bias_tensor.shape = np.array(bias.dims)
-    is_bias_valid = True
-
-    with _expand_shape_to_4d(weight_tensor):
-        _bias = libpymo.fold(
-            bn_params, weight_tensor, bias_tensor, is_bias_valid, fold_backward
-        )
-
-    bias.raw_data = np.asarray(_bias, dtype=np.float32).tobytes()
-    weight.raw_data = np.asarray(weight_tensor.data, dtype=np.float32).tobytes()
-
-
-def get_bn_params(model: ModelProto, bn: NodeProto, channels: int) -> libpymo.BNParams:
-    """
-    Returns the populated libpymo.BNParams object for the given BatchNormalization layer with
-    parameters repeated if necessary.
-
-    :param model: model to which the bn layer belongs
-    :param bn: BatchNormalization layer to retrieve the parameters from
-    :param channels: The effective number of channels the BatchNorm layer operates on (needed for Gemm layers)
-    :return: libpymo.BNParams object for the input BatchNorm layer
-    """
-    bn_params = libpymo.BNParams()
-    gamma = numpy_helper.to_array(
-        ParamUtils.get_param(model, bn, WEIGHT_INDEX)
-    ).reshape(-1)
-    # In the case of BatchNorm2d -> Flatten -> Gemm, must resize the BN parameters to the Gemm input feature length
-    resize = channels / len(gamma)
-    bn_params.gamma = np.repeat(gamma, resize)
-    bn_params.beta = np.repeat(
-        numpy_helper.to_array(ParamUtils.get_param(model, bn, BIAS_INDEX)).reshape(-1),
-        resize,
-    )
-    bn_params.runningMean = np.repeat(
-        numpy_helper.to_array(
-            ParamUtils.get_param(model, bn, RUNNING_MEAN_INDEX)
-        ).reshape(-1),
-        resize,
-    )
-    runningVar = numpy_helper.to_array(
-        ParamUtils.get_param(model, bn, RUNNING_VAR_INDEX)
-    )
-
-    epsilon = get_node_attribute(bn, "epsilon")
-    if epsilon is None:
-        epsilon = 1e-5  # Default onnx epsilon value
-    sigma = np.sqrt(runningVar + epsilon)
-    bn_params.runningVar = np.repeat(sigma.reshape(-1), resize)
-
-    return bn_params
-
-
-def copy_bn_params_to_bn_layer(bn: NodeProto, bn_params: libpymo.BNParams) -> BNLayer:
-    """
-    Copies bn params to a BN layer which can be used later by High bias absorption
-    :param bn: BN layer
-    :param bn_params: libpymo.BNParams object for the BatchNorm layer
-    :return BNLayer object
-    """
-    bn_layer = BNLayer()
-    bn_layer.bn_layer = bn
-    bn_layer.gamma = bn_params.gamma
-    bn_layer.beta = bn_params.beta
-    return bn_layer
-
-
-@contextlib.contextmanager
-def _expand_shape_to_4d(weight_tensor: libpymo.TensorParams):
-    """Expand the shape of the weight into 4d."""
-    dims = len(weight_tensor.shape)
-
-    if dims > 4:
-        raise RuntimeError
-
-    if dims == 4:
-        yield weight_tensor
-
+def _get_input_output_channel_axes(node: NodeProto) -> Tuple[int, int]:
+    if node.op_type == "Conv":
+        return 1, 0
+    elif node.op_type == "ConvTranspose":
+        return 0, 1
+    elif node.op_type == "Gemm":
+        transB = get_node_attribute(node, "transB")
+        if transB == 1:
+            return 1, 0
+        else:
+            return 0, 1
     else:
-        orig_shape = weight_tensor.shape
-        _4d_shape = np.append(orig_shape, [1 for _ in range(4 - dims)]).astype(int)
-        try:
-            weight_tensor.shape = _4d_shape
-            yield weight_tensor
-        finally:
-            weight_tensor.shape = orig_shape
+        raise RuntimeError
 
 
 def get_input_output_channels(node: NodeProto, model: ModelProto) -> Tuple[int, int]:
@@ -469,24 +398,25 @@ def get_input_output_channels(node: NodeProto, model: ModelProto) -> Tuple[int, 
     :return: Tuple of (num channels in, num channels out)
     """
     weight = ParamUtils.get_param(model, node, WEIGHT_INDEX)
+    in_axis, out_axis = _get_input_output_channel_axes(node)
     groups = get_node_attribute(node, "group")
     # If group atttribute does not exist in the node,then default is 1
     if not groups:
         groups = 1
     if node.op_type == "Conv":
-        num_in_channels = weight.dims[1] * groups
-        num_out_channels = weight.dims[0]
+        num_in_channels = weight.dims[in_axis] * groups
+        num_out_channels = weight.dims[out_axis]
     elif node.op_type == "ConvTranspose":
-        num_in_channels = weight.dims[0]
-        num_out_channels = weight.dims[1] * groups
+        num_in_channels = weight.dims[in_axis]
+        num_out_channels = weight.dims[out_axis] * groups
     elif node.op_type == "Gemm":
         transB = get_node_attribute(node, "transB")
         if transB == 1:
-            num_out_channels = weight.dims[0]
-            num_in_channels = weight.dims[1]
+            num_out_channels = weight.dims[out_axis]
+            num_in_channels = weight.dims[in_axis]
         else:
-            num_out_channels = weight.dims[1]
-            num_in_channels = weight.dims[0]
+            num_out_channels = weight.dims[out_axis]
+            num_in_channels = weight.dims[in_axis]
     else:
         num_out_channels = None
         num_in_channels = None
