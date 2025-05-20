@@ -39,6 +39,7 @@
 
 from typing import Tuple, Optional, Dict, Any, overload, Union, List
 from itertools import chain, repeat
+import math
 import torch
 from torch._C._nn import _parse_to as parse_to_args
 
@@ -240,25 +241,15 @@ class AffineEncoding(EncodingBase, _GridMixin):
         return torch.int32
 
     def _get_export_dtype(self) -> str:  # pylint: disable=too-many-return-statements
-        if 0 <= self.qmin < self.qmax < 2**4:
-            return "uint4"
+        nbits = math.ceil(math.log2(self.qmax - self.qmin + 1))
+        signed = self.qmin < 0 <= self.qmax
 
-        if 0 <= self.qmin < self.qmax < 2**8:
-            return "uint8"
+        if signed:
+            dtype_str = f"int{nbits}"
+        else:
+            dtype_str = f"uint{nbits}"
 
-        if 0 <= self.qmin < self.qmax < 2**16:
-            return "uint16"
-
-        if -(2**3) <= self.qmin < self.qmax < 2**3:
-            return "int4"
-
-        if -(2**7) <= self.qmin < self.qmax < 2**7:
-            return "int8"
-
-        if -(2**15) <= self.qmin < self.qmax < 2**15:
-            return "int16"
-
-        return "int32"
+        return dtype_str
 
     @property
     def block_size(self) -> Optional[Tuple[int, ...]]:
@@ -439,16 +430,6 @@ class AffineEncoding(EncodingBase, _GridMixin):
                     "Nonzero quant shift not supported in AffineEncoding to_qnn_encoding_dict"
                 )
             output_dtype = self._get_export_dtype()
-            assert output_dtype in (
-                "int4",
-                "int8",
-                "int16",
-                "int32",
-                "uint4",
-                "uint8",
-                "uint16",
-                "uint32",
-            )
 
             y_scale = self.scale
             if self.symmetry:

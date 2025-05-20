@@ -2601,3 +2601,18 @@ def test_equivalence_with_pairwise_nearest():
 
         out = quantizer(tensor_to_qdq)
         assert torch.equal(mapped_tensor, out)
+
+
+def test_affine_encoding_schema_2_0_0_nonstandard_dtype():
+    """
+    When: Export quantizer with non-standard data type
+    Then: Exported encoding should honor non-standard dtype
+    """
+    qtzr = QuantizeDequantize(shape=(), qmin=-4, qmax=3, symmetric=True)  # 3-bit qdq
+
+    with qtzr.compute_encodings():
+        _ = qtzr(torch.randn(10, 10))
+
+    encoding = qtzr.get_encodings().to_qnn_encoding_dict("2.0.0")
+
+    assert encoding["output_dtype"] == "int3"
