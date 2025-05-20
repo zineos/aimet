@@ -44,7 +44,6 @@ from peft.tuners.lora.layer import Linear as LoraLinear
 from peft.peft_model import PeftModel
 from safetensors.numpy import save_file, load_file
 import torch
-from torch import nn
 from typing import Union, Callable
 import time
 
@@ -59,13 +58,14 @@ from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.nn import compute_param_encodings
 from aimet_common.utils import AimetLogger
 from .decoder_processor import get_transformer_processor
-from .let_modules import LETModule
+
 from ._utils import (
-    _convert_sim_to_letsim,
-    _convert_letsim_to_sim,
     get_sqnr,
     disable_quantizers_for_omq,
     freeze_let_optimized_param_quantizers,
+    replace_with_omniquant_weight_quantizers,
+    SUPPORTED_QUANTIZED_MODULES,
+    OMQ_QUANTIZERS,
 )
 
 from tqdm import tqdm
@@ -93,7 +93,7 @@ class Omniquant:
         forward_fn: Callable,
         num_epoch: int,
         output_path: str = OMNIQUANT_ARTIFACT_DIR,
-    ) -> torch.nn.Module:
+    ):
         """
         Returns model with with omniquant weight, and save metadata in safetensor format to output path. Metadata safetensor
         can be used in update_lora_weights to update lora adaptor weights for peft lora model.
@@ -134,7 +134,6 @@ class Omniquant:
     # pylint: disable=unused-argument
     # pylint: disable=too-many-arguments
     # pylint: disable=too-many-statements
-    # pylint: disable=protected-access
     @classmethod
     def _apply_omniquant(
         cls,
@@ -156,8 +155,6 @@ class Omniquant:
         :param num_batch: Number of batches in dataloader.
         :param output_path: Path where to store artifacts.
         """
-        _convert_sim_to_letsim(quant_sim)
-
         device = quant_sim.model.device
         if quant_sim.model.device.type != "cuda":
             _logger.info(
@@ -168,14 +165,12 @@ class Omniquant:
         # Disable param quantizers except for linear and conv during LET blockwise training, and restore after optimization.
         with disable_quantizers_for_omq(quant_sim.model):
             compute_param_encodings(quant_sim.model)
-            # transformer_processor = get_transformer_processor(quant_sim.model)
-            # qt_transformer_block_list = transformer_processor.get_decoder_list(
-            #     quant_sim.model
-            # )
-            transformer_processor = get_transformer_processor(quant_sim)
+            transformer_processor = get_transformer_processor(quant_sim.model)
             qt_transformer_block_list = transformer_processor.get_decoder_list(
                 quant_sim
             )
+            replace_with_omniquant_weight_quantizers(qt_transformer_block_list)
+
             # num_repeats is used for setting the foll_scale shape for GQA pair (self_attn.v_proj, self.attn_o_proj)
             num_repeats = (
                 quant_sim.model.config.num_attention_heads
@@ -210,14 +205,13 @@ class Omniquant:
                 _set_qt_params_trainable(qt_block)
 
                 encoding_params, param_names = cls._get_trainable_params(qt_block)
-                let_params = cls._get_let_params(qt_let_pair_list)
+
                 grouped_params = [
                     {
                         "params": encoding_params,
                         "lr": OMNIQUANT_LR,
                         "weight_decay": 0.0,
                     },
-                    {"params": let_params, "lr": OMNIQUANT_LR, "weight_decay": 0.0},
                 ]
 
                 optimizer = torch.optim.AdamW(grouped_params)
@@ -252,24 +246,20 @@ class Omniquant:
 
                 _logger.info(log_msg)
 
-                # Reset scale to restore to true FP model for blockwise sampler to sampler correctly.
-                for module in qt_block.modules():
-                    if isinstance(module, LETModule):
-                        module._cache_train_scale()
-                        module._reset_let_params()
-
                 # Freeze the param quantizers for LET optimized modules
                 freeze_let_optimized_param_quantizers(qt_block)
+
             # fold_let_params
             for module in quant_sim.model.modules():
-                if isinstance(module, LETModule):
-                    module._fold()
+                if isinstance(module, SUPPORTED_QUANTIZED_MODULES):
+                    for key, quantizer in module.param_quantizers.items():
+                        if isinstance(quantizer, OMQ_QUANTIZERS):
+                            quantizer.fold_let_params(module, key)
 
             # pylint: disable=protected-access
             # pylint: disable=unnecessary-comprehension
             cls._dump_meta_data(quant_sim.model, output_path)
-            with torch.no_grad():
-                _convert_letsim_to_sim(quant_sim)
+
             # QDQ on models to fold quantizations into weight params.
             quant_sim.model.to(device)
             # pylint:disable = protected-access
@@ -310,32 +300,14 @@ class Omniquant:
             return args, kwargs
 
         # Get target output (ground truth)
-        # Default to fpfp input symmetry: fp input for fp block to get ground truth
-        # and fp input for qt block to get prediction.
         target_input = fp_input
         _args, _kwargs = _process_block_input(target_input)
 
-        @contextlib.contextmanager
-        def reset_let_scale(qt_block):
-            # swap out scale to restore fp
-            for module in qt_block.modules():
-                if isinstance(module, LETModule):
-                    module.swap_out_let_scale()
-            try:
-                yield
-            finally:
-                # swap in scale to restore scales
-                for module in qt_block.modules():
-                    if isinstance(module, LETModule):
-                        module.restore_let_scales()
+        with disable_all_quantizers(qt_block):
+            target_outputs = qt_block(*_args, **_kwargs)[0]
 
-        with reset_let_scale(qt_block):
-            with disable_all_quantizers(qt_block):
-                target_outputs = qt_block(*_args, **_kwargs)[0]
         # Get model output (prediction)
-        model_input = fp_input
-        _qt_args, _qt_kwargs = _process_block_input(model_input)
-        qt_output = qt_block(*_qt_args, **_qt_kwargs)[0]
+        qt_output = qt_block(*_args, **_kwargs)[0]
 
         with torch.no_grad():
             sqnr = (
@@ -357,11 +329,13 @@ class Omniquant:
         """Traverse quantized model, get LET scales, and dump {module_name: scale} dict to output path."""
         meta_data = {}
         for name, module in model.named_modules():
-            if isinstance(module, LETModule):
-                if module._cached_prev_scale is not None:
-                    meta_data[f"{name}.prev"] = module._cached_prev_scale
-                if module._cached_foll_scale is not None:
-                    meta_data[f"{name}.foll"] = module._cached_foll_scale
+            if isinstance(module, SUPPORTED_QUANTIZED_MODULES):
+                quantizer = module.param_quantizers["weight"]
+                if isinstance(quantizer, OMQ_QUANTIZERS):
+                    if quantizer._cached_prev_scale is not None:
+                        meta_data[f"{name}.prev"] = quantizer._cached_prev_scale
+                    if quantizer._cached_foll_scale is not None:
+                        meta_data[f"{name}.foll"] = quantizer._cached_foll_scale
 
         save_file(meta_data, output_path / OMNIQUANT_METADATA_SAFETENSOR_NAME)
         logger.info(
@@ -402,28 +376,6 @@ class Omniquant:
                     names += n
 
         return enc_params, names
-
-    @classmethod
-    def _get_let_params(cls, let_pair_list):
-        """
-        Get the let params for a given let pair in a block
-        """
-        let_params = []
-
-        def append_uniq(param):
-            for item in let_params:
-                if item is param:
-                    return
-            let_params.append(param)
-
-        for _pair in let_pair_list:
-            for q_module in _pair.prev + _pair.follow:
-                let_param = q_module.get_let_params()
-                if isinstance(let_param["prev_scale"], nn.Parameter):
-                    append_uniq(let_param["prev_scale"])
-                if isinstance(let_param["foll_scale"], nn.Parameter):
-                    append_uniq(let_param["foll_scale"])
-        return let_params
 
 
 def _get_meta_dict(meta_data):

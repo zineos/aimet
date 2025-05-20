@@ -44,12 +44,16 @@ from torch import nn
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 from transformers.models.gemma3.modeling_gemma3 import Gemma3RMSNorm
 
-from aimet_torch.experimental.omniquant._utils import _convert_sim_to_letsim
-from aimet_torch.experimental.omniquant.let_modules import (
-    LETQuantizedLlamaRMSNorm,
-    LETQuantizedGemmaNorm,
+from aimet_torch.experimental.omniquant._utils import (
+    replace_with_omniquant_weight_quantizers,
 )
 
+from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
+    QuantizedLlamaRMSNorm,
+)
+from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
+    QuantizedGemma3RMSNorm,
+)
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.quantsim import QuantizationSimModel
 
@@ -62,20 +66,23 @@ def fold_test(sim: QuantizationSimModel):
     l2.w = w*s
     """
     for _, module in enumerate(sim.model):
-        let_params = module.get_let_params()
         orig_wt = module.weight.cpu().detach().clone()
-        module.fold_let_params()  # Fold the scale into the weights
+        for key, quantizer in module.param_quantizers.items():
+            if quantizer is not None:
+                quantizer.fold_let_params(
+                    module, key
+                )  # Fold the scale into the weights
         scale_folded_wts = module.weight.cpu().detach()
-        if isinstance(module, LETQuantizedGemmaNorm):
-            prev_scale = let_params["prev_scale"]
+
+        if isinstance(module, QuantizedGemma3RMSNorm):
+            prev_scale = module.param_quantizers["weight"]._cached_prev_scale
             orig_wt = (orig_wt / prev_scale) + (1 / prev_scale) - 1
 
             assert torch.equal(orig_wt, scale_folded_wts)
         else:
-            if let_params["prev_scale"] is None:
-                factor = 1 / let_params["foll_scale"]
-            else:
-                factor = let_params["prev_scale"]
+            prev_scale = module.param_quantizers["weight"]._cached_prev_scale
+            foll_scale = module.param_quantizers["weight"]._cached_foll_scale
+            factor = prev_scale if prev_scale is not None else 1 / foll_scale
 
             assert torch.equal(orig_wt, scale_folded_wts * factor)
 
@@ -172,15 +179,23 @@ def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
 
     for idx, module in enumerate(sim.model):
         wt = module.weight
+
+        if isinstance(module, QuantizedGemma3RMSNorm):
+            wt_s = (wt / prev_scale) + (1 / prev_scale) - 1
+            sim.model[idx].weight.copy_(wt_s)
+            continue
+
         wt_s = wt * ((1 / prev_scale) if idx == 0 else foll_scale)
-        wt_s = torch.clamp(wt_s, max=module.param_quantizers["weight"].max)
+        try:
+            _max = getattr(module.param_quantizers["weight"], "max")
+            wt_s = torch.clamp(wt_s, max=_max)
+        except:
+            pass
+
         with torch.no_grad():
             sim.model[idx].weight.copy_(wt_s)
 
-        if (
-            isinstance(module, (LETQuantizedLlamaRMSNorm, LETQuantizedGemmaNorm))
-            or module.bias is None
-        ):
+        if isinstance(module, QuantizedLlamaRMSNorm) or module.bias is None:
             continue
 
         bias_s = module.bias
@@ -188,23 +203,19 @@ def update_ref_model(sim: QuantizationSimModel, prev_scale, foll_scale):
             bias_s = bias_s * (1 / prev_scale)
 
         with torch.no_grad():
-            if isinstance(
-                module, LETQuantizedGemmaNorm
-            ):  # Gemma's bias is an integer, not a tensor
-                module.bias = bias_s
-            else:
-                module.bias.copy_(bias_s)
+            module.bias.copy_(bias_s)
 
 
 @pytest.mark.parametrize(
     "inp_fn",
     [
-        get_conv_conv(True),
-        get_conv_conv(False),
         get_lin_lin(True),
         get_lin_lin(False),
+        get_conv_conv(True),
+        get_conv_conv(False),
         get_norm_lin(nn.LayerNorm),
         get_norm_lin(LlamaRMSNorm),
+        get_norm_lin(Gemma3RMSNorm),
     ],
 )
 def test_pair(inp_fn):
@@ -229,8 +240,7 @@ def test_pair(inp_fn):
     sim.compute_encodings(lambda model, _: model(inp), None)
     sim_out = sim.model(inp)  # Quantized toy model
 
-    # Replace the quantized modules with let_quantized modules
-    _convert_sim_to_letsim(sim)
+    replace_with_omniquant_weight_quantizers(sim.model)
 
     # forward pass through toy model with let_quantized module
     sim_out_with_no_scale = sim.model(inp)
@@ -244,33 +254,46 @@ def test_pair(inp_fn):
     # non-zero prev and foll
     ref_let_sim_model = copy.deepcopy(sim)
 
+    sim.compute_encodings(lambda model, _: model(inp), None)
+
     # Setting different prev and foll scale to test if all params/quantizers are getting updated
     prev_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
     foll_scale = torch.nn.Parameter(torch.tensor([20], dtype=torch.float32))
-    sim.model[0].register_let_params(prev_scale=prev_scale)
-    sim.model[1].register_let_params(foll_scale=foll_scale)
 
-    sim.compute_encodings(lambda model, _: model(inp), None)
+    sim.model[0].param_quantizers["weight"].register_let_params(prev_scale=prev_scale)
+    if getattr(sim.model[0], "bias", None) is not None:
+        sim.model[0].param_quantizers["bias"].register_let_params(prev_scale=prev_scale)
+    sim.model[1].param_quantizers["weight"].register_let_params(foll_scale=foll_scale)
+
     out_with_radn_scale = sim.model(inp)
 
     # Model params are updated due to non zero scale.
     # Prev and foll scale are different, hence sim_out, out_with_radn_scale are expected to be diferent
     assert not torch.allclose(sim_out, out_with_radn_scale, atol=0.01)
 
+    sim.compute_encodings(lambda model, _: model(inp), None)
+
     # Set scale to 2
     prev_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
     foll_scale = torch.nn.Parameter(torch.tensor([2], dtype=torch.float32))
-    sim.model[0].register_let_params(prev_scale=prev_scale)
-    sim.model[1].register_let_params(foll_scale=foll_scale)
-    sim.compute_encodings(lambda model, _: model(inp), None)
-    out_with_scale_2 = sim.model(inp)
+
+    sim.model[0].param_quantizers["weight"].register_let_params(prev_scale=prev_scale)
+    if getattr(sim.model[0], "bias", None) is not None:
+        sim.model[0].param_quantizers["bias"].register_let_params(prev_scale=prev_scale)
+    sim.model[1].param_quantizers["weight"].register_let_params(foll_scale=foll_scale)
+    with torch.no_grad():
+        out_with_scale_2 = sim.model(inp)
 
     # Reference model with updated wts and bias with prev_scale & foll_scale
-    update_ref_model(ref_let_sim_model, prev_scale, foll_scale)
-    ref_out = ref_let_sim_model.model(inp)
+    with torch.no_grad():
+        update_ref_model(ref_let_sim_model, prev_scale, foll_scale)
+        ref_out = ref_let_sim_model.model(inp)
 
     # Output of out_with_scale_2 and ref_out should match
     assert torch.allclose(out_with_scale_2, ref_out, atol=1e-05)
+
+    # Test for folding scales into weight before removing quantizers.
+    fold_test(sim)
 
     # pylint: disable=protected-access
     # remove all qunatizers
@@ -281,6 +304,3 @@ def test_pair(inp_fn):
     out_with_quantizers_disabled = sim.model(inp)
     # out_with_quantizers_disabled and out_fp should be same as quantizers were disabled
     assert torch.equal(out_fp, out_with_quantizers_disabled)
-
-    # Test for folding scales into weight
-    fold_test(sim)

@@ -42,7 +42,12 @@ from aimet_torch.v2.nn import (
     QuantizedConv2d,
 )
 
-from aimet_torch.experimental.omniquant.let_modules import LETModule
+from .let_quantizer import (
+    OmqQuantizeDequantize,
+    OmqGemmaWeightQuantizer,
+)
+
+from aimet_torch.v2.quantization.affine import QuantizeDequantize
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
 from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
@@ -59,7 +64,7 @@ import torch
 import numpy as np
 import contextlib
 
-_SUPPORTED_QUANTIZED_MODULES = (
+SUPPORTED_QUANTIZED_MODULES = (
     QuantizedLinear,
     QuantizedLayerNorm,
     QuantizedConv2d,
@@ -67,36 +72,8 @@ _SUPPORTED_QUANTIZED_MODULES = (
     QuantizedGemma3RMSNorm,
     QuantizedQwen2RMSNorm,
 )
-
-
-def _convert_sim_to_letsim(sim):
-    """Convert sim model with LET quantizers inplace."""
-    for name, module in sim.model.named_modules():
-        # TODO: Adding this hardcoding check here for llama. Need to remove it
-        if (
-            isinstance(module, _SUPPORTED_QUANTIZED_MODULES)
-            and "lm_head" not in name
-            and "model.norm" not in name
-        ):
-            let_module = LETModule.get_let_module(module)
-            parent_module_name = ".".join(name.split(".")[:-1])
-            leaf_module_name = name.split(".")[-1]
-            parent_module = sim.model.get_submodule(parent_module_name)
-            setattr(parent_module, leaf_module_name, let_module)
-
-
-def _convert_letsim_to_sim(sim):
-    """Convert LET sim to original sim model inplace."""
-    for name, module in sim.model.named_modules():
-        if isinstance(module, LETModule):
-            source_quant_module = module.get_source_quant_module()
-            parent_module = ".".join(name.split(".")[:-1])
-            leaf_module_name = name.split(".")[-1]
-            setattr(
-                sim.model.get_submodule(parent_module),
-                leaf_module_name,
-                source_quant_module,
-            )
+LWC_MODULES = (QuantizedLinear, QuantizedConv2d)
+OMQ_QUANTIZERS = (OmqQuantizeDequantize, OmqGemmaWeightQuantizer)
 
 
 # pylint: disable=no-else-return
@@ -161,3 +138,33 @@ def freeze_let_optimized_param_quantizers(sim: QuantizationSimModel):
     for module in sim.modules():
         if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
             _freeze(module)
+
+
+def get_omq_quantizer(qdq=None):
+    """Dynamically inherit from QuantizeDequantize base on qdq type."""
+    if isinstance(qdq, QuantizeDequantize):
+        new_cls = type("DynamicOmq", (OmqQuantizeDequantize, QuantizeDequantize), {})
+    else:
+        new_cls = type("DynamicOmq", (OmqQuantizeDequantize, torch.nn.Module), {})
+
+    instance = new_cls(qdq)
+
+    return instance
+
+
+def replace_with_omniquant_weight_quantizers(omniquant_block_list):
+    """Replace all the weight quantizers in supported modules with adascale quantizers"""
+    for block in omniquant_block_list:
+        for layer in block.modules():
+            if isinstance(layer, SUPPORTED_QUANTIZED_MODULES):
+                if isinstance(layer, LWC_MODULES):
+                    layer.param_quantizers["weight"] = get_omq_quantizer(
+                        layer.param_quantizers["weight"]
+                    )
+                elif isinstance(layer, QuantizedGemma3RMSNorm):
+                    layer.param_quantizers["weight"] = OmqGemmaWeightQuantizer()
+                else:
+                    layer.param_quantizers["weight"] = get_omq_quantizer()
+
+                if getattr(layer, "bias", None) is not None:
+                    layer.param_quantizers["bias"] = get_omq_quantizer()

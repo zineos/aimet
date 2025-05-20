@@ -121,12 +121,24 @@ class TransformerProcessor:
                 _LetPair([up_proj], [down_proj]),
             ]
 
-    def init_let_params(self, let_pair_list: List[_LetPair], num_repeats):
+    @classmethod
+    def init_let_params(cls, let_pair_list: List[_LetPair], num_repeats):
         """Register let params to LET pairs."""
         for _let_pair in let_pair_list:
             prev_modules, foll_modules = _let_pair.prev, _let_pair.follow
             prev_out_ch = prev_modules[0].weight.shape[0]
             prev_scale = torch.nn.Parameter(torch.ones(prev_out_ch))
+
+            # Currently only one module is expected in prev_list
+            assert len(prev_modules) == 1
+            prev_modules[0].param_quantizers["weight"].register_let_params(
+                prev_scale=prev_scale
+            )
+            if "bias" in prev_modules[0].param_quantizers:
+                prev_modules[0].param_quantizers["bias"].register_let_params(
+                    prev_scale=prev_scale
+                )
+
             for module in foll_modules:
                 foll_in_ch = module.weight.shape[1]
 
@@ -138,8 +150,6 @@ class TransformerProcessor:
                     nr = num_repeats
                 else:
                     nr = 1
-                module.register_let_params(foll_scale=prev_scale, num_repeats=nr)
-
-            # Currently only one module is expected in prev_list
-            assert len(prev_modules) == 1
-            prev_modules[0].register_let_params(prev_scale)
+                module.param_quantizers["weight"].register_let_params(
+                    foll_scale=prev_scale, num_repeats=nr
+                )

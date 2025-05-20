@@ -57,8 +57,10 @@ from aimet_torch.experimental.omniquant.defs import _LetPair
 
 from aimet_torch.experimental.omniquant import decoder_processor
 from aimet_torch.experimental.omniquant import omniquant_optimizer
-from aimet_torch.experimental.omniquant.let_modules import LETModule
-from aimet_torch.experimental.omniquant._utils import _convert_sim_to_letsim
+from aimet_torch.experimental.omniquant._utils import (
+    replace_with_omniquant_weight_quantizers,
+    SUPPORTED_QUANTIZED_MODULES,
+)
 from aimet_torch.v2.quantsim import QuantizationSimModel
 
 
@@ -71,6 +73,21 @@ def add_custom_model_class_to_support_model_group(model_class, target_group_name
     new_target_group = list(target_group)
     new_target_group.append(model_class)
     setattr(decoder_processor, target_group_name, tuple(new_target_group))
+
+    yield
+
+    setattr(decoder_processor, target_group_name, target_group)
+
+
+@contextlib.contextmanager
+def add_model_class_to_support_model_group_in_omniquant(model_class, target_group_name):
+    """
+    Add model_class Class to omniquant_optimizer.target_group_name.
+    """
+    target_group = getattr(omniquant_optimizer, target_group_name)
+    new_target_group = list(target_group)
+    new_target_group.append(model_class)
+    setattr(omniquant_optimizer, target_group_name, tuple(new_target_group))
 
     yield
 
@@ -249,7 +266,6 @@ class TestOmniquant:
         dummy_input = torch.randn(1, seq_len, emb_dim)
         fake_llama_model = FakeLlamaModel(layer_num, seq_len, head_num, emb_dim)
         qsim = QuantizationSimModel(fake_llama_model, dummy_input)
-        _convert_sim_to_letsim(qsim)
         omniquant = omniquant_optimizer.Omniquant()
 
         with add_custom_model_class_to_support_model_group(
@@ -259,7 +275,7 @@ class TestOmniquant:
                 with torch.no_grad():
                     llama_processor = decoder_processor.get_transformer_processor(qsim)
                     decoder_list = llama_processor.get_decoder_list(qsim)
-
+                    replace_with_omniquant_weight_quantizers(decoder_list)
                     for _decoder_block in decoder_list:
                         qt_let_pair_list = get_let_module_pair(_decoder_block)
                         llama_processor.init_let_params(qt_let_pair_list, num_repeats=1)
@@ -268,17 +284,21 @@ class TestOmniquant:
                         for let_pair in qt_let_pair_list:
                             prev, foll = let_pair.prev, let_pair.follow
                             scale = torch.randn(emb_dim)
-                            prev[0].prev_scale = torch.nn.Parameter(
-                                prev[0].prev_scale * scale
+                            quantizer = prev[0].param_quantizers["weight"]
+                            quantizer.prev_scale = torch.nn.Parameter(
+                                quantizer.prev_scale * scale
                             )
                             for _foll in foll:
-                                _foll.foll_scale = torch.nn.Parameter(
-                                    _foll.foll_scale * scale
+                                quantizer = _foll.param_quantizers["weight"]
+                                quantizer.foll_scale = torch.nn.Parameter(
+                                    quantizer.foll_scale * scale
                                 )
 
                         for module in _decoder_block.modules():
-                            if isinstance(module, LETModule):
-                                module.fold_let_params()
+                            if isinstance(module, SUPPORTED_QUANTIZED_MODULES):
+                                for key, quantizer in module.param_quantizers.items():
+                                    quantizer.fold_let_params(module, key)
+
                     # pylint: disable=protected-access
                     with tempfile.TemporaryDirectory() as tempdir:
                         omniquant._dump_meta_data(qsim.model, Path(tempdir))
@@ -292,15 +312,13 @@ class TestOmniquant:
                         module_name = ".".join(k.split(".")[:-1])
                         prev_foll = k.split(".")[-1]
                         let_module = qsim.model.get_submodule(module_name)
+                        quantizer = let_module.param_quantizers["weight"]
                         cached_scale = getattr(
-                            let_module, "_cached_" + prev_foll + "_scale"
+                            quantizer, "_cached_" + prev_foll + "_scale"
                         )
-                        print(cached_scale)
-                        print(metadata_scale)
-                        print(np.equal(cached_scale, metadata_scale))
-                        assert (
-                            np.equal(cached_scale, metadata_scale)
-                        ).all()  # metadata_scale is numpy array
+
+                        # cached_scale and metadata_scale is numpy array
+                        assert (np.equal(cached_scale, metadata_scale)).all()
 
     # pylint: disable=too-many-locals
     def test_load_lora_model(self):
@@ -332,7 +350,7 @@ class TestOmniquant:
             "layers.1.mlp.down_proj.foll": mlp_scale_2,
         }
 
-        # Apply meta data to let_model
+        # Apply meta data to let_model's weight direrctly.
         with torch.no_grad():
             for layer_name, scale in meta_data.items():
                 module = let_model.get_submodule(layer_name[:-5])
@@ -392,3 +410,7 @@ class TestOmniquant:
         # peft model output should be different from base model output.
         assert not torch.allclose(let_output, peft_let_output, atol=1e-5)
         assert torch.allclose(peft_let_output, peft_ori_output, atol=1e-5)
+
+
+test = TestOmniquant()
+test.test_dump_meta_data()
