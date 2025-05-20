@@ -37,16 +37,26 @@
 //==============================================================================
 
 #include "pybind11/complex.h"
+
+#ifdef BUILD_PYMO_EQUALIZATION
 #include <DlEqualization/CrossLayerScalingForPython.h>
+#endif
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#ifdef BUILD_PYMO_COMPRESSION
 #include "DlCompression/ISVD.hpp"
+#endif
+
+#ifdef BUILD_PYMO_EQUALIZATION
 #include "DlEqualization/BatchNormFoldForPython.h"
 #include "DlEqualization/BiasCorrectionForPython.h"
 #include "DlEqualization/CrossLayerScaling.h"
 #include "DlEqualization/HighBiasFoldForPython.h"
 #include "DlEqualization/def.h"
+#endif
+
 #include "DlQuantization/EncodingAnalyzerForPython.h"
 #include "DlQuantization/IQuantizationEncodingAnalyzer.hpp"
 #include "DlQuantization/IQuantizer.hpp"
@@ -60,8 +70,14 @@
 namespace py = pybind11;
 
 using namespace DlQuantization;
+
+#ifdef BUILD_PYMO_COMPRESSION
 using namespace DlCompression;
+#endif
+
+#ifdef BUILD_PYMO_EQUALIZATION
 using namespace AimetEqualization;
+#endif
 
 PYBIND11_MODULE(_libpymo, m)
 {
@@ -109,6 +125,7 @@ PYBIND11_MODULE(_libpymo, m)
     py::class_<IQuantizationEncodingAnalyzer<float>>(m, "QuantizationEncodingAnalyzer");
     m.def("GetQuantizationEncodingAnalyzerInstance", &getEncodingAnalyzerInstance<float>);
 
+#ifdef BUILD_PYMO_COMPRESSION
     // Compression python bindings
     py::enum_<COMPRESS_LAYER_TYPE>(m, "COMPRESS_LAYER_TYPE")
         .value("LAYER_TYPE_OTHER", COMPRESS_LAYER_TYPE::LAYER_TYPE_OTHER)
@@ -138,6 +155,7 @@ PYBIND11_MODULE(_libpymo, m)
         .def_readwrite("layerType", &LayerAttributes<float>::layerType)
         .def_readwrite("inputChannelMean", &LayerAttributes<float>::inputChannelMean)
         .def_readwrite("compressionRate", &LayerAttributes<float>::compressionRate);
+#endif // BUILD_PYMO_COMPRESSION
 
     py::class_<DlQuantization::EncodingAnalyzerForPython>(m, "EncodingAnalyzerForPython")
         .def(py::init<DlQuantization::QuantizationMode>())
@@ -205,6 +223,7 @@ PYBIND11_MODULE(_libpymo, m)
 
     m.def("PtrToInt64", [](void* ptr) { return (uint64_t) ptr; });
 
+#ifdef BUILD_PYMO_COMPRESSION
     py::class_<ISVD<float>>(m, "Svd")
         //        .def(py::init<const std::string &>())
         .def("SetCandidateRanks", &ISVD<float>::SetCandidateRanks)
@@ -237,7 +256,9 @@ PYBIND11_MODULE(_libpymo, m)
 
     // Factory func
     m.def("GetSVDInstance", &GetSVDInstance<float>);
+#endif // BUILD_PYMO_COMPRESSION
 
+#ifdef BUILD_PYMO_EQUALIZATION
     py::class_<AimetEqualization::CrossLayerScalingForPython>(m, "CrossLayerScaling");
     m.def("scaleLayerParams", &AimetEqualization::CrossLayerScalingForPython::scaleLayerParams);
     m.def("scaleDepthWiseSeparableLayer", &AimetEqualization::CrossLayerScalingForPython::scaleDepthWiseSeparableLayer);
@@ -311,6 +332,7 @@ PYBIND11_MODULE(_libpymo, m)
         .value("relu", AimetEqualization::ActivationType::relu)
         .value("relu6", AimetEqualization::ActivationType::relu6)
         .value("noActivation", AimetEqualization::ActivationType::noActivation);
+#endif // BUILD_PYMO_EQUALIZATION
 
     m.def("getScaleFactor", &getScaleFactor);
     m.def("getRescaledOutputAndBias", &getRescaledOutputAndBias<float>);

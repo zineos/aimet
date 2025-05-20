@@ -42,11 +42,24 @@ Python3_add_library(PyModelOptimizations SHARED
 
 target_link_libraries(PyModelOptimizations PUBLIC
         MoDlQuantization
-        MoDlEqualization
-        MoDlCompression
-        ${OPENCV_LINK_LIBRARIES}
-        z
         )
+
+if (BUILD_PYMO_EQUALIZATION)
+    target_link_libraries(PyModelOptimizations PUBLIC
+            MoDlEqualization
+            )
+endif()
+if (BUILD_PYMO_COMPRESSION)
+    target_link_libraries(PyModelOptimizations PUBLIC
+            MoDlCompression
+            )
+endif()
+if (BUILD_PYMO_EQUALIZATION OR BUILD_PYMO_COMPRESSION)
+    target_link_libraries(PyModelOptimizations PUBLIC
+            ${OPENCV_LINK_LIBRARIES}
+            z
+            )
+endif()
 
 if (ENABLE_CUDA)
     target_link_libraries(PyModelOptimizations PUBLIC

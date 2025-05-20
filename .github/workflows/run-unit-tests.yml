@@ -81,15 +81,10 @@ jobs:
               python3 -m pylint --rcfile=.pylintrc $AIMET_PACKAGES
       - name: Run unit tests
         if: matrix.ENABLE_TESTS == 'ON'
-        env:
-          CTEST_TARGETS: |
-            downloads/MoDlCompressionTest
-            downloads/MoDlEqualizationTest
-            downloads/MoDlQuantizationTest
         run: |
           set -x
 
-          for target in $CTEST_TARGETS; do
+          for target in $(find downloads -name "*Test"); do
               chmod +x $target
               # NOTE: Set LD_LIBRARY_PATH for dynamic linking with libpython3.so
               #       since ubuntu:22.04 docker image doesn't have built-in libpython3.so
@@ -98,10 +93,10 @@ jobs:
           done
 
           PYTEST_TARGETS="./ModelOptimizations/DlQuantization/test"
-          PYTEST_TARGETS="$PYTEST_TARGETS ./ModelOptimizations/DlEqualization/test"
           PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/common/test"
 
           if [ "${{ matrix.VER_TENSORFLOW }}" != "" ] ; then
+              PYTEST_TARGETS="$PYTEST_TARGETS ./ModelOptimizations/DlEqualization/test"
               PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/tensorflow/test"
           elif [ "${{ matrix.VER_ONNXRUNTIME }}" != "" ] ; then
               PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/onnx/test"

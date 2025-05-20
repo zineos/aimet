@@ -54,12 +54,17 @@ target_include_directories(TrainingExtensionsTf PRIVATE
         )
 
 target_link_libraries(TrainingExtensionsTf PUBLIC
-        MoDlCompression
         MoDlQuantization
         TensorFlow
         PyWrapTensorFlowInternal
         ${Python_LIBRARIES}
         )
+
+if (BUILD_PYMO_COMPRESSION)
+    target_link_libraries(TrainingExtensionsTf PUBLIC
+        MoDlCompression
+        )
+endif()
 
 if (ENABLE_CUDA)
     target_compile_options(TrainingExtensionsTf PRIVATE

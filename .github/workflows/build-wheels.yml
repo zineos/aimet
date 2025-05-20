@@ -108,10 +108,7 @@ jobs:
         if: matrix.id != 'tf-torch-cpu'
         with:
           name: "${{ matrix.id }}-tests"
-          path: |
-            build/bin/MoDlCompressionTest
-            build/bin/MoDlEqualizationTest
-            build/bin/MoDlQuantizationTest
+          path: build/**/MoDl*Test
           if-no-files-found: error
           retention-days: 1d
       - name: Upload AIMET documentation
