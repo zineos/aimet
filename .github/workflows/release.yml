@@ -60,7 +60,7 @@ jobs:
     name: Release AIMET to public (Automated)
     if: ${{ github.event_name == 'push' && github.server_url != 'https://github.com' }}
     needs: read_aimet_version
-    uses: ./.github/actions/release-workflow
+    uses: ./.github/workflows/release-workflow.yml
     with:
       version: ${{ needs.read_aimet_version.outputs.aimet_version }}
       push_to_pypi: true
@@ -71,7 +71,7 @@ jobs:
   release_via_manual_workflow:
     if: ${{ github.event_name == 'workflow_dispatch' && github.server_url != 'https://github.com' }}
     name: Release AIMET to public (Manual)
-    uses: ./.github/actions/release-workflow
+    uses: ./.github/workflows/release-workflow.yml
     with:
       version: ${{ inputs.version }}
       push_to_pypi: ${{ inputs.push_to_pypi }}

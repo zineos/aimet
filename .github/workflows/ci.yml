@@ -16,10 +16,10 @@ jobs:
 
   dco:
     if: github.server_url != 'https://github.com'
-    uses: ./.github/actions/dco
+    uses: ./.github/workflows/dco.yml
 
   pipeline:
     if: github.server_url != 'https://github.com'
     needs: dco
-    uses: ./.github/actions/pipeline
+    uses: ./.github/workflows/pipeline.yml
     secrets: inherit

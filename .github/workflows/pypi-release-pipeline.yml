@@ -127,7 +127,7 @@ jobs:
     name: Run unit tests
     if: ${{ inputs.run_unit_tests }}
     needs: [ variants, call-build-wheels ]
-    uses: ./.github/actions/run-unit-tests
+    uses: ./.github/workflows/run-unit-tests.yml
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit
@@ -136,7 +136,7 @@ jobs:
     name: Run acceptance tests
     if: ${{ inputs.run_acceptance_tests }}
     needs: [ variants, call-build-wheels, call-run-unit-tests ]
-    uses: ./.github/actions/run-acceptance-tests
+    uses: ./.github/workflows/run-acceptance-tests.yml
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit
