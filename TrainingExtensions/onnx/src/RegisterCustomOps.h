@@ -43,8 +43,14 @@
 #include "onnxruntime_cxx_api.h"
 #undef ORT_API_MANUAL_INIT
 
+extern "C" {
 
-extern "C" ORT_EXPORT OrtStatus* ORT_API_CALL RegisterCustomOps(OrtSessionOptions* options, const OrtApiBase* api);
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+OrtStatus* ORT_API_CALL RegisterCustomOps(OrtSessionOptions* options, const OrtApiBase* api);
+
+}
 
 
 #endif   // AIMET_REGISTERCUSTOMOPS_H

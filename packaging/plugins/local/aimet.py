@@ -167,7 +167,6 @@ def optional_dependencies() -> dict[str, list[str]]:
         ],
         "test": [
             "beautifulsoup4",
-            "deepspeed",
             "matplotlib",
             "onnxruntime-extensions",
             "onnxsim",
@@ -201,7 +200,12 @@ def optional_dependencies() -> dict[str, list[str]]:
     if aimet_variant not in ("torch-gpu", "torch-cpu"):
         return optional_dependencies
 
-    optional_dependencies["test"].append("onnxruntime")
+    optional_dependencies["test"].extend(
+        [
+            "deepspeed",
+            "onnxruntime",
+        ]
+    )
 
     try:
         import torch

@@ -19,7 +19,10 @@ RUN apt update && \
         jq \
         libeigen3-dev \
         libz-dev \
+        libz-mingw-w64-dev \
         make \
+        mingw-w64 \
+        mingw-w64-x86-64-dev \
         pandoc \
         pkg-config \
         sudo \
@@ -82,6 +85,11 @@ RUN --mount=type=bind,target=/workspace \
                                     /workspace/pyproject.toml \
     && ${CONDA} run --name ${CONDA_DEFAULT_ENV} --live-stream \
         python3 -m pip install -r /tmp/requirements.txt
+
+
+# Install win-64 python environment for cross compile
+RUN export PATH=$PATH:${CONDA_PREFIX}/bin PIP_NO_CACHE_DIR=1 \
+    && ${CONDA} create --platform win-64 --name win64 python=${VER_PYTHON}
 
 ENV PYTHONPYCACHEPREFIX=/tmp
 

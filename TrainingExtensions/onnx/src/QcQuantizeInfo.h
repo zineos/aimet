@@ -74,6 +74,6 @@ struct QcQuantizeInfo
     bool usePerChannelMode;
     int channelAxis;
     int blockAxis;
-    uint blockSize;
+    size_t blockSize;
     std::string name;
 };

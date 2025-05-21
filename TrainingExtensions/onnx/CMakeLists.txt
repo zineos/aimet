@@ -78,7 +78,7 @@ if (SKBUILD)
         )
 
     install(TARGETS OnnxCppOps
-        LIBRARY DESTINATION aimet_common
+        DESTINATION aimet_common
         )
 
 else (SKBUILD)
@@ -88,7 +88,6 @@ else (SKBUILD)
         )
 
 install(TARGETS OnnxCppOps
-        LIBRARY
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/aimet_common
         )
 
@@ -117,19 +116,18 @@ if (SKBUILD)
         )
 
     install(TARGETS quant_info
-        LIBRARY DESTINATION aimet_common
-        )
+            DESTINATION aimet_common
+            )
 
 else (SKBUILD)
+
 set_target_properties(quant_info
         PROPERTIES
         OUTPUT_NAME "quant_info"
-        SUFFIX ".${Python3_SOABI}.so"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/artifacts/aimet_common/"
         )
 
 install(TARGETS quant_info
-        LIBRARY
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/aimet_common
         )
 
@@ -154,3 +152,15 @@ add_dependencies(whl_prep_cp whl_prep_cp_onnx)
 add_dependencies(whl_prep_ln whl_prep_ln_onnx)
 
 endif (SKBUILD)
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+    set_target_properties(quant_info
+        PROPERTIES
+        SUFFIX ".${Python3_SOABI}.pyd"
+        )
+else()
+    set_target_properties(quant_info
+        PROPERTIES
+        SUFFIX ".${Python3_SOABI}.so"
+        )
+endif()

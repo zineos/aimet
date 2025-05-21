@@ -113,8 +113,7 @@ else ()
     # we can just call FetchContent_MakeAvailable() instead of the below.
     FetchContent_GetProperties(googletest)
     if (NOT googletest_POPULATED)
-        FetchContent_Populate(googletest)
-        add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR} EXCLUDE_FROM_ALL)
+        FetchContent_MakeAvailable(googletest)
     endif ()
 endif ()
 
@@ -169,59 +168,45 @@ endif()
 ######################
 
 if (ENABLE_ONNX)
-  # Aimet ONNX extension requires headers for onnxruntime which might not be installed
-  # since they are not part of neither reqs_dep_*.txt nor reqs_pip_*.txt.
-  # Download and install onnxruntime headers for user only if onnxruntime package is installed
-  # and onnxruntime_cxx_api.h can't be found in /opt/onnxruntime
+  # Download and install onnxruntime headers
   execute_process(
     COMMAND ${Python3_EXECUTABLE} "-c" "import onnxruntime; print(onnxruntime.__version__)"
-      RESULT_VARIABLE ONNXRUNTIME_NOT_FOUND
       OUTPUT_VARIABLE ONNXRUNTIME_VERSION
       OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  file(GLOB_RECURSE ONNXRUNTIME_HEADER_PATH  "/opt/onnxruntime/*onnxruntime_cxx_api.h")
 
-  if (ONNXRUNTIME_NOT_FOUND EQUAL 0)
-    if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-      set(PLATFORM_TAG "linux")
-    else()
-      message(
-        FATAL_ERROR
-        "Unsupported CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}. Only 'Linux' is supported"
-      )
-    endif()
-
-    if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-      set(PLATFORM_TAG "${PLATFORM_TAG}-x64")
-    elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-      set(PLATFORM_TAG "${PLATFORM_TAG}-aarch64")
-    else ()
-      message(
-        FATAL_ERROR
-        "Unsupported CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_PROCESSOR}; expected one of ['x86_64', 'aarch64']"
-      )
-    endif()
-
-    if (ENABLE_CUDA)
-      set(PLATFORM_TAG "${PLATFORM_TAG}-gpu")
-    endif()
-
-    if (NOT ONNXRUNTIME_HEADER_PATH)
-        message(NOTICE "ONNX Runtime: Fetching from external URL")
-        set(
-          ONNXRUNTIME_URL
-          "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-${PLATFORM_TAG}-${ONNXRUNTIME_VERSION}.tgz"
-        )
-        FetchContent_Declare(
-          onnxruntime_headers
-          URL ${ONNXRUNTIME_URL}
-          EXCLUDE_FROM_ALL
-        )
-        FetchContent_MakeAvailable(onnxruntime_headers)
-    else()
-        set(onnxruntime_headers_SOURCE_DIR "/opt/onnxruntime")
-    endif()
-    set(CMAKE_INCLUDE_PATH "${CMAKE_INCLUDE_PATH};${onnxruntime_headers_SOURCE_DIR}/include" PARENT_SCOPE)
+  if ("${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"     STREQUAL "Linux-x86_64")
+    set(PLATFORM_TAG "linux-x64")
+    set(EXTENSION "tgz")
+  elseif ("${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "Linux-aarch64")
+    set(PLATFORM_TAG "linux-aarch64")
+    set(EXTENSION "tgz")
+  elseif ("${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "Windows-x86_64")
+    set(PLATFORM_TAG "win-x86")
+    set(EXTENSION "zip")
+  else()
+    message(
+      FATAL_ERROR
+      "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR} is not supported."
+    )
   endif()
+
+  if (ENABLE_CUDA)
+    set(PLATFORM_TAG "${PLATFORM_TAG}-gpu")
+  endif()
+
+  message(NOTICE "ONNX Runtime: Fetching from external URL")
+  set(
+    ONNXRUNTIME_URL
+    "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-${PLATFORM_TAG}-${ONNXRUNTIME_VERSION}.${EXTENSION}"
+  )
+  FetchContent_Declare(
+    onnxruntime_headers
+    URL ${ONNXRUNTIME_URL}
+    EXCLUDE_FROM_ALL
+  )
+  FetchContent_MakeAvailable(onnxruntime_headers)
+
+  set(CMAKE_INCLUDE_PATH "${CMAKE_INCLUDE_PATH};${onnxruntime_headers_SOURCE_DIR}/include" PARENT_SCOPE)
 endif()
 

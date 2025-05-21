@@ -40,6 +40,7 @@
 import contextlib
 import tempfile
 from pathlib import Path
+import platform
 import os
 from typing import (
     Any,
@@ -715,8 +716,12 @@ class QuantizationSimModel:
         :param path: path where to store model external data
         """
         sess_options = SessionOptions()
-        shared_library = os.path.dirname(libquant_info.__file__)
-        shared_library = os.path.join(shared_library, "libaimet_onnxrt_ops.so")
+        shared_library = os.path.join(
+            os.path.dirname(libquant_info.__file__),
+            "libaimet_onnxrt_ops.dll"
+            if platform.system() == "Windows"
+            else "libaimet_onnxrt_ops.so",
+        )
         sess_options.register_custom_ops_library(shared_library)
         if user_onnx_libs is not None:
             for lib in user_onnx_libs:

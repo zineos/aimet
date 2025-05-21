@@ -71,7 +71,6 @@ set_target_properties(PyModelOptimizations
       PROPERTIES
          OUTPUT_NAME "pymo"
          PREFIX "_lib"
-         SUFFIX ".${Python3_SOABI}.so"
       )
 
 add_dependencies(PyModelOptimizations generate_deps)
@@ -81,7 +80,7 @@ if (SKBUILD)
         INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../../.."
         )
     install(TARGETS PyModelOptimizations
-        LIBRARY DESTINATION aimet_common
+        DESTINATION aimet_common
         )
 else (SKBUILD)
     set_target_properties(PyModelOptimizations
@@ -90,7 +89,6 @@ else (SKBUILD)
           )
 
     install(TARGETS PyModelOptimizations
-            LIBRARY
             DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/aimet_common
     )
 
@@ -105,3 +103,15 @@ else (SKBUILD)
             DEPENDS PyModelOptimizations
     )
 endif (SKBUILD)
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+    set_target_properties(PyModelOptimizations
+          PROPERTIES
+          SUFFIX ".${Python3_SOABI}.pyd"
+          )
+else()
+    set_target_properties(PyModelOptimizations
+          PROPERTIES
+          SUFFIX ".${Python3_SOABI}.so"
+          )
+endif()

@@ -54,6 +54,7 @@ macro(add_library_pybind11)
             PATH_SUFFIXES "pybind11"
             REQUIRED
             NO_DEFAULT_PATH
+            NO_CMAKE_FIND_ROOT_PATH
             )
 
     get_filename_component(PYBIND11_INCLUDE_DIR ${PYBIND11_HEADER} DIRECTORY)
@@ -65,6 +66,7 @@ macro(add_library_pybind11)
     add_library(pybind11 SHARED IMPORTED)
 
     set_target_properties(pybind11 PROPERTIES
+            IMPORTED_IMPLIB ${Python3_LIBRARIES}
             IMPORTED_LOCATION ${Python3_LIBRARIES}
             INTERFACE_INCLUDE_DIRECTORIES "${PYBIND11_INCLUDE_DIR}"
             INTERFACE_LINK_LIBRARIES Python3::Module

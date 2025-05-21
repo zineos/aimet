@@ -42,6 +42,7 @@ import onnx
 import onnxruntime as ort
 from onnx import helper, numpy_helper, OperatorSetIdProto, TensorProto
 import os
+import platform
 import pytest
 from aimet_common import libpymo
 from aimet_common.defs import (
@@ -62,8 +63,12 @@ from aimet_common.quantsim import calculate_delta_offset
 from aimet_onnx import lpbq_utils
 
 
-shared_library = os.path.dirname(libquant_info.__file__)
-shared_library = os.path.join(shared_library, "libaimet_onnxrt_ops.so")
+shared_library = os.path.join(
+    os.path.dirname(libquant_info.__file__),
+    "libaimet_onnxrt_ops.dll"
+    if platform.system() == "Windows"
+    else "libaimet_onnxrt_ops.so",
+)
 
 available_providers = [
     provider

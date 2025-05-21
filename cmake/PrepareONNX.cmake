@@ -52,11 +52,13 @@ endfunction()
 function(set_onnxruntime_variables)
     find_path(ONNXRUNTIME_INCLUDE_DIR_ "onnxruntime_cxx_api.h"
             PATHS ${onnxruntime_headers_SOURCE_DIR}/include
-            REQUIRED)
+            REQUIRED
+            NO_CMAKE_FIND_ROOT_PATH)
     find_library(ONNXRUNTIME_LIBRARIES_
-            NAMES libonnxruntime.so
+            NAMES libonnxruntime.so onnxruntime.lib
             PATHS ${onnxruntime_headers_SOURCE_DIR}/lib
-            REQUIRED)
+            REQUIRED
+            NO_CMAKE_FIND_ROOT_PATH)
 
     message(STATUS "** ONNXRUNTIME_INCLUDE_DIR = ${ONNXRUNTIME_INCLUDE_DIR_}")
     set(ONNXRUNTIME_INCLUDE_DIR ${ONNXRUNTIME_INCLUDE_DIR_} PARENT_SCOPE)

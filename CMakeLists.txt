@@ -49,7 +49,7 @@ include(cmake/PreparePyBind11.cmake)
 # Project-global settings
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard whose features are requested to build this target.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "Boolean describing whether the value of CXX_STANDARD is a requirement.")
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Boolean specifying whether compiler specific extensions are requested.")
+set(CMAKE_CXX_EXTENSIONS ON CACHE BOOL "Boolean specifying whether compiler specific extensions are requested.")
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -122,14 +122,25 @@ endif()
 
 # Find Python libraries
 execute_process(
-    COMMAND python3 -V       # "Python 3.XX.YY\n"
-    COMMAND cut -d " " -f 2  # "3.XX.YY\n"
-    COMMAND head -c -1       # "3.XX.YY"
+    COMMAND python3 -V         # "Python 3.XX.YY"
+    COMMAND cut -d " " -f 2    # "3.XX.YY"
+    COMMAND cut -d "." -f 1,2  # "3.XX"
     OUTPUT_VARIABLE Python3_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(Python3_FIND_VIRTUALENV "STANDARD")
-find_package(Python3 ${Python3_VERSION} EXACT COMPONENTS Interpreter Development)
+find_package(Python3 ${Python3_VERSION} EXACT COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Found Python3: ${Python3_FOUND}, at ${Python3_LIBRARIES}")
+
+if (CMAKE_CROSSCOMPILING)
+    # Set Python3 SOABI manually.
+    # Python3_SOABI is an empty string when cross compiling
+    if ("${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "Windows-x86_64")
+        set(Python3_SOABI "cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-win_amd64")
+    else()
+        message(FATAL_ERROR "Cross compiling is not supported except Windows-x86_64; got ${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+endif()
 
 # -------------------------------
 # Compilation flags - not (yet) per target

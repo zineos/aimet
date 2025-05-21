@@ -35,6 +35,15 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 # pylint: disable=missing-module-docstring
+import sys
+
+if sys.platform.startswith("win") and "scipy" in sys.modules:
+    raise ImportError(
+        "aimet-onnx for Windows has a known issue where it will hit segmentaion fault "
+        "when imported after scipy DLLs. To work around this failure, import aimet-onnx "
+        "before any other python libraries."
+    )
+
 from aimet_common import _version
 
 __version__ = _version.__version__
