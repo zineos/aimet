@@ -17,9 +17,7 @@ jobs:
       - name: Checkout internal repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
           path: ${{ env.REPO_DIR }}
-          token: ${{ secrets.AIMET_CI }}
           fetch-depth: 0
 
       - name: Validate version in source branch
