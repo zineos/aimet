@@ -177,7 +177,7 @@ def optional_dependencies() -> dict[str, list[str]]:
             "pytorch-ignite",
             "safetensors",
             "torchvision",
-            "transformers",
+            "transformers<4.52.2",
             "datasets",
         ],
         "docs": [
