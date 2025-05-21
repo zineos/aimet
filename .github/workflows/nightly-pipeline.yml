@@ -19,7 +19,7 @@ on:
 jobs:
   pre-commit-check:
     name: "Pre-commit check"
-    uses: ./.github/workflows/pre-commit.yml
+    uses: ./.github/actions/pre-commit
 
   set_ref_name:
     name: Set ref_name to run nightly pipeline on
@@ -224,7 +224,7 @@ jobs:
   call-run-unit-tests:
     name: Run unit tests
     needs: [ variants, call-build-wheels ]
-    uses: ./.github/workflows/run-unit-tests.yml
+    uses: ./.github/actions/run-unit-tests
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit
@@ -232,7 +232,7 @@ jobs:
   call-run-acceptance-tests:
     name: Run acceptance tests
     needs: [ variants, call-build-wheels, call-run-unit-tests ]
-    uses: ./.github/workflows/run-acceptance-tests.yml
+    uses: ./.github/actions/run-acceptance-tests
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit

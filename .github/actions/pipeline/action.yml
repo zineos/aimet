@@ -6,7 +6,7 @@ on:
 jobs:
   pre-commit-check:
     name: "Pre-commit check"
-    uses: ./.github/workflows/pre-commit.yml
+    uses: ./.github/actions/pre-commit
 
   docker-tag:
     name: Check if 'latest' tag could be used (no build docker images)
@@ -219,7 +219,7 @@ jobs:
   call-run-unit-tests:
     name: Run unit tests
     needs: [ variants, call-build-wheels ]
-    uses: ./.github/workflows/run-unit-tests.yml
+    uses: ./.github/actions/run-unit-tests
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit
