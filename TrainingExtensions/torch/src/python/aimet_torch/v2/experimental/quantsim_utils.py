@@ -136,7 +136,9 @@ def _propagate_output_encodings(
                 # As a workaround, AIMET qconcat module has only one input quantizer
                 # that gets applied to all input tensors
                 i = 0
-            qmodule.input_quantizers[i] = qtzr
+
+            if i < len(qmodule.input_quantizers):
+                qmodule.input_quantizers[i] = qtzr
             return
 
         qmodule = sim._get_qmodule(producer)  # pylint: disable=protected-access
@@ -152,7 +154,7 @@ def _propagate_output_encodings(
                 # As a workaround, AIMET qsplit module has only one output quantizer
                 # that gets applied to all output tensors
                 i = 0
-            if qmodule.output_quantizers[i] is not None:
+            if i < len(qmodule.output_quantizers) and qmodule.output_quantizers[i]:
                 qmodule.output_quantizers[i] = qtzr
 
         if not qmodule or _is_math_invariant_op(qmodule):
