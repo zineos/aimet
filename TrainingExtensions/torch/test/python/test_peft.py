@@ -380,10 +380,23 @@ class TestLoraAdapterPeft:
             ]
             assert sorted(tensor_name) == sorted(tensors)
 
+    @pytest.mark.cuda
+    def test_changing_lora_device(self):
+        model = one_adapter_model().cuda()
+
+        replace_lora_layers_with_quantizable_layers(model)
+        dummy_inputs = torch.randn(10, 10).cuda()
+
+        _ = model(dummy_inputs)
+
+        model.cpu()
+
+        _ = model(dummy_inputs.cpu())
+
 
 def _is_frozen(quantizer):
     return (
-        quantizer._allow_overwrite == False
-        and quantizer.min.requires_grad == False
-        and quantizer.max.requires_grad == False
+        not quantizer._allow_overwrite
+        and not quantizer.min.requires_grad
+        and not quantizer.max.requires_grad
     )

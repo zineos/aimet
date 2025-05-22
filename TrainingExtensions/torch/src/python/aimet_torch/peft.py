@@ -71,12 +71,14 @@ class LoraLayer(torch.nn.Module):
         self.base_layer = lora_layer.base_layer
         self.r = lora_layer.r
         self.lora_alpha = lora_layer.lora_alpha
-        self.scaling = [
-            torch.nn.Parameter(torch.as_tensor(scale), requires_grad=False).to(
-                self.base_layer.weight.device
-            )
-            for scale in lora_layer.scaling.values()
-        ]
+        self.scaling = torch.nn.ParameterList(
+            [
+                torch.nn.Parameter(torch.as_tensor(scale), requires_grad=False).to(
+                    self.base_layer.weight.device
+                )
+                for scale in lora_layer.scaling.values()
+            ]
+        )
         self.lora_dropout = nn.ModuleList({})
         self.adapter_name_to_index = {}
         self.index_to_adapter_name = {}
