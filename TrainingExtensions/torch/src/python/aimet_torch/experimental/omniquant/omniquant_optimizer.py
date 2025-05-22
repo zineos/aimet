@@ -300,14 +300,14 @@ class Omniquant:
             return args, kwargs
 
         # Get target output (ground truth)
-        target_input = fp_input
-        _args, _kwargs = _process_block_input(target_input)
+        _args, _kwargs = _process_block_input(fp_input)
 
         with disable_all_quantizers(qt_block):
             target_outputs = qt_block(*_args, **_kwargs)[0]
 
         # Get model output (prediction)
-        qt_output = qt_block(*_args, **_kwargs)[0]
+        _qt_args, _qt_kwargs = _process_block_input(fp_input)
+        qt_output = qt_block(*_qt_args, **_qt_kwargs)[0]
 
         with torch.no_grad():
             sqnr = (
