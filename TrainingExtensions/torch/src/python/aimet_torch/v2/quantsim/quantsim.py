@@ -62,6 +62,7 @@ import onnx
 
 from aimet_common import quantsim
 from aimet_common.defs import QuantScheme, QuantizationDataType
+from aimet_common.onnx._utils import _is_htp_interpolation_op
 from aimet_common.quantsim_config.quantsim_config import _config_file_aliases
 from aimet_common.utils import deprecated, _red
 from aimet_torch._base.quantsim import (
@@ -733,21 +734,26 @@ class QuantizationSimModel(_QuantizationSimModelBase):  # pylint: disable=missin
             propagate_output_encodings,
         )
 
-        resize_ops = set()
+        htp_interpolation_ops = set()
 
         for qmodule in self.qmodules():
             orig_module_type = type(qmodule.get_original_module())
-            onnx_op = map_torch_types_to_onnx.get(orig_module_type)
+            onnx_op_types = map_torch_types_to_onnx.get(orig_module_type)
 
-            if not onnx_op or len(onnx_op) > 1:
+            if not onnx_op_types:
                 continue
 
-            (onnx_op,) = onnx_op
+            # Output encoding back-propagation only works when output quantizer exists
+            if (
+                len(qmodule.output_quantizers) != 1
+                or qmodule.output_quantizers[0] is None
+            ):
+                continue
 
-            if onnx_op == "Resize":
-                resize_ops.add(qmodule)
+            if all(_is_htp_interpolation_op(op_type) for op_type in onnx_op_types):
+                htp_interpolation_ops.add(qmodule)
 
-        propagate_output_encodings(self, lambda module: module in resize_ops)
+        propagate_output_encodings(self, lambda module: module in htp_interpolation_ops)
 
 
 class _QuantizationSimOnnxExport:

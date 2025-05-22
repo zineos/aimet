@@ -1439,9 +1439,16 @@ class TestQuantsim:
                 lambda: randn(1, 1, 10, 10),
             ),
             # (lambda torchvision.transforms.Resize(),        lambda: ...),
+            # TODO: Need to enable output quantization of interpolation layers
+            #       in htp config file to pass below test cases
+            # (lambda: nn.MaxPool1d(3), lambda: randn(1, 3, 100)),
+            # (lambda: nn.MaxPool2d(3), lambda: randn(1, 3, 10, 10)),
+            # (lambda: nn.MaxPool3d(3), lambda: randn(1, 3, 5, 5, 5)),
+            # (lambda: nn.AvgPool2d(3), lambda: randn(1, 3, 5, 5, 5)),
+            # (lambda: nn.AvgPool2d(3), lambda: randn(1, 3, 5, 5, 5)),
         ],
     )
-    def test_htp_resize(self, module_factory, input_factory):
+    def test_htp_interpolation_tie_encodings(self, module_factory, input_factory):
         """
         Purpose: HTP treats onnx::Resize as data movement op, and therefore
                  requires its input/output to share the same encoding
