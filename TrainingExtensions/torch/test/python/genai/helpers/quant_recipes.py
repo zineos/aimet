@@ -175,7 +175,7 @@ class AdaScale(QuantizationTechnique):
         quantsim: QuantizationSimModel,
         dataloader: DataLoader,
         num_batches: int = 20,
-        num_epochs: int = 5,
+        num_iterations: int = 1500,
     ):
         class LimitedBatchDataLoader:
             """Internal helper class to reduce number of accessible batches in Dataloader"""
@@ -206,7 +206,7 @@ class AdaScale(QuantizationTechnique):
             lambda model, inputs: model(
                 inputs["input_ids"].to(device=model.device), use_cache=False
             ),
-            num_epochs,
+            num_iterations,
         )
 
         _compute_encodings(quantsim, dataloader, num_iterations=20)

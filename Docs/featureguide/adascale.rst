@@ -23,7 +23,7 @@ Prerequisites
 
 To use AdaScale, you must:
 
-- Use PyTorch. AdaScale does not support other frameworks yet.
+- Use PyTorch. AdaScale does not support other frameworks yet
 - Load a pre-trained model
 - Create a dataloader for the model
 
@@ -62,7 +62,7 @@ Setup
 Step 1
 ~~~~~~
 
-Use AIMET's :ref:`quantization simulation<quantsim-index>` to create a QuantSimModel object
+Use AIMET's :ref:`quantization simulation<quantsim-index>` to create a QuantSimModel object.
 
 .. tab-set::
     :sync-group: platform
@@ -89,7 +89,8 @@ Use AIMET's :ref:`quantization simulation<quantsim-index>` to create a QuantSimM
 Step 2
 ~~~~~~
 
-Apply AdaScale to decide optimal quantization encodings for parameters of supported layers
+Apply AdaScale to decide optimal quantization encodings for parameters of supported layers.
+It is recommended to use a minimum of 1500 iterations when applying AdaScale regardless of the dataloader batch size.
 
 .. tab-set::
     :sync-group: platform
@@ -115,7 +116,7 @@ Apply AdaScale to decide optimal quantization encodings for parameters of suppor
 Step 3
 ~~~~~~
 
-Compute encodings for remaining parameters of the model
+Compute encodings for remaining parameters of the model.
 
 .. tab-set::
     :sync-group: platform
@@ -141,7 +142,7 @@ Compute encodings for remaining parameters of the model
 Step 4
 ~~~~~~
 
-Evaluate the quantized model
+Evaluate the quantized model.
 
 .. tab-set::
     :sync-group: platform

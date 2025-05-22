@@ -37,6 +37,7 @@
 # pylint: disable=missing-docstring
 import torch
 from torch.utils.data import Dataset, DataLoader
+from aimet_torch.experimental.adascale import adascale_optimizer
 
 class ModelWithLinears(torch.nn.Module):
     def __init__(self):
@@ -79,6 +80,9 @@ class CustomDataset(Dataset):
 # General setup that can be changed as needed
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 model = ModelWithConsecutiveLinearBlocks().eval().to(device)
+
+# Register ModelWithLinears as the block type to AdaScale
+adascale_optimizer.model_to_block_mapping[ModelWithConsecutiveLinearBlocks] = ModelWithLinears
 # End of [setup]
 
 # [prepare-dataloader]
@@ -108,7 +112,7 @@ from aimet_torch.v2.utils import default_forward_fn
 apply_adascale(qsim=sim,
                data_loader=data_loader,
                forward_fn=default_forward_fn,
-               num_epochs=10)
+               num_iterations=1500)
 
 # End of [apply-adascale]
 

@@ -151,7 +151,7 @@ class TestAdascale:
         """Test basic flow"""
         model, shape = model_and_shape
         batch_size = 1
-        num_epochs = 1
+        num_iterations = 1
 
         torch.manual_seed(0)
         dummy_input = torch.rand(shape)
@@ -169,7 +169,7 @@ class TestAdascale:
                 test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
-            apply_adascale(sim, data_loader, None, num_epochs)
+            apply_adascale(sim, data_loader, None, num_iterations)
 
         for block in sim.model.blocks:
             for module in block.modules():
@@ -300,7 +300,7 @@ class TestAdascale:
         model, shape = model_and_shape
 
         batch_size = 16
-        num_epochs = 10
+        num_iterations = 130
 
         torch.manual_seed(0)
         dummy_input = torch.rand(shape)
@@ -321,7 +321,7 @@ class TestAdascale:
                 test_models.ModelWithConsecutiveConv2dBlocks: test_models.ModelWithConvs,
             },
         ):
-            apply_adascale(sim, data_loader, None, num_epochs)
+            apply_adascale(sim, data_loader, None, num_iterations)
 
         adascale_output = sim.model(dummy_input)
         loss_after_opt = torch.nn.functional.mse_loss(fp_output, adascale_output)

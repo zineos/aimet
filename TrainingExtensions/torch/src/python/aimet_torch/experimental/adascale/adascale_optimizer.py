@@ -104,13 +104,13 @@ class AdaScale:
         qsim: QuantizationSimModel,
         data_loader: DataLoader,
         forward_fn: Callable[[torch.nn.Module, Any], Any] = None,
-        num_epochs: int = 1,
+        num_iterations: int = 1500,
     ):
         """
         :param qsim: Quantization Sim model
         :param data_loader: DataLoader object to load the input data
         :param forward_fn: forward function to run the forward pass of the model
-        :param num_epochs: Number of epochs to perform the AdaScale BKD
+        :param num_iterations: Number of iterations to optimize for during AdaScale BKD
 
         Note that the forward_fn should take exactly two arguments -
         1) the model
@@ -125,7 +125,7 @@ class AdaScale:
             >>> data_set = DataSet(dummy_input)
             >>> data_loader = DataLoader(data_set, ...)
             >>> sim = QuantizationSimModel(model, dummy_input)
-            >>> apply_adascale(sim, data_loader, forward_fn=forward_fn, num_epochs=10)
+            >>> apply_adascale(sim, data_loader, forward_fn=forward_fn, num_iterations=1500)
             >>> sim.compute_encodings(...)
             >>> sim.export(...)
 
@@ -190,8 +190,12 @@ class AdaScale:
                         fp_out.append(fp_block_results)
                         del fp_args, fp_kwargs
 
-                for _ in range(num_epochs):
+                curr_iteration = 0
+                while curr_iteration < num_iterations:
                     for batch_idx in range(len(data_loader)):
+                        curr_iteration += 1
+                        if curr_iteration > num_iterations:
+                            break
                         with torch.set_grad_enabled(True):
                             with patch_attr(
                                 torch.Tensor,
