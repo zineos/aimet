@@ -36,6 +36,7 @@
 # =============================================================================
 """Defines onnx export API"""
 
+import copy
 import contextlib
 import io
 import os
@@ -47,7 +48,7 @@ import onnx
 import torch
 from torch.onnx import _constants
 
-from aimet_common.onnx._utils import _add_onnx_qdq_nodes
+from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_data_movement_op
 
 from .nn import QuantizationMixin
 from .quantization import DequantizedTensor
@@ -348,7 +349,41 @@ def _to_onnx(
             onnx_model
         ).items()
     }
+    tensor_to_encoding_map |= _derive_data_movement_op_output_encoding(
+        onnx_model, tensor_to_encoding_map
+    )
     return onnx_model, tensor_to_encoding_map
+
+
+def _derive_data_movement_op_output_encoding(
+    model: onnx.ModelProto,
+    tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
+) -> Mapping[str, Tuple[EncodingBase, bool]]:
+    data_movement_ops = [
+        node for node in model.graph.node if _is_data_movement_op(node.op_type)
+    ]
+
+    output_encodings = {}
+
+    for node in data_movement_ops:
+        input_name = node.input[0]
+        output_name = node.output[0]
+        inp_encoding, _ = tensor_to_encoding_map.get(input_name, (None, None))
+
+        if not inp_encoding:
+            inp_encoding, _ = output_encodings.get(input_name, (None, None))
+
+        if not inp_encoding:
+            # No input encoding to inherit; skip
+            continue
+
+        if output_name in tensor_to_encoding_map:
+            # Output encoding already exists; skip
+            continue
+
+        output_encodings[output_name] = (copy.deepcopy(inp_encoding), False)
+
+    return output_encodings
 
 
 @contextlib.contextmanager

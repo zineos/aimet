@@ -44,6 +44,7 @@ import torch
 from torch.onnx import _constants
 import onnx
 import tempfile
+from unittest.mock import patch
 from aimet_common.quantsim_config.utils import (
     get_path_for_per_channel_config,
     get_path_for_per_tensor_config,
@@ -478,11 +479,17 @@ def test_quantsim_export_resnet18(
             assert len(onnx_encodings["param_encodings"]) == len(
                 expected_param_encodings
             )
-            assert len(onnx_encodings["activation_encodings"]) == len(
+            # Exported encodings can contain MORE encodings than quantsim
+            # due to data movement op's output encodings that are generated
+            # on-the-fly during export
+            assert len(onnx_encodings["activation_encodings"]) >= len(
                 expected_activation_encodings
             )
         else:
-            assert len(onnx_encodings["encodings"]) == len(
+            # Exported encodings can contain MORE encodings than quantsim
+            # due to data movement op's output encodings that are generated
+            # on-the-fly during export
+            assert len(onnx_encodings["encodings"]) >= len(
                 expected_param_encodings
             ) + len(expected_activation_encodings)
 
@@ -675,11 +682,14 @@ def test_quantsim_export_onnx_qdq_resnet18(
         onnx_dq_nodes = [
             node for node in onnx_model.graph.node if node.op_type == "DequantizeLinear"
         ]
-        assert len(onnx_dq_nodes) == len(sim_qdq_nodes)
+        # Exported onnx qdq model can contain MORE qdq nodes than quantsim
+        # due to data movement op's output encodings that are generated
+        # on-the-fly during export
+        assert len(onnx_dq_nodes) >= len(sim_qdq_nodes)
 
         if activation_kind in ("uint", "int"):
             """
-            Then: Model input/outputs should be associated with QDQ
+            Then: All model input/outputs should be associated with QDQ
             """
             input_names = set(inp.name for inp in onnx_model.graph.input)
             output_names = set(out.name for out in onnx_model.graph.output)
@@ -855,3 +865,92 @@ def test_non_standard_quantizer():
 
     with pytest.raises(RuntimeError):
         aimet_torch.onnx.export(sim.model, x, f=os.devnull)
+
+
+def test_data_movement_op_encoding_generation():
+    """
+    Given: Model with data movement ops
+    """
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = torch.nn.Conv2d(3, 3, 3)
+
+        def forward(self, x):
+            x = self.conv(x)
+            x = x.reshape(1, -1)
+            return x[:, -10:]
+
+    """
+    When Export to onnx QDQ
+    """
+    model = Model()
+    x = torch.randn(1, 3, 224, 224)
+    sim = QuantizationSimModel(model, x)
+    sim.compute_encodings(lambda model: model(x))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        full_path = os.path.join(tmpdir, "model.onnx")
+        aimet_torch.onnx.export(
+            sim.model,
+            x,
+            full_path,
+            input_names=["input"],
+            output_names=["output"],
+            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        )
+        onnx_model = onnx.load_model(full_path)
+
+    with open("/tmp/onnx_reshape_qdq.onnx", "wb") as f:
+        f.write(onnx_model.SerializeToString())
+
+    """
+    Then: All model input/outputs should be associated with QDQ
+    """
+    input_names = set(inp.name for inp in onnx_model.graph.input)
+    output_names = set(out.name for out in onnx_model.graph.output)
+    for node in onnx_model.graph.node:
+        if node.input and node.input[0] in input_names:
+            assert node.op_type == "QuantizeLinear"
+            input_names.remove(node.input[0])
+        if node.output and node.output[0] in output_names:
+            assert node.op_type == "DequantizeLinear"
+            output_names.remove(node.output[0])
+    assert not input_names
+    assert not output_names
+
+    """
+    Then: ORT output should be EQUAL with/without data movement op output QDQ
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        full_path = os.path.join(tmpdir, "model.onnx")
+        with patch(
+            "aimet_torch.onnx._derive_data_movement_op_output_encoding", lambda *_: {}
+        ):
+            aimet_torch.onnx.export(
+                sim.model,
+                x,
+                full_path,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+            )
+        onnx_model_ = onnx.load_model(full_path)
+        # patch sanity check
+        assert len(onnx_model.graph.node) > len(onnx_model_.graph.node)
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess = ort.InferenceSession(
+        onnx_model.SerializeToString(), sess_options=sess_options
+    )
+    sess_ = ort.InferenceSession(
+        onnx_model_.SerializeToString(), sess_options=sess_options
+    )
+
+    for _ in range(10):
+        x = torch.randn(5, 3, 224, 224).detach().numpy()
+        (output,) = sess.run(None, {"input": x})
+        (output_,) = sess_.run(None, {"input": x})
+        assert np.all(output == output_)
