@@ -3950,30 +3950,3 @@ def standalone_instancenorm(input_shape: tuple[int, int, int]):
     )
     onnx.checker.check_model(model)
     return model
-
-def model_with_ignore_ops(tmpdir):
-    class CustomModel(nn.Module):
-        def __init__(self):
-            super(CustomModel, self).__init__()
-            self.conv = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
-            self.fc = nn.Linear(16 * 16 * 32, 10)
-
-        def forward(self, x):
-            x = self.conv(x)
-            x = torch.squeeze(x, dim=0)
-            x = torch.unsqueeze(x, dim=0)
-            x = torch.transpose(x, 1, 2)
-            x1, x2 = torch.split(x, split_size_or_sections=16, dim=1)
-            x1 = x1.reshape(1,-1)
-            x2 = x2.reshape(1, -1)
-            x1 = self.fc(x1)
-            x2 = self.fc(x2)
-            return x1, x2
-
-    model = CustomModel()
-    model.eval()
-    input_tensor = torch.randn(1, 3, 32, 32)
-    model_file_path = os.path.join(tmpdir, 'custom_model.onnx')
-    torch.onnx.export(model, input_tensor, model_file_path)
-
-    return onnx.load(model_file_path)

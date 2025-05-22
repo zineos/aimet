@@ -134,15 +134,7 @@ class LayerOutput:
             name for name in self.activation_names if name.endswith("_updated")
         ]
         if quantized_activation_names:
-            # Replace the _updated names with the original names to remove the corresponding unquantized activations
-            activations_to_remove = [name[:-8] for name in quantized_activation_names]
-
-            # Also remove the _qdq activations
-            for name in self.activation_names:
-                if name.endswith('_qdq'):
-                    activations_to_remove.append(name)
-
-            self.activation_names = list(set(self.activation_names) - set(activations_to_remove))
+            self.activation_names = quantized_activation_names
 
         LayerOutput.register_activations(self.model, self.activation_names)
 
