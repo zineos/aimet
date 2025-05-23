@@ -48,7 +48,7 @@ import onnx
 import torch
 from torch.onnx import _constants
 
-from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_data_movement_op
+from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_grid_preserving_op
 
 from .nn import QuantizationMixin
 from .quantization import DequantizedTensor
@@ -360,7 +360,7 @@ def _derive_data_movement_op_output_encoding(
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
 ) -> Mapping[str, Tuple[EncodingBase, bool]]:
     data_movement_ops = [
-        node for node in model.graph.node if _is_data_movement_op(node.op_type)
+        node for node in model.graph.node if _is_grid_preserving_op(node.op_type)
     ]
 
     output_encodings = {}

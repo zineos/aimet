@@ -387,11 +387,18 @@ def _is_float_output(op_type: str) -> bool:
     )
 
 
-def _is_data_movement_op(op_type: str) -> bool:
+def _is_grid_preserving_op(op_type: str) -> bool:
     """
-    Returns True if op_type can be considered a data movement op.
+    Returns True if op_type can be considered a grid-preserving op.
     Data movement op is defined as a reshape or indexing operator
-    whose output strictly preserves the input range.
+    whose output strictly preserves the quantization grid of the input
+
+    Formally put,
+    function `f` is a grid-preserving op if and only if y == y'
+    where
+        * x_q = quantize(x, scale_x, zp_x)
+        * y  = f(x_q)
+        * y' = requantize(y, scale_x, zp_x)
     """
     return op_type in (
         "BatchToSpace",
@@ -405,6 +412,8 @@ def _is_data_movement_op(op_type: str) -> bool:
         "GatherElements",
         "GatherND",
         "Identity",
+        "MaxPool",
+        "MaxRoiPool",
         "NonZero",
         "Pad",
         "ReduceMax",
@@ -432,12 +441,7 @@ def _is_htp_interpolation_op(op_type: str) -> bool:
     """
     # TODO: Absorb this function into redesigned config file
     return op_type in (
-        "ChannelShuffle",
         "CropAndResize",
-        "MaxPool",
-        "MaxRoiPool",
-        "MaxUnpool",
-        "NonMaxSuppression",
         "Resize",
         "ScatterElements",
         "Upsample",
