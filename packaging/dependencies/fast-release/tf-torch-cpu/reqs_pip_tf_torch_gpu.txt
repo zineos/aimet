@@ -10,7 +10,7 @@ networkx
 numpy<2
 onnx
 onnxruntime~=1.19.0
-onnxscript
+onnxscript==0.2.5
 osqp
 pandas
 pandoc
