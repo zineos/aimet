@@ -73,7 +73,7 @@ from aimet_onnx.quantsim import (
 )
 import aimet_onnx
 from aimet_onnx.qc_quantize_op import OpMode, GroupedBlockQuantizeDequantize
-from aimet_onnx.utils import make_dummy_input, remove_node
+from aimet_onnx.utils import make_dummy_input
 from .models import models_for_tests, test_models
 from .models.models_for_tests import (
     batchnorm_model,
@@ -86,6 +86,7 @@ from .models.models_for_tests import (
     instance_norm_model,
     layernorm_model,
     linear_split_into_matmul_add,
+    model_with_split_matmul,
     multi_input_with_constant_model,
     multi_output_model,
     single_residual_model,
@@ -2900,6 +2901,7 @@ def test_onnx_qdq(
 
     (out_sim,) = sim.session.run(None, {"input": input})
 
+    sim._insert_data_movement_op_output_quantizers()
     onnx_qdq_model = sim._to_onnx_qdq()
 
     """
@@ -3005,6 +3007,7 @@ def test_onnx_qdq_opset_compatibility(
       1. Onnx opset should be upgraded to minimum required opset if needed
       2. Should pass onnx checker
     """
+    sim._insert_data_movement_op_output_quantizers()
     onnx_qdq_model = sim._to_onnx_qdq()
     output_model_opset = onnx_qdq_model.opset_import[0].version
     assert output_model_opset == max(input_model_opset, minimum_required_opset)
@@ -3073,3 +3076,60 @@ def test_onnx_qdq_opset_compatibility(
     )
     (out_onnx_qdq,) = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
+
+
+def test_insert_data_movement_op_output_quantizers():
+    model = model_with_split_matmul()
+    sim = QuantizationSimModel(model)
+    x = np.random.randn(1, 128, 8, 750).astype(np.float32)
+    sim.compute_encodings(lambda session: session.run(None, {"model_input": x}))
+    onnx_qdq_before = sim._to_onnx_qdq()
+
+    """
+    When: Call _insert_data_movement_op_output_quantizers before _to_onnx_qdq()
+    Then:
+      1. All node outputs should fed into QuantizeLinear
+      2. All node inputs should be an output of DequantizeLinear
+      3. Model output should be EQUAL with/without data movement op output QDQ
+    """
+    sim._insert_data_movement_op_output_quantizers()
+    onnx_qdq_after = sim._to_onnx_qdq()
+
+    q_nodes = [
+        node for node in onnx_qdq_after.graph.node if node.op_type == "QuantizeLinear"
+    ]
+    all_outputs = itertools.chain(
+        *(
+            node.output
+            for node in onnx_qdq_after.graph.node
+            if node.op_type not in ("QuantizeLinear", "DequantizeLinear")
+        )
+    )
+    for output in all_outputs:
+        assert any(output == q.input[0] for q in q_nodes)
+
+    dq_nodes = [
+        node for node in onnx_qdq_after.graph.node if node.op_type == "DequantizeLinear"
+    ]
+    all_inputs = itertools.chain(
+        node.input[0]
+        for node in onnx_qdq_after.graph.node
+        if node.op_type not in ("QuantizeLinear", "DequantizeLinear")
+    )
+    for input in all_inputs:
+        assert any(input == dq.output[0] for dq in dq_nodes)
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess_before = ort.InferenceSession(
+        onnx_qdq_before.SerializeToString(), sess_options=sess_options
+    )
+    sess_after = ort.InferenceSession(
+        onnx_qdq_after.SerializeToString(), sess_options=sess_options
+    )
+    for _ in range(10):
+        x = np.random.randn(1, 128, 8, 750).astype(np.float32)
+        outputs_before = sess_before.run(None, {"model_input": x})
+        outputs_after = sess_after.run(None, {"model_input": x})
+        for out_before, out_after in zip(outputs_before, outputs_after):
+            assert np.all(out_before == out_after)

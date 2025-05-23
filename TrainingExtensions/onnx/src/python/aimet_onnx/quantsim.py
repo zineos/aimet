@@ -70,7 +70,7 @@ from packaging import version
 from aimet_common import libpymo, quantsim
 from aimet_common import libquant_info
 from aimet_common.defs import QuantScheme, QuantizationDataType
-from aimet_common.onnx._utils import _add_onnx_qdq_nodes
+from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_grid_preserving_op
 from aimet_common.quantsim import (
     extract_global_quantizer_args,
     VALID_ENCODING_VERSIONS,
@@ -1656,6 +1656,56 @@ class QuantizationSimModel:
                     attr.ClearField("ints")
                     attr.floats.extend(qdq_param.astype(np.int64).tolist())
                     break
+
+    def _insert_data_movement_op_output_quantizers(self):
+        """
+        Insert data moevement op output quantizers.
+        The newly inserted output quantizers will inherit the input encodings.
+        This function is useful for export; encouraged to call this function right before export
+
+        Example:
+
+            >>> onnx_qdq = sim._to_onnx_qdq()
+            >>> len([dq for dq in onnx_qdq.graph.node if dq.op_type == "DequantizeLinear"])
+            10
+            >>> sim._insert_data_movement_op_output_quantizers()
+            >>> onnx_qdq = sim._to_onnx_qdq()
+            >>> len([dq for dq in onnx_qdq.graph.node if dq.op_type == "DequantizeLinear"])
+            15
+        """
+        data_movement_ops = [
+            op
+            for op in self.connected_graph.ordered_ops
+            if _is_grid_preserving_op(op.type)
+        ]
+
+        for op in data_movement_ops:
+            input_qtzr = self.qc_quantize_op_dict.get(op.inputs[0].name)
+
+            if input_qtzr is None:
+                # No input quantizer found; skip
+                continue
+
+            input_encoding = input_qtzr.get_encodings()
+
+            if not input_encoding:
+                # No input encoding to inherit; skip
+                continue
+
+            for output in op.outputs:
+                if output.name in self.qc_quantize_op_dict:
+                    # Output quantizer already exists; skip
+                    continue
+
+                self._insert_quantizer(output.name, is_param=False)
+                output_qtzr = self.qc_quantize_op_dict[output.name]
+                output_qtzr.load_encodings(input_encoding)
+
+                # Rename model output node
+                for graph_output in self.model.model.graph.output:
+                    if graph_output.name in output.name:
+                        graph_output.name += "_updated"
+                        break
 
 
 # pylint: disable=too-many-locals, too-many-branches
