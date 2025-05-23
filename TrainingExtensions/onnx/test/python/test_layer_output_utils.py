@@ -35,8 +35,10 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 import copy
+import json
 import os
 import shutil
+import tempfile
 
 import torch
 import numpy as np
@@ -46,7 +48,10 @@ from torch.utils.data import Dataset, DataLoader
 from aimet_onnx.utils import make_dummy_input
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.layer_output_utils import LayerOutput, LayerOutputUtil
-from .models.models_for_tests import build_dummy_model_with_dynamic_input
+from .models.models_for_tests import (
+    build_dummy_model_with_dynamic_input,
+    model_with_ignore_ops,
+)
 
 
 # Fetch appropriate execution providers depending on availability
@@ -245,3 +250,30 @@ class TestLayerOutputUtil:
 
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
+
+    def test_generate_layeroutput_for_all_ops(self):
+        """Test to check if layer outputs for all ops are being generated on QuantiSim model"""
+        with tempfile.TemporaryDirectory() as tempdir:
+            model = model_with_ignore_ops(tempdir)
+
+            input = np.random.rand(1, 3, 32, 32).astype(np.float32)
+            org_path = os.path.join(tempdir, "org")
+            lop = LayerOutputUtil(model, org_path)
+            lop.generate_layer_outputs(input)
+
+            sim = QuantizationSimModel(model)
+
+            sim_path = os.path.join(tempdir, "sim")
+            lop2 = LayerOutputUtil(sim.model.model, sim_path)
+            lop2.generate_layer_outputs(input)
+
+            json_file_name = "layer_output_name_order.json"
+
+            with open(os.path.join(org_path, json_file_name), "r") as f:
+                org_op_list = json.load(f)["layer_output_names"]
+
+            with open(os.path.join(sim_path, json_file_name), "r") as f:
+                sim_op_list = json.load(f)["layer_output_names"]
+
+            assert len(org_op_list) == len(sim_op_list)
+            assert set(org_op_list) == set(sim_op_list)
