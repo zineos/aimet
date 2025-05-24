@@ -5,6 +5,27 @@
 #############
 Release notes
 #############
+2.7.0
+=====
+
+* New Features
+    * ONNX
+        * Support aimet-onnx for Windows/ARM64
+    * PyTorch
+        * OmniQuant (experimental) - implement OmniQuant PTQ technique (https://arxiv.org/pdf/2308.13137) for Llama and Qwen2 model families
+
+* Bug Fixes and Improvements
+    * ONNX
+        * Remove DlCompression, DlEqualization, OpenCV, zlib dependencies
+        * Support loading encodings for missing quantizers
+        * Set bitwidth of tensor quantizer while loading encodings
+    * PyTorch
+        * Remove DlCompression, DlEqualization, OpenCV, zlib dependencies
+        * Export encodings for data movement operations in ONNX QDQ export
+        * AdaScale (experimental) - support for updating Conv2D layers in blocks
+        * AdaScale (experimental) - update API to take num_iterations instead of num_epochs
+
+* Deprecations
 
 2.6.0
 =====
