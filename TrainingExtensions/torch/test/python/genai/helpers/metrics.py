@@ -214,7 +214,17 @@ class Interactive(EvaluationMetric):
             if user_input_prompt == "exit":
                 break
 
-            formatted_user_input = f"You are a helpful AI assistant. Please be concise. {user_input_prompt}"
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI assistant. Please be concise.",
+                },
+                {"role": "user", "content": user_input_prompt},
+            ]
+
+            formatted_user_input = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
             tokenized_user_input = tokenizer(
                 formatted_user_input, return_tensors="pt"
             ).to(model.device)
