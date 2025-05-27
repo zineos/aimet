@@ -38,10 +38,11 @@
 """Metrics for GenAI testing"""
 
 from abc import ABC, abstractmethod
+import readline
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, GenerationConfig
 
 from .datasets import (
     Wikitext,
@@ -201,3 +202,38 @@ class MMMLU(GenericMMLU):
             tokenizer, context_length, split, num_fewshot
         )
         return DataLoader(dataset)
+
+
+class Interactive(EvaluationMetric):
+    @classmethod
+    def evaluate(
+        cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int
+    ) -> float:
+        while True:
+            user_input_prompt = input("Enter your prompt or 'exit' to quit: ")
+            if user_input_prompt == "exit":
+                break
+
+            formatted_user_input = f"You are a helpful AI assistant. Please be concise. {user_input_prompt}"
+            tokenized_user_input = tokenizer(
+                formatted_user_input, return_tensors="pt"
+            ).to(model.device)
+
+            generation_config = GenerationConfig(
+                max_new_tokens=1000,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+
+            output = model.model.generate(
+                inputs=tokenized_user_input["input_ids"],
+                attention_mask=tokenized_user_input["attention_mask"],
+                generation_config=generation_config,
+            )
+
+            print("-------- Response Summary --------")
+            print(f"Prompt: {formatted_user_input}")
+            prompt_length = tokenized_user_input["input_ids"][0].shape[-1]
+            print(f"Response: {tokenizer.decode(output[0][prompt_length:])}")
+
+        return float("nan")

@@ -48,11 +48,10 @@ from aimet_torch.utils import place_model
 from .helpers.profiler import ResourceProfiler, write_stats_to_disk
 
 
-@pytest.mark.skipif(
-    lambda test_parameters: test_parameters is None,
-    reason="No GenAI test parameters provided.",
-)
 def test_llm_quantization(test_parameters):
+    if test_parameters is None:
+        pytest.skip("No GenAI test parameters provided.")
+
     print(test_parameters)
     model_kwargs = test_parameters.pop("model")
     model_cls = model_kwargs.pop("class")
