@@ -93,14 +93,12 @@ class DependencyGraph:
         self,
         model: Union[onnx.ModelProto, ONNXModel],
         data_loader: Iterable,
-        num_batches: int,
     ):
         """
         Initializes the object of the Dependency Graph
 
         :param model: FP32 model
         :param data_loader: DataLoader object
-        :param num_batches: Number of batches to iterate over
         """
         self.model = model
         if not isinstance(model, ONNXModel):
@@ -128,7 +126,7 @@ class DependencyGraph:
         for start_op in self.conn_graph.starting_ops:
             self._fill_dependency_graph(start_op)
 
-        self._populate_data_for_starting_ops(data_loader, num_batches)
+        self._populate_data_for_starting_ops(data_loader)
 
     def get_topologically_sorted_nodes(self):
         """
@@ -305,26 +303,27 @@ class DependencyGraph:
         tensor = onnx.numpy_helper.to_array(tensor_proto)
         return tensor
 
-    def _populate_data_for_starting_ops(self, data_loader: Iterable, num_batches: int):
+    def _populate_data_for_starting_ops(self, inputs: Iterable[Dict[str, np.ndarray]]):
         """
         Initializes float_data and sim_data dictionaries for model input(s) using data loader and number of batches.
 
         :param data_loader: DataLoader object
-        :param num_batches: Number of batches to iterate over
         """
         model_inputs = [node.name for node in self.conn_graph.model.graph.input]
         data = {model_input: [] for model_input in model_inputs}
 
-        for i, batch in enumerate(data_loader):
-            if i >= num_batches:
-                break
-            batch_dict = create_input_dict(self.conn_graph.model, batch)
+        for batch_dict in inputs:
+            if not isinstance(batch_dict, dict):
+                raise TypeError(
+                    f"Expected each input sample to be type `Dict[str, np.ndarray]` but got type {type(batch_dict)}. "
+                    "To resolve this, ensure that `inputs` argument is type `Iterable[Dict[str, np.ndarray]]`"
+                )
             for model_input in model_inputs:
                 if model_input not in batch_dict.keys():
                     raise ValueError(
                         f"All inputs to the graph must be present in the dataloader. {model_input} is missing in the dataloader"
                     )
-                data[model_input].append(np.array(batch_dict[model_input]))
+                data[model_input].append(batch_dict[model_input])
 
         for input_name, data_value in data.items():
             self.update_sim_data([input_name], [data_value])

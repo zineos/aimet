@@ -41,10 +41,11 @@
 # pylint: disable=no-name-in-module, ungrouped-imports, too-many-lines
 
 import copy
-from typing import List, Iterable, Dict
+from typing import List, Dict, Collection
 from collections import defaultdict
 from dataclasses import dataclass
 from contextlib import contextmanager
+import itertools
 import numpy as np
 import onnx
 import onnxruntime
@@ -52,7 +53,7 @@ import torch
 from onnx.utils import Extractor
 from aimet_common.libpymo import TensorQuantizerOpMode
 from aimet_common.defs import QuantScheme
-from aimet_common.utils import AimetLogger
+from aimet_common.utils import AimetLogger, deprecated
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import QcQuantizeOp
 from aimet_onnx.sequential_mse.dependency_graph import (
@@ -62,6 +63,25 @@ from aimet_onnx.sequential_mse.dependency_graph import (
 from aimet_onnx.sequential_mse.dependency_graph import DependencyNode
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
+
+
+def apply_seq_mse(
+    sim: QuantizationSimModel,
+    inputs: Collection[Dict[str, np.ndarray]],
+    num_candidates: int = 20,
+):
+    """
+    Sequentially optimizes the QuantizationSimModel's weight encodings to reduce MSE loss at layer outputs.
+
+    Args:
+        sim: QuantizationSimModel instance to optimize
+        inputs: The set of input samples to use during optimization
+        num_candidates: Number of encoding candidates to sweep for each weight. Decreasing this can reduce
+            runtime but may lead to lower accuracy.
+    """
+    seq_mse_params = SeqMseParams(num_batches=None, num_candidates=num_candidates)
+    seq_mse = SequentialMse(None, sim, seq_mse_params, inputs)
+    seq_mse.apply_seq_mse_algo()
 
 
 @dataclass
@@ -92,7 +112,7 @@ class SequentialMse:
         model: onnx.ModelProto,
         sim: QuantizationSimModel,
         params: SeqMseParams,
-        data_loader: Iterable,
+        data_loader: Collection[Dict[str, np.ndarray]],
     ):
         """
         Initialize the sequential mse object
@@ -100,7 +120,7 @@ class SequentialMse:
         :param model: float model
         :param sim: QuantizationSimModel object
         :param params: Sequential MSE parameters
-        :param data_loader: Torch Dataloader
+        :param data_loader: The set of input samples to use during optimization
         """
         # pylint: disable=protected-access
         assert sim._quant_scheme in (
@@ -110,6 +130,7 @@ class SequentialMse:
 
         self.sim = sim
         self.params = params
+        data_loader = itertools.islice(data_loader, params.num_batches)
 
         # Hacky way to get around onnx.shape_inference.infer_shapes call as it doesn't work for model >2GB
         raw_data = {}
@@ -136,9 +157,7 @@ class SequentialMse:
 
         self._update_value_info()
 
-        self.dependency_graph = DependencyGraph(
-            self._extractor.model, data_loader, params.num_batches
-        )
+        self.dependency_graph = DependencyGraph(self._extractor.model, data_loader)
         self._extractor.model = self.sim.model.model
         self._extractor.graph = self.sim.model.model.graph
         self.data_loader = data_loader
@@ -202,12 +221,13 @@ class SequentialMse:
                 self._update_value_info_for_output(node)
                 self._update_value_info_for_input(node)
 
+    @deprecated("Use aimet_onnx.apply_seq_mse instead")
     @staticmethod
     def apply_seq_mse(
         model: onnx.ModelProto,
         sim: QuantizationSimModel,
         params: SeqMseParams,
-        data_loader: Iterable,
+        data_loader: Collection[Dict[str, np.ndarray]],
     ):
         """
         It performs following steps:
@@ -217,7 +237,7 @@ class SequentialMse:
         :param model: float model
         :param sim: QuantizationSimModel object
         :param params: Sequential MSE parameters
-        :param data_loader: Data loader
+        :param data_loader: The set of input samples to use during optimization
         """
         seq_mse = SequentialMse(model, sim, params, data_loader)
         seq_mse.apply_seq_mse_algo()
@@ -571,8 +591,8 @@ class SequentialMse:
         :return: outputs
         """
         outputs = []
-
-        for i in range(self.params.num_batches):
+        dataset_len = len(next(iter(inputs.values())))
+        for i in range(dataset_len):
             input_batch = {}
             for name, data in inputs.items():
                 input_batch[name] = data[i]

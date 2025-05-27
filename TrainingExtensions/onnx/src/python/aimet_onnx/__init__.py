@@ -49,3 +49,4 @@ from aimet_common import _version
 __version__ = _version.__version__
 
 from .quantsim import QuantizationSimModel, compute_encodings
+from .sequential_mse.seq_mse import apply_seq_mse

@@ -47,6 +47,7 @@ import os
 from onnx.utils import Extractor
 import logging
 from aimet_common.utils import AimetLogger
+from aimet_onnx import apply_seq_mse
 from aimet_onnx.sequential_mse.dependency_graph import (
     DependencyGraph,
     SUPPORTED_MODULES,
@@ -68,73 +69,6 @@ from .models.test_models_onnx import model_with_multiple_outputs
 np.random.seed(0)
 torch.manual_seed(42)
 AimetLogger.set_level_for_all_areas(logging.DEBUG)
-
-
-def unlabeled_data_loader(dummy_inputs):
-    class MyDataset(Dataset):
-        def __init__(self, data):
-            self.data = data
-
-        def __getitem__(self, index):
-            if isinstance(dummy_inputs, list):
-                return [value[index] for value in self.data]
-            else:
-                return self.data[index]
-
-        def __len__(self):
-            if isinstance(dummy_inputs, list):
-                return len(self.data[0])
-            else:
-                return len(self.data)
-
-    if isinstance(dummy_inputs, list):
-        dataset = MyDataset(
-            [[value[0, :] for _ in range(10)] for value in dummy_inputs]
-        )
-    else:
-        dataset = MyDataset([dummy_inputs[0, :] for _ in range(10)])
-
-    return DataLoader(dataset)
-
-
-def dummy_input_for_linear_layer():
-    return torch.randn((1, 100, 100))
-
-
-def dummy_input_for_conv_layer():
-    return torch.randn((1, 5, 5, 5))
-
-
-def dummy_input_for_dependency_graph():
-    return torch.randn((1, 1, 10, 10))
-
-
-def dummy_input_for_residual_model():
-    return torch.randn((1, 3, 32, 32))
-
-
-def dummy_input_for_model_with_multiple_input():
-    return [torch.randn((1, 3, 32, 32)), torch.randn((1, 3, 32, 32))]
-
-
-def get_single_linear_layer_model():
-    return single_linear_layer_model()
-
-
-def get_single_conv_layer_model():
-    return single_conv_layer_model()
-
-
-def get_model_with_split():
-    return model_with_split()
-
-
-def get_model_with_multiple_inputs():
-    return model_with_multiple_inputs()
-
-
-def get_model_with_multiple_outputs():
-    return model_with_multiple_outputs()
 
 
 def _get_config_file(
@@ -234,8 +168,8 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
     )
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
-    seq_mse = SequentialMse(sim.model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    seq_mse = SequentialMse(sim.model, sim, seq_params, inputs)
     conv_node = seq_mse.dependency_graph._name_to_node["/conv/Conv"]
     seq_mse._run_seq_mse([conv_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(conv_node)
@@ -257,7 +191,7 @@ def test_do_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
 @pytest.mark.parametrize("enable_pcq", [True, False])
 @pytest.mark.parametrize("pass_model", [True, False])
 def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
-    model = get_single_linear_layer_model()
+    model = single_linear_layer_model()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -271,13 +205,13 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
             pcq=True,
         ),
     )
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
     seq_params = SeqMseParams(num_batches=1)
     seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_linear_layer())
     if pass_model:
-        seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+        seq_mse = SequentialMse(model, sim, seq_params, inputs)
     else:
-        seq_mse = SequentialMse(None, sim, seq_params, dataloader)
+        seq_mse = SequentialMse(None, sim, seq_params, inputs)
     fc_node = seq_mse.dependency_graph._name_to_node["/fc/MatMul"]
     seq_mse._run_seq_mse([fc_node])
     _, per_channel_max = seq_mse._get_min_max_from_weights(fc_node)
@@ -295,7 +229,7 @@ def test_do_seq_mse_for_linear(param_bw, loss_fn, enable_pcq, pass_model):
 @pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_apply_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
-    model = get_single_conv_layer_model()
+    model = single_conv_layer_model()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -306,15 +240,18 @@ def test_apply_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
             is_symmetric=True,
             strict_symmetric=False,
             unsigned_symmetric=False,
-            pcq=True,
+            pcq=enable_pcq,
         ),
     )
-    seq_params = SeqMseParams(num_batches=1)
-    seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
-    seq_mse.apply_seq_mse_algo()
-    weight_quantizer = seq_mse.sim.qc_quantize_op_dict["conv.weight"]
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    if loss_fn != "mse":
+        seq_params = SeqMseParams(num_batches=1)
+        seq_params.loss_fn = loss_fn
+        seq_mse = SequentialMse(model, sim, seq_params, inputs)
+        seq_mse.apply_seq_mse_algo()
+    else:
+        apply_seq_mse(sim, inputs[:1])
+    weight_quantizer = sim.qc_quantize_op_dict["conv.weight"]
     assert weight_quantizer._is_encoding_frozen
 
 
@@ -322,7 +259,7 @@ def test_apply_seq_mse_for_conv(param_bw, loss_fn, enable_pcq):
 @pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_static_apply_seq_mse(param_bw, loss_fn, enable_pcq):
-    model = get_single_conv_layer_model()
+    model = single_conv_layer_model()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -333,20 +270,23 @@ def test_static_apply_seq_mse(param_bw, loss_fn, enable_pcq):
             is_symmetric=True,
             strict_symmetric=False,
             unsigned_symmetric=False,
-            pcq=True,
+            pcq=enable_pcq,
         ),
     )
-    seq_params = SeqMseParams(num_batches=1)
-    seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_conv_layer())
-    SequentialMse.apply_seq_mse(model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    if loss_fn != "mse":
+        seq_params = SeqMseParams(num_batches=1)
+        seq_params.loss_fn = loss_fn
+        SequentialMse.apply_seq_mse(model, sim, seq_params, inputs)
+    else:
+        apply_seq_mse(sim, inputs[:1])
 
 
 @pytest.mark.parametrize("param_bw", [2, 31])
 @pytest.mark.parametrize("loss_fn", ["mse", "l1", "sqnr"])
 @pytest.mark.parametrize("enable_pcq", [True, False])
 def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
-    model = get_model_with_split()
+    model = model_with_split()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -357,18 +297,21 @@ def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
             is_symmetric=True,
             strict_symmetric=False,
             unsigned_symmetric=False,
-            pcq=True,
+            pcq=enable_pcq,
         ),
     )
-    seq_params = SeqMseParams(num_batches=1)
-    seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_dependency_graph())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
-    seq_mse.apply_seq_mse_algo()
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    if loss_fn != "mse":
+        seq_params = SeqMseParams(num_batches=1)
+        seq_params.loss_fn = loss_fn
+        seq_mse = SequentialMse(model, sim, seq_params, inputs)
+        seq_mse.apply_seq_mse_algo()
+    else:
+        apply_seq_mse(sim, inputs[:1])
 
-    weight_quantizer_conv_1 = seq_mse.sim.qc_quantize_op_dict["conv1.weight"]
-    weight_quantizer_conv_2 = seq_mse.sim.qc_quantize_op_dict["conv2.weight"]
-    weight_quantizer_conv_3 = seq_mse.sim.qc_quantize_op_dict["conv3.weight"]
+    weight_quantizer_conv_1 = sim.qc_quantize_op_dict["conv1.weight"]
+    weight_quantizer_conv_2 = sim.qc_quantize_op_dict["conv2.weight"]
+    weight_quantizer_conv_3 = sim.qc_quantize_op_dict["conv3.weight"]
 
     assert weight_quantizer_conv_1.is_encoding_frozen()
     assert weight_quantizer_conv_2.is_encoding_frozen()
@@ -376,7 +319,7 @@ def test_apply_seq_mse_for_split(param_bw, loss_fn, enable_pcq):
 
 
 def test_dependency_graph():
-    model = get_model_with_split()
+    model = model_with_split()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -391,8 +334,8 @@ def test_dependency_graph():
         ),
     )
     seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader(dummy_input_for_dependency_graph())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    seq_mse = SequentialMse(model, sim, seq_params, inputs)
 
     assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].in_degree == 0
     assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].out_degree == 2
@@ -438,8 +381,8 @@ def test_residual_model_dependency_graph():
         ),
     )
     seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader(dummy_input_for_residual_model())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    seq_mse = SequentialMse(model, sim, seq_params, inputs)
 
     assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].in_degree == 0
     assert seq_mse.dependency_graph._name_to_node["/conv1/Conv"].out_degree == 2
@@ -496,13 +439,16 @@ def test_apply_seq_mse_for_residual_model(param_bw, loss_fn, enable_pcq):
             pcq=enable_pcq,
         ),
     )
-    seq_params = SeqMseParams(num_batches=2)
-    seq_params.loss_fn = loss_fn
-    dataloader = unlabeled_data_loader(dummy_input_for_residual_model())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
-    seq_mse.apply_seq_mse_algo()
+    inputs = [make_dummy_input(model.model) for _ in range(10)]
+    if loss_fn != "mse":
+        seq_params = SeqMseParams(num_batches=2)
+        seq_params.loss_fn = loss_fn
+        seq_mse = SequentialMse(model, sim, seq_params, inputs)
+        seq_mse.apply_seq_mse_algo()
+    else:
+        apply_seq_mse(sim, inputs[:1])
 
-    for conn_graph_op in seq_mse.dependency_graph.conn_graph.ordered_ops:
+    for conn_graph_op in sim.connected_graph.ordered_ops:
         if conn_graph_op.type in SUPPORTED_MODULES:
             param_names = [
                 param_name
@@ -510,12 +456,12 @@ def test_apply_seq_mse_for_residual_model(param_bw, loss_fn, enable_pcq):
                 if param_type == "weight"
             ]
             assert len(param_names) == 1
-            quantizer = seq_mse.sim.qc_quantize_op_dict[param_names[0]]
+            quantizer = sim.qc_quantize_op_dict[param_names[0]]
             assert quantizer.is_encoding_frozen()
 
 
 def test_model_with_multiple_inputs_dependency_graph_utils():
-    model = get_model_with_multiple_inputs()
+    model = model_with_multiple_inputs()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -530,8 +476,8 @@ def test_model_with_multiple_inputs_dependency_graph_utils():
         ),
     )
     seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader(dummy_input_for_model_with_multiple_input())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model) for _ in range(10)]
+    seq_mse = SequentialMse(model, sim, seq_params, inputs)
 
     starting_ops_names = [
         op.name_op for op in seq_mse.dependency_graph.conn_graph.starting_ops
@@ -546,7 +492,7 @@ def test_model_with_multiple_inputs_dependency_graph_utils():
 
 
 def test_model_with_multiple_outputs_value_info():
-    model = get_model_with_multiple_outputs()
+    model = model_with_multiple_outputs()
     sim = QuantizationSimModel(
         model=copy.deepcopy(model),
         quant_scheme=QuantScheme.post_training_tf,
@@ -561,8 +507,8 @@ def test_model_with_multiple_outputs_value_info():
         ),
     )
     seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader(dummy_input_for_model_with_multiple_input())
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
+    inputs = [make_dummy_input(model) for _ in range(10)]
+    seq_mse = SequentialMse(model, sim, seq_params, inputs)
 
     assert "Conv1_Y" in seq_mse._extractor.vimap
 
@@ -581,17 +527,9 @@ def test_concat_model():
             pcq=True,
         ),
     )
-    seq_params = SeqMseParams(num_batches=1)
-    dataloader = unlabeled_data_loader(
-        [
-            torch.randn((1, 3, 8, 8)),
-            torch.randn((1, 3, 8, 8)),
-            torch.randn((1, 3, 8, 8)),
-        ]
-    )
-    seq_mse = SequentialMse(model, sim, seq_params, dataloader)
-    seq_mse.apply_seq_mse_algo()
-    for cg_op in seq_mse.dependency_graph.conn_graph.ordered_ops:
+
+    apply_seq_mse(sim, [make_dummy_input(model.model)])
+    for cg_op in sim.connected_graph.ordered_ops:
         if cg_op.type in SUPPORTED_MODULES:
             param_names = [
                 param_name
@@ -599,7 +537,7 @@ def test_concat_model():
                 if param_type == "weight"
             ]
             assert len(param_names) == 1
-            quantizer = seq_mse.sim.qc_quantize_op_dict[param_names[0]]
+            quantizer = sim.qc_quantize_op_dict[param_names[0]]
             assert quantizer.is_encoding_frozen()
 
 
@@ -664,8 +602,8 @@ class TestDependencyGraph:
     )
     def test_dependency_graph(self, model, cached_data):
         """Compare the one-shot and iterative outputs"""
-        dl = data_loader(tuple(cached_data.values()))
-        dep_graph = DependencyGraph(model, dl, 1)
+        dl = [cached_data]
+        dep_graph = DependencyGraph(model, dl)
 
         sorted_nodes = dep_graph.get_topologically_sorted_nodes()
         model_outputs = [node.name for node in model.model.graph.output]
