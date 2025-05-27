@@ -89,6 +89,19 @@ class RemoveQuantization(QuantizationTechnique):
         remove_all_quantizers(quantsim.model)
 
 
+class LoadEncodings(QuantizationTechnique):
+    """Load encodings from file"""
+
+    @staticmethod
+    def apply(quantsim: QuantizationSimModel, dataloader: DataLoader, **recipe_kwargs):
+        if "path" not in recipe_kwargs:
+            raise ValueError(
+                "Encodings path must be provided for LoadEncodings recipe as 'path'."
+            )
+
+        quantsim.load_encodings(recipe_kwargs["path"], partial=False)
+
+
 class PCQ(QuantizationTechnique):
     """Apply vanilla PCQ to model"""
 
