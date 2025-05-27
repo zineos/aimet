@@ -123,7 +123,6 @@ class Qwen_25(GenAIModel):
             cls.static_graph_prepare_inputs_for_generation, quantsim.model
         )
 
-        remove_param_quantizers(quantsim.model.model.model.embed_tokens)
         quantsim.model.model.lm_head.param_quantizers["weight"].bitwidth = 8
         for _, module in quantsim.model.named_modules():
             if isinstance(module, QuantizedQwen2RMSNorm):
