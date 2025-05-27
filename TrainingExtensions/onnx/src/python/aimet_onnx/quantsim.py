@@ -217,7 +217,6 @@ class QuantizationSimModel:
     :param default_param_bw: Quantization bitwidth for parameter
     :param default_activation_bw: Quantization bitwidth for activation
     :param use_symmetric_encodings: Deprecated, symmetry is controlled by the config_file
-    :param use_cuda: Deprecated, use `providers` instead
     :param config_file: File path or alias of the configuration file.
                         Alias can be one of {{ {", ".join(_config_file_aliases.keys())} }} (Default: `"default"`)
     :param default_data_type: Default data type to use for quantizing all layer inputs, outputs and parameters.
@@ -226,7 +225,7 @@ class QuantizationSimModel:
                              default_output_bw=16 and default_param_bw=16
     :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
     :param providers: Onnxruntime execution providers to use when building InferenceSession.
-                      If `None`, falls back to `onnxruntime.get_available_providers()`
+                      If `None`, default provider is "CPUExecutionProvider"
     :param path: Directory to save the artifacts.
     """
 
@@ -239,8 +238,6 @@ class QuantizationSimModel:
         default_param_bw: int = 8,
         default_activation_bw: int = 8,
         use_symmetric_encodings: bool = None,  # Deprecated
-        use_cuda: bool = None,  # Deprecated
-        device: int = None,  # Deprecated
         config_file: Optional[str] = None,
         default_data_type: QuantizationDataType = QuantizationDataType.int,
         user_onnx_libs: List[str] = None,
@@ -270,55 +267,14 @@ class QuantizationSimModel:
                 stacklevel=2,
             )
 
-        if device is not None:
-            warnings.warn(
-                _red(
-                    "Passing `device` will be deprecated in later versions. "
-                    "Please use the `providers` argument instead to specify cuda device."
-                ),
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if providers is not None:
-                raise RuntimeError(
-                    "Cannot provide `device` and `providers` at the same time."
-                )
-
-        if use_cuda is not None:
-            warnings.warn(
-                _red(
-                    "Passing `use_cuda` will be deprecated in later versions. "
-                    "Please use the `providers` argument instead."
-                ),
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if providers is not None:
-                raise RuntimeError(
-                    "Cannot provide `use_cuda` and `providers` at the same time."
-                )
-
-            # Legacy behavior of use_cuda
-            if "CUDAExecutionProvider" not in ort.get_available_providers():
-                use_cuda = False
-
-            device = device or 0
-            if use_cuda:
-                providers = [
-                    ("CUDAExecutionProvider", {"device_id": device}),
-                    "CPUExecutionProvider",
-                ]
-            else:
-                providers = ["CPUExecutionProvider"]
-
-        if not providers:
-            providers = ort.get_available_providers()
-
         if isinstance(quant_scheme, str):
             quant_scheme = QuantScheme.from_str(quant_scheme)
 
         if isinstance(model, ModelProto):
             model = ONNXModel(model)
+
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
 
         op_domain = "aimet.customop.cpu"
         for provider in providers:

@@ -54,6 +54,8 @@ image_size = 32
 batch_size = 64
 num_workers = 4
 
+CUDA_PROVIDERS = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
 
 def model_eval_onnx(session, val_loader):
     """
@@ -114,7 +116,7 @@ class TestAdaroundAcceptance:
                 quant_scheme=QuantScheme.post_training_tf,
                 default_param_bw=8,
                 default_activation_bw=8,
-                use_cuda=True,
+                providers=CUDA_PROVIDERS,
             )
             sim.set_and_freeze_param_encodings(os.path.join(tmpdir, "dummy.encodings"))
             sim.compute_encodings(callback, None)

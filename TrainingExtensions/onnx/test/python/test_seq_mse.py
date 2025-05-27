@@ -574,7 +574,6 @@ def test_concat_model():
         quant_scheme=QuantScheme.post_training_tf,
         default_activation_bw=8,
         default_param_bw=4,
-        use_cuda=False,
         config_file=_get_config_file(
             is_symmetric=True,
             strict_symmetric=False,

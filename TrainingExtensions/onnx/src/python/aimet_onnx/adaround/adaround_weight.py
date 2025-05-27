@@ -134,7 +134,7 @@ class Adaround:
         ignore_quant_ops_list: List[str] = None,
         default_quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
         default_config_file: str = None,
-        use_cuda: bool = True,
+        use_cuda: bool = False,
         device: int = 0,
         user_onnx_libs: List[str] = None,
     ) -> onnx_pb.ModelProto:
@@ -171,7 +171,6 @@ class Adaround:
             default_param_bw=default_param_bw,
             config_file=default_config_file,
             user_onnx_libs=user_onnx_libs,
-            use_cuda=use_cuda,
         )
 
         # For the params in the param_bw_override_list, override the default parameter bitwidths in the QuantSim
@@ -203,7 +202,7 @@ class Adaround:
         params: AdaroundParameters,
         path: str,
         filename_prefix: str,
-        use_cuda: bool = True,
+        use_cuda: bool = False,
         device: int = 0,
         user_onnx_libs: List[str] = None,
     ) -> onnx_pb.ModelProto:
@@ -255,7 +254,7 @@ class Adaround:
         quant_sim: QuantizationSimModel,
         module_act_func_pair: Dict,
         params: AdaroundParameters,
-        use_cuda: bool = True,
+        use_cuda: bool = False,
         device: int = 0,
         user_onnx_libs: List[str] = None,
     ):

@@ -281,8 +281,6 @@ def patch_ptq_techniques(
             default_param_bw: int = 8,
             default_activation_bw: int = 8,
             use_symmetric_encodings: bool = None,  # Deprecated
-            use_cuda: bool = None,  # Deprecated
-            device: int = None,  # Deprecated
             config_file=None,
             default_data_type: QuantizationDataType = QuantizationDataType.int,
             user_onnx_libs: List[str] = None,
@@ -297,8 +295,6 @@ def patch_ptq_techniques(
                 default_param_bw,
                 default_activation_bw,
                 use_symmetric_encodings,
-                use_cuda,
-                device,
                 config_file,
                 default_data_type,
                 user_onnx_libs,

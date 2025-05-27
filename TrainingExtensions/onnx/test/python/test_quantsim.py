@@ -2057,29 +2057,14 @@ class TestQuantSim:
 
     @pytest.mark.cuda
     def test_quantsim_init_args(self):
-        with pytest.raises(RuntimeError):
-            QuantizationSimModel(
-                single_residual_model(),
-                use_cuda=True,
-                providers=["CPUExecutionProvider"],
-            )
-
-        with pytest.raises(RuntimeError):
-            QuantizationSimModel(
-                single_residual_model(),
-                use_cuda=False,
-                providers=["CPUExecutionProvider"],
-            )
-
-        with pytest.raises(RuntimeError):
-            QuantizationSimModel(
-                single_residual_model(),
-                device=0,
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-            )
-
         with pytest.raises(TypeError):
             QuantizationSimModel(single_residual_model(), rounding_mode="stochastic")
+
+        sim = QuantizationSimModel(
+            single_residual_model(),
+            providers=ort.get_available_providers(),
+        )
+        assert sim.session.get_providers() == CUDA_PROVIDERS
 
         sim = QuantizationSimModel(single_residual_model(), providers=CUDA_PROVIDERS)
         assert sim.session.get_providers() == CUDA_PROVIDERS
@@ -2988,7 +2973,6 @@ def test_onnx_qdq_opset_compatibility(
         model,
         default_param_bw=param_bw,
         default_activation_bw=act_bw,
-        use_cuda=False,
         config_file=config_file,
     )
     input = np.random.randn(*input_shape).astype(np.float32)

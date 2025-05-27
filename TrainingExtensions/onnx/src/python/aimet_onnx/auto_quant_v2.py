@@ -256,7 +256,7 @@ class _AutoQuant:  # pylint: disable=too-many-instance-attributes
         output_bw: int = 8,
         quant_scheme: QuantScheme = QuantScheme.post_training_tf_enhanced,
         rounding_mode: str = "nearest",
-        use_cuda: bool = True,
+        use_cuda: bool = False,
         device: int = 0,
         config_file: str = None,
         results_dir: str = "/tmp",
@@ -453,8 +453,6 @@ class _AutoQuant:  # pylint: disable=too-many-instance-attributes
             "default_activation_bw": (output_bw or self._quantsim_params["output_bw"]),
             "default_param_bw": (param_bw or self._quantsim_params["param_bw"]),
             "config_file": (config_file or self._quantsim_params["config_file"]),
-            "use_cuda": self._quantsim_params["use_cuda"],
-            "device": self._quantsim_params["device"],
         }
         sim = QuantizationSimModel(model, self.dummy_input, **kwargs)
 

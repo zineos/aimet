@@ -57,6 +57,7 @@ except (ImportError, OSError):
 image_size = 32
 batch_size = 64
 num_workers = 4
+CUDA_PROVIDERS = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
 
 def model_eval_onnx(session, val_loader):
@@ -118,7 +119,7 @@ class TestQuantizeAcceptance:
                 quant_scheme=QuantScheme.post_training_tf,
                 default_param_bw=8,
                 default_activation_bw=8,
-                use_cuda=True,
+                providers=CUDA_PROVIDERS,
                 config_file=config_file,
             )
 
