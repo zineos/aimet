@@ -96,35 +96,3 @@ Users should instead define their model as::
         ...
 
 Also, User can also automate this by using :ref:`Model Preparer API<api-torch-model-preparer>`
-
-**Use only torch.Tensor or tuples of torch.Tensors as model/submodule inputs and outputs**
-
-Modules should use tensor or tuples of tensor for inputs and output in order to support conversion of the model to onnx.
-For example, if the user had::
-
-    def __init__(self,...):
-    ...
-    def forward(self, inputs: Dict[str, torch.Tensor]):
-        ...
-        x = self.conv1(inputs['image_rgb'])
-        rgb_output = self.relu1(x)
-        ...
-        x = self.conv2(inputs['image_bw'])
-        bw_output = self.relu2(x)
-        ...
-        return { 'rgb': rgb_output, 'bw': bw_output }
-
-Users should instead define their model as::
-
-    def __init__(self,...):
-    ...
-    def forward(self, image_rgb, image_bw):
-        ...
-        x = self.conv1(image_rgb)
-        rgb_output = self.relu1(x)
-        ...
-        x = self.conv2(image_bw)
-        bw_output = self.relu2(x)
-        ...
-        return rgb_output, bw_output
-
