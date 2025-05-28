@@ -35,10 +35,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-"""GenAI models"""
+"""Base directory to hold quantized transformers Phi-3 modules"""
 
-from .genai_model import GenAIModel
-from .llama import Llama_32
-from .qwen import Qwen_25
-from .gemma import Gemma_3
-from .phi3 import Phi_3
+from .modeling_phi3 import QuantizedPhi3RMSNorm, QuantizedPhi3RotaryEmbedding

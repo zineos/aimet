@@ -35,10 +35,56 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-"""GenAI models"""
+"""Quantized Phi-3 modules"""
 
-from .genai_model import GenAIModel
-from .llama import Llama_32
-from .qwen import Qwen_25
-from .gemma import Gemma_3
-from .phi3 import Phi_3
+import torch
+from aimet_torch.v2.nn.true_quant import QuantizationMixin
+
+try:
+    from transformers.models.phi3 import modeling_phi3
+except ImportError as exc:
+    raise ImportError(
+        "aimet_torch.v2.nn.transformers.models.phi3.modeling_phi3 cannot be imported. Please make sure "
+        "that you have transformers installed in your environment."
+    ) from exc
+
+
+@QuantizationMixin.implements(modeling_phi3.Phi3RMSNorm)
+class QuantizedPhi3RMSNorm(QuantizationMixin, modeling_phi3.Phi3RMSNorm):
+    """Implement Quantized Phi-3 RMS Norm"""
+
+    def __quant_init__(self):
+        # pylint: disable=useless-parent-delegation
+        super().__quant_init__()
+
+        self.input_quantizers = torch.nn.ModuleList([None])
+        self.output_quantizers = torch.nn.ModuleList([None])
+        self.param_quantizers = torch.nn.ModuleDict({"weight": None})
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # pylint: disable=arguments-differ
+        if self.input_quantizers[0]:
+            hidden_states = self.input_quantizers[0](hidden_states)
+
+        with self._patch_quantized_parameters():
+            ret = super().forward(hidden_states)
+
+        if self.output_quantizers[0]:
+            ret = self.output_quantizers[0](ret)
+
+        return ret
+
+
+@QuantizationMixin.implements(modeling_phi3.Phi3RotaryEmbedding)
+class QuantizedPhi3RotaryEmbedding(
+    QuantizationMixin, modeling_phi3.Phi3RotaryEmbedding
+):
+    """Implement Quantized Phi-3 Rotary Embedding"""
+
+    def __quant_init__(self):
+        # pylint: disable=useless-parent-delegation
+        super().__quant_init__()
+
+    def forward(self, x: torch.Tensor, position_ids: torch.Tensor) -> torch.Tensor:
+        # pylint: disable=arguments-differ
+        return super().forward(x, position_ids)
