@@ -55,11 +55,11 @@ from aimet_common.libpymo import TensorQuantizerOpMode
 from aimet_common.defs import QuantScheme
 from aimet_common.utils import AimetLogger, deprecated
 from aimet_onnx.quantsim import QuantizationSimModel
-from aimet_onnx.qc_quantize_op import QcQuantizeOp
 from aimet_onnx.sequential_mse.dependency_graph import (
     DependencyGraph,
     SUPPORTED_MODULES,
 )
+from aimet_onnx.utils import disable_quantizers
 from aimet_onnx.sequential_mse.dependency_graph import DependencyNode
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
@@ -250,16 +250,19 @@ class SequentialMse:
         3) run the onnx graph and compute encoding using seq mse algorithm
         4) re-enable the quantizer disabled in first step
         """
-        with self.temporarily_disable_quantizers(), _remove_session(self.sim):
+        with (
+            disable_quantizers(self.sim, self._get_quantizers_to_be_disabled()),
+            _remove_session(self.sim),
+        ):
             self._topological_traversal()
 
-    def _get_quantizers_to_be_disabled(self) -> List[QcQuantizeOp]:
+    def _get_quantizers_to_be_disabled(self) -> List[str]:
         """
-        Get list of quantizers to be disabled in sim model before applying seq mse.
+        Get list of quantizer names to be disabled in sim model before applying seq mse.
 
         NOTE: Disable all activation quantizers and param quantizers of non-supported modules
 
-        :return Returns the quantizers to be disabled in sim model.
+        :return Returns the quantizer names to be disabled in sim model.
         """
         enabled_quantizer_names = []
 
@@ -283,23 +286,9 @@ class SequentialMse:
         quantizers_to_be_disabled = []
         for name in enabled_quantizer_names:
             if name not in param_quantizer_names:
-                quantizers_to_be_disabled.append(self.sim.qc_quantize_op_dict[name])
+                quantizers_to_be_disabled.append(name)
 
         return quantizers_to_be_disabled
-
-    @contextmanager
-    def temporarily_disable_quantizers(self):
-        """
-        Disable quantizers needed to be disabled before applying sequential MSE.
-        """
-        quantizers_to_be_disabled = self._get_quantizers_to_be_disabled()
-        try:
-            for quantizer in quantizers_to_be_disabled:
-                quantizer.enabled = False
-            yield
-        finally:
-            for quantizer in quantizers_to_be_disabled:
-                quantizer.enabled = True
 
     @contextmanager
     def _disable_subgraph_quantizers(self, model: onnx.ModelProto):

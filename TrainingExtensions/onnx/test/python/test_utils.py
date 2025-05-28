@@ -37,10 +37,12 @@
 import onnx
 import torch
 from packaging import version
+import pytest
 
 import aimet_onnx.utils as utils
-from aimet_onnx.utils import ParamUtils
+from aimet_onnx.utils import ParamUtils, disable_quantizers
 from aimet_onnx.adaround.utils import ModelData, read_attributes_for_op
+from aimet_onnx.quantsim import QuantizationSimModel
 
 from .models import models_for_tests
 
@@ -217,3 +219,36 @@ class TestUtils:
         model = models_for_tests.transposed_conv_model_without_bn()
         model_data = ModelData(model.model)
         assert len(model_data.module_to_info) == 3
+
+    def test_disable_quantizers(self):
+        model = models_for_tests.single_residual_model().model
+        sim = QuantizationSimModel(model)
+        enabled_quantizers = set(
+            name
+            for name, quantizer in sim.qc_quantize_op_dict.items()
+            if quantizer.enabled
+        )
+
+        with disable_quantizers(sim, set(sim.param_names)):
+            for name in sim.param_names:
+                assert not sim.qc_quantize_op_dict[name].enabled
+
+            for name in enabled_quantizers - set(sim.param_names):
+                assert sim.qc_quantize_op_dict[name].enabled
+
+        for name in enabled_quantizers:
+            assert sim.qc_quantize_op_dict[name].enabled
+
+        with disable_quantizers(sim, set(sim.activation_names)):
+            for name in sim.activation_names:
+                assert not sim.qc_quantize_op_dict[name].enabled
+
+            for name in enabled_quantizers - set(sim.activation_names):
+                assert sim.qc_quantize_op_dict[name].enabled
+
+        for name in enabled_quantizers:
+            assert sim.qc_quantize_op_dict[name].enabled
+
+        with pytest.raises(RuntimeError):
+            with disable_quantizers(sim, {"nonexistant_quantizer"}):
+                pass

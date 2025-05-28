@@ -39,6 +39,7 @@
 import copy
 import itertools
 from typing import Dict, Iterable, List, Union, Tuple
+from contextlib import contextmanager
 import os
 import pickle
 import numpy as np
@@ -454,6 +455,32 @@ def save_model_with_external_weights(model: onnx.ModelProto, f: str, **kwargs):
     onnx.save_model(model, f, save_as_external_data=True, **kwargs)
     # Load back weights which are removed when saving as external data
     onnx.load_external_data_for_model(model, os.path.dirname(f))
+
+
+@contextmanager
+def disable_quantizers(sim, quantizer_names: set[str]):
+    """Disables all quantizers in quantizer_names inside the context"""
+    if not isinstance(quantizer_names, set):
+        quantizer_names = set(quantizer_names)
+
+    if not quantizer_names.issubset(sim.qc_quantize_op_dict.keys()):
+        raise RuntimeError(
+            f"quantizer_names contains non-existent quantizers: {quantizer_names - sim.qc_quantize_op_dict.keys()}"
+        )
+
+    is_enabled = {
+        name: sim.qc_quantize_op_dict[name].enabled for name in quantizer_names
+    }
+
+    try:
+        for name in quantizer_names:
+            sim.qc_quantize_op_dict[name].enabled = False
+
+        yield
+
+    finally:
+        for name in quantizer_names:
+            sim.qc_quantize_op_dict[name].enabled = is_enabled[name]
 
 
 class CachedDataset:

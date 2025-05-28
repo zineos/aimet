@@ -39,17 +39,19 @@
 """Top level API for Adaptive Rounding - Post-Training Quantization (PTQ)"""
 
 import copy
+from contextlib import contextmanager
 import os
 import tempfile
 import json
-from typing import Tuple, Dict, List, Callable
+from typing import Tuple, Dict, List, Callable, Collection
 from onnx import onnx_pb
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from tqdm import tqdm
+import numpy as np
 
 # Import AIMET specific modules
 from aimet_common import quantsim
-from aimet_common.utils import AimetLogger
+from aimet_common.utils import AimetLogger, deprecated
 from aimet_common.defs import QuantScheme, QuantizationDataType
 
 from aimet_onnx.adaround.adaround_loss import AdaroundHyperParameters
@@ -57,6 +59,7 @@ from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantize
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import OpMode
 from aimet_onnx.meta.utils import get_module_act_func_pair, get_ordered_ops
+from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx import utils
 from aimet_onnx.adaround.adaround_optimizer import AdaroundOptimizer
 from aimet_onnx.adaround.utils import ModelData, ModuleInfo
@@ -68,19 +71,75 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 AdaroundSupportedModules = ["Conv", "ConvTranspose", "MatMul", "Gemm"]
 
 
+def apply_adaround(
+    sim: QuantizationSimModel,
+    inputs: Collection[Dict[str, np.array]],
+    iterations: int = 10000,
+):
+    """
+    Optimizes the rounding direction of weights in the QuantizationSimModel to reduce quantization error.
+
+    After applying AdaRound to a QuantizationSimModel object, the quantization encodings will be frozen
+    for optimized weights and the sim model will contain updated weight tensors.
+
+    Args:
+        sim: QuantizationSimModel instance to optimize
+        inputs: The set of input samples to use during optimization.
+        num_iterations: Number of optimization steps to take for each layer. Recommended value is
+            10K for weight bitwidths >= 8-bits, 15K for weight bitwidths < 8 bits.
+    """
+
+    parameters = AdaroundParameters(
+        inputs,
+        len(inputs),
+        iterations,
+        AdaroundParameters.DEFAULT_REG_PARAM,
+        AdaroundParameters.DEFAULT_BETA_RANGE,
+        AdaroundParameters.DEFAULT_WARM_START,
+    )
+
+    module_act_func_pair = get_module_act_func_pair(sim.connected_graph)
+
+    # TODO: Refactor AdaRound to remove the need for separate unquantized model
+    model = copy.deepcopy(sim.model.model)
+    model = QuantizationSimModel.remove_quantizers(model)
+
+    with utils.disable_quantizers(sim, set(sim.activation_names)):
+        Adaround._adaround_model(
+            ONNXModel(model),
+            sim,
+            module_act_func_pair,
+            parameters,
+            use_cuda="CUDAExecutionProvider" in sim.session.get_providers(),
+            user_onnx_libs=sim._user_onnx_libs,
+            device=int(
+                sim.session.get_provider_options()
+                .get("CUDAExecutionProvider", {})
+                .get("device_id", "0")
+            ),
+        )
+
+    # Re-build session since weights have been updated
+    sim._rebuild_session()
+
+
 class AdaroundParameters:
     """
     Configuration parameters for Adaround
     """
+
+    DEFAULT_REG_PARAM: float = 0.01
+    DEFAULT_BETA_RANGE: Tuple = (20, 2)
+    DEFAULT_WARM_START: float = 0.2
 
     def __init__(
         self,
         data_loader,
         num_batches: int,
         default_num_iterations: int = None,
-        default_reg_param: float = 0.01,
-        default_beta_range: Tuple = (20, 2),
-        default_warm_start: float = 0.2,
+        default_reg_param: float = DEFAULT_REG_PARAM,
+        default_beta_range: Tuple = DEFAULT_BETA_RANGE,
+        default_warm_start: float = DEFAULT_WARM_START,
         forward_fn: Callable = None,
         forward_pass_callback_args=None,
     ):
@@ -123,6 +182,7 @@ class Adaround:
     """
 
     @classmethod
+    @deprecated(f"Use `aimet_onnx.apply_adaround` instead")
     def apply_adaround(
         cls,
         model: onnx_pb.ModelProto,
@@ -228,7 +288,7 @@ class Adaround:
             assert not quant_sim.qc_quantize_op_dict[quantizer_name].enabled
 
         # Get the module - activation function pair using ConnectedGraph
-        module_act_func_pair = get_module_act_func_pair(model)
+        module_act_func_pair = get_module_act_func_pair(ConnectedGraph(model))
 
         cls._adaround_model(
             model,
@@ -311,7 +371,8 @@ class Adaround:
             modules = get_ordered_ops(model)
             for module in tqdm(modules):
                 name = module.name
-                if cls._is_supported_layer_type(model_data.module_to_info[name]):
+                module_info = model_data.module_to_info[name]
+                if cls._is_supported_layer_type(module_info):
                     # Get module's next following activation function
                     act_func = module_act_func_pair[name]
                     quantized_input_name = quantized_layer_to_input_tensor_name[name]
@@ -319,7 +380,7 @@ class Adaround:
                         "Started Optimizing weight rounding of module: %s", name
                     )
                     AdaroundOptimizer.adaround_module(
-                        model_data.module_to_info[name],
+                        module_info,
                         quantized_input_name,
                         model,
                         quant_sim.model,
@@ -331,6 +392,9 @@ class Adaround:
                         device,
                         user_onnx_libs,
                     )
+                    # Freeze quantizer's encodings
+                    weight_name = module_info.params["weight"].name
+                    quant_sim.qc_quantize_op_dict[weight_name].freeze_encodings()
 
     @classmethod
     def _is_supported_layer_type(cls, module_info: ModuleInfo):

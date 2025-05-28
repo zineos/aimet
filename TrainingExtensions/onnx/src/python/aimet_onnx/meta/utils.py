@@ -86,19 +86,16 @@ def get_param_shape_using_connected_graph(
     return None
 
 
-def get_module_act_func_pair(model: ModelProto) -> Dict[str, str]:
+def get_module_act_func_pair(graph: ConnectedGraph) -> Dict[str, str]:
     """
-    For given model, returns dictionary of module to immediate following activation function else maps
+    For given graph, returns dictionary of module to immediate following activation function else maps
     module to None.
 
     Activation functions should be defined as nn.Modules in model and not as functional in the forward pass.
 
-    :param model: ONNX model
+    :param graph: ConnectedGraph object
     :return: Dictionary of module name to activation function name
     """
-    # Create ConnectedGraph
-    graph = ConnectedGraph(model)
-
     # Maps module to next following activation function else None
     module_act_func_pair = {}
 

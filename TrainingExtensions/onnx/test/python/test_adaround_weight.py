@@ -40,20 +40,24 @@
 import copy
 import os
 import json
+from contextlib import contextmanager
 import tempfile
 import numpy as np
 import torch
 from onnxruntime import SessionOptions, GraphOptimizationLevel, InferenceSession
 import pytest
 from onnxsim import simplify
+import onnx
 
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_common import libquant_info
+from aimet_onnx import apply_adaround, QuantizationSimModel, compute_encodings
 from aimet_onnx.adaround.adaround_weight import (
     Adaround,
     AdaroundParameters,
     AdaroundSupportedModules,
 )
+from aimet_onnx.utils import make_dummy_input, ParamUtils
 from .models import models_for_tests
 
 
@@ -103,6 +107,62 @@ class TestAdaround:
                 if node.op_type in AdaroundSupportedModules
             }
             assert params.issubset(param_names)
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            models_for_tests.single_residual_model().model,
+            models_for_tests.depthwise_conv_model().model,
+            models_for_tests.add_matmul_model(),
+            models_for_tests.model_with_split_matmul(),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "providers",
+        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
+    )
+    def test_apply_adaround(self, providers, model):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
+
+        inputs = [make_dummy_input(model) for _ in range(2)]
+        sim = QuantizationSimModel(copy.deepcopy(model), providers=providers)
+        is_enabled = {name: q.enabled for name, q in sim.qc_quantize_op_dict.items()}
+
+        adaroundable_ops = [
+            op
+            for op in sim.connected_graph.ordered_ops
+            if op.type in ("Conv", "MatMul", "Gemm")
+        ]
+        weight_tensors = {
+            t.name: copy.deepcopy(onnx.numpy_helper.to_array(t.tensor))
+            for op in adaroundable_ops
+            for t, param_type in op.parameters.values()
+            if param_type == "weight"
+        }
+
+        assert weight_tensors
+
+        with compute_encodings(sim):
+            for inp in inputs:
+                sim.session.run(None, inp)
+
+        apply_adaround(sim, inputs, iterations=5)
+
+        # Quantizer enabled state must be restored after adaround
+        for name, q in sim.qc_quantize_op_dict.items():
+            assert q.enabled == is_enabled[name]
+
+        # Only optimized weights should have frozen encodings
+        for name, quantizer in sim.qc_quantize_op_dict.items():
+            assert quantizer.is_encoding_frozen() == (name in weight_tensors)
+
+        # Optimized weight should not be equal to original weight
+        for name, old_weight in weight_tensors.items():
+            new_weight = onnx.numpy_helper.to_array(
+                ParamUtils.get_param_by_name(sim.model.model, name)
+            )
+            assert not np.all(old_weight == new_weight)
 
     @pytest.mark.skip(
         reason="test requires exact version of torch that the code has built against."
