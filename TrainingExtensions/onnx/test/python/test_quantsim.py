@@ -2060,11 +2060,16 @@ class TestQuantSim:
         with pytest.raises(TypeError):
             QuantizationSimModel(single_residual_model(), rounding_mode="stochastic")
 
+        # Since, onnxruntime-gpu=1.22, if "TensorrtExecutionProvider" isn't available,
+        # it directly falls back to "CPUExecutionProvider" w/o trying "CUDAExecutionProvider"
+        # this behavior is different from the previous releases.
         sim = QuantizationSimModel(
             single_residual_model(),
             providers=ort.get_available_providers(),
         )
-        assert sim.session.get_providers() == CUDA_PROVIDERS
+        assert all(
+            provider in CUDA_PROVIDERS for provider in sim.session.get_providers()
+        )
 
         sim = QuantizationSimModel(single_residual_model(), providers=CUDA_PROVIDERS)
         assert sim.session.get_providers() == CUDA_PROVIDERS
