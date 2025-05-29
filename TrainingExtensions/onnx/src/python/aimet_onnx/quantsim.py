@@ -53,6 +53,7 @@ from typing import (
     TypeVar,
     Union,
     Sequence,
+    Iterable,
 )
 import itertools
 import json
@@ -862,6 +863,10 @@ class QuantizationSimModel:
         )
 
     @overload
+    def compute_encodings(self, inputs: Iterable[Dict[str, np.ndarray]]):  # pylint: disable=arguments-differ
+        ...
+
+    @overload
     def compute_encodings(
         self, forward_pass_callback: Callable[[ort.InferenceSession], Any]
     ):  # pylint: disable=arguments-differ
@@ -878,9 +883,7 @@ class QuantizationSimModel:
 
     del T
 
-    def compute_encodings(
-        self, forward_pass_callback, forward_pass_callback_args=_NOT_SPECIFIED
-    ):
+    def compute_encodings(self, *args, **kwargs):
         r"""
         Computes encodings for all quantizers in the model.
 
@@ -890,6 +893,12 @@ class QuantizationSimModel:
         their quantization encodings according to the observed input statistics.
 
         This function is overloaded with the following signatures:
+
+        .. function:: compute_encodings(inputs)
+           :noindex:
+
+           :param inputs: The set of model input samples to use during calibration
+           :type inputs: Iterable[Dict[str, np.ndarray]]
 
         .. function:: compute_encodings(forward_pass_callback)
            :noindex:
@@ -915,9 +924,31 @@ class QuantizationSimModel:
             ...
             >>> sim.compute_encodings(run_forward_pass)
         """
+        inputs, forward_pass_callback, forward_pass_calback_args = (
+            _parse_compute_encodings_args(*args, **kwargs)
+        )
+        if forward_pass_callback:
+            return self._compute_encodings_from_callback(
+                forward_pass_callback, forward_pass_calback_args
+            )
+
+        with compute_encodings(self):
+            for item in inputs:
+                self.session.run(None, item)
+
+    def _compute_encodings_from_callback(
+        self, forward_pass_callback, forward_pass_callback_args=_NOT_SPECIFIED
+    ):
         if forward_pass_callback_args is _NOT_SPECIFIED:
             args = (self.session,)
         else:
+            warnings.warn(
+                _red(
+                    "Support for calling compute_encodings() with forward_pass_callback_args is deprecated and will be removed in the future. "
+                ),
+                DeprecationWarning,
+                stacklevel=3,
+            )
             args = (self.session, forward_pass_callback_args)
 
         with compute_encodings(self):
@@ -1932,6 +1963,52 @@ def log_and_catch_mismatched_encodings(
             logger.error(log_message)
             raise AssertionError(log_message)
         logger.info(log_message)
+
+
+def _parse_compute_encodings_args(*args, **kwargs):
+    # Default error message to display for unsupported argument combinations
+    msg = (
+        f"compute_encodings() supports the following function signatures:\n\n"
+        " * (inputs: Iterable[Dict[str, np.ndarray]])\n"
+        " * (forward_pass_callback: Callable[[InferenceSession], Any])\n"
+        " * (forward_pass_callback: Callable[[InferenceSession, T], Any], forward_pass_callback_args: T)\n"
+        f"but receieved: args={[type(arg) for arg in args]}, kwargs={ {key: type(val) for key, val in kwargs.items()} }"
+    )
+
+    inputs = kwargs.pop("inputs", None)
+    forward_pass_callback = kwargs.pop("forward_pass_callback", None)
+    forward_pass_callback_args = kwargs.pop(
+        "forward_pass_callback_args", _NOT_SPECIFIED
+    )
+
+    if kwargs:
+        raise TypeError(msg)
+    if args and (inputs or forward_pass_callback):
+        raise TypeError(msg)
+    if len(args) > 2:
+        raise TypeError(msg)
+    if len(args) == 2:
+        if forward_pass_callback_args is not _NOT_SPECIFIED:
+            raise TypeError(msg)
+        forward_pass_callback, forward_pass_callback_args = args
+    elif len(args) == 1:
+        if isinstance(args[0], Iterable):
+            inputs = args[0]
+        elif callable(args[0]):
+            forward_pass_callback = args[0]
+        else:
+            raise TypeError(
+                f"First positional argument to compute_encodings() must be callable or iterable, recieved {type(args[0])}"
+            )
+
+    if inputs and (
+        forward_pass_callback or forward_pass_callback_args is not _NOT_SPECIFIED
+    ):
+        raise TypeError(msg)
+    if not (inputs or forward_pass_callback):
+        raise TypeError(msg)
+
+    return inputs, forward_pass_callback, forward_pass_callback_args
 
 
 # pylint: disable=protected-access
