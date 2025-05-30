@@ -3,7 +3,7 @@ hvplot
 Jinja2
 jsonschema
 numpy<2
-onnx~=1.16.1
+onnx
 onnxruntime>=1.22
 osqp
 pandas
