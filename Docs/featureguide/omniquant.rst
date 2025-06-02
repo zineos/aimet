@@ -12,8 +12,7 @@ Omniquant comprises of 2 components `Learnable Weight Clipping (LWC)` and `Learn
 
 OmniQuant introduces trainable parameter `scale` in the weight quantizers of every supported module and performs BKD (Blockwise Knowledge Distillation) by comparing quantized output of every supported block with its FP32 equivalent.
 The trainable parameter `scale` is learnt pairwise in Omniquant.
-From OmniQuant perspective, a block is defined as a non-leaf module which takes in one activation input tensor and outputs one activation tensor.
-
+From OmniQuant perspective, a block is defined as a non-leaf module which takes in one activation input tensor and outputs one activation tensor. Omniquant also requires blocks to be contiguous to perform optimization.
 Warning: This feature is currently experimental. This feature is currently supported for llama3.2, Qwen2.5, Deepseek Distill for Qwen 2.5
 
 Workflow
@@ -27,6 +26,7 @@ To use OmniQuant, you must:
 - Use PyTorch. OmniQuant does not support other frameworks yet
 - Load a pre-trained model
 - Create a dataloader for the model
+- Choose a model which has contiguous blocks, and each block taking in one activation input and outputting one activation tensor. Example block: LlamaDecoderLayer in LlamaModel
 
 Procedure
 ---------
