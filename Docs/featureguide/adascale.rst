@@ -11,7 +11,7 @@ AdaScale is a PTQ technique which improves the accuracy of the quantized model b
 
 AdaScale introduces trainable parameters (gamma, beta, s2, s3) in the weight quantizers of every supported module and performs BKD (Blockwise Knowledge Distillation) by comparing quantized output of every supported block with its FP32 equivalent.
 
-From AdaScale perspective, a block is defined as a non-leaf module which takes in one activation input tensor and outputs one activation tensor.
+From AdaScale perspective, a block is defined as a non-leaf module which takes in one activation input tensor and outputs one activation tensor. AdaScale also requires blocks to be contiguous to perform optimization.
 
 Warning: This feature is currently experimental.
 
@@ -26,6 +26,7 @@ To use AdaScale, you must:
 - Use PyTorch. AdaScale does not support other frameworks yet
 - Load a pre-trained model
 - Create a dataloader for the model
+- Choose a model which has contiguous blocks, and each block taking in one activation input and outputting one activation tensor. Example block: LlamaDecoderLayer in LlamaModel
 
 Procedure
 ---------
