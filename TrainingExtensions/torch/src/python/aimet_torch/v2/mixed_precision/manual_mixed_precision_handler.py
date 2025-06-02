@@ -784,7 +784,7 @@ class MpHandler:
                     mp_requests,
                     module,
                     request.input_candidates[0]
-                    if request.output_candidates and len(request.output_candidates) > 0
+                    if request.input_candidates and len(request.input_candidates) > 0
                     else None,
                     copy.deepcopy(request.param_candidate)
                     if len(module.param_quantizers.keys())
