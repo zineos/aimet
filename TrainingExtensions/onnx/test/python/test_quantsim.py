@@ -57,6 +57,7 @@ from aimet_common import quantsim
 from aimet_common import libquant_info
 from aimet_common import libpymo
 from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType
+from aimet_common.onnx.opset10 import unpack_int4x2_to_int8
 from aimet_common.quantsim_config.utils import (
     get_path_for_per_channel_config,
     get_path_for_per_tensor_config,
@@ -93,6 +94,7 @@ from .models.models_for_tests import (
     SingleResidual,
     standalone_batchnorm,
     standalone_batchnorm_constants,
+    standalone_gemm,
     standalone_instancenorm,
     standalone_layernorm,
     transposed_conv_model,
@@ -3179,3 +3181,79 @@ def test_insert_data_movement_op_output_quantizers():
         outputs_after = sess_after.run(None, {"model_input": x})
         for out_before, out_after in zip(outputs_before, outputs_after):
             assert np.all(out_before == out_after)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_onnx_qdq_lpbq(seed: int):
+    ort.set_seed(seed)
+    np.random.seed(seed)
+
+    model = standalone_gemm(in_channels=16, out_channels=16)
+    sim = QuantizationSimModel(
+        model,
+        default_param_bw=4,
+        default_activation_bw=16,
+        config_file="htp_v81",
+    )
+
+    set_grouped_blockwise_quantization_for_weights(
+        sim,
+        op_types=("MatMul", "Conv", "Gemm"),
+        bitwidth=4,
+        decompressed_bw=8,
+        block_size=4,
+        strict=False,
+    )
+
+    input_shape = tuple(
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
+    input = np.random.randn(*input_shape).astype(np.float32)
+
+    """
+    When: Create a pure onnx model with sim._to_onnx_qdq()
+    """
+    sim.compute_encodings([{"input": input}])
+
+    (out_sim,) = sim.session.run(None, {"input": input})
+
+    sim._insert_data_movement_op_output_quantizers()
+    onnx_qdq_model = sim._to_onnx_qdq()
+
+    # NOTE: ORT Cast doesn't support int4 inputs yet.
+    # To work around this limitation, temporarily convert uint4 to uint8
+    for init in onnx_qdq_model.graph.initializer:
+        if init.name == f"weight_per_block_uint_scale":
+            init.data_type = onnx.TensorProto.UINT8
+            int4x2_scale = np.frombuffer(init.raw_data, dtype=np.uint8)
+            init.raw_data = unpack_int4x2_to_int8(
+                int4x2_scale, dtype=np.uint8
+            ).tobytes()
+
+    """
+    Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
+    """
+    assert len(
+        [
+            node
+            for node in onnx_qdq_model.graph.node
+            if node.op_type == "DequantizeLinear"
+        ]
+    ) == len(
+        [
+            qtzr
+            for qtzr in sim.qc_quantize_op_dict.values()
+            if qtzr.enabled
+            and (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
+        ]
+    )
+
+    """
+    Then: Output of the pure onnx model should be equal to that of sim.session
+    """
+    # Allow off-by-1 error
+    atol = 1 * sim.qc_quantize_op_dict["output"].get_encodings()[0].delta
+    sess = ort.InferenceSession(onnx_qdq_model.SerializeToString())
+    (out_onnx_qdq,) = sess.run(None, {"input": input})
+    assert np.allclose(out_sim, out_onnx_qdq, atol=atol)

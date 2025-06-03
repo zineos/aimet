@@ -43,6 +43,7 @@ from typing import Iterable, Optional, Sequence, Dict, List
 import numpy as np
 import onnx
 from onnx import ModelProto, NodeProto, TensorProto
+from onnx.helper import make_node
 from onnx.numpy_helper import from_array, to_array
 
 from aimet_common.onnx import opset10, opset13, opset21
@@ -122,22 +123,112 @@ def _add_onnx_qdq_nodes(
         output_dtype = encoding["output_dtype"]
         axis = encoding.get("axis", None)
         block_size = encoding.get("block_size", None)
-        y_scale = np.array(encoding["y_scale"]).astype(np.float32)
         y_zero_point = encoding.get("y_zero_point", None)
+
+        y_scale = np.array(
+            encoding.get("y_scale") or encoding.get("per_channel_float_scale")
+        ).astype(np.float32)
+        per_block_int_scale = (
+            np.array(encoding["per_block_int_scale"])
+            if "per_block_int_scale" in encoding
+            else None
+        )
 
         if y_zero_point is not None:
             y_zero_point = np.array(encoding["y_zero_point"], dtype=np.int64)
+        elif per_block_int_scale is not None:
+            y_zero_point = np.zeros(per_block_int_scale.shape, dtype=np.int64)
         else:
             y_zero_point = np.zeros(y_scale.shape, dtype=np.int64)
 
-        tensors_to_add.extend(
-            [
-                from_array(y_scale, name=f"{input_name}_scale"),
-                opset.DequantizeLinear.make_zero_point(
-                    y_zero_point, dtype=output_dtype, name=f"{input_name}_zero_point"
-                ),
-            ]
+        tensors_to_add.append(
+            opset.DequantizeLinear.make_zero_point(
+                y_zero_point, dtype=output_dtype, name=f"{input_name}_zero_point"
+            )
         )
+
+        if per_block_int_scale is None:
+            tensors_to_add.append(from_array(y_scale, name=f"{input_name}_scale"))
+        else:
+            # Export LPBQ.
+            #
+            # Strategy: Derive y_scale from per_channel_float_scale and per_block_uint_scale
+            #
+            # per_channel_float_scale -> Reshape --+
+            #        (FLOAT)                       |
+            #                                      +--> Mul -> (y_scale)
+            #                  1.0 --+             |
+            # per_block_uint_scale --+-> Add ------+
+            #        (UINT4)
+            if output_dtype != "int4":
+                raise RuntimeError(
+                    "LPBQ can be only exported with int4 or int8; got {output_dtype}"
+                )
+
+            tensors_to_add.extend(
+                [
+                    from_array(
+                        y_scale.flatten(), name=f"{input_name}_per_channel_float_scale"
+                    ),
+                    opset.DequantizeLinear.make_int_arr(
+                        per_block_int_scale - 1,
+                        dtype="uint4",
+                        name=f"{input_name}_per_block_uint_scale",
+                    ),
+                ]
+            )
+            nodes_to_add.extend(
+                [
+                    make_node(
+                        "Constant",
+                        name=f"{input_name}_scale/Constant_0",
+                        inputs=[],
+                        outputs=[f"{input_name}_per_block_scale/shape"],
+                        value_ints=y_scale.shape,
+                    ),
+                    make_node(
+                        "Reshape",
+                        name=f"{input_name}_scale/Reshape",
+                        inputs=[
+                            f"{input_name}_per_channel_float_scale",
+                            f"{input_name}_per_block_scale/shape",
+                        ],
+                        outputs=[f"{input_name}_per_block_scale_0"],
+                    ),
+                    make_node(
+                        "Constant",
+                        name=f"{input_name}_scale/Constant_1",
+                        inputs=[],
+                        outputs=[f"{input_name}_per_block_scale/one"],
+                        value_float=1.0,
+                    ),
+                    make_node(
+                        "Cast",
+                        name=f"{input_name}_scale/Cast",
+                        inputs=[f"{input_name}_per_block_uint_scale"],
+                        outputs=[f"{input_name}_per_block_scale/Cast_output"],
+                        to=TensorProto.FLOAT,
+                    ),
+                    make_node(
+                        "Add",
+                        name=f"{input_name}_per_block_scale/Add",
+                        inputs=[
+                            f"{input_name}_per_block_scale/Cast_output",
+                            f"{input_name}_per_block_scale/one",
+                        ],
+                        outputs=[f"{input_name}_per_block_scale_1"],
+                    ),
+                    make_node(
+                        "Mul",
+                        name=f"{input_name}_per_block_scale/Mul",
+                        inputs=[
+                            f"{input_name}_per_block_scale_0",
+                            f"{input_name}_per_block_scale_1",
+                        ],
+                        outputs=[f"{input_name}_scale"],
+                    ),
+                ]
+            )
 
         if output_dtype in ("int32", "uint32"):
             nodes_to_add.append(
@@ -264,8 +355,8 @@ def _finalize_graph_changes(
 
     # Insert new nodes in a topologically order
     original_nodes = deque(list(model.graph.node))
-    new_nodes = {node.input[0]: node for node in nodes_to_add}
-    queue = deque([])
+    new_nodes = {node.input[0]: node for node in nodes_to_add if node.input}
+    queue = deque([node for node in nodes_to_add if not node.input])
 
     queue.extend(
         [new_nodes.pop(inp.name) for inp in model.graph.input if inp.name in new_nodes]

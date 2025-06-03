@@ -3980,3 +3980,41 @@ def model_with_ignore_ops(tmpdir):
     torch.onnx.export(model, input_tensor, model_file_path)
 
     return onnx.load(model_file_path)
+
+
+def standalone_gemm(in_channels: int, out_channels: int):
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="Gemm",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, in_channels]
+                )
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, out_channels]
+                )
+            ],
+            initializer=[
+                numpy_helper.from_array(
+                    np.random.randn(out_channels, in_channels).astype(np.float32),
+                    name="weight",
+                ),
+                numpy_helper.from_array(
+                    np.random.randn(out_channels).astype(np.float32),
+                    name="bias",
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Gemm",
+                    ["input", "weight", "bias"],
+                    ["output"],
+                    "Gemm",
+                )
+            ],
+        ),
+    )
+    onnx.checker.check_model(model)
+    return model

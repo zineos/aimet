@@ -36,10 +36,61 @@
 # =============================================================================
 # pylint: disable=no-member
 from abc import ABC, abstractmethod
-import sys
 from typing import Iterable, Mapping, Optional
 import numpy as np
 from onnx import helper, numpy_helper, TensorProto
+
+
+def pack_int8_to_int4x2(arr: np.ndarray) -> np.ndarray:
+    if arr.dtype not in (np.int8, np.uint8):
+        raise RuntimeError(f"Only [u]int8 can be packed to int4x2; got {arr.dtype}")
+
+    if arr.ndim > 1:
+        raise RuntimeError(
+            f"Only 1D vector can be packed to int4x2; got N-D array of shape {arr.shape}"
+        )
+
+    if arr.size % 2 == 1:
+        # Add 0 padding to enable int4x2 packing
+        arr = np.concatenate((arr, np.array([0], dtype=arr.dtype)))
+
+    signed = arr.dtype == np.int8
+    arr = arr.astype(np.uint8)
+
+    int4x2 = np.zeros(arr.size // 2, dtype=np.uint8)
+    int4x2 |= arr[1::2] << 4
+
+    if signed:
+        int4x2 |= arr[::2] & 0x07
+        int4x2 |= (arr[::2] & 0x80) >> 4
+    else:
+        int4x2 |= arr[::2] & 0x0F
+
+    return int4x2
+
+
+def unpack_int4x2_to_int8(arr: np.ndarray, dtype) -> np.ndarray:
+    if arr.dtype != np.uint8:
+        raise RuntimeError(f"Expected uint8 input; got {arr.dtype}")
+
+    dtype = np.dtype(dtype)
+    if dtype not in (np.int8, np.uint8):
+        raise RuntimeError(f"Expected target dtype [u]int8; got {dtype}")
+
+    if arr.ndim > 1:
+        raise RuntimeError(
+            f"Only 1D vector can be packed to int4x2; got N-D array of shape {arr.shape}"
+        )
+
+    uint8 = np.empty(arr.size * 2, dtype=np.uint8)
+    uint8[1::2] = arr >> 4
+    uint8[0::2] = arr & 0x0F
+
+    if dtype == np.uint8:
+        return uint8
+
+    int8 = np.where(uint8 >= 8, uint8 | 0xF0, uint8).astype(np.int8)
+    return int8
 
 
 class _QdqNodeFactory(ABC):
@@ -69,7 +120,9 @@ class _QdqNodeFactory(ABC):
         )
 
     @classmethod
-    def make_zero_point(cls, zero_point: np.ndarray, dtype: str, name: str):
+    def make_zero_point(
+        cls, zero_point: np.ndarray, dtype: str, name: str
+    ) -> TensorProto:
         cls._check_dtype(dtype)
 
         if (dtype == "int32" or dtype.startswith("float")) and not np.all(
@@ -79,43 +132,19 @@ class _QdqNodeFactory(ABC):
                 "DequantizeLinear with type int32 or float8 should have "
                 "no zero point or all zero points should be 0"
             )
+        return cls.make_int_arr(zero_point, dtype, name)
 
+    @classmethod
+    def make_int_arr(cls, arr: np.ndarray, dtype: str, name: str) -> TensorProto:
         if dtype not in ("int4", "uint4"):
-            zero_point = zero_point.astype(dtype)
-            return numpy_helper.from_array(zero_point, name=name)
+            arr = arr.astype(dtype)
+            return numpy_helper.from_array(arr, name=name)
 
-        target_shape = zero_point.shape
-
-        # Numpy doesn't support int4/uint4.
-        # Do bitshift operations to pack int4 array into int8 array
-        zero_point = zero_point.astype("int8" if dtype == "int4" else "uint8").flatten()
-        if zero_point.size % 2 == 1:
-            # Add 0 padding to enable int4x2 packing
-            zero_point = np.concatenate(
-                (zero_point, np.array([0], dtype=zero_point.dtype))
-            )
-
-        if sys.byteorder == "little":
-            # Little endian:
-            #
-            #       zp[n+1]     zp[n]
-            #       <-----> | <----->
-            # bit:  7 6 5 4   3 2 1 0
-            #     (MSB)           (LSB)
-            MSB = zero_point[1::2] << 4
-            LSB = zero_point[::2] & 0x0F
-        else:
-            # Big endian:
-            #
-            #       zp[n]     zp[n+1]
-            #       <-----> | <----->
-            # bit:  7 6 5 4   3 2 1 0
-            #     (MSB)           (LSB)
-            MSB = zero_point[::2] << 4
-            LSB = zero_point[1::2] & 0x0F
-
-        zero_point_int4x2 = MSB | LSB
-        tensor = numpy_helper.from_array(zero_point_int4x2, name=name)
+        target_shape = arr.shape
+        arr_int4x2 = pack_int8_to_int4x2(
+            arr.flatten().astype(np.int8 if dtype == "int4" else np.uint8)
+        )
+        tensor = numpy_helper.from_array(arr_int4x2, name=name)
 
         # Restore data_type to INT4/UINT4
         tensor.data_type = TensorProto.INT4 if dtype == "int4" else TensorProto.UINT4

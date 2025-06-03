@@ -40,7 +40,12 @@ import numpy as np
 try:
     import onnx
     import onnxruntime as ort
-    from aimet_common.onnx.opset10 import QuantizeLinear, DequantizeLinear
+    from aimet_common.onnx.opset10 import (
+        QuantizeLinear,
+        DequantizeLinear,
+        pack_int8_to_int4x2,
+        unpack_int4x2_to_int8,
+    )
 except ImportError:
     pass
 else:
@@ -328,3 +333,34 @@ else:
         sess = ort.InferenceSession(model.SerializeToString())
         (output,) = sess.run(None, {"input": input})
         assert np.all(output == expected_output)
+
+    def test_pack_int8_to_int4x2():
+        uint8 = np.arange(16, dtype=np.uint8)
+        uint4x2 = pack_int8_to_int4x2(uint8)
+        assert uint4x2[0] == 0b00010000
+        assert uint4x2[1] == 0b00110010
+        assert uint4x2[2] == 0b01010100
+        assert uint4x2[3] == 0b01110110
+        assert uint4x2[4] == 0b10011000
+        assert uint4x2[5] == 0b10111010
+        assert uint4x2[6] == 0b11011100
+        assert uint4x2[7] == 0b11111110
+
+        uint8_ = unpack_int4x2_to_int8(uint4x2, dtype=np.uint8)
+        assert uint8_.dtype == np.uint8
+        assert np.all(uint8 == uint8_)
+
+        int8 = np.arange(-8, 8, dtype=np.int8)
+        int4x2 = pack_int8_to_int4x2(int8)
+        assert int4x2[0] == 0b10011000
+        assert int4x2[1] == 0b10111010
+        assert int4x2[2] == 0b11011100
+        assert int4x2[3] == 0b11111110
+        assert int4x2[4] == 0b00010000
+        assert int4x2[5] == 0b00110010
+        assert int4x2[6] == 0b01010100
+        assert int4x2[7] == 0b01110110
+
+        int8_ = unpack_int4x2_to_int8(int4x2, dtype=np.int8)
+        assert int8_.dtype == np.int8
+        assert np.all(int8 == int8_)
