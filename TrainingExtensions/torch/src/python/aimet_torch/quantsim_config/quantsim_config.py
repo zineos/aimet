@@ -766,20 +766,12 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         """
 
         if ConfigDictKeys.IS_INPUT_QUANTIZED in model_input_configs:
-            # Find all ops which are either model input ops or have constant inputs as inputs
-            input_ops = cg_utils.get_all_input_ops(self._conn_graph)
-            ops_to_set = list(
-                set(input_ops).union(
-                    cg_utils.get_all_ops_with_constant_inputs(self._conn_graph)
-                )
-            )
-
-            for op in ops_to_set:
+            for op in self._conn_graph.ordered_ops:
                 if op.get_module() in self._module_to_quantsim_wrapper_dict:
                     input_and_constant_input_indices = [
                         idx
                         for idx, inp in enumerate(op.inputs)
-                        if inp.is_model_input or inp.is_const
+                        if not inp.is_quantized()
                     ]
                     curr_module = self._module_to_quantsim_wrapper_dict[op.get_module()]
                     for idx, quantizer in enumerate(curr_module.input_quantizers):

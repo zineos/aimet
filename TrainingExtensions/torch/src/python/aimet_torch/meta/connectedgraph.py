@@ -54,14 +54,14 @@ from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
 from aimet_common.connected_graph.connectedgraph import (
     ConnectedGraph as AimetCommonConnectedGraph,
 )
-from aimet_common.connected_graph.product import Product
 from aimet_common.connected_graph.operation import (
     determine_preceding_op_input_product_index_in_multi_input_op,
 )
 from aimet_common.model_module import PytorchModelModule
 from aimet_common.utils import AimetLogger
 import aimet_torch._base.nn.modules.custom as aimet_modules
-from aimet_torch.meta.operation import Op
+from .operation import Op
+from .product import Product
 from aimet_torch.utils import (
     is_leaf_module,
     run_hook_for_layers_with_given_input,

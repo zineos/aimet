@@ -66,3 +66,27 @@ class Op(aimet_common.connected_graph.operation.Op):
         """
         super().__init__(name, dotted_name, output_shape, is_anonymous, op_type)
         self.residing_module = residing_module
+
+    def is_grid_preserving_op(self) -> bool:
+        from .connectedgraph import ConnectedGraph
+        from aimet_common.onnx._utils import _is_grid_preserving_op
+        from ..onnx_utils import map_torch_types_to_onnx
+        from ..nn import QuantizationMixin
+
+        module = self.get_module()
+
+        if not module:
+            return self.type in ConnectedGraph.math_invariant_types
+
+        if isinstance(module, QuantizationMixin):
+            module = module.get_original_module()
+
+        module_cls = type(module)
+        onnx_op_types = map_torch_types_to_onnx.get(module_cls)
+
+        if not onnx_op_types:
+            # ONNX op type unknown.
+            # To be safe, we should assume non-grid-preserving op in this case.
+            return False
+
+        return all(_is_grid_preserving_op(op_type) for op_type in onnx_op_types)

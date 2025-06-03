@@ -35,17 +35,23 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 import contextlib
-import torch
-from torch import nn, randn
+import itertools
 import tempfile
 import os
 import json
 import pytest
 import random
 import numpy as np
+
+import onnx
+import torch
+from torch import nn, randn
+
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_common.defs import QuantizationDataType, QuantScheme
+import aimet_torch
 from aimet_torch import onnx_utils
+from aimet_torch.model_preparer import prepare_model
 from aimet_torch.v2.quantsim import QuantizationSimModel, load_encodings_to_sim
 from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnalyzer
@@ -1138,7 +1144,7 @@ class TestQuantsim:
 
         assert isinstance(qlinear.add, custom.QuantizedAdd)
         assert qlinear.add.input_quantizers[0] is None
-        assert isinstance(qlinear.add.input_quantizers[1], AffineQuantizerBase)
+        assert qlinear.add.input_quantizers[1] is None
         assert isinstance(qlinear.add.output_quantizers[0], AffineQuantizerBase)
 
         """
@@ -1153,7 +1159,7 @@ class TestQuantsim:
 
         expected_schema = {
             "activation_encodings": {
-                "0.add": {"input": ..., "output": ...},  # CustomLinear.add
+                "0.add": {"output": ...},  # CustomLinear.add
                 "0.matmul": {"input": ..., "output": ...},  # CustomLinear.matmul
                 "1": {"output": ...},  # Sigmoid
             },
@@ -2118,3 +2124,72 @@ class TestEncodingPropagation:
 
             out_2 = qsim_2.model(dummy_input)
             assert torch.allclose(out_1, out_2, atol=1e-7)
+
+
+class ReshapeConv(torch.nn.Module):
+    def __init__(self, functional: bool):
+        super().__init__()
+        if functional:
+            self.reshape = torch.reshape
+        else:
+            self.reshape = custom.Reshape()
+        self.conv = torch.nn.Conv1d(3, 3, 3)
+
+    def forward(self, x):
+        x = self.reshape(x, (1, 3, -1))
+        return self.conv(x)
+
+
+@pytest.mark.parametrize(
+    "model_factory",
+    [
+        lambda: ReshapeConv(functional=True),
+        lambda: ReshapeConv(functional=False),
+    ],
+)
+def test_input_quantizer_enabling(model_factory):
+    """
+    Given: Model whose input is fed into functional data movement op
+    """
+    model = model_factory()
+    x = torch.randn(3, 100)
+
+    """
+    When: Create quantsim
+    Then: There should be exactly one input quantizer
+    """
+    sim = QuantizationSimModel(model, x)
+    input_qtzrs = itertools.chain(
+        *(
+            [qtzr for qtzr in qmodule.input_quantizers if qtzr]
+            for qmodule in sim.qmodules()
+        )
+    )
+    assert len(list(input_qtzrs)) == 1
+
+    """
+    When: Export to onnx QDQ
+    Then: All inputs/outputs should be associated with QDQ
+    """
+    sim.compute_encodings(lambda model: model(x))
+
+    pytest.skip(reason="Need another PR to pass this criterion")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        onnx_path = os.path.join(tmp_dir, "model.onnx")
+        aimet_torch.onnx.export(sim.model, x, onnx_path)
+        onnx_model = onnx.load_model(onnx_path)
+
+    for node in onnx_model.graph.node:
+        if node.op_type in ("QuantizeLinear", "DequantizeLinear"):
+            continue
+        if node.input:
+            producer = next(
+                dq for dq in onnx_model.graph.node if dq.output[:1] == node.input[:1]
+            )
+            assert producer.op_type == "DequantizeLinear"
+        if node.output:
+            consumer = next(
+                q for q in onnx_model.graph.node if node.output[:1] == q.input[:1]
+            )
+            assert consumer.op_type == "QuantizeLinear"
