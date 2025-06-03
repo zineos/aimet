@@ -118,7 +118,7 @@ jobs:
           name: Docs
           path: wheelhouse/Docs/
           if-no-files-found: error
-          retention-days: 1d
+          retention-days: 30d
       - name: "Build aimet-onnx for Windows (temporary)"
         if: matrix.id == 'onnx-cpu'
         run: |
