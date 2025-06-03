@@ -18,6 +18,7 @@ Optimization techniques
     Analysis tools <analysis tools/index>
     Compression <compression/index>
     Quantized LoRa <quantized LoRa/index>
+    OmniQuant <omniquant>
 
 :ref:`Adaptive rounding <featureguide-adaround>`
 ================================================
