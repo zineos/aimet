@@ -34,21 +34,20 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-# pylint: disable=missing-module-docstring
-import sys
 
-if sys.platform.startswith("win") and "scipy" in sys.modules:
-    raise ImportError(
-        "aimet-onnx for Windows has a known issue where it will hit segmentaion fault "
-        "when imported after scipy DLLs. To work around this failure, import aimet-onnx "
-        "before any other python libraries."
-    )
+from aimet_common.defs import qtype, QTYPE_ALIASES
 
-from aimet_common import _version
-from aimet_common.defs import qtype, int4, int8, int16, float16
 
-__version__ = _version.__version__
+def test_qtypes():
+    assert str(qtype.float(5, 10, False, False)) == "float16"
+    assert str(qtype.float(2, 1, False, False)) == "float4e2m1"
+    assert str(qtype.float(4, 3, True, True)) == "float8e4m3fnuz"
+    assert str(qtype.float(5, 2, False, False)) == "float8e5m2"
 
-from .quantsim import QuantizationSimModel, compute_encodings
-from .adaround.adaround_weight import apply_adaround
-from .sequential_mse.seq_mse import apply_seq_mse
+    assert str(qtype.int(3)) == "int3"
+    assert qtype.int(16) == QTYPE_ALIASES["int16"]
+    assert qtype.int(8).bits == 8
+
+    assert qtype.float(5, 10, False, False) == QTYPE_ALIASES["float16"]
+    assert QTYPE_ALIASES["float16"].mantissa_bits == 10
+    assert QTYPE_ALIASES["float16"].exponent_bits == 5

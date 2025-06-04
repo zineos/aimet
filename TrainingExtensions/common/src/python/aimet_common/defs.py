@@ -41,6 +41,8 @@ import io
 from enum import Enum
 from typing import Union, Callable, Any, Optional, Dict, List
 from decimal import Decimal
+from dataclasses import dataclass
+import abc
 
 from aimet_common.layer_database import Layer
 from aimet_common import libpymo
@@ -488,3 +490,91 @@ class EncodingType(Enum):
     PER_BLOCK = 2
     LPBQ = 3
     VECTOR = 4
+
+
+class qtype(abc.ABC):
+    """Parent class for all quantized data type definitions"""
+
+    @abc.abstractmethod
+    def __repr__(self):
+        pass
+
+    @staticmethod
+    def int(bits: int) -> "Int":
+        """
+        Constructs an integer QType with the specified number of bits
+
+        Args:
+            bits: Number of bits
+
+        Returns:
+            Integer QType with the specified number of bits
+        """
+        return Int(bits)
+
+    @staticmethod
+    def float(
+        exponent_bits: int,
+        mantissa_bits: int,
+        finite: bool = False,
+        unsigned_zero: bool = False,
+    ) -> "Float":
+        """
+        Constructs an floating point QType with the specified configuration
+
+        Args:
+            exponent_bits: Number of exponent bits
+            mantissa_bits: Number of mantissa bits
+            finite: If False, the QType can represent infinite values
+            unsigned_zero: If False, the QType uses both signed and unsigned zero/NaN values
+
+        Returns:
+            Floating point QType with the specified configuration
+        """
+        return Float(exponent_bits, mantissa_bits, finite, unsigned_zero)
+
+
+@dataclass(frozen=True)
+class Int(qtype):
+    """Quantized integer types"""
+
+    bits: int
+
+    def __repr__(self):
+        return f"int{self.bits}"
+
+
+@dataclass(frozen=True)
+class Float(qtype):
+    """Quantized float types"""
+
+    exponent_bits: int
+    mantissa_bits: int
+    finite: bool
+    unsigned_zero: bool
+
+    def __repr__(self):
+        for name, dtype in QTYPE_ALIASES.items():
+            if dtype == self:
+                return name
+
+        e = self.exponent_bits
+        m = self.mantissa_bits
+        fn = "fn" if self.finite else ""
+        uz = "uz" if self.unsigned_zero else ""
+        return f"float{e + m + 1}e{e}m{m}{fn}{uz}"
+
+
+int4 = qtype.int(4)
+int8 = qtype.int(8)
+int16 = qtype.int(16)
+float16 = qtype.float(
+    exponent_bits=5, mantissa_bits=10, finite=False, unsigned_zero=False
+)
+
+QTYPE_ALIASES = {
+    "int4": int4,
+    "int8": int8,
+    "int16": int16,
+    "float16": float16,
+}
