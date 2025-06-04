@@ -1143,10 +1143,10 @@ def get_bitwidth(session):
 
     param_quantizer = session["qc_quantize_op_dict"]["_conv_0.weight"]
     param_bw = param_quantizer.bitwidth
-    param_dtype = param_quantizer._data_type
+    param_dtype = param_quantizer.data_type
 
     output_quantizer = session["qc_quantize_op_dict"]["output"]
     output_bw = output_quantizer.bitwidth
-    output_dtype = output_quantizer._data_type
+    output_dtype = output_quantizer.data_type
 
     return ((output_bw, output_dtype), (param_bw, param_dtype))

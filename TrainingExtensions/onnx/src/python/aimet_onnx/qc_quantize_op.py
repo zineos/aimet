@@ -112,7 +112,7 @@ class QcQuantizeOp:
         self.op_mode = op_mode
         self.use_symmetric_encodings = use_symmetric_encodings
         self.enabled = True
-        self._data_type = QuantizationDataType.int
+        self.data_type = QuantizationDataType.int
         self.tensor_quantizer_params = tensor_quantizer_params
         self._encoding_min_max_fixed_vals = None
 
@@ -174,7 +174,11 @@ class QcQuantizeOp:
 
         :return: Quantization data type
         """
-        return self._data_type
+        return (
+            QuantizationDataType.int
+            if self.quant_info.isIntDataType
+            else QuantizationDataType.float
+        )
 
     @data_type.setter
     def data_type(self, data_type: QuantizationDataType):
@@ -185,10 +189,7 @@ class QcQuantizeOp:
         :param data_type: Quantization data type
         """
         if not self._is_encoding_frozen:
-            self._data_type = data_type
-            self.quant_info.isIntDataType = False
-            if data_type == QuantizationDataType.int:
-                self.quant_info.isIntDataType = True
+            self.quant_info.isIntDataType = data_type == QuantizationDataType.int
 
     def _build_tensor_quantizer(self):
         shape = ()

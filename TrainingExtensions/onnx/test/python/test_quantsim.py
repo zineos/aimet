@@ -563,6 +563,18 @@ class TestQuantSim:
                         tensor.name == exported_cg.get_all_ops()[name].outputs[idx].name
                     )
 
+    def test_insert_quantizer(self):
+        model = single_residual_model().model
+        reshape_output = next(
+            iter(op.output[0] for op in model.graph.node if op.op_type == "Reshape")
+        )
+        sim = QuantizationSimModel(model, providers=["CPUExecutionProvider"])
+        sim._insert_quantizer(reshape_output, is_param=False)
+        sim.activation_names.append(reshape_output)
+        sim._rebuild_session()
+        sim.compute_encodings([make_dummy_input(model)])
+        assert sim.qc_quantize_op_dict[reshape_output].get_encodings() is not None
+
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu(self):
         """Test to compare encodings with PT"""

@@ -268,6 +268,7 @@ class TestQcQuantizeOp:
             bitwidth=8,
             use_symmetric_encodings=False,
         )
+        qc_op.data_type = QuantizationDataType.float
 
         qc_op.op_mode = OpMode.quantizeDequantize
         output = session.run(None, {"input": input_arr})[0]
@@ -375,6 +376,7 @@ class TestQcQuantizeOp:
         encodings.max = 2.5
         encodings.min = -7
         encodings.offset = -188
+        encodings.delta = (7 + 2.5) / 255
         qc_op.load_encodings([encodings])
 
         output_qdq = session.run(None, {"input": input_arr})
@@ -405,9 +407,10 @@ class TestQcQuantizeOp:
 
         encodings = libpymo.TfEncoding()
         encodings.bw = 8
-        encodings.max = 7
+        encodings.max = 7 * 127 / 128
         encodings.min = -7
         encodings.offset = -128
+        encodings.delta = 7 / 128
         qc_op.load_encodings([encodings])
 
         output_qdq = session.run(None, {"input": input_arr})
@@ -444,6 +447,7 @@ class TestQcQuantizeOp:
         encodings.max = 5.3
         encodings.min = 0.0
         encodings.offset = 0
+        encodings.delta = 5.3 / 255
         qc_op.load_encodings([encodings])
 
         output_qdq = session.run(None, {"input": input_arr})

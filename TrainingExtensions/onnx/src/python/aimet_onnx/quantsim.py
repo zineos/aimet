@@ -656,6 +656,9 @@ class QuantizationSimModel:
             bitwidth=bitwidth,
             tensor_quantizer_params=tensor_quantizer_params,
         )
+        self.qc_quantize_op_dict[
+            input_name
+        ].data_type = self._default_quantization_data_type
 
     @staticmethod
     def build_session(
