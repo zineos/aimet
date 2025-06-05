@@ -63,6 +63,9 @@ from aimet_common.quantsim import calculate_delta_offset
 from aimet_onnx import lpbq_utils
 
 
+FLOAT32_MIN = np.finfo(np.float32).min
+FLOAT32_MAX = np.finfo(np.float32).max
+
 shared_library = os.path.join(
     os.path.dirname(libquant_info.__file__),
     "libaimet_onnxrt_ops.dll"
@@ -653,9 +656,9 @@ class TestQcQuantizeOp:
     @pytest.mark.parametrize(
         "input_arr",
         (
-            np.asarray([0, -3.4028e38]).astype(np.float32),
-            np.asarray([0, 3.4028e38]).astype(np.float32),
-            np.asarray([0, -3.4028e38, 3.4028e38]).astype(np.float32),
+            np.asarray([0, FLOAT32_MIN]).astype(np.float32),
+            np.asarray([0, FLOAT32_MAX]).astype(np.float32),
+            np.asarray([0, FLOAT32_MIN, FLOAT32_MAX]).astype(np.float32),
         ),
     )
     @pytest.mark.parametrize(
@@ -687,9 +690,16 @@ class TestQcQuantizeOp:
         session.run(None, {"input": input_arr})
         qc_op.compute_encodings()
 
-        assert qc_op.get_encodings()[0].max >= 0
-        assert qc_op.get_encodings()[0].min <= 0
-        assert qc_op.get_encodings()[0].delta > 0
+        max = qc_op.get_encodings()[0].max
+        min = qc_op.get_encodings()[0].min
+        delta = qc_op.get_encodings()[0].delta
+        offset = qc_op.get_encodings()[0].offset
+        num_steps = 2 ** qc_op.get_encodings()[0].bw - 1
+
+        assert FLOAT32_MIN <= min <= 0
+        assert np.allclose(min, delta * offset)
+        assert 0 <= max <= FLOAT32_MAX
+        assert np.allclose(max, delta * (offset + num_steps))
 
 
 blockwise_qdq_test_1 = {

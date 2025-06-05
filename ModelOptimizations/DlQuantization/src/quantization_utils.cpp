@@ -39,6 +39,7 @@
 
 #include "quantization_utils.hpp"
 #include "DlQuantization/Quantization.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -67,78 +68,41 @@ TfEncoding getComputedEncodings(uint8_t bw, double min, double max, bool useSymm
     }
     encoding.bw = bw;
 
-    // To handle the cases where the min/max can be infinite values
-    if (isinf(min) != 0)
-        min = std::numeric_limits<float>::lowest();
+    double FLOAT32_MIN = std::numeric_limits<float>::lowest();
+    double FLOAT32_MAX = std::numeric_limits<float>::max();
 
-    if (isinf(max) != 0)
-        max = std::numeric_limits<float>::max();
+    min = std::clamp(min, FLOAT32_MIN, 0.0);
+    max = std::clamp(max, 0.0, FLOAT32_MAX);
 
-    // Special case for symmetric encodings. If all values are positive or 0, we can treat the
-    // symmetric encodings as unsigned, which essentially translates to asymmetric
+    // Unsigned symmetric is not applicable if min < 0
+    useUnsignedSymmetric = useUnsignedSymmetric && (min >= 0.0);
 
-    // This is a complex check: here is the explanation
-    // If min < 0, then unsigned symmetric mode is immaterial
-    // Also if user can explicitly requested to disable unsigned-symmetric mode, then we use regular symmetric
-    if (useSymmetricEncodings && ((min < 0.0) || (!useUnsignedSymmetric)))
+    if (useSymmetricEncodings && !useUnsignedSymmetric)
     {
-        // If we desire symmetric encodings then we need to expand either the min or max to be mirrors of each other
-        // centered around 0
         unsigned int numPositiveSteps = std::floor(numSteps / 2);
         unsigned int numNegativeSteps = numSteps - numPositiveSteps;
         encoding.delta = std::max(max / numPositiveSteps, - min / numNegativeSteps);
-        encoding.offset               = -std::ceil(numSteps / 2);
-        encoding.min                  = std::max(encoding.offset * encoding.delta, (double) std::numeric_limits<float>::lowest());
-        encoding.max                  = std::min(encoding.delta * numPositiveSteps, (double) std::numeric_limits<float>::max());
+        encoding.offset = -static_cast<double>(numNegativeSteps);
     }
     else
     {
-        // Unsigned symmetric handling is the same as asymmetric from this point forward
-
         encoding.delta = (max - min) / numSteps;
-        if (min < 0 && max > 0)
-        {
-            // Need to make sure 0-value is exactly quantizable
-            // Quantization of q into b is given by:
-            //     b = q / delta - offset, where
-            //                             delta = (max - min)/#steps
-            //                             offset = min / delta
-            // For q = 0: b = -min / delta
-            // Find the closest round b, and set q=0 for it
-            double bZero    = round(-min / encoding.delta);
-            bZero           = std::min(numSteps, std::max(0.0, bZero));   // just to be safe
-            encoding.offset = -bZero;
-        }
-        else
-        {
-            // One of min or max is guaranteed to be zero, so 0 is exactly quantizable already
-            encoding.offset = round(min / encoding.delta);
-            encoding.min = min;
-            encoding.max = max;
-            return encoding;
-        }
-
-        // Check that the recalculated min/max should be in range of float
-        if (encoding.delta * encoding.offset >= std::numeric_limits<float>::lowest() &&
-            encoding.delta * encoding.offset <= std::numeric_limits<float>::max())
-        {
-            // Calculate 'min' and 'max' based on 'delta' and 'offset'.
-            // Note this min and max can vary from the one in 'stats'. This min and max
-            // can really be represented with the integer offset.
-            encoding.min = encoding.delta * encoding.offset;
-        }
-        else
-        {
-            // As min value is out of range set it to float min
-            encoding.min = std::numeric_limits<float>::lowest();
-        }
-
-        // We want to calculate: max = delta * numSteps + min.
-        // To avoid numerical accuracy issues on Linaro, we simplify the math.
-        encoding.max = max - min + encoding.min;
-        if (encoding.max > std::numeric_limits<float>::max())
-            encoding.max = std::numeric_limits<float>::max();
+        encoding.offset = std::clamp(round(min / encoding.delta), -numSteps, 0.0);
     }
+
+    // Clamp delta such that dequantized tensor always lie in range [FLOAT32_MIN, FLOAT32_MAX]
+    // In other words, FLOAT32_MIN <= encoding.delta * encoding.offset
+    //                              < encoding.delta * (encoding.offset + num_steps)
+    //                              < FLOAT32_MAX
+    if (encoding.offset < 0)
+        encoding.delta = std::min(encoding.delta, FLOAT32_MIN / encoding.offset);
+
+    if (encoding.offset + numSteps > 0)
+        encoding.delta = std::min(encoding.delta, FLOAT32_MAX / (encoding.offset + numSteps));
+
+    encoding.min = encoding.delta * encoding.offset;
+    encoding.max = encoding.delta * (encoding.offset + numSteps);
+
     return encoding;
 }
 

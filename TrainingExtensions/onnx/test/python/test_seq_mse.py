@@ -37,9 +37,7 @@
 # =============================================================================
 
 import pytest
-from unittest.mock import patch
 import torch
-from torch.utils.data import Dataset, DataLoader
 import copy
 import json
 import numpy as np
@@ -66,9 +64,14 @@ from .models import models_for_tests
 from .models.test_models_onnx import model_with_multiple_inputs
 from .models.test_models_onnx import model_with_multiple_outputs
 
-np.random.seed(0)
-torch.manual_seed(42)
+
 AimetLogger.set_level_for_all_areas(logging.DEBUG)
+
+
+@pytest.fixture(autouse=True)
+def seed():
+    np.random.seed(0)
+    torch.manual_seed(42)
 
 
 def _get_config_file(
