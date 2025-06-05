@@ -272,7 +272,7 @@ class TestQuantSim:
                 sim.compute_encodings(inputs)
 
             for name, qc_op in sim.get_qc_quantize_op().items():
-                assert qc_op.encodings[0].bw == 8
+                assert qc_op.get_encodings()[0].bw == 8
 
             for name, qc_op in sim.get_qc_quantize_op().items():
                 assert qc_op.is_initialized()
@@ -497,7 +497,7 @@ class TestQuantSim:
             sim.compute_encodings(callback)
 
             for name, qc_op in sim.get_qc_quantize_op().items():
-                assert qc_op.encodings[0].bw == 8
+                assert qc_op.get_encodings()[0].bw == 8
 
             for name, qc_op in sim.get_qc_quantize_op().items():
                 assert qc_op.is_initialized()
@@ -755,9 +755,9 @@ class TestQuantSim:
                     num_channels = qc_op.tensor_quantizer_params.tensor_shape[
                         qc_op.tensor_quantizer_params.channel_axis
                     ]
-                    assert num_channels == len(qc_op.encodings)
+                    assert num_channels == len(qc_op.get_encodings())
                     assert num_channels == len(param_encodings[param_name]["scale"])
-                    for encoding in qc_op.encodings:
+                    for encoding in qc_op.get_encodings():
                         assert encoding.bw == 8
                         assert encoding.min != encoding.max
 
@@ -797,7 +797,7 @@ class TestQuantSim:
                     assert qc_op.quant_info.usePerChannelMode
                     assert qc_op.quant_info.enabled
                     assert qc_op.quant_info.channelAxis == 1
-                    assert len(qc_op.encodings) == weight.dims[1]
+                    assert len(qc_op.get_encodings()) == weight.dims[1]
 
     def test_load_encodings_ptq(self):
         model = single_residual_model().model

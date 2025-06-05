@@ -300,8 +300,8 @@ class TestQcQuantizeOp:
 
         session.run(None, {"input": input_arr})[0]
         qc_op.compute_encodings()
-        assert math.isclose(qc_op.encodings[0].max, 2.5, rel_tol=1e-2)
-        assert math.isclose(qc_op.encodings[0].min, -7, rel_tol=1e-2)
+        assert math.isclose(qc_op.get_encodings()[0].max, 2.5, rel_tol=1e-2)
+        assert math.isclose(qc_op.get_encodings()[0].min, -7, rel_tol=1e-2)
 
         qc_op.op_mode = OpMode.quantizeDequantize
         output = session.run(None, {"input": input_arr2})[0]
@@ -687,9 +687,9 @@ class TestQcQuantizeOp:
         session.run(None, {"input": input_arr})
         qc_op.compute_encodings()
 
-        assert qc_op.encodings[0].max >= 0
-        assert qc_op.encodings[0].min <= 0
-        assert qc_op.encodings[0].delta > 0
+        assert qc_op.get_encodings()[0].max >= 0
+        assert qc_op.get_encodings()[0].min <= 0
+        assert qc_op.get_encodings()[0].delta > 0
 
 
 blockwise_qdq_test_1 = {
