@@ -381,13 +381,30 @@ def extract_global_quantizer_args(
             else quant_scheme,
             "param_bitwidth": quantsim_configurator.default_param_bw,
             "activation_bitwidth": quantsim_configurator.default_output_bw,
-            "dtype": quantsim_configurator.default_data_type.name,
             "is_symmetric": param_dict["is_symmetric"]
             if "is_symmetric" in param_dict
             else is_per_channel_quant,
             "per_channel_quantization": is_per_channel_quant,
         }
     )
+    # Keep the dictionary structure the same if possible for backwards compatibility
+    if (
+        quantsim_configurator.default_act_data_type
+        == quantsim_configurator.default_param_data_type
+    ):
+        quant_args.update(
+            {
+                "dtype": quantsim_configurator.default_param_data_type.name,
+            }
+        )
+    else:
+        quant_args.update(
+            {
+                "param_dtype": quantsim_configurator.default_param_data_type.name,
+                "activation_dtype": quantsim_configurator.default_act_data_type,
+            }
+        )
+
     return quant_args
 
 

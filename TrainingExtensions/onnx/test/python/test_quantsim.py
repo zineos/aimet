@@ -57,7 +57,7 @@ from onnxsim import simplify
 from aimet_common import quantsim
 from aimet_common import libquant_info
 from aimet_common import libpymo
-from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType
+from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType, qtype
 from aimet_common.onnx.opset10 import unpack_int4x2_to_int8
 from aimet_common.quantsim_config.utils import (
     get_path_for_per_channel_config,
@@ -203,7 +203,7 @@ class TestQuantSim:
         model = build_dummy_model()
         dummy_input = make_dummy_input(model)
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, dummy_input, path=tempdir)
+            sim = QuantizationSimModel(model, path=tempdir)
             assert len(sim.model.nodes()) == 14
 
             node_ls = [node.op_type for node in sim.model.nodes()]
@@ -249,7 +249,7 @@ class TestQuantSim:
             )
             onnx_model = load_model(os.path.join(tempdir, "dummy_model.onnx"))
             dummy_input = make_dummy_input(onnx_model)
-            sim = QuantizationSimModel(onnx_model, dummy_input, path=tempdir)
+            sim = QuantizationSimModel(onnx_model, path=tempdir)
             sim.session.run(None, dummy_input)
 
     @pytest.mark.parametrize("with_context_manager", (True, False))
@@ -369,8 +369,8 @@ class TestQuantSim:
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(
                 model,
-                default_activation_bw=16,
-                default_param_bw=16,
+                activation_type="int16",
+                param_type="int16",
                 quant_scheme=QuantScheme.post_training_tf,
                 path=tempdir,
             )
@@ -699,18 +699,16 @@ class TestQuantSim:
                 onnx_model_cpu,
                 providers=CPU_PROVIDERS,
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
-                default_data_type=QuantizationDataType.float,
-                default_param_bw=16,
-                default_activation_bw=16,
+                param_type="float16",
+                activation_type="float16",
                 path=tempdir,
             )
             onnx_sim_gpu = QuantizationSimModel(
                 onnx_model_gpu,
                 providers=CUDA_PROVIDERS,
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
-                default_data_type=QuantizationDataType.float,
-                default_param_bw=16,
-                default_activation_bw=16,
+                param_type="float16",
+                activation_type="float16",
                 path=tempdir,
             )
 
@@ -1047,9 +1045,7 @@ class TestQuantSim:
         # Input shape is not compatible with block size
         bq_weights.remove(model.graph().node[0].input[1])
 
-        sim = QuantizationSimModel(
-            model, dummy_input, default_param_bw=16, default_activation_bw=16
-        )
+        sim = QuantizationSimModel(model, param_type="int16", activation_type="int16")
         swap_quantizer_func(sim=sim, bitwidth=4, block_size=4)
 
         sim.compute_encodings([dummy_input])
@@ -1058,7 +1054,7 @@ class TestQuantSim:
             sim.export(tempdir, "export")
 
             sim_2 = QuantizationSimModel(
-                model_2, dummy_input, default_param_bw=16, default_activation_bw=16
+                model_2, param_type="int16", activation_type="int16"
             )
             swap_quantizer_func(sim=sim_2, bitwidth=4, block_size=4)
 
@@ -1084,7 +1080,7 @@ class TestQuantSim:
             assert np.allclose(out1, out2)
 
             sim_3 = QuantizationSimModel(
-                model_3, dummy_input, default_param_bw=16, default_activation_bw=16
+                model_3, param_type="int16", activation_type="int16"
             )
 
             # TODO: switch to strict=True when we support swapping to LPBQ quantizer from non-LPBQ quantizer
@@ -1165,9 +1161,7 @@ class TestQuantSim:
         model_2 = copy.deepcopy(model)
         dummy_input = make_dummy_input(model.model)
 
-        sim = QuantizationSimModel(
-            model, dummy_input, default_param_bw=16, default_activation_bw=16
-        )
+        sim = QuantizationSimModel(model, param_type="int16", activation_type="int16")
         set_grouped_blockwise_quantization_for_weights(
             sim,
             op_types=("MatMul", "Conv", "Gemm"),
@@ -1183,7 +1177,7 @@ class TestQuantSim:
             sim.export(tempdir, "export")
 
             sim_2 = QuantizationSimModel(
-                model_2, dummy_input, default_param_bw=16, default_activation_bw=16
+                model_2, param_type="int16", activation_type="int16"
             )
             set_grouped_blockwise_quantization_for_weights(
                 sim_2,
@@ -1232,8 +1226,8 @@ class TestQuantSim:
             sim = QuantizationSimModel(
                 model=model,
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
-                default_activation_bw=8,
-                default_param_bw=8,
+                param_type="int8",
+                activation_type="int8",
                 path=tempdir,
             )
             sim.session.run(None, {"input": sample_input})
@@ -1314,8 +1308,8 @@ class TestQuantSim:
             sim = QuantizationSimModel(
                 model=model,
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
-                default_activation_bw=8,
-                default_param_bw=8,
+                param_type="int8",
+                activation_type="int8",
                 user_onnx_libs=[onnx_library],
                 path=tempdir,
             )
@@ -1363,7 +1357,7 @@ class TestQuantSim:
     def test_linear_split_into_matmul_add(self):
         model = linear_split_into_matmul_add()
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, default_activation_bw=16, path=tempdir)
+            sim = QuantizationSimModel(model, activation_type="int16", path=tempdir)
 
             sim.compute_encodings(make_dummy_input(model.model) for _ in range(3))
             sim.export(tempdir, "linear_matmul_add_pattern")
@@ -1485,8 +1479,8 @@ class TestQuantSim:
 
             sim = QuantizationSimModel(
                 model,
-                default_param_bw=8,
-                default_activation_bw=16,
+                param_type="int8",
+                activation_type="int16",
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -1540,8 +1534,8 @@ class TestQuantSim:
 
             sim = QuantizationSimModel(
                 model,
-                default_param_bw=16,
-                default_activation_bw=8,
+                param_type="int16",
+                activation_type="int8",
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -1591,8 +1585,8 @@ class TestQuantSim:
 
             sim = QuantizationSimModel(
                 model,
-                default_param_bw=8,
-                default_activation_bw=16,
+                param_type="int8",
+                activation_type="int16",
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -1637,8 +1631,8 @@ class TestQuantSim:
 
         sim = QuantizationSimModel(
             model,
-            default_param_bw=16,
-            default_activation_bw=16,
+            param_type="int16",
+            activation_type="int16",
             path=tmpdir,
             config_file=os.path.join(tmpdir, "quantsim_config.json"),
         )
@@ -1794,7 +1788,7 @@ class TestQuantSim:
         # Input shape is not compatible with block size
         bq_weights.remove(model.graph().node[0].input[1])
 
-        sim = QuantizationSimModel(model, dummy_input)
+        sim = QuantizationSimModel(model)
         set_blockwise_quantization_for_weights(
             sim, ("MatMul", "Conv", "Gemm"), 8, True, block_size, strict=False
         )
@@ -1880,19 +1874,13 @@ class TestQuantSim:
     def test_load_float16_encodings(self, tmpdir):
         model = models_for_tests.weight_matmul_model(10, 10)
         sim = QuantizationSimModel(
-            model,
-            default_activation_bw=16,
-            default_param_bw=16,
-            default_data_type=QuantizationDataType.float,
+            model, param_type="float16", activation_type="float16"
         )
         sim.export(tmpdir, "model")
 
         model = models_for_tests.weight_matmul_model(10, 10)
         sim = QuantizationSimModel(
-            model,
-            default_activation_bw=16,
-            default_param_bw=16,
-            default_data_type=QuantizationDataType.float,
+            model, param_type="float16", activation_type="float16"
         )
         load_encodings_to_sim(sim, os.path.join(tmpdir, "model.encodings"), strict=True)
 
@@ -1920,8 +1908,8 @@ class TestQuantSim:
 
             sim = QuantizationSimModel(
                 model,
-                default_param_bw=8,
-                default_activation_bw=16,
+                param_type="int8",
+                activation_type="int16",
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -1968,9 +1956,8 @@ class TestQuantSim:
 
             sim = QuantizationSimModel(
                 model,
-                dummy_input,
-                default_param_bw=8,
-                default_activation_bw=16,
+                param_type="int8",
+                activation_type="int16",
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -2007,9 +1994,7 @@ class TestQuantSim:
         # Input shape is not compatible with block size
         bq_weights.remove(model.graph().node[0].input[1])
 
-        sim = QuantizationSimModel(
-            model, dummy_input, default_param_bw=16, default_activation_bw=16
-        )
+        sim = QuantizationSimModel(model, param_type="int16", activation_type="int16")
         set_grouped_blockwise_quantization_for_weights(
             sim,
             ("MatMul", "Conv", "Gemm"),
@@ -2051,10 +2036,7 @@ class TestQuantSim:
     def test_lpbq_strict(self):
         model = models_for_tests.weight_matmul_model(in_features=16, out_features=32)
         sim = QuantizationSimModel(
-            model,
-            default_activation_bw=16,
-            default_param_bw=16,
-            default_data_type=QuantizationDataType.float,
+            model, param_type="float16", activation_type="float16"
         )
         quantizers = set(sim.qc_quantize_op_dict.values())
 
@@ -2181,6 +2163,81 @@ class TestQuantSim:
             == "DEFAULT"
         )
 
+        dummy_input = make_dummy_input(single_residual_model().model)
+        with pytest.warns(DeprecationWarning):
+            QuantizationSimModel(single_residual_model(), dummy_input)
+
+        with pytest.warns(DeprecationWarning):
+            QuantizationSimModel(
+                single_residual_model(), dummy_input, QuantScheme.min_max
+            )
+
+        with pytest.warns(DeprecationWarning):
+            QuantizationSimModel(
+                single_residual_model(), default_param_bw=8, default_activation_bw=16
+            )
+
+        with pytest.warns(DeprecationWarning):
+            sim = QuantizationSimModel(single_residual_model(), use_cuda=True)
+            assert "CUDAExecutionProvider" in sim.session.get_providers()
+
+        with pytest.warns(DeprecationWarning):
+            QuantizationSimModel(
+                single_residual_model(),
+                default_param_bw=16,
+                default_activation_bw=16,
+                default_data_type=QuantizationDataType.float,
+            )
+
+        with pytest.warns(DeprecationWarning):
+            QuantizationSimModel(
+                single_residual_model(), default_data_type=QuantizationDataType.int
+            )
+
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(
+                single_residual_model(),
+                param_type="float16",
+                activation_type="float16",
+                default_data_type=QuantizationDataType.float,
+            )
+
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(
+                single_residual_model(), param_type="int4", default_param_bw=4
+            )
+
+        with pytest.raises(TypeError):
+            QuantizationSimModel(single_residual_model(), unknown_arg=None)
+
+        with pytest.raises(RuntimeError):
+            QuantizationSimModel(single_residual_model(), param_type=qtype.float(6, 1))
+
+    def test_quantsim_init_dtypes(self):
+        sim = QuantizationSimModel(
+            single_residual_model(), param_type="int4", activation_type="float16"
+        )
+        for name in sim.activation_names:
+            assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.float
+            assert sim.qc_quantize_op_dict[name].bitwidth == 16
+
+        for name in sim.param_names:
+            assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.int
+            assert sim.qc_quantize_op_dict[name].bitwidth == 4
+
+        sim = QuantizationSimModel(
+            single_residual_model(),
+            param_type=qtype.float(5, 10),
+            activation_type=qtype.int(6),
+        )
+        for name in sim.activation_names:
+            assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.int
+            assert sim.qc_quantize_op_dict[name].bitwidth == 6
+
+        for name in sim.param_names:
+            assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.float
+            assert sim.qc_quantize_op_dict[name].bitwidth == 16
+
 
 class TestEncodingPropagation:
     def test_output(self):
@@ -2222,7 +2279,7 @@ class TestEncodingPropagation:
         model = _convert_to_onnx(pt_model, x)
         dummy_input = make_dummy_input(model.model)
         with _apply_constraints(True):
-            sim = QuantizationSimModel(model, dummy_input)
+            sim = QuantizationSimModel(model)
 
             sim.compute_encodings([dummy_input])
             assert _compare_encodings(
@@ -2271,7 +2328,7 @@ class TestEncodingPropagation:
         model = _convert_to_onnx(pt_model, dummy_input)
         dummy_input = make_dummy_input(model.model)
         with _apply_constraints(True):
-            sim = QuantizationSimModel(model, dummy_input)
+            sim = QuantizationSimModel(model)
             sim.compute_encodings([dummy_input])
 
             assert _compare_encodings(
@@ -2330,7 +2387,7 @@ class TestEncodingPropagation:
                     +-> q_in2b -> conv2b -> *q_out3* ------^
         """
         with _apply_constraints(True):
-            sim = QuantizationSimModel(model, dummy_input)
+            sim = QuantizationSimModel(model)
             sim.compute_encodings([dummy_input])
 
             for cg_op in sim.connected_graph.ordered_ops:
@@ -2376,7 +2433,7 @@ class TestEncodingPropagation:
         model.model, _ = simplify(model.model)
         dummy_input = make_dummy_input(model.model)
         with _apply_constraints(True):
-            sim = QuantizationSimModel(model, dummy_input)
+            sim = QuantizationSimModel(model)
             sim.compute_encodings([dummy_input])
 
             for cg_op in sim.connected_graph.ordered_ops:
@@ -2489,7 +2546,6 @@ class TestEncodingPropagation:
 
             sim = QuantizationSimModel(
                 model,
-                dummy_input,
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
             )
@@ -2551,7 +2607,7 @@ class TestEncodingPropagation:
                 model,
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
-                default_activation_bw=16,
+                activation_type="int16",
             )
             assert sim.qc_quantize_op_dict["model_input"].enabled
             assert sim.qc_quantize_op_dict["model_input"].use_symmetric_encodings
@@ -2583,8 +2639,8 @@ class TestEncodingPropagation:
                 model,
                 path=tempdir,
                 config_file=os.path.join(tempdir, "quantsim_config.json"),
-                default_activation_bw=16,
-                default_param_bw=4,
+                param_type="int4",
+                activation_type="int16",
             )
             """
             Exception rule should not be applied to non-dynamic matmuls
@@ -2930,22 +2986,10 @@ def test_onnx_qdq(
     activation_kind, activation_bw = _parse_type(activation_dtype)
     sim = QuantizationSimModel(
         model,
-        default_param_bw=param_bw,
-        default_activation_bw=activation_bw,
+        param_type=param_dtype.removeprefix("u"),
+        activation_type=activation_dtype.removeprefix("u"),
         config_file="htp_v81",
     )
-
-    if param_kind == "float":
-        for op in sim.connected_graph.get_all_ops().values():
-            _, _, param_quantizers = sim.get_op_quantizers(op)
-            for qtzr in param_quantizers.values():
-                qtzr.data_type = QuantizationDataType.float
-
-    if activation_kind == "float":
-        for op in sim.connected_graph.get_all_ops().values():
-            input_quantizers, output_quantizers, _ = sim.get_op_quantizers(op)
-            for qtzr in itertools.chain(input_quantizers, output_quantizers):
-                qtzr.data_type = QuantizationDataType.float
 
     input_shape = tuple(
         dim.dim_value
@@ -3051,8 +3095,8 @@ def test_onnx_qdq_opset_compatibility(
     config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
     sim = QuantizationSimModel(
         model,
-        default_param_bw=param_bw,
-        default_activation_bw=act_bw,
+        param_type=qtype.int(param_bw),
+        activation_type=qtype.int(act_bw),
         config_file=config_file,
     )
     input = np.random.randn(*input_shape).astype(np.float32)
@@ -3273,8 +3317,8 @@ def test_onnx_qdq_lpbq(seed: int):
     model = standalone_gemm(in_channels=16, out_channels=16)
     sim = QuantizationSimModel(
         model,
-        default_param_bw=4,
-        default_activation_bw=16,
+        param_type="int4",
+        activation_type="int16",
         config_file="htp_v81",
     )
 

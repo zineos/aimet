@@ -82,7 +82,7 @@ class TestQuantAnalyzer:
             models_for_tests.TinyModel(), dummy_input
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(calibrate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)
@@ -106,7 +106,7 @@ class TestQuantAnalyzer:
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         quant_analyzer = QuantAnalyzer(
             model, dummy_input_dict, CallbackFunc(None), CallbackFunc(None)
         )
@@ -124,7 +124,7 @@ class TestQuantAnalyzer:
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         quant_analyzer = QuantAnalyzer(
             model, dummy_input_dict, CallbackFunc(None), CallbackFunc(None)
         )
@@ -142,7 +142,7 @@ class TestQuantAnalyzer:
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         quant_analyzer = QuantAnalyzer(
             model, dummy_input_dict, CallbackFunc(None), CallbackFunc(None)
         )
@@ -200,7 +200,7 @@ class TestQuantAnalyzer:
             layer_names.append(node.name)
 
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)
@@ -237,7 +237,7 @@ class TestQuantAnalyzer:
             layer_names.append(node.name)
 
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)
@@ -270,7 +270,7 @@ class TestQuantAnalyzer:
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)
@@ -315,7 +315,6 @@ class TestQuantAnalyzer:
             fold_all_batch_norms_to_weight(model)
             sim = QuantizationSimModel(
                 copy.deepcopy(model),
-                dummy_input_dict,
                 config_file=Path(tmp_dir, "quantsim_config.json"),
             )
             sim.compute_encodings(evaluate, dummy_input_dict)
@@ -342,7 +341,7 @@ class TestQuantAnalyzer:
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
         sim = QuantizationSimModel(
-            model, dummy_input_dict, quant_scheme=QuantScheme.post_training_tf_enhanced
+            model, quant_scheme=QuantScheme.post_training_tf_enhanced
         )
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
@@ -398,7 +397,6 @@ class TestQuantAnalyzer:
             fold_all_batch_norms_to_weight(model)
             sim = QuantizationSimModel(
                 model,
-                dummy_input_dict,
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
                 config_file=Path(tmp_dir, "quantsim_config.json"),
             )
@@ -442,7 +440,7 @@ class TestQuantAnalyzer:
             layer_names.append(node.name)
 
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)
@@ -478,7 +476,7 @@ class TestQuantAnalyzer:
         )
         dummy_input_dict = {"input": np.random.randn(1, 3, 32, 32).astype(np.float32)}
         fold_all_batch_norms_to_weight(model)
-        sim = QuantizationSimModel(copy.deepcopy(model), dummy_input_dict)
+        sim = QuantizationSimModel(copy.deepcopy(model))
         sim.compute_encodings(evaluate, dummy_input_dict)
         forward_pass_callback = CallbackFunc(calibrate, dummy_input_dict)
         eval_callback = CallbackFunc(evaluate, dummy_input_dict)

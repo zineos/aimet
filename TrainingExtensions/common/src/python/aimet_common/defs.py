@@ -499,6 +499,32 @@ class qtype(abc.ABC):
     def __repr__(self):
         pass
 
+    @abc.abstractmethod
+    def to_legacy_repr(self) -> tuple[QuantizationDataType, int]:
+        """
+        Returns the qtype represented as a tuple of (QuantizationDataType, bitwidth)
+        """
+
+    @staticmethod
+    def from_legacy_repr(dtype: QuantizationDataType, bitwidth: int) -> "qtype":
+        """Converts (QuantizationDataType, bitwidth) tuple to qtype"""
+        if dtype == QuantizationDataType.int:
+            return qtype.int(bitwidth)
+        if dtype != QuantizationDataType.float:
+            raise ValueError(f"Unsupported data type: {dtype}")
+        if bitwidth == 16:
+            return QTYPE_ALIASES["float16"]
+        if bitwidth == 32:
+            return QTYPE_ALIASES["float32"]
+        if bitwidth == 8:
+            # Default to float8e4m3
+            return qtype.float(
+                exponent_bits=4, mantissa_bits=3, finite=False, unsigned_zero=False
+            )
+        raise ValueError(
+            "float data type is only supported with bitwidth of 8, 16, or 32, got {bitwidth}"
+        )
+
     @staticmethod
     def int(bits: int) -> "Int":
         """
@@ -533,6 +559,17 @@ class qtype(abc.ABC):
         """
         return Float(exponent_bits, mantissa_bits, finite, unsigned_zero)
 
+    @staticmethod
+    def from_string(name: str):
+        """
+        Returns the qtype object associated with the given string alias
+        """
+        if name not in QTYPE_ALIASES:
+            raise ValueError(
+                f"{name} is not a defined qtype alias. Use {qtype.int.__qualname__} or {qtype.float.__qualname__} to construct a custom qtype."
+            )
+        return QTYPE_ALIASES[name]
+
 
 @dataclass(frozen=True)
 class Int(qtype):
@@ -542,6 +579,9 @@ class Int(qtype):
 
     def __repr__(self):
         return f"int{self.bits}"
+
+    def to_legacy_repr(self):
+        return QuantizationDataType.int, self.bits
 
 
 @dataclass(frozen=True)
@@ -564,6 +604,10 @@ class Float(qtype):
         uz = "uz" if self.unsigned_zero else ""
         return f"float{e + m + 1}e{e}m{m}{fn}{uz}"
 
+    def to_legacy_repr(self):
+        bits = self.exponent_bits + self.mantissa_bits + 1
+        return QuantizationDataType.float, bits
+
 
 int4 = qtype.int(4)
 int8 = qtype.int(8)
@@ -571,10 +615,14 @@ int16 = qtype.int(16)
 float16 = qtype.float(
     exponent_bits=5, mantissa_bits=10, finite=False, unsigned_zero=False
 )
+float32 = qtype.float(
+    exponent_bits=8, mantissa_bits=23, finite=False, unsigned_zero=False
+)
 
 QTYPE_ALIASES = {
     "int4": int4,
     "int8": int8,
     "int16": int16,
     "float16": float16,
+    "float32": float32,
 }

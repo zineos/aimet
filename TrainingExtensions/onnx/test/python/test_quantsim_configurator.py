@@ -37,7 +37,7 @@
 import json
 import os
 import pytest
-from aimet_common.defs import QuantizationDataType
+from aimet_common.defs import QuantizationDataType, qtype
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx.quantsim import QuantizationSimModel, QuantSimConfigurator
@@ -258,9 +258,8 @@ class TestQuantSimConfig:
                 model,
                 ConnectedGraph(model),
                 config_file=config_file.name,
-                quantsim_output_bw=8,
-                quantsim_param_bw=8,
-                quantsim_data_type=QuantizationDataType.int,
+                param_type=qtype.int(8),
+                activation_type=qtype.int(8),
             )
             assert qsim_config._get_supergroup_pass_list() == ["LayerNormalization"]
 

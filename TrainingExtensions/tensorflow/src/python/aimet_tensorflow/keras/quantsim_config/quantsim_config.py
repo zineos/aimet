@@ -54,7 +54,7 @@ from aimet_common.connected_graph.connectedgraph_utils import (
     get_all_output_ops,
 )
 from aimet_common.connected_graph.operation import Op
-from aimet_common.defs import QuantScheme, QuantizationDataType
+from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.graph_searcher import GraphSearcher
 from aimet_common.quantsim_config.quantsim_config import (
@@ -369,8 +369,21 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         default_data_type: QuantizationDataType = QuantizationDataType.int,
         config_file: str = None,
     ):
+        # Legacy behavior, if QuantizationDataType.float, always use float16
+        param_type = (
+            qtype.int(default_param_bw)
+            if default_data_type == QuantizationDataType.int
+            else qtype.from_string("float16")
+        )
+        activation_type = (
+            qtype.int(default_output_bw)
+            if default_data_type == QuantizationDataType.int
+            else qtype.from_string("float16")
+        )
         super().__init__(
-            config_file, default_data_type, default_output_bw, default_param_bw
+            config_file,
+            param_type=param_type,
+            activation_type=activation_type,
         )
         RANGE_LEARNING = (
             QuantScheme.training_range_learning_with_tf_init,

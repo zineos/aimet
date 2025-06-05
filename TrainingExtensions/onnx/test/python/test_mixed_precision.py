@@ -708,9 +708,7 @@ class TestAMPv1:
     def test_choose_mixed_precision(self, model, tmpdir):
         np.random.seed(0)
 
-        sim = QuantizationSimModel(
-            model, default_activation_bw=8, default_param_bw=8, config_file="htp_v73"
-        )
+        sim = QuantizationSimModel(model, config_file="htp_v73")
         enabled_quantizers = {q for q in sim.qc_quantize_op_dict.values() if q.enabled}
         total_bits = 16 * len(enabled_quantizers)
 

@@ -39,7 +39,7 @@
 from abc import ABC, abstractmethod
 import os
 from typing import Dict, List, Optional
-from aimet_common.defs import QuantizationDataType, QuantDtypeBwInfo
+from aimet_common.defs import QuantizationDataType, QuantDtypeBwInfo, qtype
 from aimet_common.connected_graph.operation import Op
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.quantsim_config.json_config_importer import (
@@ -188,19 +188,14 @@ class QuantSimConfigurator(ABC):
     """Class for parsing and applying quantsim configurations from json config file"""
 
     def __init__(
-        self,
-        config_file: Optional[str],
-        default_data_type: QuantizationDataType,
-        default_output_bw: int,
-        default_param_bw: int,
+        self, config_file: Optional[str], param_type: qtype, activation_type: qtype
     ):
         config_file = _get_config_file(config_file)
 
         self._quantsim_configs = JsonConfigImporter.import_json_config_file(config_file)
         self._supported_kernels = {}
-        self._default_data_type = default_data_type
-        self._default_output_bw = default_output_bw
-        self._default_param_bw = default_param_bw
+        self._param_type = param_type
+        self._activation_type = activation_type
 
     def _set_quantsim_configs(self):
         """
@@ -390,10 +385,8 @@ class QuantSimConfigurator(ABC):
 
         if is_current_config_same_as_override_option(
             QuantDtypeBwInfo(
-                self._default_data_type,
-                self._default_output_bw,
-                self._default_data_type,
-                self._default_param_bw,
+                *self._activation_type.to_legacy_repr(),
+                *self._param_type.to_legacy_repr(),
             ),
             default_configs[ConfigDictKeys.SUPPORTED_KERNELS],
         ):
@@ -411,13 +404,11 @@ class QuantSimConfigurator(ABC):
         ][DEFAULT_OVERRIDE_SUPPORTED_KERNEL_INDEX][ConfigDictKeys.PARAM]
 
         # keep the updated with defaults, to be used later to apply op level config
-        self._default_data_type = config_file_default_act_bw_dtype_config[
-            ConfigDictKeys.DTYPE
-        ]
-        self._default_output_bw = config_file_default_act_bw_dtype_config[
+        override_dtype = config_file_default_act_bw_dtype_config[ConfigDictKeys.DTYPE]
+        override_act_bw = config_file_default_act_bw_dtype_config[
             ConfigDictKeys.BITWIDTH
         ]
-        self._default_param_bw = config_file_default_param_bw_dtype_config[
+        override_param_bw = config_file_default_param_bw_dtype_config[
             ConfigDictKeys.BITWIDTH
         ]
 
@@ -425,26 +416,25 @@ class QuantSimConfigurator(ABC):
             "Target default supported kernel at override index {%s} is different from quantsim defaults."
             " Enforcing target kernel config for act bw = {%s} and dtype = {%s}",
             DEFAULT_OVERRIDE_SUPPORTED_KERNEL_INDEX,
-            self._default_output_bw,
-            self._default_data_type,
+            override_act_bw,
+            override_dtype,
         )
 
-        self._override_default_act_bw_dtype(
-            self._default_data_type, self._default_output_bw
-        )
+        self._param_type = qtype.from_legacy_repr(override_dtype, override_param_bw)
+        self._activation_type = qtype.from_legacy_repr(override_dtype, override_act_bw)
+
+        self._override_default_act_bw_dtype(override_dtype, override_act_bw)
 
         logger.info(
             "Target default supported kernel at override index {%s} is different from quantsim defaults."
             " Enforcing target kernel config for param bw = {%s} and dtype = {%s}",
             DEFAULT_OVERRIDE_SUPPORTED_KERNEL_INDEX,
-            self._default_param_bw,
-            self._default_data_type,
+            override_param_bw,
+            override_dtype,
         )
 
         # override param config defaults.
-        self._override_default_param_bw_dtype(
-            self._default_data_type, self._default_param_bw
-        )
+        self._override_default_param_bw_dtype(override_dtype, override_param_bw)
 
     def _apply_overrides_for_op(self, op_config: OpType, quantizer_data):
         """
@@ -467,10 +457,8 @@ class QuantSimConfigurator(ABC):
         # --------------------------------------------------------------------------------------------------- #
 
         quant_dtype_bw_info = QuantDtypeBwInfo(
-            self._default_data_type,
-            self._default_output_bw,
-            self._default_data_type,
-            self._default_param_bw,
+            *self._activation_type.to_legacy_repr(),
+            *self._param_type.to_legacy_repr(),
         )
         if not current_config_in_supported_kernels(
             quant_dtype_bw_info, op_config[ConfigDictKeys.SUPPORTED_KERNELS]
@@ -514,17 +502,22 @@ class QuantSimConfigurator(ABC):
     @property
     def default_output_bw(self):
         """Returns output bit-width"""
-        return self._default_output_bw
+        return self._activation_type.to_legacy_repr()[1]
 
     @property
     def default_param_bw(self):
         """Returns parameter bit-width"""
-        return self._default_param_bw
+        return self._param_type.to_legacy_repr()[1]
 
     @property
-    def default_data_type(self):
-        """Returns default datatype"""
-        return self._default_data_type
+    def default_act_data_type(self):
+        """Returns default activation datatype"""
+        return self._activation_type.to_legacy_repr()[0]
+
+    @property
+    def default_param_data_type(self):
+        """Returns default parameter datatype"""
+        return self._param_type.to_legacy_repr()[0]
 
     @abstractmethod
     def _override_param_bw_dtype(

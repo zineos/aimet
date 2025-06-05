@@ -42,7 +42,7 @@ from typing import List, Dict, Tuple, Union
 import onnx
 from packaging import version
 
-from aimet_common.defs import QuantizationDataType
+from aimet_common.defs import QuantizationDataType, qtype
 from aimet_common.graph_searcher import GraphSearcher
 from aimet_common.connected_graph.connectedgraph_utils import (
     get_all_input_ops,
@@ -115,13 +115,10 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         model: ModelProto,
         conn_graph: ConnectedGraph,
         config_file: str,
-        quantsim_output_bw: int,
-        quantsim_param_bw: int,
-        quantsim_data_type: QuantizationDataType = QuantizationDataType.int,
+        param_type: qtype,
+        activation_type: qtype,
     ):
-        super().__init__(
-            config_file, quantsim_data_type, quantsim_output_bw, quantsim_param_bw
-        )
+        super().__init__(config_file, param_type, activation_type)
 
         self._model = model
         self._conn_graph = conn_graph
@@ -169,10 +166,10 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         self._disable_all_quantizers()
         self._set_quantsim_configs()
         self._override_param_bw_dtype(
-            self._param_names, self._default_data_type, self._default_param_bw
+            self._param_names, *self._param_type.to_legacy_repr()
         )
         self._override_act_bw_dtype(
-            self._activation_names, self._default_data_type, self._default_output_bw
+            self._activation_names, *self._activation_type.to_legacy_repr()
         )
         self._generate_and_apply_op_instance_specific_config()
 

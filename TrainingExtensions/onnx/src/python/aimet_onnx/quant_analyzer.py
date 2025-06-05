@@ -50,7 +50,7 @@ from onnxruntime.quantization.onnx_model import ONNXModel
 from sklearn.metrics import mean_squared_error
 
 from aimet_common.utils import AimetLogger
-from aimet_common.defs import QuantScheme
+from aimet_common.defs import QuantScheme, qtype
 from aimet_common.quant_analyzer import (
     save_json,
     export_per_layer_sensitivity_analysis_plot,
@@ -58,7 +58,6 @@ from aimet_common.quant_analyzer import (
     export_per_layer_mse_plot,
     export_stats_histogram_plot,
 )
-
 from aimet_onnx.qc_quantize_op import QcQuantizeOp
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.batch_norm_fold import fold_all_batch_norms_to_weight
@@ -185,12 +184,13 @@ class QuantAnalyzer:
         _ = fold_all_batch_norms_to_weight(self._onnx_model)
         kwargs = {
             "quant_scheme": quant_scheme,
-            "default_activation_bw": default_activation_bw,
-            "default_param_bw": default_param_bw,
+            "param_type": qtype.int(default_param_bw),
+            "activation_type": qtype.int(default_activation_bw),
             "config_file": config_file,
         }
+
         sim = QuantizationSimModel(
-            copy.deepcopy(self._onnx_model), self._dummy_input, **kwargs
+            copy.deepcopy(self._onnx_model), dummy_input=self._dummy_input, **kwargs
         )
         sim.compute_encodings(
             self._forward_pass_callback.func, self._forward_pass_callback.args
@@ -209,19 +209,19 @@ class QuantAnalyzer:
         """
         # pylint: disable=protected-access
         fp32_eval_score = self._eval_model(self._onnx_model.model)
-        _logger.info("FP32 eval score (W32A32): %f", fp32_eval_score)
+        _logger.info("FP32 eval score (W: float32, A: float32): %f", fp32_eval_score)
 
         weight_quantized_eval_score = self._eval_weight_quantized_model(sim)
         _logger.info(
-            "Weight-quantized eval score (W%dA32): %f",
-            sim._default_param_bw,
+            "Weight-quantized eval score (W: %d, A: float32): %f",
+            sim._param_type,
             weight_quantized_eval_score,
         )
 
         act_quantized_eval_score = self._eval_activation_quantized_model(sim)
         _logger.info(
-            "Activation-quantized eval score (W32A%d): %f",
-            sim._default_activation_bw,
+            "Activation-quantized eval score (W: float32, A: %d): %f",
+            sim._activation_type,
             act_quantized_eval_score,
         )
 

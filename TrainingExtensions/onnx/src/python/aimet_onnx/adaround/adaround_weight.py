@@ -52,7 +52,7 @@ import numpy as np
 # Import AIMET specific modules
 from aimet_common import quantsim
 from aimet_common.utils import AimetLogger, deprecated
-from aimet_common.defs import QuantScheme, QuantizationDataType
+from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
 
 from aimet_onnx.adaround.adaround_loss import AdaroundHyperParameters
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
@@ -228,7 +228,7 @@ class Adaround:
         quant_sim = QuantizationSimModel(
             copy.deepcopy(model),
             quant_scheme=default_quant_scheme,
-            default_param_bw=default_param_bw,
+            param_type=qtype.int(default_param_bw),
             config_file=default_config_file,
             user_onnx_libs=user_onnx_libs,
         )

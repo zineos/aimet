@@ -46,7 +46,7 @@ from aimet_common.utils import AimetLogger, log_with_error_and_assert_if_false
 from aimet_common.graph_searcher import GraphSearcher
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.connected_graph.operation import Op
-from aimet_common.defs import QuantizationDataType, QuantDtypeBwInfo
+from aimet_common.defs import QuantizationDataType, QuantDtypeBwInfo, qtype
 from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
 from aimet_common.connected_graph import connectedgraph_utils as cg_utils
 from aimet_common.quantsim_config.json_config_importer import (
@@ -151,7 +151,11 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         quantsim_data_type: QuantizationDataType,
     ):
         super().__init__(
-            config_file, quantsim_data_type, quantsim_output_bw, quantsim_param_bw
+            config_file,
+            param_type=qtype.from_legacy_repr(quantsim_data_type, quantsim_param_bw),
+            activation_type=qtype.from_legacy_repr(
+                quantsim_data_type, quantsim_output_bw
+            ),
         )
         _report_unsupported_ops(self._quantsim_configs)
         self._conn_graph = connected_graph
@@ -169,10 +173,8 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         if ENFORCE_TARGET_DTYPE_BITWIDTH_CONFIG:
             if self.check_correctness_of_dtype_bw_rules(
                 QuantDtypeBwInfo(
-                    self._default_data_type,
-                    self._default_output_bw,
-                    self._default_data_type,
-                    self._default_param_bw,
+                    *self._activation_type.to_legacy_repr(),
+                    *self._param_type.to_legacy_repr(),
                 )
             ):
                 logger.info(

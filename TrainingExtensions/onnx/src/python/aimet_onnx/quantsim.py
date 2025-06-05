@@ -55,6 +55,7 @@ from typing import (
     Sequence,
     Iterable,
 )
+from functools import wraps
 import itertools
 import json
 import warnings
@@ -70,7 +71,15 @@ from packaging import version
 
 from aimet_common import libpymo, quantsim
 from aimet_common import libquant_info
-from aimet_common.defs import QuantScheme, QuantizationDataType
+from aimet_common.defs import (
+    QuantScheme,
+    QuantizationDataType,
+    qtype,
+    QTYPE_ALIASES,
+    Float,
+    int8,
+    _quant_scheme_aliases,
+)
 from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_grid_preserving_op
 from aimet_common.quantsim import (
     extract_global_quantizer_args,
@@ -147,6 +156,107 @@ _tie_qtzrs = False
 
 data_types_to_quantize = [np.float32]
 
+_DEPRECATED_ARGS = {
+    "rounding_mode",
+    "default_param_bw",
+    "default_activation_bw",
+    "use_symmetric_encodings",
+    "default_data_type",
+    "use_cuda",
+    "device",
+}
+
+
+def _allow_deprecated_args(func):
+    @wraps(func)
+    def init_wrapper(self, model, *args, **kwargs):
+        # Quantsim constructor called using old function signature
+        if args or (kwargs.keys() & _DEPRECATED_ARGS):
+            warnings.warn(
+                _red(
+                    f"{func.__qualname__}() was called using a deprecated function signature. This will raise an error in future releases."
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            kwargs = _parse_deprecated_args(*args, **kwargs)
+
+        return func(self, model, **kwargs)
+
+    return init_wrapper
+
+
+def _parse_deprecated_args(
+    dummy_input: Optional[Dict[str, np.ndarray]] = None,
+    quant_scheme: QuantScheme = QuantScheme.min_max,
+    rounding_mode: str = None,
+    default_param_bw: int = None,
+    default_activation_bw: int = None,
+    use_symmetric_encodings: bool = None,  # pylint:disable = unused-argument
+    use_cuda: bool = None,
+    device: int = None,
+    config_file: Optional[str] = None,
+    default_data_type: QuantizationDataType = None,
+    user_onnx_libs: List[str] = None,
+    providers: Optional[Sequence[str | Tuple[str, Dict[Any, Any]]]] = None,
+    path: Optional[str] = None,
+    **kwargs,
+):
+    # Args which are now keyword-only
+    kwargs["dummy_input"] = dummy_input
+    kwargs["quant_scheme"] = quant_scheme
+    kwargs["config_file"] = config_file
+    kwargs["user_onnx_libs"] = user_onnx_libs
+    kwargs["providers"] = providers
+    kwargs["path"] = path
+
+    # Unused argument
+    kwargs.pop("use_symmetric_encodings", None)
+
+    # Legacy behavior for already-deprecated rounding
+    if rounding_mode and rounding_mode != "nearest":
+        raise TypeError("'rounding_mode' parameter is no longer supported.")
+
+    # Providers is not compatible with `use_cuda` or `device`
+    if providers and (use_cuda is not None or device is not None):
+        raise RuntimeError(
+            f"Cannot provide `providers` and { {'use_cuda', 'device'} } at the same time."
+        )
+
+    # If user has explicitly passed use_cuda=True, allow it
+    if use_cuda:
+        kwargs["providers"] = [
+            ("CUDAExecutionProvider", {"device_id": device or 0}),
+            "CPUExecutionProvider",
+        ]
+
+    # Deprecated args related to dtype/bitwidth
+    deprecated_dtype_args = {
+        "default_param_bw": default_param_bw,
+        "default_activation_bw": default_activation_bw,
+        "default_data_type": default_data_type,
+    }
+    deprecated_dtype_args = {
+        key: value for key, value in deprecated_dtype_args.items() if value is not None
+    }
+    new_dtype_args = kwargs.keys() & {"param_type", "activation_type"}
+
+    # Don't allow old and new dtype arguments
+    if deprecated_dtype_args and new_dtype_args:
+        raise RuntimeError(
+            f"Received deprecated keyword arguments {set(deprecated_dtype_args.keys())} which are incompatible with keyword arguments {new_dtype_args}"
+        )
+
+    # Convert legacy dtype specification to qtype
+    if deprecated_dtype_args:
+        param_bw = deprecated_dtype_args.pop("default_param_bw", 8)
+        act_bw = deprecated_dtype_args.pop("default_activation_bw", 8)
+        dtype = deprecated_dtype_args.pop("default_data_type", QuantizationDataType.int)
+        kwargs["param_type"] = qtype.from_legacy_repr(dtype, param_bw)
+        kwargs["activation_type"] = qtype.from_legacy_repr(dtype, act_bw)
+
+    return kwargs
+
 
 @contextlib.contextmanager
 def _apply_constraints(flag: bool):
@@ -211,68 +321,60 @@ class QuantizationSimModel:
     __doc__ = f"""
     Class that simulates the quantized model execution on a target hardware backend.
 
-    :param model: ONNX model
-    :param dummy_input: Dummy input to the model. If None, will attempt to auto-generate a dummy input
-    :param quant_scheme: Quantization scheme (e.g. QuantScheme.post_training_tf)
-    :param rounding_mode: Deprecated
-    :param default_param_bw: Quantization bitwidth for parameter
-    :param default_activation_bw: Quantization bitwidth for activation
-    :param use_symmetric_encodings: Deprecated, symmetry is controlled by the config_file
-    :param config_file: File path or alias of the configuration file.
-                        Alias can be one of {{ {", ".join(_config_file_aliases.keys())} }} (Default: `"default"`)
-    :param default_data_type: Default data type to use for quantizing all layer inputs, outputs and parameters.
-                             Possible options are QuantizationDataType.int and QuantizationDataType.float.
-                             Note that the mode default_data_type=QuantizationDataType.float is only supported with
-                             default_output_bw=16 and default_param_bw=16
-    :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
-    :param providers: Onnxruntime execution providers to use when building InferenceSession.
-                      If `None`, default provider is "CPUExecutionProvider"
-    :param path: Directory to save the artifacts.
+    Args:
+        model: ONNX ModelProto to quantize
+        param_type: quantized type to use for parameter tensors.
+            Can be {{ {", ".join(QTYPE_ALIASES.keys())} }} or :class:`aimet_onnx.qtype`
+        activation_type: quantized type to use for activation tensors.
+            Can be {{ {", ".join(QTYPE_ALIASES.keys())} }} or :class:`aimet_onnx.qtype`
+        quant_scheme: Quantization scheme to use for calibration.
+            Can be {{ {", ".join(_quant_scheme_aliases.keys())} }} or :class:`QuantScheme`
+        config_file: File path or alias of the configuration file.
+            Alias can be one of {{ {", ".join(_config_file_aliases.keys())} }} (Default: `"default"`)
+        dummy_input: Sample input to the model. Only needed for non shape-inferable models with parameterized shapes
+        user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
+        providers: Onnxruntime execution providers to use when building InferenceSession.
+            If `None`, default provider is "CPUExecutionProvider"
+        path: Directory to save temporary artifacts.
     """
 
+    @_allow_deprecated_args
     def __init__(
         self,
-        model: Union[ModelProto, ONNXModel],
-        dummy_input: Optional[Dict[str, np.ndarray]] = None,
-        quant_scheme: QuantScheme = QuantScheme.min_max,
-        rounding_mode: str = None,  # Deprecated
-        default_param_bw: int = 8,
-        default_activation_bw: int = 8,
-        use_symmetric_encodings: bool = None,  # Deprecated
+        model: ModelProto,
+        *,
+        param_type: Union[str, qtype] = int8,
+        activation_type: Union[str, qtype] = int8,
+        quant_scheme: Union[str, QuantScheme] = QuantScheme.min_max,
         config_file: Optional[str] = None,
-        default_data_type: QuantizationDataType = QuantizationDataType.int,
-        user_onnx_libs: List[str] = None,
+        dummy_input: Optional[Dict[str, np.ndarray]] = None,
+        user_onnx_libs: Optional[List[str]] = None,
         providers: Optional[Sequence[str | Tuple[str, Dict[Any, Any]]]] = None,
         path: Optional[str] = None,
     ):
-        # pylint: disable = too-many-branches, too-many-statements
-        if rounding_mode is not None:
-            if rounding_mode == "nearest":
-                warnings.warn(
-                    _red(
-                        "Passing rounding_mode='nearest' is no longer needed "
-                        "and will be deprecated soon in the later versions."
-                    ),
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            else:
-                raise TypeError("'rounding_mode' parameter is no longer supported.")
-
-        if use_symmetric_encodings is not None:
-            warnings.warn(
-                _red(
-                    "Passing `use_symmetric_encodings` is not needed and will be deprecated in later versions."
-                ),
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         if isinstance(quant_scheme, str):
             quant_scheme = QuantScheme.from_str(quant_scheme)
 
         if isinstance(model, ModelProto):
             model = ONNXModel(model)
+
+        if isinstance(param_type, str):
+            param_type = qtype.from_string(param_type)
+
+        if isinstance(activation_type, str):
+            activation_type = qtype.from_string(activation_type)
+
+        for dtype in (param_type, activation_type):
+            if dtype in QTYPE_ALIASES.values():
+                continue
+
+            # Only aliased float types (fp16, fp32) are supported float types
+            if isinstance(dtype, Float):
+                raise RuntimeError(f"Simulating {dtype} quantization is not supported.")
+
+            logger.warning(
+                "Exporting {dtype} quantization to onnx graph is not supported"
+            )
 
         if providers is None:
             providers = ["CPUExecutionProvider"]
@@ -295,10 +397,8 @@ class QuantizationSimModel:
         self.qc_quantize_op_dict = {}
         self.connected_graph = ConnectedGraph(self.model)
         self._quant_scheme = quant_scheme
-        self._rounding_mode = rounding_mode
-        self._default_param_bw = default_param_bw
-        self._default_activation_bw = default_activation_bw
-        self._default_quantization_data_type = default_data_type
+        self._param_type = param_type
+        self._activation_type = activation_type
         self._user_onnx_libs = user_onnx_libs
         self.param_names = []
         self.input_quantizers_name = []
@@ -353,9 +453,8 @@ class QuantizationSimModel:
             self.model,
             self.connected_graph,
             config_file,
-            self._default_activation_bw,
-            self._default_param_bw,
-            self._default_quantization_data_type,
+            self._param_type,
+            self._activation_type,
         )
         quantsim_configurator.configure_quantizers(
             self.qc_quantize_op_dict,
@@ -629,12 +728,12 @@ class QuantizationSimModel:
         if is_param:
             output_name = input_name + "_qdq"
             op_mode = OpMode.oneShotQuantizeDequantize
-            bitwidth = self._default_param_bw
+            dtype, bitwidth = self._param_type.to_legacy_repr()
             tensor_quantizer_params = self._create_tensor_quantizer_params(input_name)
         else:
             output_name = input_name + "_updated"
             op_mode = OpMode.updateStats
-            bitwidth = self._default_activation_bw
+            dtype, bitwidth = self._activation_type.to_legacy_repr()
             tensor_quantizer_params = None
 
         quant_info = libquant_info.QcQuantizeInfo()
@@ -656,9 +755,7 @@ class QuantizationSimModel:
             bitwidth=bitwidth,
             tensor_quantizer_params=tensor_quantizer_params,
         )
-        self.qc_quantize_op_dict[
-            input_name
-        ].data_type = self._default_quantization_data_type
+        self.qc_quantize_op_dict[input_name].data_type = dtype
 
     @staticmethod
     def build_session(
@@ -2046,7 +2143,7 @@ def _parse_compute_encodings_args(*args, **kwargs):
             forward_pass_callback = args[0]
         else:
             raise TypeError(
-                f"First positional argument to compute_encodings() must be callable or iterable, recieved {type(args[0])}"
+                f"First positional argument to compute_encodings() must be callable or iterable, received {type(args[0])}"
             )
 
     if inputs and (

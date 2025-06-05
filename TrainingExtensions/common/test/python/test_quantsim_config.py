@@ -53,6 +53,7 @@ from aimet_common.quantsim_config.quantsim_config import (
     QuantSimConfigurator,
     QuantizationDataType,
 )
+from aimet_common.defs import qtype
 
 
 class TestJsonConfigImporter(unittest.TestCase):
@@ -428,9 +429,8 @@ class TestQuantSimConfig(unittest.TestCase):
 
         qsim_config = QuantSimConfigurator(
             config_file="./config.json",
-            default_data_type=QuantizationDataType.int,
-            default_output_bw=8,
-            default_param_bw=8,
+            param_type=qtype.int(8),
+            activation_type=qtype.int(8),
         )
         assert qsim_config._op_type_default_override_supported_kernel_lookup(
             "Type1", 16, QuantizationDataType.float

@@ -454,7 +454,7 @@ class _AutoQuant:  # pylint: disable=too-many-instance-attributes
             "default_param_bw": (param_bw or self._quantsim_params["param_bw"]),
             "config_file": (config_file or self._quantsim_params["config_file"]),
         }
-        sim = QuantizationSimModel(model, self.dummy_input, **kwargs)
+        sim = QuantizationSimModel(model, dummy_input=self.dummy_input, **kwargs)
 
         param_quantizers, activation_quantizers = sim.get_all_quantizers()
 
