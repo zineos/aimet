@@ -56,12 +56,6 @@ using namespace DlQuantization;
 template <typename TypeParam>
 class TestQuantizationLibTfEnhancedCpuGpu : public ::testing::Test
 {
-protected:
-    void PrintEncoding(TfEncoding encoding)
-    {
-        cout << "Encoding: min: " << encoding.min << ", max: " << encoding.max << ", delta: " << encoding.delta
-             << ", offset: " << encoding.offset << ", bw: " << encoding.bw << endl;
-    }
 };
 
 // Test on CPU and GPU with float and double
@@ -262,9 +256,6 @@ TYPED_TEST(TestQuantizationLibTfEnhancedCpuGpu, SANITY_CompareToOtherQuantizers)
     // the max smaller.
     EXPECT_GT(encoding_tf_enhanced.min, encoding_tf.min);
     EXPECT_LT(encoding_tf_enhanced.max, encoding_tf.max);
-
-    std::cout << "TfEnhanced (min/max): " << encoding_tf_enhanced.min << "," << encoding_tf_enhanced.max << "\n";
-    std::cout << "Tf         (min/max): " << encoding_tf.min << "," << encoding_tf.max << "\n";
 }
 
 // Test the computation of delta and offset, given a min and max.

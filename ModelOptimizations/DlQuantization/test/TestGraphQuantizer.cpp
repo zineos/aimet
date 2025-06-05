@@ -110,13 +110,6 @@ protected:
             [&](const std::pair<std::string, TfEncoding>& enc1, const std::pair<std::string, TfEncoding>& enc2)
             {
                 bool isEqual = compareEncodings(enc1.second, enc2.second);
-                if (!isEqual)
-                {
-                    std::cout << std::endl << "Got:   ";
-                    printEncoding(enc1.second);
-                    std::cout << std::endl << "Expected:   ";
-                    printEncoding(enc2.second);
-                }
                 return enc1.first == enc2.first && isEqual;
             });
     }

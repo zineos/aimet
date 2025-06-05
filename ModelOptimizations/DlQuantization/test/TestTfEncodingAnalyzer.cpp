@@ -79,11 +79,6 @@ TYPED_TEST(TestTfEncodingAnalyzer, Asymmetric)
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, false, false, false);
 
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
-
     EXPECT_NEAR(encoding.min, *std::min_element(tensor.begin(), tensor.end()), 0.03);
     EXPECT_NEAR(encoding.max, *std::max_element(tensor.begin(), tensor.end()), 0.03);
     EXPECT_FLOAT_EQ(encoding.delta, (encoding.max - encoding.min) / 255);
@@ -117,11 +112,6 @@ TYPED_TEST(TestTfEncodingAnalyzer, Symmetric)
 
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, true, false, false);
-
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
 
     float expected_max = std::max(std::abs(*std::min_element(tensor.begin(), tensor.end())),
                                   std::abs(*std::max_element(tensor.begin(), tensor.end())));
@@ -169,11 +159,6 @@ TYPED_TEST(TestTfEncodingAnalyzer, StrictSymmetric)
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, true, true, false);
 
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
-
     float expected_max = std::max(std::abs(*std::min_element(tensor.begin(), tensor.end())),
                                   std::abs(*std::max_element(tensor.begin(), tensor.end())));
 
@@ -219,11 +204,6 @@ TYPED_TEST(TestTfEncodingAnalyzer, SymmetricUnsigned)
 
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, true, false, true);
-
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
 
     float expected_max = std::max(std::abs(*std::min_element(tensor.begin(), tensor.end())),
                                   std::abs(*std::max_element(tensor.begin(), tensor.end())));
@@ -271,11 +251,6 @@ TYPED_TEST(TestTfEncodingAnalyzer, SymmetricForcedSigned)
 
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, true, false, false);
-
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
 
     float expected_max = std::max(std::abs(*std::min_element(tensor.begin(), tensor.end())),
                                   std::abs(*std::max_element(tensor.begin(), tensor.end())));

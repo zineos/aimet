@@ -218,12 +218,6 @@ static TfEncoding getTfSymmetricEncoding(double max, int bw)
     return encoding;
 }
 
-static void printEncoding(TfEncoding encoding)
-{
-    std::cout << "Encoding: min: " << encoding.min << ", max: " << encoding.max << ", delta: " << encoding.delta
-              << ", offset: " << encoding.offset << ", bw: " << encoding.bw << std::endl;
-}
-
 static bool compareEncodings(TfEncoding e0, TfEncoding e1)
 {
     bool result = true;
@@ -250,30 +244,12 @@ static void compareEncodings(TfEncoding e0, TfEncoding e1, double err)
 }
 
 template <typename T>
-void printTensors(const T* v1, const T* v2, uint32_t size)
-{
-    std::cout << "Got tensor: ";
-    ;
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        std::cout << (float) v1[i] << ", ";
-    }
-    std::cout << std::endl << "Expected:   ";
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        std::cout << (float) v2[i] << ", ";
-    }
-    std::cout << std::endl;
-}
-
-template <typename T>
 bool compareTensors(const T* v1, const T* v2, uint32_t size)
 {
     for (uint32_t i = 0; i < size; ++i)
     {
         if (v1[i] != v2[i])
         {
-            printTensors(v1, v2, size);
             return false;
         }
     }

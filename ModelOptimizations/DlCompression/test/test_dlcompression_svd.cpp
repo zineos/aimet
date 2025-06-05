@@ -134,20 +134,6 @@ protected:
 
 #ifdef USE_OPENCV
 
-    void PrintMatrixElements(const std::string& matName, cv::Mat& Mat, int numRows, int numCols)
-    {
-        std::cout << std::endl << std::endl << std::endl;
-        std::cout << "Printing " << numRows << " rows and " << numCols << " columns of " << matName << std::endl;
-        for (int i = 0; i < numRows; i++)
-        {
-            for (int j = 0; j < numCols; j++)
-            {
-                std::cout << std::setprecision(6) << std::setw(8) << std::fixed << Mat.at<TypeParam>(i, j) << "\t";
-            }
-            std::cout << std::endl;
-        }
-    }
-
     // Check whether a matrix is identity matrix [I]
     bool IsIdentityMatrix(cv::Mat& Mat, int rows, int cols)
     {
@@ -158,15 +144,11 @@ protected:
             {
                 if ((i == j) && Mat.at<TypeParam>(i, j) != 1.0)
                 {
-                    std::cout << "Returning false for Mat(i, j) = (" << i << ", " << j
-                              << ") = " << Mat.at<TypeParam>(i, j) << std::endl;
                     return false;
                 }
 
                 else if ((i != j) && Mat.at<TypeParam>(i, j) != 0)
                 {
-                    std::cout << "Returning false for Mat(i, j) = (" << i << ", " << j
-                              << ") = " << Mat.at<TypeParam>(i, j) << std::endl;
                     return false;
                 }
             }
@@ -350,8 +332,6 @@ TYPED_TEST(DlCompressionSVDTest, SANITY_TestExactReconstruction)
     // in their true mathematical form by nullifying the transpose
     // applied by the SVD algorithm.
     cv::Mat Reconstructed_Matrix = WeightMat_0.t() * WeightMat_1.t();
-    // this->PrintMatrixElements("Reconstructed_Matrix", Reconstructed_Matrix,
-    //    Reconstructed_Matrix.rows, Reconstructed_Matrix.cols);
     // Estimate the tensor approximation residual (TAR)
     float recon_error = cv::norm(Reconstructed_Matrix.t(), original_Matrix, (cv::NORM_RELATIVE | cv::NORM_L2));
     ASSERT_LE(recon_error, errorThreshold);

@@ -86,9 +86,7 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, GetStats)
         double pdf;
 
         std::tie(leftEdge, pdf) = entry;
-        std::cout << leftEdge << ":" << pdf << "\n";
     }
-    std::cout << histogram.size() << "\n";
 }
 
 TYPED_TEST(TestTfEnhancedEncodingAnalyzer, Asymmetric)
@@ -121,14 +119,6 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, Asymmetric)
 
     // Get the encodings
     DlQuantization::TfEncoding encoding = analyzer.computeEncoding(8, false, false, false);
-
-    std::cout << "Absolute Min: " << min << std::endl;
-    std::cout << "Absolute Max: " << max << std::endl;
-
-    std::cout << encoding.min << std::endl;
-    std::cout << encoding.max << std::endl;
-    std::cout << encoding.delta << std::endl;
-    std::cout << encoding.offset << std::endl;
 
     // We know we have a normal distribution. We expect the encoding to cover
     // at least 2 standard deviations, and at most 6.
@@ -226,13 +216,6 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, Symmetric)
     dataType absoluteMin = *std::min_element(tensor.begin(), tensor.end());
     dataType absoluteMax = *std::max_element(tensor.begin(), tensor.end());
 
-    std::cout << "Absolute Min: " << absoluteMin << std::endl;
-    std::cout << "Absolute Max: " << absoluteMax << std::endl;
-    std::cout << encoding.min << std::endl;
-    std::cout << encoding.max << std::endl;
-    std::cout << encoding.delta << std::endl;
-    std::cout << encoding.offset << std::endl;
-
     absoluteMax = std::max(std::abs(absoluteMax), std::abs(absoluteMin));
     absoluteMin = -absoluteMax;
 
@@ -274,13 +257,6 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, StrictSymmetric)
 
     dataType absoluteMin = *std::min_element(tensor.begin(), tensor.end());
     dataType absoluteMax = *std::max_element(tensor.begin(), tensor.end());
-
-    std::cout << "Absolute Min: " << absoluteMin << std::endl;
-    std::cout << "Absolute Max: " << absoluteMax << std::endl;
-    std::cout << encoding.min << std::endl;
-    std::cout << encoding.max << std::endl;
-    std::cout << encoding.delta << std::endl;
-    std::cout << encoding.offset << std::endl;
 
     absoluteMax = std::max(std::abs(absoluteMax), std::abs(absoluteMin));
     absoluteMin = -absoluteMax;
@@ -325,13 +301,6 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, SymmetricUnsigned)
 
     dataType absoluteMin = *std::min_element(tensor.begin(), tensor.end());
     dataType absoluteMax = *std::max_element(tensor.begin(), tensor.end());
-
-    std::cout << "Absolute Min: " << absoluteMin << std::endl;
-    std::cout << "Absolute Max: " << absoluteMax << std::endl;
-    std::cout << "Encoding Min: " << encoding.min << std::endl;
-    std::cout << "Encoding Max: " << encoding.max << std::endl;
-    std::cout << "Encoding Delta: " << encoding.delta << std::endl;
-    std::cout << "Encoding Offset: " << encoding.offset << std::endl;
 
     absoluteMax = std::max(std::abs(absoluteMax), std::abs(absoluteMin));
     absoluteMin = -absoluteMax;

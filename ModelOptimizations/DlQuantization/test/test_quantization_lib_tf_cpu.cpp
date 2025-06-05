@@ -78,12 +78,6 @@ protected:
     {
         return e0.min == e1.min && e0.max == e1.max && e0.delta == e1.delta && e0.offset == e1.offset && e0.bw == e1.bw;
     }
-
-    void PrintEncoding(TfEncoding encoding)
-    {
-        cout << "Encoding: min: " << encoding.min << ", max: " << encoding.max << ", delta: " << encoding.delta
-             << ", offset: " << encoding.offset << ", bw: " << encoding.bw << endl;
-    }
 };
 
 // Test on CPU with float and double
