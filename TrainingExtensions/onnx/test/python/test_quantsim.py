@@ -3021,6 +3021,7 @@ def test_onnx_qdq(
 @pytest.mark.parametrize(
     "param_bw, act_bw, per_channel, minimum_required_opset",
     [
+        (4, 8, False, 21),
         (4, 16, False, 21),
         (8, 8, False, 10),
         (8, 16, False, 21),

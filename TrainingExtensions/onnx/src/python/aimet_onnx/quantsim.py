@@ -1427,6 +1427,22 @@ class QuantizationSimModel:
         Return a copy of ModelProto with all QcQuantizeOp replaced with
         onnx::QuantizeLinear and/or DequantizeLinear
         """
+        try:
+            invalid_bitwidth = next(
+                qtzr.bitwidth
+                for qtzr in self.qc_quantize_op_dict.values()
+                if qtzr.data_type == QuantizationDataType.int
+                and qtzr.bitwidth not in (4, 8, 16, 32)
+            )
+        except StopIteration:
+            invalid_bitwidth = None
+
+        if invalid_bitwidth is not None:
+            raise RuntimeError(
+                f"Invalid bitwidth {invalid_bitwidth};"
+                " expected standard ONNX integer data types such as [U]INT{4, 8, 16, 32}"
+            )
+
         onnx_opset_version = next(
             opset.version for opset in self.model.opset_import() if opset.domain == ""
         )
@@ -1469,12 +1485,12 @@ class QuantizationSimModel:
             )
 
         if onnx_opset_version < 21 and any(
-            qtzr.data_type == QuantizationDataType.int and 8 < qtzr.bitwidth <= 16
+            qtzr.data_type == QuantizationDataType.int and qtzr.bitwidth not in (8, 32)
             for qtzr in self.qc_quantize_op_dict.values()
         ):
             desired_onnx_opset_version = 21
             logger.info(
-                "onnx::QuantizeLinear and DequantizeLinear with INT16 are only supported in opset >= 21;"
+                "onnx::QuantizeLinear and DequantizeLinear with INT4/INT16 are only supported in opset >= 21;"
                 " got opset=%d",
                 onnx_opset_version,
             )
