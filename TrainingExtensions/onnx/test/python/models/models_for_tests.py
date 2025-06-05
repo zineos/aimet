@@ -4018,3 +4018,101 @@ def standalone_gemm(in_channels: int, out_channels: int):
     )
     onnx.checker.check_model(model)
     return model
+
+
+def conv_relu():
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="ConvRelu",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, 3, 32, 32]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 8, 30, 30]
+                ),
+            ],
+            initializer=[
+                numpy_helper.from_array(
+                    np.random.randn(8, 3, 3, 3).astype("float32"), name="conv_weight"
+                ),
+                numpy_helper.from_array(
+                    np.random.randn(8).astype("float32"), name="conv_bias"
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Conv",
+                    inputs=["input", "conv_weight", "conv_bias"],
+                    outputs=["conv_output"],
+                    name="conv",
+                ),
+                helper.make_node(
+                    "Relu", inputs=["conv_output"], outputs=["output"], name="relu"
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+    return model
+
+
+def reshape_with_multiple_consumers():
+    """
+    input -> Relu -+-> Reshape ------> Add ->
+                   +-> Sigmoid ---------^
+    """
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="reshape_with_multiple_consumers",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[3, 1024]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 3, 1024]
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Relu",
+                    inputs=["input"],
+                    outputs=["relu_output"],
+                    name="relu",
+                ),
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["shape"],
+                    name="shape",
+                    value_ints=[1, 3, 1024],
+                ),
+                helper.make_node(
+                    "Reshape",
+                    inputs=["relu_output", "shape"],
+                    outputs=["reshape_output"],
+                    name="reshape",
+                ),
+                helper.make_node(
+                    "Sigmoid",
+                    inputs=["relu_output"],
+                    outputs=["sigmoid_output"],
+                    name="sigmoid",
+                ),
+                helper.make_node(
+                    "Add",
+                    inputs=["reshape_output", "sigmoid_output"],
+                    outputs=["output"],
+                    name="add",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+    return model

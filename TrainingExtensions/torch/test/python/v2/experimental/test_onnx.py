@@ -43,6 +43,7 @@ import numpy as np
 import torch
 from torch.onnx import _constants
 import onnx
+from onnx import helper, TensorProto
 import tempfile
 from unittest.mock import patch
 from aimet_common.quantsim_config.utils import (
@@ -53,7 +54,10 @@ from aimet_common import quantsim as quantsim_common
 import aimet_torch.v2 as aimet
 import aimet_torch.v2.quantization as Q
 from aimet_torch.v2.quantsim.quantsim import QuantizationSimModel
-from aimet_torch.onnx import _concretize_int32_bias_quantizers
+from aimet_torch.onnx import (
+    _concretize_int32_bias_quantizers,
+    _derive_data_movement_op_encoding,
+)
 from torchvision.models import resnet18, mobilenet_v3_small
 from aimet_torch.v2.experimental.onnx._export import export as _export
 from aimet_torch.batch_norm_fold import fold_all_batch_norms
@@ -925,9 +929,7 @@ def test_data_movement_op_encoding_generation():
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         full_path = os.path.join(tmpdir, "model.onnx")
-        with patch(
-            "aimet_torch.onnx._derive_data_movement_op_output_encoding", lambda *_: {}
-        ):
+        with patch("aimet_torch.onnx._derive_data_movement_op_encoding", lambda *_: {}):
             aimet_torch.onnx.export(
                 sim.model,
                 x,
@@ -954,3 +956,103 @@ def test_data_movement_op_encoding_generation():
         (output,) = sess.run(None, {"input": x})
         (output_,) = sess_.run(None, {"input": x})
         assert np.all(output == output_)
+
+
+def test_data_movement_op_encoding_generation_edge_case():
+    """
+    Given:
+                                                          +--> QDQ
+      input -> Relu -+-> Reshape -> QDQ --> Add -> Split -+
+                     +-> Sigmoid ------------^            +--> ...
+    """
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="reshape_with_multiple_consumers",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[3, 1024]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "split_output_0", TensorProto.FLOAT, shape=[1, 3, 512]
+                ),
+                helper.make_tensor_value_info(
+                    "split_output_1", TensorProto.FLOAT, shape=[1, 3, 512]
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Relu",
+                    inputs=["input"],
+                    outputs=["relu_output"],
+                    name="relu",
+                ),
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["shape"],
+                    name="shape",
+                    value_ints=[1, 3, 1024],
+                ),
+                helper.make_node(
+                    "Reshape",
+                    inputs=["relu_output", "shape"],
+                    outputs=["reshape_output"],
+                    name="reshape",
+                ),
+                helper.make_node(
+                    "Sigmoid",
+                    inputs=["relu_output"],
+                    outputs=["sigmoid_output"],
+                    name="sigmoid",
+                ),
+                helper.make_node(
+                    "Add",
+                    inputs=["reshape_output", "sigmoid_output"],
+                    outputs=["add_output"],
+                    name="add",
+                ),
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["splits"],
+                    name="Constant_0",
+                    value_ints=[512, 512],
+                ),
+                helper.make_node(
+                    "Split",
+                    inputs=["add_output", "splits"],
+                    outputs=["split_output_0", "split_output_1"],
+                    axis=-1,
+                    name="split",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+
+    """
+    When: Call _derive_data_movement_op_encoding
+    Then: Output encodings should not be reused for input quantization
+    """
+    new_encodings = _derive_data_movement_op_encoding(
+        model,
+        {
+            "reshape_output": (
+                Q.affine.AffineEncoding(
+                    torch.ones(()), torch.zeros(()), qmin=0, qmax=255, symmetry=False
+                ),
+                False,
+            ),
+            "split_output_0": (
+                Q.affine.AffineEncoding(
+                    torch.ones(()), torch.zeros(()), qmin=0, qmax=255, symmetry=False
+                ),
+                False,
+            ),
+        },
+    )
+
+    assert not new_encodings

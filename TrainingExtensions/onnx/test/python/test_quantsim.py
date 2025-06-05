@@ -42,6 +42,7 @@ import json
 import os
 import tempfile
 import tracemalloc
+from unittest.mock import patch
 from functools import partial
 
 import onnx.numpy_helper
@@ -82,6 +83,7 @@ from .models.models_for_tests import (
     BNAfterConv,
     build_dummy_model,
     build_lstm_gru_dummy_model,
+    conv_relu,
     custom_add_model,
     depthwise_transposed_conv_model,
     instance_norm_model,
@@ -90,6 +92,7 @@ from .models.models_for_tests import (
     model_with_split_matmul,
     multi_input_with_constant_model,
     multi_output_model,
+    reshape_with_multiple_consumers,
     single_residual_model,
     SingleResidual,
     standalone_batchnorm,
@@ -3139,11 +3142,26 @@ def test_onnx_qdq_opset_compatibility(
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
 
 
-def test_insert_data_movement_op_output_quantizers():
-    model = model_with_split_matmul()
+@pytest.mark.parametrize(
+    "model_factory",
+    [
+        model_with_split_matmul,
+        conv_relu,
+    ],
+)
+def test_insert_data_movement_op_quantizers(model_factory):
+    if model_factory == conv_relu:
+        pytest.skip(reason="Need another PR to pass this case")
+
+    model = model_factory()
     sim = QuantizationSimModel(model)
-    x = np.random.randn(1, 128, 8, 750).astype(np.float32)
-    sim.compute_encodings(lambda session: session.run(None, {"model_input": x}))
+    input_name = sim.model.model.graph.input[0].name
+    input_shape = tuple(
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
+    inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
+    sim.compute_encodings(lambda session: session.run(None, inputs))
     onnx_qdq_before = sim._to_onnx_qdq()
 
     """
@@ -3189,11 +3207,62 @@ def test_insert_data_movement_op_output_quantizers():
         onnx_qdq_after.SerializeToString(), sess_options=sess_options
     )
     for _ in range(10):
-        x = np.random.randn(1, 128, 8, 750).astype(np.float32)
-        outputs_before = sess_before.run(None, {"model_input": x})
-        outputs_after = sess_after.run(None, {"model_input": x})
+        inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
+        outputs_before = sess_before.run(None, inputs)
+        outputs_after = sess_after.run(None, inputs)
         for out_before, out_after in zip(outputs_before, outputs_after):
             assert np.all(out_before == out_after)
+
+
+@pytest.mark.parametrize(
+    "model_factory", [model_with_split_matmul, reshape_with_multiple_consumers]
+)
+def test_insert_data_movement_op_edge_case(model_factory):
+    """
+    Given: Model with edge case scenarios
+
+      model_with_split_matmul:
+
+                         +--> Quantize
+          input -> Split +--> ...
+                         +--> ...
+
+      reshape_with_multiple_consumers:
+
+                           +--> Quantize
+          input -> Reshape +
+                           +--> ...
+    """
+    model = reshape_with_multiple_consumers()
+    with patch("aimet_onnx.quantsim.op_outputs_to_ignore", []):
+        sim = QuantizationSimModel(model)
+
+    # Disable all quantizers...
+    for qtzr in sim.qc_quantize_op_dict.values():
+        qtzr.enabled = False
+
+    # Except output of Reshape and Split
+    for node in sim.model.model.graph.node:
+        if node.op_type in ("Reshape", "Split"):
+            for output in node.output:
+                sim.qc_quantize_op_dict[output].enabled = True
+
+    input_name = sim.model.model.graph.input[0].name
+    input_shape = tuple(
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
+    inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
+    sim.compute_encodings(lambda session: session.run(None, inputs))
+    onnx_qdq_before = sim._to_onnx_qdq()
+
+    """
+    When: Call _insert_data_movement_op_output_quantizers before _to_onnx_qdq()
+    Then: Output encoding should NOT be reused for input quantization
+    """
+    sim._insert_data_movement_op_output_quantizers()
+    onnx_qdq_after = sim._to_onnx_qdq()
+    assert onnx_qdq_before == onnx_qdq_after
 
 
 @pytest.mark.parametrize("seed", range(10))

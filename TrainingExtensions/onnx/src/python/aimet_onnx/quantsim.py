@@ -1602,6 +1602,9 @@ class QuantizationSimModel:
             )
         )
 
+        if not partial_model.graph.output:
+            return {}
+
         sess = self.build_session(partial_model, ["CPUExecutionProvider"])
         out = sess.run(list(qdq_params.keys()), {})
         return {
@@ -1685,33 +1688,59 @@ class QuantizationSimModel:
             if _is_grid_preserving_op(op.type)
         ]
 
-        for op in data_movement_ops:
+        def propogate_quantizer(op: Op):
             input_qtzr = self.qc_quantize_op_dict.get(op.inputs[0].name)
+            output_qtzr = self.qc_quantize_op_dict.get(op.outputs[0].name)
 
-            if input_qtzr is None:
-                # No input quantizer found; skip
-                continue
+            input_encoding = output_encoding = None
 
-            input_encoding = input_qtzr.get_encodings()
+            if input_qtzr:
+                input_encoding = input_qtzr.get_encodings()
 
-            if not input_encoding:
-                # No input encoding to inherit; skip
-                continue
+            if output_qtzr:
+                output_encoding = output_qtzr.get_encodings()
 
-            for output in op.outputs:
-                if output.name in self.qc_quantize_op_dict:
-                    # Output quantizer already exists; skip
-                    continue
+            if not input_encoding and not output_encoding:
+                # No input/output encoding to inherit; skip
+                return
 
-                self._insert_quantizer(output.name, is_param=False)
-                output_qtzr = self.qc_quantize_op_dict[output.name]
-                output_qtzr.load_encodings(input_encoding)
+            if input_encoding and output_encoding:
+                # Both input and output encoding already exists; skip
+                return
 
-                # Rename model output node
-                for graph_output in self.model.model.graph.output:
-                    if graph_output.name in output.name:
-                        graph_output.name += "_updated"
-                        break
+            if input_encoding:
+                # Reuse input encoding for output quantization
+                for output in op.outputs:
+                    if output.name not in self.qc_quantize_op_dict:
+                        self._insert_quantizer(output.name, is_param=False)
+                    output_qtzr = self.qc_quantize_op_dict[output.name]
+                    output_qtzr.enabled = True
+                    output_qtzr.load_encodings(input_encoding)
+
+                    # Rename model output node
+                    for graph_output in self.model.model.graph.output:
+                        if graph_output.name in output.name:
+                            graph_output.name += "_updated"
+                            break
+            else:
+                if len(op.inputs[0].consumers) > 1 or len(op.outputs) > 1:
+                    # If input has more than one consumer or if there are more than one output,
+                    # it is NOT safe to reuse output encoding for input quantization
+                    return
+
+                # Reuse output encoding for input quantization
+                if not input_qtzr:
+                    self._insert_quantizer(op.inputs[0].name, is_param=False)
+                input_qtzr = self.qc_quantize_op_dict[op.inputs[0].name]
+                input_qtzr.enabled = True
+                input_qtzr.load_encodings(output_encoding)
+
+        for op in data_movement_ops:
+            propogate_quantizer(op)
+
+        # Repeat in reverse-DFS order
+        for op in reversed(data_movement_ops):
+            propogate_quantizer(op)
 
 
 # pylint: disable=too-many-locals, too-many-branches

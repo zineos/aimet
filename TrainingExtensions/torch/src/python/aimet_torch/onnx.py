@@ -36,13 +36,14 @@
 # =============================================================================
 """Defines onnx export API"""
 
+from collections import defaultdict
 import copy
 import contextlib
 import io
 import os
 import tempfile
 import traceback
-from typing import Any, Mapping, Tuple, Union
+from typing import Any, List, Mapping, Tuple, Union
 
 import onnx
 import torch
@@ -349,13 +350,13 @@ def _to_onnx(
             onnx_model
         ).items()
     }
-    tensor_to_encoding_map |= _derive_data_movement_op_output_encoding(
+    tensor_to_encoding_map |= _derive_data_movement_op_encoding(
         onnx_model, tensor_to_encoding_map
     )
     return onnx_model, tensor_to_encoding_map
 
 
-def _derive_data_movement_op_output_encoding(
+def _derive_data_movement_op_encoding(
     model: onnx.ModelProto,
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
 ) -> Mapping[str, Tuple[EncodingBase, bool]]:
@@ -363,27 +364,52 @@ def _derive_data_movement_op_output_encoding(
         node for node in model.graph.node if _is_grid_preserving_op(node.op_type)
     ]
 
-    output_encodings = {}
+    encodings = {name: enc for name, (enc, _) in tensor_to_encoding_map.items()}
+    new_encodings = {}
+    consumers: Mapping[str, List[onnx.NodeProto]] = defaultdict(list)
 
-    for node in data_movement_ops:
+    for node in model.graph.node:
+        for inp in node.input:
+            consumers[inp].append(node)
+
+    def derive_encoding(node: onnx.NodeProto):
         input_name = node.input[0]
         output_name = node.output[0]
-        inp_encoding, _ = tensor_to_encoding_map.get(input_name, (None, None))
+        inp_encoding = encodings.get(input_name)
+        out_encoding = encodings.get(output_name)
 
-        if not inp_encoding:
-            inp_encoding, _ = output_encodings.get(input_name, (None, None))
-
-        if not inp_encoding:
+        if not inp_encoding and not out_encoding:
             # No input encoding to inherit; skip
-            continue
+            return {}
 
-        if output_name in tensor_to_encoding_map:
-            # Output encoding already exists; skip
-            continue
+        if inp_encoding and out_encoding:
+            # Both input and output encoding already exists; skip
+            return {}
 
-        output_encodings[output_name] = (copy.deepcopy(inp_encoding), False)
+        if out_encoding:
+            if len(consumers[input_name]) > 1 or len(node.output) > 1:
+                # If input has more than one consumer or if there are more than one output,
+                # it is NOT safe to reuse output encoding for input quantization
+                return {}
+            else:
+                # Reuse output encoding for input quantization
+                return {input_name: copy.deepcopy(out_encoding)}
+        else:
+            # Reuse input encoding for output quantization
+            return {output_name: copy.deepcopy(inp_encoding)}
 
-    return output_encodings
+    for node in data_movement_ops:
+        enc = derive_encoding(node)
+        new_encodings |= enc
+        encodings |= enc
+
+    # Repeat in reverse-DFS order
+    for node in reversed(data_movement_ops):
+        enc = derive_encoding(node)
+        new_encodings |= enc
+        encodings |= enc
+
+    return {key: (enc, False) for key, enc in new_encodings.items()}
 
 
 @contextlib.contextmanager

@@ -2173,22 +2173,27 @@ def test_input_quantizer_enabling(model_factory):
     """
     sim.compute_encodings(lambda model: model(x))
 
-    pytest.skip(reason="Need another PR to pass this criterion")
-
     with tempfile.TemporaryDirectory() as tmp_dir:
         onnx_path = os.path.join(tmp_dir, "model.onnx")
         aimet_torch.onnx.export(sim.model, x, onnx_path)
         onnx_model = onnx.load_model(onnx_path)
 
+    onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
+    dtypes = {
+        val.name: val.type.tensor_type.elem_type for val in onnx_model.graph.value_info
+    }
+
     for node in onnx_model.graph.node:
         if node.op_type in ("QuantizeLinear", "DequantizeLinear"):
             continue
-        if node.input:
+
+        if node.input and dtypes[node.input[0]] == onnx.TensorProto.FLOAT:
             producer = next(
                 dq for dq in onnx_model.graph.node if dq.output[:1] == node.input[:1]
             )
             assert producer.op_type == "DequantizeLinear"
-        if node.output:
+
+        if node.output and dtypes[node.output[0]] == onnx.TensorProto.FLOAT:
             consumer = next(
                 q for q in onnx_model.graph.node if node.output[:1] == q.input[:1]
             )
