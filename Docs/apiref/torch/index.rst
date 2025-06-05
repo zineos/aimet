@@ -31,15 +31,19 @@ aimet_torch API
     aimet_torch.compress <compress>
     aimet_torch.omniquant <omniquant>
 
+..
+  # start-after
+
 aimet_torch
 ===========
 
 .. important::
-   :mod:`aimet_torch` package is upgraded to :mod:`aimet_torch.v2` with more
-   flexible, extensible, and PyTorch-friendly user interface!
+   :mod:`aimet_torch` package has been upgraded to :mod:`aimet_torch.v2`.
 
-   aimet_torch 2 is fully backward compatible with all the public APIs of aimet_torch 1.x.,
-   please see :doc:`Migrate to aimet_torch 2 <migration_guide>`.
+   aimet_torch 2 is fully backward-compatible with all the public APIs of aimet_torch 1.x.
+   See the :ref:`Migration guide <torch-migration-guide>`. 
+
+AIMET quantization for PyTorch models provides the following functionality.
 
 - :ref:`aimet_torch.quantsim <apiref-torch-quantsim>`
 - :ref:`aimet_torch.nn <apiref-torch-nn>`
@@ -64,11 +68,14 @@ aimet_torch
 - :ref:`aimet_torch.omniquant <apiref-torch-omniquant>`
 
 
+..
+  # end-before
+
+
 aimet_torch.v1
 ==============
 
-If you still prefer to use aimet_torch 1.x, your imports should originate from the :mod:`aimet_torch.v1`
-namespace.
+To use aimet_torch 1.x, import from the :mod:`aimet_torch.v1` namespace.
 
 .. toctree::
     :hidden:
@@ -79,6 +86,9 @@ namespace.
     aimet_torch.v1.quant_analyzer <v1/quant_analyzer>
     aimet_torch.v1.autoquant <v1/autoquant>
     aimet_torch.v1.amp <v1/amp>
+
+..
+  # start-after-v1
 
 - :ref:`aimet_torch.v1.quantsim <apiref-torch-v1-quantsim>`
 - :ref:`aimet_torch.v1.adaround <apiref-torch-v1-adaround>`
