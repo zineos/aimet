@@ -50,6 +50,8 @@ from aimet_common.defs import QuantScheme
 from aimet_onnx.batch_norm_fold import fold_all_batch_norms_to_weight
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.quant_analyzer import QuantAnalyzer
+from aimet_onnx import analyze_per_layer_sensitivity
+from aimet_onnx.utils import make_dummy_input
 from .models import models_for_tests
 
 
@@ -503,3 +505,26 @@ class TestQuantAnalyzer:
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "weights.html"))
             assert os.path.isfile(Path(tmp_dir, "min_max_ranges", "activations.html"))
             assert os.path.isfile(Path(tmp_dir, "per_layer_mse_loss.html"))
+
+    def test_analyze_per_layer_sensitivity(self, tmp_path):
+        model = models_for_tests.single_residual_model().model
+        sim = QuantizationSimModel(model)
+        sim.compute_encodings([make_dummy_input(model)])
+        eval_callback = lambda session: evaluate(session, make_dummy_input(model))
+        results = analyze_per_layer_sensitivity(sim, eval_callback)
+
+        # Note: current quantizer grouping logic is not good, not making strong assertions based on this
+        # Should have at least one result entry for each param quantizer
+        enabled_param_quantizers = [
+            sim.qc_quantize_op_dict[name]
+            for name in sim.param_names
+            if sim.qc_quantize_op_dict[name].enabled
+        ]
+        assert len(results) >= len(enabled_param_quantizers)
+        # Keys should be op names
+        for op_name in results.keys():
+            assert op_name in sim.connected_graph.get_all_ops()
+
+        filename = os.path.join(tmp_path, "sensitivity_analysis_result")
+        analyze_per_layer_sensitivity(sim, eval_callback, filename)
+        assert os.path.exists(filename + ".html")

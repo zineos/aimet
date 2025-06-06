@@ -39,9 +39,11 @@
 
 import os
 import re
-from typing import Any, Callable, Union, Tuple, Dict, List, Iterable
+from typing import Any, Callable, Union, Tuple, Dict, List, Iterable, Optional
 import copy
 from collections import defaultdict
+from tqdm import tqdm
+from pathlib import Path
 
 import numpy as np
 from onnx import ModelProto
@@ -149,10 +151,16 @@ class QuantAnalyzer:
         self.check_model_sensitivity_to_quantization(sim)
 
         # Perform per layer analysis by enabling its quantizers (OPTION-1).
-        self.perform_per_layer_analysis_by_enabling_quantizers(sim, results_dir)
+        output = self.perform_per_layer_analysis_by_enabling_quantizers(
+            sim, results_dir
+        )
+        save_json(output, results_dir, "per_layer_quant_enabled.json")
 
         # Perform per layer analysis by disabling its quantizers (OPTION-2).
-        self.perform_per_layer_analysis_by_disabling_quantizers(sim, results_dir)
+        output = self.perform_per_layer_analysis_by_disabling_quantizers(
+            sim, results_dir
+        )
+        save_json(output, results_dir, "per_layer_quant_disabled.json")
 
         # Export encoding min-max range.
         self.export_per_layer_encoding_min_max_range(sim, results_dir)
@@ -319,7 +327,8 @@ class QuantAnalyzer:
     def perform_per_layer_analysis_by_enabling_quantizers(
         self,
         sim: QuantizationSimModel,
-        results_dir: str,
+        results_dir: Optional[str] = None,
+        filename: Optional[str] = None,
     ) -> Dict:
         """
         Performs layer-wise quantization sensitivity analysis by enabling its quantizers
@@ -334,33 +343,37 @@ class QuantAnalyzer:
 
         :param sim: Quantsim model.
         :param results_dir: Directory to save the results.
+        :param filename: Name of the file to save the results to
         :return: layer wise eval score dictionary. dict[layer_name] = eval_score
         """
-        results_dir = os.path.abspath(results_dir)
-        os.makedirs(results_dir, exist_ok=True)
+        if not filename:
+            filename = "per_layer_quant_enabled"
 
         _logger.info(
-            "OPTION-1: All the quantizers are disabled. "
             "Starting per-layer analysis by enabling layer-specific quantizers as per config file."
         )
         layer_wise_eval_score_dict = self._perform_per_layer_analysis(
             sim, disable_all_quantizers=True, enabled_before=True, enabled_after=False
         )
-        export_per_layer_sensitivity_analysis_plot(
-            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_enabled"
-        )
-        save_json(
-            layer_wise_eval_score_dict,
-            results_dir,
-            title="per_layer_quant_enabled.json",
-        )
-        _logger.info("Exported per-layer quant analysis (enabled) plot.")
+
+        if results_dir:
+            results_dir = os.path.abspath(results_dir)
+            os.makedirs(results_dir, exist_ok=True)
+
+            export_per_layer_sensitivity_analysis_plot(
+                layer_wise_eval_score_dict,
+                os.path.join(results_dir, filename),
+                title="per_layer_quant_enabled",
+            )
+            _logger.info("Exported per-layer quant analysis (enabled) plot.")
+
         return layer_wise_eval_score_dict
 
     def perform_per_layer_analysis_by_disabling_quantizers(
         self,
         sim: QuantizationSimModel,
-        results_dir: str,
+        results_dir: Optional[str] = None,
+        filename: Optional[str] = None,
     ) -> Dict:
         """
         Performs layer-wise quantization sensitivity analysis by disabling its quantizers
@@ -375,27 +388,29 @@ class QuantAnalyzer:
 
         :param sim: Quantsim model.
         :param results_dir: Directory to save the results.
+        :param filename: Name of the file to save the results to
         :return: layer wise eval score dictionary. dict[layer_name] = eval_score
         """
-        results_dir = os.path.abspath(results_dir)
-        os.makedirs(results_dir, exist_ok=True)
+        if not filename:
+            filename = "per_layer_quant_disabled"
 
         _logger.info(
-            "OPTION-2: All the quantizers are enabled as per config file. "
             "Starting per-layer analysis by disabling layer-specific quantizers."
         )
         layer_wise_eval_score_dict = self._perform_per_layer_analysis(
             sim, disable_all_quantizers=False, enabled_before=False, enabled_after=True
         )
-        export_per_layer_sensitivity_analysis_plot(
-            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_disabled"
-        )
-        save_json(
-            layer_wise_eval_score_dict,
-            results_dir,
-            title="per_layer_quant_disabled.json",
-        )
-        _logger.info("Exported per-layer quant analysis (disabled) plot.")
+
+        if results_dir:
+            results_dir = os.path.abspath(results_dir)
+            os.makedirs(results_dir, exist_ok=True)
+            export_per_layer_sensitivity_analysis_plot(
+                layer_wise_eval_score_dict,
+                os.path.join(results_dir, filename),
+                title="per_layer_quant_disabled",
+            )
+            _logger.info("Exported per-layer quant analysis (disabled) plot.")
+
         return layer_wise_eval_score_dict
 
     def _perform_per_layer_analysis(
@@ -433,7 +448,7 @@ class QuantAnalyzer:
                 self._enable_disable_quantizers(enabled_quantizers, enabled=False)
 
         eval_score_dict = {}
-        for op_name, enabled_quantizers in op_to_quantizers_dict.items():
+        for op_name, enabled_quantizers in tqdm(op_to_quantizers_dict.items()):
             self._enable_disable_quantizers(enabled_quantizers, enabled=enabled_before)
 
             # Record eval score.
@@ -748,3 +763,33 @@ class QuantAnalyzer:
 
         average_loss = loss / total
         return float(average_loss)
+
+
+def analyze_per_layer_sensitivity(
+    sim: QuantizationSimModel,
+    eval_fn: Callable[[ort.InferenceSession], float],
+    filename: Optional[str] = None,
+) -> Dict[str, float]:
+    """
+    Analyzes the QuantSim model's per-layer sensitivity to quantization by evaluating sim with a single layer's
+    quantizers enabled at a time.
+
+
+    Args:
+        sim: Calibrated QuantizationSimModel object to analyze
+        eval_fn: Function which takes in an InferenceSession and returns an evaluation score
+        filename: If provided, saves an html visualization of the model's per-layer sensitivity at the provided path
+
+    Returns:
+        Dictionary mapping onnx node name to the sim's eval score with only that node's quantizers enable
+    """
+
+    quant_analyzer = QuantAnalyzer(sim.model, None, lambda: None, eval_fn)
+    if filename:
+        abs_path = Path(filename).resolve()
+        results_dir, fname = abs_path.parent, abs_path.name
+    else:
+        results_dir = fname = None
+    return quant_analyzer.perform_per_layer_analysis_by_enabling_quantizers(
+        sim, results_dir, fname
+    )

@@ -50,7 +50,7 @@ DEFAULT_BOKEH_FIGURE_HEIGHT = 300
 
 
 def export_per_layer_sensitivity_analysis_plot(
-    layer_wise_eval_score_dict: Dict, results_dir: str, title: str
+    layer_wise_eval_score_dict: Dict, filename: str, title: str
 ) -> plotting.figure:
     """
     Export per layer sensitivity analysis in html format.
@@ -66,7 +66,9 @@ def export_per_layer_sensitivity_analysis_plot(
         eval_scores.append(eval_score)
 
     # Configure the output file to be saved.
-    filename = os.path.join(results_dir, f"{title}.html")
+    if not filename.endswith(".html"):
+        filename = filename + ".html"
+
     plotting.output_file(filename)
     plot = plotting.figure(
         x_range=layer_names,

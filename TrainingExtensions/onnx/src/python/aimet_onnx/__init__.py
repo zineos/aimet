@@ -52,3 +52,4 @@ __version__ = _version.__version__
 from .quantsim import QuantizationSimModel, compute_encodings
 from .adaround.adaround_weight import apply_adaround
 from .sequential_mse.seq_mse import apply_seq_mse
+from .quant_analyzer import analyze_per_layer_sensitivity

@@ -489,8 +489,9 @@ class QuantAnalyzerBase(ABC):
         layer_wise_eval_score_dict = self._perform_per_layer_analysis(
             sim, disable_all_quantizers=True, enabled_before=True, enabled_after=False
         )
+        title = "per_layer_quant_enabled"
         export_per_layer_sensitivity_analysis_plot(
-            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_enabled"
+            layer_wise_eval_score_dict, os.path.join(results_dir, title), title=title
         )
         save_json(
             layer_wise_eval_score_dict,
@@ -529,8 +530,9 @@ class QuantAnalyzerBase(ABC):
         layer_wise_eval_score_dict = self._perform_per_layer_analysis(
             sim, disable_all_quantizers=False, enabled_before=False, enabled_after=True
         )
+        title = "per_layer_quant_disabled"
         export_per_layer_sensitivity_analysis_plot(
-            layer_wise_eval_score_dict, results_dir, title="per_layer_quant_disabled"
+            layer_wise_eval_score_dict, os.path.join(results_dir, title), title=title
         )
         save_json(
             layer_wise_eval_score_dict,
