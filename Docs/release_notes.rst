@@ -5,6 +5,48 @@
 #############
 Release notes
 #############
+2.8.0
+=====
+
+* New Features
+    * ONNX
+        * Update aimet_onnx :func:`QuantizationSimModel.__init__` function signature (`cbe67ae`_)
+        * Defined new AdaRound API :func:`aimet_onnx.apply_adaround` (`84edcf5`_)
+        * Defined new sequential MSE API :func:`aimet_onnx.apply_seq_mse` (`836ab1e`_)
+        * Defined new per-layer sensitivity analysis API :func:`aimet_onnx.analyze_per_layer_sensitivity` (`dc34fa4`_)
+        * Allowed onnx :func:`QuantizationSimModel.compute_encodings` to take iterables (`2c8ae88`_)
+    * PyTorch
+        * Added native support for huggingface Phi-3 (`80cd141`_)
+
+* Bug Fixes and Improvements
+    * ONNX
+        * Made dynamic weights of Conv, ConvTranspose, Gemm, and MatMul follow the symmetry of static weights (`ce68e75`_)
+        * aimet-onnx on PyPI is now compatible with onnxruntime-gpu (`6d3aa97`_)
+        * Unpinned onnx version (`abe8782`_)
+        * Changed default execution provider to CPUExecutionProvider (`e7d10c7`_)
+        * Made QcQuantizeOp's data_type attribute always consistent without additional reconfiguration (`8009871`_)
+        * Made delta/offset and min/max always consistent (`88706ef`_)
+    * PyTorch
+        * Made input quantizers always get enabled whenever the input wasn't already quantized (`a2adae2`_)
+        * Deprecated saving PyTorch model object during :func:`QuantizationsimModel.export` (`b5521f3`_)
+
+.. _cbe67ae: https://github.com/quic/aimet/commit/cbe67ae291f3519f3207d438450d22964f5a8c0d
+.. _84edcf5: https://github.com/quic/aimet/commit/84edcf580ac76afa8d128316e03c7737f2599c2d
+.. _836ab1e: https://github.com/quic/aimet/commit/836ab1e56de792569155269dbe3c54d717649468
+.. _dc34fa4: https://github.com/quic/aimet/commit/dc34fa46e802cc50bfc16cfbc197e3b56d9d8d9e
+.. _2c8ae88: https://github.com/quic/aimet/commit/2c8ae88193da0f6284e5dc416ee6af53a9aea701
+.. _80cd141: https://github.com/quic/aimet/commit/80cd14176448e586b7b53e624f1dd38b93e78d24
+.. _cbe67ae: https://github.com/quic/aimet/commit/cbe67ae291f3519f3207d438450d22964f5a8c0d
+.. _ce68e75: https://github.com/quic/aimet/commit/ce68e75f2d55ad07e918f9b0ffb2dc23893ceaf6
+.. _6d3aa97: https://github.com/quic/aimet/commit/6d3aa97195317010fe650df7fe612570b53f1d13
+.. _abe8782: https://github.com/quic/aimet/commit/abe87827fa77bc6b850289ae35566e7de437c8d1
+.. _e7d10c7: https://github.com/quic/aimet/commit/e7d10c799d29beb2b8b36cd4bce8dcaacd1bd9f7
+.. _8009871: https://github.com/quic/aimet/commit/8009871262dc702b277b34ae53f70d760e300736
+.. _88706ef: https://github.com/quic/aimet/commit/88706eff5301eeb4274b333efbab140a1bc1b5f5
+.. _a2adae2: https://github.com/quic/aimet/commit/a2adae2e9ca7ee261bb03e407da0598715b9f933
+.. _a2adae2: https://github.com/quic/aimet/commit/a2adae2e9ca7ee261bb03e407da0598715b9f933
+.. _b5521f3: https://github.com/quic/aimet/commit/b5521f3fefc5ee405f0596fcf01be670af81cd4a
+
 2.7.0
 =====
 
@@ -32,6 +74,7 @@ Release notes
     * PyTorch
         * Support for simulating float8 quantization
         * Experimental: Added :func:`aimet_torch.onnx.export` API for exporting :mod:`QuantizationSimModel` to onnx QDQ graph
+        * Added native support for huggingface Llama, Qwen2, and Gemma3 (`1493fe1`_)
 
 * Bug Fixes and Improvements
     * ONNX
@@ -49,6 +92,8 @@ Release notes
 * Deprecations:
     * ONNX
         * Deprecated `use_cuda`, `device`, `rounding_mode`, and `use_symmetric_encodings` args to :func:`QuantizationSimModel.__init__`
+
+.. _1493fe1: https://github.com/quic/aimet/commit/1493fe1d8e40e5b8d041f11603b2d60cd76d94d3
 
 2.5.0
 =====
