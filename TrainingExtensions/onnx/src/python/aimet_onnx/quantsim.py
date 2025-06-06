@@ -96,7 +96,11 @@ from aimet_onnx.meta.utils import (
     get_op_given_param_name,
     get_param_shape_using_connected_graph,
 )
-from aimet_onnx.meta.connectedgraph import ConnectedGraph, _get_matmul_add_bias_idx
+from aimet_onnx.meta.connectedgraph import (
+    ConnectedGraph,
+    _get_matmul_add_bias_idx,
+    WEIGHT_INDEX,
+)
 from aimet_onnx.qc_quantize_op import (
     QcQuantizeOp,
     OpMode,
@@ -424,6 +428,7 @@ class QuantizationSimModel:
         self.quant_args = extract_global_quantizer_args(
             quant_scheme, quantsim_configurator
         )
+        self._apply_param_symmetry_to_inputs(quantsim_configurator)
         self._apply_exception_rules()
         if _tie_qtzrs:
             self._tie_quantizers_for_op_types(op_types_to_tie_qtzrs)
@@ -842,6 +847,52 @@ class QuantizationSimModel:
                 param_quantizers[param_type] = self.qc_quantize_op_dict[param_name]
 
         return input_quantizers, output_quantizers, param_quantizers
+
+    def _apply_param_symmetry_to_inputs(
+        self, quantsim_configurator: QuantSimConfigurator
+    ):
+        """
+        Apply Param symmetry to it's respective input quantizer when weights are not constant.
+
+        Currently this is applicable to the following operations:
+            Conv, ConvTranspose, Gemm, MatMul
+        """
+
+        # Get default symmetry from config
+        default_symmetry = (
+            quantsim_configurator.quantsim_configs.get("defaults", {})
+            .get("params", {})
+            .get("is_symmetric", False)
+        )
+        op_specific_config = quantsim_configurator.quantsim_configs.get("op_type", {})
+
+        for op in self.connected_graph.ordered_ops:
+            if op.type not in ("Conv", "ConvTranspose", "Gemm", "MatMul"):
+                continue
+
+            op_weights = op.inputs[WEIGHT_INDEX]
+            # Check if weights are constant
+            if op_weights.name in self.param_names:
+                continue
+
+            # If `op_type` overrides symmetry, use that. Otherwise, use default symmetry from config
+            expected_op_symmetry = (
+                op_specific_config.get(op.type, {})
+                .get("params", {})
+                .get("weight", {})
+                .get("is_symmetric", default_symmetry)
+            )
+            input_weight_quantizer = self._get_closest_enabled_quantizer(op_weights)
+
+            if input_weight_quantizer is None:
+                logger.warning(
+                    "Quantizer for weights input not found for Op: %s. Unable to override symmetry for input weights.",
+                    op.name,
+                )
+                continue
+
+            # Override symmetry for input weights
+            input_weight_quantizer.use_symmetric_encodings = expected_op_symmetry
 
     def _apply_exception_rules(self):
         """

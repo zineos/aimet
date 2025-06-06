@@ -3484,7 +3484,7 @@ def conv_with_weight_identity_input():
     return model
 
 
-def dynamic_conv_model():
+def dynamic_conv_model(conv_transpose: bool = False):
     model = helper.make_model(
         graph=helper.make_graph(
             name="DynamicConvModel",
@@ -3514,7 +3514,7 @@ def dynamic_conv_model():
                     name="add",
                 ),
                 helper.make_node(
-                    "Conv",
+                    "ConvTranspose" if conv_transpose else "Conv",
                     inputs=["x", "dynamic_conv.weight"],
                     outputs=["model_output"],
                     name="conv",
@@ -4010,6 +4010,43 @@ def standalone_gemm(in_channels: int, out_channels: int):
                 helper.make_node(
                     "Gemm",
                     ["input", "weight", "bias"],
+                    ["output"],
+                    "Gemm",
+                )
+            ],
+        ),
+    )
+    onnx.checker.check_model(model)
+    return model
+
+
+def dynamic_gemm(in_channels: int, out_channels: int):
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="Gemm",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, in_channels]
+                ),
+                helper.make_tensor_value_info(
+                    "weights", TensorProto.FLOAT, shape=[out_channels, in_channels]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, out_channels]
+                )
+            ],
+            initializer=[
+                numpy_helper.from_array(
+                    np.random.randn(out_channels).astype(np.float32),
+                    name="bias",
+                )
+            ],
+            nodes=[
+                helper.make_node(
+                    "Gemm",
+                    ["input", "weights", "bias"],
                     ["output"],
                     "Gemm",
                 )

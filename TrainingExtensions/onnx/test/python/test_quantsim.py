@@ -3377,3 +3377,190 @@ def test_onnx_qdq_lpbq(seed: int):
     sess = ort.InferenceSession(onnx_qdq_model.SerializeToString())
     (out_onnx_qdq,) = sess.run(None, {"input": input})
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol)
+
+
+class TestDynamicWeightSymmetryMapping:
+    @pytest.mark.parametrize("default_symmetry", [True, False, None])
+    @pytest.mark.parametrize("matmul_op_symmetry", [True, False, None])
+    def test_dynamic_matmul_symmetry(self, default_symmetry, matmul_op_symmetry):
+        model = models_for_tests.dynamic_matmul_model(batch_size=1)
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        # Expected symmetry is
+        #  - Default symmetry, if present
+        #  - Op_Type param symmetry, if present
+        expected_symmetry = False
+        if default_symmetry is not None:
+            quantsim_config["defaults"]["params"]["is_symmetric"] = str(
+                default_symmetry
+            )
+            expected_symmetry = default_symmetry
+
+        if matmul_op_symmetry is not None:
+            op_symmetry = {
+                "params": {"weight": {"is_symmetric": str(matmul_op_symmetry)}}
+            }
+            quantsim_config["op_type"]["MatMul"] = op_symmetry
+            expected_symmetry = matmul_op_symmetry
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["/linear/Gemm_output_0"].enabled
+            assert (
+                sim.qc_quantize_op_dict["/linear/Gemm_output_0"].use_symmetric_encodings
+                == expected_symmetry
+            )
+
+    def test_dynamic_conv_symmetry(self):
+        model = models_for_tests.dynamic_conv_model()
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["dynamic_conv.weight"].enabled
+            assert sim.qc_quantize_op_dict[
+                "dynamic_conv.weight"
+            ].use_symmetric_encodings
+
+    @pytest.mark.parametrize("conv_transpose", [True, False])
+    def test_dynamic_conv_symmetry(self, conv_transpose):
+        model = models_for_tests.dynamic_conv_model(conv_transpose=conv_transpose)
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["dynamic_conv.weight"].enabled
+            assert sim.qc_quantize_op_dict[
+                "dynamic_conv.weight"
+            ].use_symmetric_encodings
+
+    @pytest.mark.parametrize("conv_transpose", [True, False])
+    def test_dynamic_conv_symmetry(self, conv_transpose):
+        model = models_for_tests.dynamic_conv_model(conv_transpose=conv_transpose)
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["dynamic_conv.weight"].enabled
+            assert sim.qc_quantize_op_dict[
+                "dynamic_conv.weight"
+            ].use_symmetric_encodings
+
+    def test_dynamic_gemm_symmetry(self):
+        model = models_for_tests.dynamic_gemm(in_channels=10, out_channels=10)
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["weights"].enabled
+            assert sim.qc_quantize_op_dict["weights"].use_symmetric_encodings
