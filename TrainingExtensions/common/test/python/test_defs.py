@@ -35,6 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
+import pytest
 from aimet_common.defs import qtype, QTYPE_ALIASES
 
 
@@ -51,3 +52,14 @@ def test_qtypes():
     assert qtype.float(5, 10, False, False) == QTYPE_ALIASES["float16"]
     assert QTYPE_ALIASES["float16"].mantissa_bits == 10
     assert QTYPE_ALIASES["float16"].exponent_bits == 5
+
+
+def test_invalid_qtypes():
+    with pytest.raises(ValueError):
+        qtype.int(0)
+
+    with pytest.raises(ValueError):
+        qtype.float(-1, 4)
+
+    with pytest.raises(ValueError):
+        qtype.float(1, -1)

@@ -583,6 +583,10 @@ class Int(qtype):
     def to_legacy_repr(self):
         return QuantizationDataType.int, self.bits
 
+    def __post_init__(self):
+        if self.bits < 1:
+            raise ValueError(f"bits must be strictly positive, got {self.bits}")
+
 
 @dataclass(frozen=True)
 class Float(qtype):
@@ -607,6 +611,16 @@ class Float(qtype):
     def to_legacy_repr(self):
         bits = self.exponent_bits + self.mantissa_bits + 1
         return QuantizationDataType.float, bits
+
+    def __post_init__(self):
+        if self.exponent_bits < 1:
+            raise ValueError(
+                f"exponent_bits must be strictly positive, got {self.exponent_bits}"
+            )
+        if self.mantissa_bits < 1:
+            raise ValueError(
+                f"mantissa_bits must be strictly positive, got {self.mantissa_bits}"
+            )
 
 
 int4 = qtype.int(4)
