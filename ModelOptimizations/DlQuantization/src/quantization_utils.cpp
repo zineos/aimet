@@ -68,8 +68,9 @@ TfEncoding getComputedEncodings(uint8_t bw, double min, double max, bool useSymm
     }
     encoding.bw = bw;
 
-    double FLOAT32_MIN = std::numeric_limits<float>::lowest();
-    double FLOAT32_MAX = std::numeric_limits<float>::max();
+    // Use 0.99 of numeric limits to avoid floating point overflow
+    double FLOAT32_MIN = std::numeric_limits<float>::lowest() * 0.99;
+    double FLOAT32_MAX = std::numeric_limits<float>::max() * 0.99;
 
     min = std::clamp(min, FLOAT32_MIN, 0.0);
     max = std::clamp(max, 0.0, FLOAT32_MAX);

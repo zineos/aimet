@@ -666,7 +666,10 @@ class TestQcQuantizeOp:
         (QuantScheme.post_training_tf, QuantScheme.post_training_tf_enhanced),
     )
     @pytest.mark.parametrize("symmetric", (True, False))
-    def test_update_stats_extreme_values(self, quant_scheme, input_arr, symmetric):
+    @pytest.mark.parametrize("bitwidth", [2, 4, 8, 16])
+    def test_update_stats_extreme_values(
+        self, quant_scheme, input_arr, symmetric, bitwidth
+    ):
         quant_info = libquant_info.QcQuantizeInfo()
         quant_info.isIntDataType = True
         quant_node = helper.make_node(
@@ -683,22 +686,24 @@ class TestQcQuantizeOp:
             quant_scheme=quant_scheme,
             rounding_mode="nearest",
             op_mode=OpMode.updateStats,
-            bitwidth=8,
+            bitwidth=bitwidth,
             use_symmetric_encodings=symmetric,
         )
 
         session.run(None, {"input": input_arr})
         qc_op.compute_encodings()
 
-        max = qc_op.get_encodings()[0].max
-        min = qc_op.get_encodings()[0].min
-        delta = qc_op.get_encodings()[0].delta
-        offset = qc_op.get_encodings()[0].offset
-        num_steps = 2 ** qc_op.get_encodings()[0].bw - 1
+        max = np.array(qc_op.get_encodings()[0].max, dtype=np.float32)
+        min = np.array(qc_op.get_encodings()[0].min, dtype=np.float32)
+        delta = np.array(qc_op.get_encodings()[0].delta, dtype=np.float32)
+        offset = np.array(qc_op.get_encodings()[0].offset, dtype=np.float32)
+        num_steps = np.array(2 ** qc_op.get_encodings()[0].bw - 1, dtype=np.float32)
 
         assert FLOAT32_MIN <= min <= 0
+        assert FLOAT32_MIN <= delta * offset <= 0
         assert np.allclose(min, delta * offset)
         assert 0 <= max <= FLOAT32_MAX
+        assert 0 <= delta * (offset + num_steps) <= FLOAT32_MAX
         assert np.allclose(max, delta * (offset + num_steps))
 
 
