@@ -674,13 +674,31 @@ class _EvalSession:  # pylint: disable=too-many-instance-attributes
         :param export_kwargs: Additional kwargs for sim.export
         :return: The paths where model and encoding are saved
         """
-        sim.export(
-            path=self._results_dir,
-            filename_prefix=self.title_lowercase,
-            dummy_input=self._dummy_input_on_cpu,
-            **export_kwargs,
-        )
+
+        # Setting save_model_during_export to false to prevent saving twice
+        # Remove this when saving model during export is completely removed
+        @contextlib.contextmanager
+        def set_save_model_during_export_to_false():
+            from aimet_torch._base import quantsim
+
+            curr_setting = quantsim._SAVE_TORCH_MODEL_DURING_EXPORT
+            quantsim._SAVE_TORCH_MODEL_DURING_EXPORT = False
+
+            try:
+                yield
+            finally:
+                quantsim._SAVE_TORCH_MODEL_DURING_EXPORT = curr_setting
+
+        with set_save_model_during_export_to_false():
+            sim.export(
+                path=self._results_dir,
+                filename_prefix=self.title_lowercase,
+                dummy_input=self._dummy_input_on_cpu,
+                **export_kwargs,
+            )
         model_path = os.path.join(self._results_dir, f"{self.title_lowercase}.pth")
+        model_without_quantizers = sim.get_original_model(sim.model, qdq_weights=True)
+        torch.save(model_without_quantizers, model_path)
         encoding_path = os.path.join(
             self._results_dir, f"{self.title_lowercase}.encodings"
         )

@@ -111,6 +111,9 @@ SKIP_TORCH_ENCODINGS_EXPORT = False
 
 SUPPORTED_KERNELS_ACTION = SupportedKernelsAction.warn_on_error
 
+# Remove this once saving torch model during export is fully removed
+_SAVE_TORCH_MODEL_DURING_EXPORT = True
+
 unquantizable_modules = (torch.nn.Identity,)
 
 
@@ -899,7 +902,14 @@ class _QuantizationSimModelBase(_QuantizationSimModelInterface):
         # Create a version of the model without any quantization ops
         model_to_export = self.get_original_model(self.model, qdq_weights=True)
 
-        torch.save(model_to_export, model_path)
+        if _SAVE_TORCH_MODEL_DURING_EXPORT:
+            msg = _red(
+                "Saving torch model during export will be discontinued in future versions. To serialize a model with qdq weights, run\n"
+                "qdq_model = quantsim.get_original_model(self.model, qdq_weights=True)\n"
+                "to obtain a Pytorch model with qdq weights and serialize as needed."
+            )
+            warnings.warn(msg, DeprecationWarning, stacklevel=2)
+            torch.save(model_to_export, model_path)
 
         if onnx_export_args is None:
             onnx_export_args = {
