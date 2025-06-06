@@ -69,16 +69,16 @@ jobs:
                  "PIP_INDEX":       "pypi"
               }
             ]')
-          elif [ "${{ inputs.variant-id }}" == "onnx-cpu" ] ; then
+          elif [ "${{ inputs.variant-id }}" == "onnx-gpu" ] ; then
             VALUE=$(echo "${VALUE:-"{}"}" | jq -c '.include += [
               {
-                 "id":              "onnx-cpu",
-                 "runs-on":         "ubuntu-latest",
+                 "id":              "onnx-gpu",
+                 "runs-on":         "k8s-gpu",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
-                 "VER_CUDA":        "",
+                 "VER_CUDA":        "12.1.0",
                  "ENABLE_TESTS":    "ON",
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       "pypi"

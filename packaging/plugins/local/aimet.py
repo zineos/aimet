@@ -69,6 +69,21 @@ def is_cmake_option_enabled(option_name: str) -> bool:
     }
 
 
+def is_pip_index_pypi() -> bool:
+    """Returns True if CMAKE_ARGS environment variable contains `-DPIP_INDEX=pypi`"""
+    cmake_args = {
+        k: v
+        for k, v in (
+            arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", ""))
+        )
+    }
+    pip_index_pypi = False
+    if cmake_args.get("-DPIP_INDEX", "") == "pypi":
+        pip_index_pypi = True
+
+    return pip_index_pypi
+
+
 def get_aimet_variant() -> str:
     """Return a variant based on CMAKE_ARGS environment variable"""
     enable_cuda = is_cmake_option_enabled("ENABLE_CUDA")
@@ -118,13 +133,18 @@ def get_name() -> str:
 def get_aimet_dependencies() -> list[str]:
     """Read dependencies form the corresponded files and return them as a list (!) of strings"""
     aimet_variant = get_aimet_variant()
+    base_path = pathlib.Path(_PKG_ROOT, "packaging", "dependencies")
 
     if aimet_variant in ("torch-gpu", "onnx-cpu", "tf-torch-cpu"):
-        deps_path = pathlib.Path(
-            _PKG_ROOT, "packaging", "dependencies", "fast-release", aimet_variant
-        )
+        deps_path = pathlib.Path(base_path, "fast-release", aimet_variant)
+
+    # To publish the aimet-onnx-gpu wheel on PyPI, we have to temporarily use 'onnxruntime' as a dependency.
+    # For publishing the same wheel on GitHub, we continue using 'onnxruntime-gpu' as the dependency.
+    # This conditional logic will be removed once 'onnxruntime-gpu' becomes a valid dependency for the aimet-onnx PyPI wheel.
+    elif aimet_variant == "onnx-gpu" and is_pip_index_pypi():
+        deps_path = pathlib.Path(base_path, "fast-release", aimet_variant)
     else:
-        deps_path = pathlib.Path(_PKG_ROOT, "packaging", "dependencies", aimet_variant)
+        deps_path = pathlib.Path(base_path, aimet_variant)
 
     deps_files = [*deps_path.glob("reqs_pip_*.txt")]
     print(f"CMAKE_ARGS='{os.environ.get('CMAKE_ARGS', '')}'")
@@ -169,13 +189,7 @@ def get_version() -> str:
     cuda_version = get_cuda_version()
 
     # For PyPi releases, just return the version without appending the variant string
-    cmake_args = {
-        k: v
-        for k, v in (
-            arg.split("=", 1) for arg in shlex.split(os.environ.get("CMAKE_ARGS", ""))
-        )
-    }
-    if cmake_args.get("-DPIP_INDEX", "") == "pypi":
+    if is_pip_index_pypi():
         return version
 
     # Append the variant string to the original software version that was passed in

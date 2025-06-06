@@ -2133,35 +2133,29 @@ class TestQuantSim:
         with pytest.raises(TypeError):
             QuantizationSimModel(single_residual_model(), rounding_mode="stochastic")
 
-        # Since, onnxruntime-gpu=1.22, if "TensorrtExecutionProvider" isn't available,
-        # it directly falls back to "CPUExecutionProvider" w/o trying "CUDAExecutionProvider"
-        # this behavior is different from the previous releases.
-        sim = QuantizationSimModel(
-            single_residual_model(),
-            providers=ort.get_available_providers(),
-        )
-        assert all(
-            provider in CUDA_PROVIDERS for provider in sim.session.get_providers()
-        )
-
-        sim = QuantizationSimModel(single_residual_model(), providers=CUDA_PROVIDERS)
-        assert sim.session.get_providers() == CUDA_PROVIDERS
-
         sim = QuantizationSimModel(single_residual_model(), providers=CPU_PROVIDERS)
         assert sim.session.get_providers() == CPU_PROVIDERS
 
-        providers = [
-            ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),
-            "CPUExecutionProvider",
-        ]
-        sim = QuantizationSimModel(single_residual_model(), providers=providers)
-        assert sim.session.get_providers() == CUDA_PROVIDERS
-        assert (
-            sim.session.get_provider_options()["CUDAExecutionProvider"][
-                "cudnn_conv_algo_search"
+        available_providers = ort.get_available_providers()
+        # Remove this check once onnxruntime-gpu becomes valid dependency for PyPI wheel.
+        if "CUDAExecutionProvider" in available_providers:
+            sim = QuantizationSimModel(
+                single_residual_model(), providers=CUDA_PROVIDERS
+            )
+            assert sim.session.get_providers() == CUDA_PROVIDERS
+
+            providers = [
+                ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "DEFAULT"}),
+                "CPUExecutionProvider",
             ]
-            == "DEFAULT"
-        )
+            sim = QuantizationSimModel(single_residual_model(), providers=providers)
+            assert sim.session.get_providers() == CUDA_PROVIDERS
+            assert (
+                sim.session.get_provider_options()["CUDAExecutionProvider"][
+                    "cudnn_conv_algo_search"
+                ]
+                == "DEFAULT"
+            )
 
         dummy_input = make_dummy_input(single_residual_model().model)
         with pytest.warns(DeprecationWarning):

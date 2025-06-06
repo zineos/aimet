@@ -74,7 +74,7 @@ jobs:
     needs: build_wheels_and_test
     uses: ./.github/workflows/pypi-release-pipeline.yml
     with:
-      variant-id: onnx-cpu
+      variant-id: onnx-gpu
       deploy: true
       run_unit_tests: true
       run_acceptance_tests: false
