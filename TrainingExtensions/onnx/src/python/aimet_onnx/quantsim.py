@@ -1674,7 +1674,6 @@ class QuantizationSimModel:
                 qdq_node_info["node_name_prefixes"].append(aimet_node.name)
                 qdq_node_info["encodings"].append(encodings)
 
-        graph_output_names = [out.name for out in model_copy.graph.output]
         self.remove_quantizers(model_copy)
 
         if onnx_opset_version < desired_onnx_opset_version:
@@ -1686,21 +1685,44 @@ class QuantizationSimModel:
             model_copy, **qdq_node_info, onnx_opset=desired_onnx_opset_version
         )
 
-        # Graph output could have been renamed during self.remove_quantizers.
-        # Restore the original output names
-        q_input_names = set(
-            node.input[0]
+        # Restore original model's output names
+        #
+        #   ORIGINAL MODEL:
+        #     ... -> last_node -------------->
+        #                       (out)
+        #
+        #   ONNX QDQ (BEFORE RENAMING):
+        #     ... -> last_node --------------> Q ---------> DQ -------------->
+        #                       (out)             (out_q)      (out_updated)
+        #
+        #   ONNX QDQ (AFTER RENAMING):
+        #     ... -> last_node --------------> Q ---------> DQ -------------->
+        #                       (out_updated)     (out_q)      (out)
+        consumers = {
+            node.input[i]: node
             for node in model_copy.graph.node
-            if node.op_type == "QuantizeLinear"
-        )
-        dq_output_names = set(
-            node.output[0]
+            for i in range(len(node.input))
+        }
+        producers = {
+            node.output[i]: node
             for node in model_copy.graph.node
-            if node.op_type == "DequantizeLinear"
-        )
-        for out, orig_name in zip(model_copy.graph.output, graph_output_names):
-            if out.name in q_input_names and orig_name in dq_output_names:
-                out.name = orig_name
+            for i in range(len(node.output))
+        }
+        for graph_out in model_copy.graph.output:
+            last_node = producers[graph_out.name]
+            q = consumers.get(graph_out.name)
+
+            if not (q and q.op_type == "QuantizeLinear"):
+                continue
+
+            dq = consumers.get(q.output[0])
+
+            if not (dq and dq.op_type == "DequantizeLinear"):
+                continue
+
+            i = list(last_node.output).index(graph_out.name)
+            q.input[0] = last_node.output[i] = dq.output[0]
+            dq.output[0] = graph_out.name
 
         # TODO: Unfortunately, this sanity check doesn't pass yet because the
         #       QcQuantizeOp nodes inserted during QuantizationSimModel.__init__

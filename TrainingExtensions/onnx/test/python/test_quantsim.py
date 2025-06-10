@@ -2976,6 +2976,9 @@ def test_onnx_qdq(
     np.random.seed(seed)
 
     model = model_factory()
+    input_names = [inp.name for inp in getattr(model, "model", model).graph.input]
+    output_names = [out.name for out in getattr(model, "model", model).graph.output]
+
     param_kind, param_bw = _parse_type(param_dtype)
     activation_kind, activation_bw = _parse_type(activation_dtype)
     sim = QuantizationSimModel(
@@ -3005,6 +3008,12 @@ def test_onnx_qdq(
 
     sim._insert_data_movement_op_output_quantizers()
     onnx_qdq_model = sim._to_onnx_qdq()
+
+    """
+    Then: Exported model should preserve the original I/O names
+    """
+    assert input_names == [inp.name for inp in onnx_qdq_model.graph.input]
+    assert output_names == [out.name for out in onnx_qdq_model.graph.output]
 
     """
     Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
@@ -3086,6 +3095,9 @@ def test_onnx_qdq_opset_compatibility(
 
     input_shape = (1, 3, 32, 32)
     model = single_residual_model(opset_version=input_model_opset)
+    input_names = [inp.name for inp in model.graph().input]
+    output_names = [out.name for out in model.graph().output]
+
     config_file = "htp_v81" if per_channel else get_path_for_per_tensor_config()
     sim = QuantizationSimModel(
         model,
@@ -3135,6 +3147,12 @@ def test_onnx_qdq_opset_compatibility(
         else getattr(onnx.TensorProto, f"UINT{act_bw}")
         for q in q_nodes
     }
+
+    """
+    Then: Exported model should preserve the original I/O names
+    """
+    assert input_names == [inp.name for inp in onnx_qdq_model.graph.input]
+    assert output_names == [out.name for out in onnx_qdq_model.graph.output]
 
     """
     Then: Model input/outputs should be associated with QDQ
