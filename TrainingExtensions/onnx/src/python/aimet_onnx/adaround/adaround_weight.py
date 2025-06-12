@@ -85,7 +85,7 @@ def apply_adaround(
     Args:
         sim (QuantizationSimModel): Calibrated QuantizationSimModel instance to optimize
         inputs (Collection[Dict[str, np.ndarray]]): The set of input samples to use during optimization.
-        num_iterations (int): Number of optimization steps to take for each layer. Recommended value is
+        iterations (int): Number of optimization steps to take for each layer. Recommended value is
             10K for weight bitwidths >= 8-bits, 15K for weight bitwidths < 8 bits.
     """
 
