@@ -36,6 +36,7 @@
 # =============================================================================
 """Common utility for Quantization"""
 
+import os
 from typing import Union, Tuple, Dict
 import numpy as np
 
@@ -52,9 +53,15 @@ from aimet_common import libpymo
 # Change in major revision should indicate substantial change to the format, updates to minor version indicates
 # additional information element being added to encoding format and might require update to fully consume the encodings.
 # The patching version shall be updated to indicate minor updates to quantization simulation e.g. bug fix etc.
-encoding_version = "1.0.0"
+encoding_version = os.getenv("AIMET_ENCODING_VERSION", "1.0.0")
 ALLOW_EXPERIMENTAL = False
 VALID_ENCODING_VERSIONS = {"0.6.1", "1.0.0", "2.0.0"}
+
+if encoding_version not in VALID_ENCODING_VERSIONS:
+    raise RuntimeError(
+        "Invalid AIMET_ENCODING_VERSION variable."
+        f"Expected one of {sorted(list(VALID_ENCODING_VERSIONS))}; got {encoding_version}"
+    )
 
 
 def gate_min_max(min_val: float, max_val: float) -> Tuple[float, float]:
