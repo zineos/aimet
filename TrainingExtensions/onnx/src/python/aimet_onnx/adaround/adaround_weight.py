@@ -74,7 +74,7 @@ AdaroundSupportedModules = ["Conv", "ConvTranspose", "MatMul", "Gemm"]
 def apply_adaround(
     sim: QuantizationSimModel,
     inputs: Collection[Dict[str, np.ndarray]],
-    iterations: int = 10000,
+    num_iterations: int = 10000,
 ):
     """
     Optimizes the rounding direction of weights in the QuantizationSimModel to reduce quantization error.
@@ -85,14 +85,14 @@ def apply_adaround(
     Args:
         sim (QuantizationSimModel): Calibrated QuantizationSimModel instance to optimize
         inputs (Collection[Dict[str, np.ndarray]]): The set of input samples to use during optimization.
-        iterations (int): Number of optimization steps to take for each layer. Recommended value is
+        num_iterations (int): Number of optimization steps to take for each layer. Recommended value is
             10K for weight bitwidths >= 8-bits, 15K for weight bitwidths < 8 bits.
     """
 
     parameters = AdaroundParameters(
         inputs,
         len(inputs),
-        iterations,
+        num_iterations,
         AdaroundParameters.DEFAULT_REG_PARAM,
         AdaroundParameters.DEFAULT_BETA_RANGE,
         AdaroundParameters.DEFAULT_WARM_START,
