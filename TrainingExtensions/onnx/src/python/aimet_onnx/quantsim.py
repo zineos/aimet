@@ -1917,7 +1917,10 @@ class QuantizationSimModel:
 
 # pylint: disable=too-many-locals, too-many-branches
 def load_encodings_to_sim(
-    quant_sim_model: QuantizationSimModel, onnx_encoding_path: str, strict=True
+    quant_sim_model: QuantizationSimModel,
+    onnx_encoding_path: str,
+    strict=True,
+    allow_overwrite=True,
 ) -> List[_EncodingMismatchInfo]:
     """
     Loads the saved encodings to quant sim model. The encoding filename to load should end in .encodings,
@@ -2020,7 +2023,7 @@ def load_encodings_to_sim(
 
         # pylint: disable=protected-access
         quant_sim_model.qc_quantize_op_dict[quantizer_name]._load_encodings_dict(
-            encodings_to_load
+            encodings_to_load, allow_overwrite=allow_overwrite
         )
     return mismatched_encodings
 

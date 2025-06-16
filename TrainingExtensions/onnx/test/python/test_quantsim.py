@@ -578,6 +578,95 @@ class TestQuantSim:
         sim.compute_encodings([make_dummy_input(model)])
         assert sim.qc_quantize_op_dict[reshape_output].get_encodings() is not None
 
+    @pytest.mark.parametrize(
+        "act_enc, param_enc",
+        [
+            (
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_TENSOR",
+                    "is_sym": False,
+                    "offset": [0.0],
+                    "scale": [0.023529411764705882],
+                },
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_TENSOR",
+                    "is_sym": False,
+                    "offset": [0.0],
+                    "scale": [0.023529411764705882],
+                },
+            ),
+            (
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_TENSOR",
+                    "is_sym": False,
+                    "offset": [0.0],
+                    "scale": [0.023529411764705882],
+                },
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_CHANNEL",
+                    "is_sym": True,
+                    "offset": [-128.0] * 10,
+                    "scale": [0.023529411764705882] * 10,
+                },
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("allow_overwrite", [True, False])
+    def test_load_encodings_to_sim_with_allow_overwrite(
+        self, allow_overwrite, act_enc, param_enc
+    ):
+        model = test_models.model_with_split().model
+
+        sim = QuantizationSimModel(
+            model,
+            providers=CPU_PROVIDERS,
+        )
+
+        encodings = {
+            "param_encodings": [
+                {"name": "conv1.weight", **param_enc},
+            ],
+            "activation_encodings": [
+                {"name": "input", **act_enc},
+                {"name": "/conv1/Conv_output_0", **act_enc},
+            ],
+            "version": "1.0.0",
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            enc_path = os.path.join(temp_dir, "model.encodings")
+            with open(enc_path, "w") as f:
+                json.dump(encodings, f, indent=4)
+
+            load_encodings_to_sim(
+                sim, enc_path, strict=False, allow_overwrite=allow_overwrite
+            )
+
+            sim.compute_encodings([make_dummy_input(model)])
+
+            # If allow_overwrite is True, compute_encodings call will re-write the encodings.
+            # If allow_overwrite is False, loaded encodings will be frozen
+            for encoding in itertools.chain(
+                encodings["activation_encodings"], encodings["param_encodings"]
+            ):
+                sim_enc = sim.qc_quantize_op_dict[encoding["name"]].export_encodings(
+                    "1.0.0"
+                )
+                enc = (
+                    act_enc
+                    if encoding in encodings["activation_encodings"]
+                    else param_enc
+                )
+                assert sim_enc != enc if allow_overwrite else sim_enc == enc
+
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu(self):
         """Test to compare encodings with PT"""

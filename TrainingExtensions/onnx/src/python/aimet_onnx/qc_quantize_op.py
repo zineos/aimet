@@ -412,7 +412,7 @@ class QcQuantizeOp:
 
             self.load_encodings(encoding)
 
-    def _load_encodings_dict(self, encoding_dict: dict):
+    def _load_encodings_dict(self, encoding_dict: dict, allow_overwrite: bool = True):
         self.bitwidth = encoding_dict["bw"]
         data_type = (
             QuantizationDataType.int
@@ -471,6 +471,10 @@ class QcQuantizeOp:
             libpymo_encodings.append(enc)
 
         self.load_encodings(libpymo_encodings)
+
+        if not allow_overwrite:
+            self.freeze_encodings()
+
         self.enabled = True
 
     def load_encodings(self, encoding: List[libpymo.TfEncoding]):
@@ -932,7 +936,7 @@ class GroupedBlockQuantizeDequantize(QcQuantizeOp):
 
         return grouping
 
-    def _load_encodings_dict(self, encoding_dict: dict):
+    def _load_encodings_dict(self, encoding_dict: dict, allow_overwrite: bool = True):
         # pylint: disable=too-many-locals
         data_type = (
             QuantizationDataType.int
@@ -1011,6 +1015,10 @@ class GroupedBlockQuantizeDequantize(QcQuantizeOp):
             libpymo_encodings.append(enc)
 
         self.load_encodings(libpymo_encodings)
+
+        if not allow_overwrite:
+            self.freeze_encodings()
+
         self.enabled = True
 
     def load_encodings(self, encoding: List[libpymo.TfEncoding]):
