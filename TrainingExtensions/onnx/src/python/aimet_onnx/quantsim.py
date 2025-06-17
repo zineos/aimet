@@ -1920,7 +1920,9 @@ def load_encodings_to_sim(
     quant_sim_model: QuantizationSimModel,
     onnx_encoding_path: str,
     strict=True,
+    *,
     allow_overwrite=True,
+    disable_missing_quantizers=True,
 ) -> List[_EncodingMismatchInfo]:
     """
     Loads the saved encodings to quant sim model. The encoding filename to load should end in .encodings,
@@ -1932,6 +1934,9 @@ def load_encodings_to_sim(
     :param strict: If set to True and encoding settings between encodings to load do not line up with Quantsim
         initialized settings, an assertion will be thrown. If set to False, quantizer settings will update to align with
         encodings to load.
+    :param allow_overwrite: If true, loaded encodings will be overwritten by subsequent compute_encodings calls
+        If false, loaded quantizer encodings will be frozen.
+    :param diable_missing_quantizers: If true, quantizers which do not have encodings will be disabled.
     :return: List of EncodingMismatchInfo objects containing quantizer names and mismatched settings
     """
     mismatched_encodings = []
@@ -2013,7 +2018,8 @@ def load_encodings_to_sim(
             quantizer_name not in activation_encodings
             and quantizer_name not in param_encodings
         ):
-            quantizer.enabled = False
+            if disable_missing_quantizers:
+                quantizer.enabled = False
             continue
 
         if quantizer_name in activation_encodings:

@@ -667,6 +667,42 @@ class TestQuantSim:
                 )
                 assert sim_enc != enc if allow_overwrite else sim_enc == enc
 
+    def test_load_partial_encodings_to_sim(self, tmp_path):
+        model = single_residual_model().model
+        sim = QuantizationSimModel(copy.deepcopy(model))
+        for name in sim.activation_names:
+            sim.qc_quantize_op_dict[name].enabled = False
+
+        sim.compute_encodings([make_dummy_input(model)])
+        sim.export(tmp_path, "model")
+
+        sim = QuantizationSimModel(copy.deepcopy(model))
+        enabled_quantizers = {
+            name for name, q in sim.qc_quantize_op_dict.items() if q.enabled
+        }
+        load_encodings_to_sim(
+            sim,
+            os.path.join(tmp_path, "model.encodings"),
+            strict=False,
+            disable_missing_quantizers=False,
+        )
+        # No quantizers should be disabled by this
+        enabled_quantizers_after_load = {
+            name for name, q in sim.qc_quantize_op_dict.items() if q.enabled
+        }
+        assert enabled_quantizers_after_load == enabled_quantizers
+        # None of the activation quantizers should be initialized
+        assert not any(
+            sim.qc_quantize_op_dict[name].is_initialized()
+            for name in sim.activation_names
+        )
+        # All of the enabled param quantizers should be initialized
+        assert all(
+            sim.qc_quantize_op_dict[name].is_initialized()
+            for name in sim.param_names
+            if sim.qc_quantize_op_dict[name].enabled
+        )
+
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu(self):
         """Test to compare encodings with PT"""
