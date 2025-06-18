@@ -98,7 +98,7 @@ class GenAIModel(ABC):
         pad_token = 0  # TODO: switch back to tokenize.eos_token_id
         head_dim = (
             model.config.head_dim
-            if hasattr(model.config, "head_dim")
+            if hasattr(model.config, "head_dim") and model.config.head_dim is not None
             else model.config.hidden_size // model.config.num_attention_heads
         )
 

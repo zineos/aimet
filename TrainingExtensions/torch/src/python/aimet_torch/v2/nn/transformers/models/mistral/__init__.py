@@ -35,11 +35,6 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-"""GenAI models"""
+"""Base directory to hold quantized transformers Mistral modules"""
 
-from .genai_model import GenAIModel
-from .llama import Llama_32
-from .qwen import Qwen_25
-from .gemma import Gemma_3
-from .phi3 import Phi_3
-from .mistral import Mistral_03
+from .modeling_mistral import QuantizedMistralRMSNorm, QuantizedMistralRotaryEmbedding
