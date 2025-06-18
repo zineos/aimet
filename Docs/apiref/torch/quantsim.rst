@@ -8,7 +8,7 @@ aimet_torch.quantsim
   # start-after
 
 .. autoclass:: aimet_torch.QuantizationSimModel
-   :members: compute_encodings, export
+   :members: compute_encodings, export, fold_param_quantizers
 
 **Quant Scheme Enum**
 
