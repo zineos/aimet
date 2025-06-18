@@ -13,7 +13,7 @@ Glossary
       A measure of the percentage of correct predictions made by a model.
 
    Activation
-      The output of a node's activation function, passed as an input to the subsequent layer of the network. 
+      The output of a node's activation function, passed as an input to the subsequent layer of the network.
 
    Activation Quantization
       The process of converting the output values (:term:`activations`) of nodes from high precision (for example, 32-bit floating point) to lower precision (for example, 8-bit integer), reducing computation and memory requirements during :term:`inference`.
@@ -34,10 +34,10 @@ Glossary
       A technique for normalizing a layer's input to accelerate the convergence of deep network models.
 
    BN
-     :term: `Batch Normalization`.
+     :term:`Batch Normalization`.
 
    Batch Normalization Folding (BN Folding)
-      A model optimization technique that merges :term:`Batch Normalization` layers to eliminate the need to compute :term:`Batch Normalization` during :term:`inference`. 
+      A model optimization technique that merges :term:`Batch Normalization` layers to eliminate the need to compute :term:`Batch Normalization` during :term:`inference`.
 
    CNN
       :term:`Convolutional neural network`.
@@ -52,7 +52,7 @@ Glossary
       A deep learning model that uses convolutional layers to extract features from input data, such as images.
 
    Device
-      A portable computation platform such as a mobile phone or a laptop. 
+      A portable computation platform such as a mobile phone or a laptop.
 
    DLF
       Dynamic Layer Fusion.
@@ -80,7 +80,7 @@ Glossary
 
    Layer
       How nodes are organized in a model. The nodes in a layer are connected to the previous and subsequent layer via :term:`weights`.
-   
+
    Layer-wise quantization
       A :term:`quantization` method where each layer is quantized independently. Used to achieve balance between model accuracy and computational efficiency by more aggressively compressing layers that have minimal impact on model performance.
 
@@ -94,7 +94,7 @@ Glossary
       Another :term:`compression` and optimization toolkit similar to AIMET.
 
    Node
-      A computation unit in a :model:`model`. Each node performs a mathematical function on an input to produce an output. 
+      A computation unit in a :model:`model`. Each node performs a mathematical function on an input to produce an output.
 
    Normalization
       Scaling a feature such as a :term:`layer` to standardize the range of the feature.
@@ -148,13 +148,13 @@ Glossary
       :term:`Qualcomm Innovation Center`.
 
    Target Hardware Accelerator
-      Specialized hardware designed to accelerate AI :term:`inference` tasks. Examples include GPUs, TPUs, and custom ASICs, for example Qualcomm's Cloud AI 100 inference accelerator. 
+      Specialized hardware designed to accelerate AI :term:`inference` tasks. Examples include GPUs, TPUs, and custom ASICs, for example Qualcomm's Cloud AI 100 inference accelerator.
 
    Target Runtime
       A model quantized for use on a low bitwidth platform, typically an :term:`edge device`.
 
    TensorFlow
-      A widely-used open-source deep learning framework developed by Google. 
+      A widely-used open-source deep learning framework developed by Google.
 
    TorchScript
       An intermediate representation for :term:`PyTorch` models that enables running them independently of the Python environment, making them more suitable for production deployment.
