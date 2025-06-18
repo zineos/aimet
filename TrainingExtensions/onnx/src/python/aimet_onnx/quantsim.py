@@ -1161,11 +1161,23 @@ class QuantizationSimModel:
 
         save_json_yaml(encoding_file_path, encodings_dict)
 
-    def remove_quantization_nodes(self):
+    @contextlib.contextmanager
+    def _remove_quantization_nodes(self):
         """
         Remove quantization nodes
         """
-        self.model = self.remove_quantizers(self.model)
+        sim_outputs = [out.name for out in self.model.graph().output]
+        sim_nodes = list(self.model.nodes())
+        try:
+            self.model = self.remove_quantizers(self.model)
+
+            yield
+
+        finally:
+            self.model.model.graph.ClearField("node")
+            self.model.model.graph.node.extend(sim_nodes)
+            for output, name in zip(self.model.graph().output, sim_outputs):
+                output.name = name
 
     @staticmethod
     def remove_quantizers(model: Union[ONNXModel, ModelProto]):
@@ -1415,19 +1427,19 @@ class QuantizationSimModel:
         self._export_encodings(os.path.join(path, filename_prefix) + ".encodings")
 
         if export_model:
-            self.remove_quantization_nodes()
-            if self.model.model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
-                # Note: Saving as external data mutates the saved model, removing all initializer data
-                save_model_with_external_weights(
-                    self.model.model,
-                    os.path.join(path, filename_prefix) + ".onnx",
-                    location=filename_prefix + ".data",
-                    all_tensors_to_one_file=True,
-                )
-            else:
-                self.model.save_model_to_file(
-                    os.path.join(path, filename_prefix) + ".onnx"
-                )
+            with self._remove_quantization_nodes():
+                if self.model.model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
+                    # Note: Saving as external data mutates the saved model, removing all initializer data
+                    save_model_with_external_weights(
+                        self.model.model,
+                        os.path.join(path, filename_prefix) + ".onnx",
+                        location=filename_prefix + ".data",
+                        all_tensors_to_one_file=True,
+                    )
+                else:
+                    self.model.save_model_to_file(
+                        os.path.join(path, filename_prefix) + ".onnx"
+                    )
 
     def set_and_freeze_param_encodings(self, encoding_path: str):
         """

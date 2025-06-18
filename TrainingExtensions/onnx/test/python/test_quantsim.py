@@ -401,6 +401,7 @@ class TestQuantSim:
     def test_export_model(self, export_model):
         """Test to export encodings and model"""
         model = build_dummy_model()
+        dummy_input = make_dummy_input(model)
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(model, path=tempdir)
 
@@ -411,8 +412,20 @@ class TestQuantSim:
                 session.run(None, make_dummy_input(model))
 
             sim.compute_encodings(dummy_callback)
+
+            nodes_before_export = copy.deepcopy(sim.model.model.graph.node)
+            output_before_export = sim.session.run(None, dummy_input)[0]
+
             sim.export(tempdir, "quant_sim_model", export_model=export_model)
 
+            # model.graph should not be changed
+            for node in nodes_before_export:
+                assert node in sim.model.model.graph.node
+
+            # Output should not change after export
+            sim._rebuild_session()
+            output_after_export = sim.session.run(None, dummy_input)[0]
+            assert np.allclose(output_before_export, output_after_export)
             assert (
                 os.path.exists(os.path.join(tempdir, "quant_sim_model.onnx"))
                 == export_model
@@ -431,6 +444,19 @@ class TestQuantSim:
             }
             assert activation_names == {"3", "4", "5", "input", "output"}
             assert param_names == {"conv_b", "conv_w", "fc_b", "fc_w"}
+
+            if export_model:
+                model_path = os.path.join(tempdir, "quant_sim_model.onnx")
+                onnx.checker.check_model(model_path)
+                model = onnx.load(model_path)
+                # Exported graph should not have any QcQuantizeOps
+                assert not any(
+                    node.op_type == "QcQuantizeOp" for node in model.graph.node
+                )
+                # Exported graph should not have updated output names
+                assert not any(
+                    output.name.endswith("updated") for output in model.graph.output
+                )
 
     def test_export_model_1_0_0(self):
         """Test to export encodings and model in 1.0.0 format"""
@@ -928,7 +954,7 @@ class TestQuantSim:
     def test_load_encodings_ptq(self):
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, path=tempdir)
+            sim = QuantizationSimModel(copy.deepcopy(model), path=tempdir)
 
             dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
 
@@ -939,7 +965,7 @@ class TestQuantSim:
 
             del sim
 
-            sim = QuantizationSimModel(model, path=tempdir)
+            sim = QuantizationSimModel(copy.deepcopy(model), path=tempdir)
             load_encodings_to_sim(sim, os.path.join(tempdir, "onnx_sim.encodings"))
             out3 = sim.session.run(None, dummy_tensor)
 
@@ -949,7 +975,9 @@ class TestQuantSim:
         model = single_residual_model().model
         with tempfile.TemporaryDirectory() as tempdir:
             sim = QuantizationSimModel(
-                model, config_file=get_path_for_per_channel_config(), path=tempdir
+                copy.deepcopy(model),
+                config_file=get_path_for_per_channel_config(),
+                path=tempdir,
             )
 
             dummy_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
@@ -962,7 +990,9 @@ class TestQuantSim:
             del sim
 
             sim = QuantizationSimModel(
-                model, config_file=get_path_for_per_channel_config(), path=tempdir
+                copy.deepcopy(model),
+                config_file=get_path_for_per_channel_config(),
+                path=tempdir,
             )
             load_encodings_to_sim(sim, os.path.join(tempdir, "onnx_sim.encodings"))
             out3 = sim.session.run(None, dummy_tensor)
@@ -1050,7 +1080,7 @@ class TestQuantSim:
         ).tobytes()
 
         with tempfile.TemporaryDirectory() as tempdir:
-            sim = QuantizationSimModel(model, path=tempdir)
+            sim = QuantizationSimModel(copy.deepcopy(model), path=tempdir)
 
             conv_ops = [
                 node for node in sim.model.model.graph.node if node.op_type == "Conv"
@@ -1093,7 +1123,7 @@ class TestQuantSim:
             out2 = sim.session.run(None, dummy_tensor)
             del sim
 
-            sim = QuantizationSimModel(model, path=tempdir)
+            sim = QuantizationSimModel(copy.deepcopy(model), path=tempdir)
             if strict:
                 with pytest.raises(AssertionError):
                     load_encodings_to_sim(

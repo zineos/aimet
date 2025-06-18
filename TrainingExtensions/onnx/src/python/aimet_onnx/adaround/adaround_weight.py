@@ -304,9 +304,9 @@ class Adaround:
         # Export quantization encodings to JSON-formatted file
         cls._export_encodings_to_json(path, filename_prefix, quant_sim)
 
-        quant_sim.remove_quantization_nodes()
+        adaround_model = quant_sim.remove_quantizers(quant_sim.model)
         logger.info("Completed Adarounding Model")
-        return quant_sim.model
+        return adaround_model
 
     @classmethod
     def _adaround_model(
