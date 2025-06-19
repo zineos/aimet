@@ -38,7 +38,7 @@
 """AdaScale implementation"""
 
 from copy import deepcopy
-from typing import Callable, List, Any
+from typing import Callable, List, Any, Tuple
 
 import torch
 from torch.utils.data import DataLoader
@@ -165,9 +165,15 @@ class AdaScale:
                 device=device, desc="AdaScale blocks processed"
             ):
                 # only set adascale params to train mode
-                trainable_params = cls._get_adascale_trainable_params(block)
+                all_lwc_parameters, all_scale_parameters = (
+                    cls._get_adascale_trainable_params(block)
+                )
+                trainable_params = [
+                    {"params": all_lwc_parameters, "lr": 1e-3},
+                    {"params": all_scale_parameters, "lr": 5e-4},
+                ]
                 optimizer = torch.optim.Adam(trainable_params)
-                cls._set_requires_grad(trainable_params, True)
+                cls._set_requires_grad(all_lwc_parameters + all_scale_parameters, True)
 
                 fp_out = []  # save fp batchwise block outputs to use across epochs
                 for batch_idx in range(len(data_loader)):
@@ -282,19 +288,22 @@ class AdaScale:
                     layer.requires_grad_(False)
 
     @staticmethod
-    def _get_adascale_trainable_params(non_leaf_module: torch.nn.Module) -> List:
+    def _get_adascale_trainable_params(
+        non_leaf_module: torch.nn.Module,
+    ) -> Tuple[List, List]:
         """Get all the adascale scale params present in the non-leaf module"""
-        trainable_params = []
+        all_scale_parameters = []
+        all_lwc_parameters = []
         for module in non_leaf_module.modules():
             if isinstance(module, tuple(supported_modules)) and isinstance(
                 module.param_quantizers["weight"], AdaScaleQuantizeDequantize
             ):
-                trainable_params.extend(
-                    module.param_quantizers[
-                        "weight"
-                    ].get_adascale_trainable_parameters()
-                )
-        return trainable_params
+                lwc_params, scale_parameters = module.param_quantizers[
+                    "weight"
+                ].get_adascale_trainable_parameters()
+                all_lwc_parameters.extend(lwc_params)
+                all_scale_parameters.extend(scale_parameters)
+        return all_lwc_parameters, all_scale_parameters
 
     @staticmethod
     def _set_requires_grad(adascale_params: list, val: bool):

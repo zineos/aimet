@@ -99,7 +99,8 @@ def test_adascale_compute_encodings(ada_module_and_shape):
     assert torch.equal(qdq(input_tensor), adascale_qdq(input_tensor))
 
     adascale_qdq.eval()
-    adascale_params = adascale_qdq.get_adascale_trainable_parameters()
+    lwc_params, scale_params = adascale_qdq.get_adascale_trainable_parameters()
+    adascale_params = lwc_params + scale_params
     for p in adascale_params:
         p.requires_grad = True
 
@@ -211,8 +212,10 @@ class TestAdascale:
                     block.layer2.param_quantizers["weight"], AdaScaleQuantizeDequantize
                 )
 
-                trainable_params = AdaScale._get_adascale_trainable_params(block)
-                AdaScale._set_requires_grad(trainable_params, True)
+                lwc_params, scale_params = AdaScale._get_adascale_trainable_params(
+                    block
+                )
+                AdaScale._set_requires_grad(lwc_params + scale_params, True)
 
                 for name, param in block.named_parameters():
                     if name in [
@@ -269,8 +272,10 @@ class TestAdascale:
                             "layer2.bias",
                         ]
 
-                trainable_params = AdaScale._get_adascale_trainable_params(block)
-                AdaScale._set_requires_grad(trainable_params, True)
+                lwc_params, scale_params = AdaScale._get_adascale_trainable_params(
+                    block
+                )
+                AdaScale._set_requires_grad(lwc_params + scale_params, True)
                 with remove_activation_quantizers(block):
                     for name, param in block.named_parameters():
                         if name in [
@@ -331,8 +336,8 @@ class TestAdascale:
         dummy_input = torch.rand(1, 3, 32, 64)
         model = test_models.ModelWithConsecutiveLinearBlocks()
         sim = QuantizationSimModel(model, dummy_input)
-        trainable_params = AdaScale._get_adascale_trainable_params(sim.model)
-        assert not trainable_params
+        lwc_params, scale_params = AdaScale._get_adascale_trainable_params(sim.model)
+        assert not lwc_params + scale_params
 
         with patch.dict(
             model_to_block_mapping,
@@ -345,7 +350,9 @@ class TestAdascale:
 
             AdaScale._replace_with_adascale_weight_quantizers(adascale_blocks)
             for block in adascale_blocks:
-                trainable_params = AdaScale._get_adascale_trainable_params(block)
+                lwc_params, scale_params = AdaScale._get_adascale_trainable_params(
+                    block
+                )
                 assert (
-                    len(trainable_params) == 8
+                    len(lwc_params + scale_params) == 8
                 )  # two linear layers X [gamma, beta, s2, s3]
