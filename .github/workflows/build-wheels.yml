@@ -149,6 +149,6 @@ jobs:
         with:
           name: "${{ matrix.id }}-win-wheel"
           path: |
-            wheelhouse/aimet*.whl
+            wheelhouse/aimet*-win*.whl
           if-no-files-found: error
           retention-days: 30d
