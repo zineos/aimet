@@ -3553,6 +3553,27 @@ def test_onnx_qdq_lpbq(seed: int):
 
 
 class TestDynamicWeightSymmetryMapping:
+    def _assert_uint_activation(self, model: onnx.ModelProto):
+        model = onnx.shape_inference.infer_shapes(model)
+
+        dtypes = {
+            val.name: val.type.tensor_type.elem_type for val in model.graph.value_info
+        }
+        param_names = set(init.name for init in model.graph.initializer)
+        q_nodes = [
+            node for node in model.graph.node if node.op_type == "QuantizeLinear"
+        ]
+
+        for q in q_nodes:
+            output_dtype = dtypes[q.output[0]]
+            if q.input[0] not in param_names:
+                assert output_dtype in (
+                    onnx.TensorProto.UINT4,
+                    onnx.TensorProto.UINT8,
+                    onnx.TensorProto.UINT16,
+                    onnx.TensorProto.UINT32,
+                )
+
     @pytest.mark.parametrize("default_symmetry", [True, False, None])
     @pytest.mark.parametrize("matmul_op_symmetry", [True, False, None])
     def test_dynamic_matmul_symmetry(self, default_symmetry, matmul_op_symmetry):
@@ -3606,6 +3627,13 @@ class TestDynamicWeightSymmetryMapping:
                 == expected_symmetry
             )
 
+            """
+            When: Export to onnx QDQ
+            Then: All activation quantizers must be uint
+            """
+            onnx_qdq_model = sim._to_onnx_qdq()
+            self._assert_uint_activation(onnx_qdq_model)
+
     def test_dynamic_conv_symmetry(self):
         model = models_for_tests.dynamic_conv_model()
         quantsim_config = {
@@ -3639,39 +3667,12 @@ class TestDynamicWeightSymmetryMapping:
                 "dynamic_conv.weight"
             ].use_symmetric_encodings
 
-    @pytest.mark.parametrize("conv_transpose", [True, False])
-    def test_dynamic_conv_symmetry(self, conv_transpose):
-        model = models_for_tests.dynamic_conv_model(conv_transpose=conv_transpose)
-        quantsim_config = {
-            "defaults": {
-                "ops": {"is_output_quantized": "True"},
-                "params": {"is_quantized": "True", "is_symmetric": "True"},
-                "per_channel_quantization": "False",
-                "strict_symmetric": "False",
-                "unsigned_symmetric": "False",
-            },
-            "params": {},
-            "op_type": {},
-            "supergroups": [],
-            "model_input": {"is_input_quantized": "True"},
-            "model_output": {"is_output_quantized": "True"},
-        }
-
-        with tempfile.TemporaryDirectory() as tempdir:
-            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
-                json.dump(quantsim_config, f)
-
-            sim = QuantizationSimModel(
-                model,
-                path=tempdir,
-                config_file=os.path.join(tempdir, "quantsim_config.json"),
-                default_activation_bw=16,
-            )
-
-            assert sim.qc_quantize_op_dict["dynamic_conv.weight"].enabled
-            assert sim.qc_quantize_op_dict[
-                "dynamic_conv.weight"
-            ].use_symmetric_encodings
+            """
+            When: Export to onnx QDQ
+            Then: All activation quantizers must be uint
+            """
+            onnx_qdq_model = sim._to_onnx_qdq()
+            self._assert_uint_activation(onnx_qdq_model)
 
     @pytest.mark.parametrize("conv_transpose", [True, False])
     def test_dynamic_conv_symmetry(self, conv_transpose):
@@ -3706,6 +3707,54 @@ class TestDynamicWeightSymmetryMapping:
             assert sim.qc_quantize_op_dict[
                 "dynamic_conv.weight"
             ].use_symmetric_encodings
+
+            """
+            When: Export to onnx QDQ
+            Then: All activation quantizers must be uint
+            """
+            onnx_qdq_model = sim._to_onnx_qdq()
+            self._assert_uint_activation(onnx_qdq_model)
+
+    @pytest.mark.parametrize("conv_transpose", [True, False])
+    def test_dynamic_conv_symmetry(self, conv_transpose):
+        model = models_for_tests.dynamic_conv_model(conv_transpose=conv_transpose)
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": "False",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                path=tempdir,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+                default_activation_bw=16,
+            )
+
+            assert sim.qc_quantize_op_dict["dynamic_conv.weight"].enabled
+            assert sim.qc_quantize_op_dict[
+                "dynamic_conv.weight"
+            ].use_symmetric_encodings
+
+            """
+            When: Export to onnx QDQ
+            Then: All activation quantizers must be uint
+            """
+            onnx_qdq_model = sim._to_onnx_qdq()
+            self._assert_uint_activation(onnx_qdq_model)
 
     def test_dynamic_gemm_symmetry(self):
         model = models_for_tests.dynamic_gemm(in_channels=10, out_channels=10)
@@ -3737,3 +3786,10 @@ class TestDynamicWeightSymmetryMapping:
 
             assert sim.qc_quantize_op_dict["weights"].enabled
             assert sim.qc_quantize_op_dict["weights"].use_symmetric_encodings
+
+            """
+            When: Export to onnx QDQ
+            Then: All activation quantizers must be uint
+            """
+            onnx_qdq_model = sim._to_onnx_qdq()
+            self._assert_uint_activation(onnx_qdq_model)

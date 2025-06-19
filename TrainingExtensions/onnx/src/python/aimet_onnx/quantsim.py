@@ -1673,12 +1673,21 @@ class QuantizationSimModel:
             "node_name_prefixes": [],
             "encodings": [],
         }
+        param_names = set(self.param_names)
 
         for aimet_node in aimet_qc_quantize_nodes:
-            qtzr = self.qc_quantize_op_dict[aimet_node.input[0]]
-            encodings = qtzr._export_2_0_0_encodings()  # pylint: disable=protected-access
+            input_name = aimet_node.input[0]
+            qtzr = self.qc_quantize_op_dict[input_name]
+            encodings = qtzr.export_encodings("2.0.0")
 
             if encodings:
+                if input_name not in param_names:
+                    # Always cast activation encoding to unsigned encoding.
+                    # This takes care of edge case where qtzr could be a symmetric quantizer
+                    # for dynamic weight of Conv/ConvTranspose/Gemm/Matmul.
+                    # This is a workaround for QNN converter limitation
+                    encodings = _to_unsigned_encoding(encodings)
+
                 # Affine quantizer
                 # Replace QcQuantizeOp with onnx::QuantizeLinear and DequantizeLinear
                 qdq_node_info["input_names"].append(aimet_node.input[0])
@@ -1925,6 +1934,32 @@ class QuantizationSimModel:
         # Repeat in reverse-DFS order
         for op in reversed(data_movement_ops):
             propogate_quantizer(op)
+
+
+def _to_unsigned_encoding(encoding: dict) -> dict:
+    if ("output_dtype" not in encoding) or ("y_scale" not in encoding):
+        raise RuntimeError(
+            f"Expected 2.0.0 encoding format. Got unexpected keys: {list(encoding.keys())}"
+        )
+
+    encoding = encoding.copy()
+    output_dtype = encoding["output_dtype"]
+
+    if output_dtype.startswith("uint"):
+        return encoding
+
+    bw = int(output_dtype[3:])
+
+    if "y_zero_point" in encoding:
+        y_zero_point = np.array(encoding["y_zero_point"], dtype=np.int64)
+    else:
+        y_scale = np.array(encoding["y_scale"])
+        y_zero_point = np.zeros(y_scale.shape, dtype=np.int64)
+
+    # Update dtype from int to uint and shift zero_point accordingly
+    encoding["output_dtype"] = "u" + output_dtype
+    encoding["y_zero_point"] = (y_zero_point + 2 ** (bw - 1)).tolist()
+    return encoding
 
 
 # pylint: disable=too-many-locals, too-many-branches
