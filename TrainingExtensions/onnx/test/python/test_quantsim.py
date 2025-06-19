@@ -1446,13 +1446,8 @@ class TestQuantSim:
         assert peak_mem < current_mem + 0.25 * total_act_memory
         assert peak_mem < current_mem * 5
 
-    @pytest.mark.skip(
-        reason="test requires exact version of torch that the code has built against."
-    )
     def test_model_with_custom_ops(self):
-        custom_ops_path = os.path.dirname(libquant_info.__file__)
-        custom_ops_path = os.path.join(custom_ops_path, "customops")
-        onnx_library = os.path.join(custom_ops_path, "libonnx_custom_add.so")
+        from onnxruntime_extensions import get_library_path
 
         def dummy_callback(session, args):
             calib_data = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
@@ -1465,7 +1460,7 @@ class TestQuantSim:
                 quant_scheme=QuantScheme.post_training_tf_enhanced,
                 param_type="int8",
                 activation_type="int8",
-                user_onnx_libs=[onnx_library],
+                user_onnx_libs=[get_library_path()],
                 path=tempdir,
             )
             sim.save_model_graph("./quantized_custom_model")

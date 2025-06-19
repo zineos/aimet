@@ -164,13 +164,10 @@ class TestAdaround:
             )
             assert not np.all(old_weight == new_weight)
 
-    @pytest.mark.skip(
-        reason="test requires exact version of torch that the code has built against."
-    )
     def test_apply_adaround_for_custom_op(self):
-        custom_ops_path = os.path.dirname(libquant_info.__file__)
-        custom_ops_path = os.path.join(custom_ops_path, "customops")
-        onnx_library = os.path.join(custom_ops_path, "libonnx_custom_add.so")
+        from onnxruntime_extensions import get_library_path
+
+        onnx_library = get_library_path()
 
         np.random.seed(0)
         torch.manual_seed(0)
@@ -208,7 +205,7 @@ class TestAdaround:
             with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
                 encoding_data = json.load(json_file)
 
-            param_keys = encoding_data.keys()
+            param_keys = {enc["name"] for enc in encoding_data}
             params = {
                 node.input[1]
                 for node in model.nodes()

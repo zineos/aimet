@@ -2118,46 +2118,51 @@ def instance_norm_model(opset_version=_DEFAULT_OPSET_VERSION):
 
 
 def custom_add_model():
-    class CustomAddModel(nn.Module):
-        """Simple model using custom addition op"""
-
-        def __init__(self):
-            super(CustomAddModel, self).__init__()
-
-            custom_ops_path = os.path.dirname(libquant_info.__file__)
-            custom_ops_path = os.path.join(custom_ops_path, "customops")
-            torch_library = os.path.join(custom_ops_path, "libtorch_custom_add.so")
-
-            torch.ops.load_library(torch_library)
-
-            def my_add(g, x, y):
-                return g.op("my_ops::custom_add", x, y)
-
-            torch.onnx.register_custom_op_symbolic("my_ops::custom_add", my_add, 9)
-
-            self.conv = nn.Conv2d(
-                in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1
-            )
-
-        def forward(self, x):
-            x_conv = self.conv(x)
-            x_add1 = torch.ops.my_ops.custom_add(x_conv, x_conv)
-            return x_add1
-
-    model = CustomAddModel()
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        save_path = os.path.join(tmp_dir, "./simple_custom_model.onnx")
-        torch.onnx.export(
-            model,
-            torch.randn(1, 3, 64, 64),
-            save_path,
-            verbose=True,
-            input_names=["input"],
-            output_names=["output_add"],
-            custom_opsets={"my_ops": 2},
-        )
-        model_onnx = ONNXModel(load_model(save_path))
-    return model_onnx
+    model = helper.make_model(
+        graph=helper.make_graph(
+            name="CustomAddModel",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, 3, 64, 64]
+                )
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 3, 64, 64]
+                )
+            ],
+            initializer=[
+                numpy_helper.from_array(
+                    np.random.randn(3, 3, 3, 3).astype(np.float32), name="weight"
+                ),
+                numpy_helper.from_array(
+                    np.random.randn(3).astype(np.float32), name="bias"
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Conv",
+                    inputs=["input", "weight", "bias"],
+                    outputs=["y"],
+                    pads=[1, 1, 1, 1],
+                    name="conv",
+                ),
+                helper.make_node(
+                    "CustomAdd",
+                    inputs=["input", "y"],
+                    outputs=["output"],
+                    domain="ai.onnx.contrib",
+                    name="add",
+                ),
+            ],
+        ),
+        opset_imports=[
+            helper.make_operatorsetid("ai.onnx.contrib", 1),
+            helper.make_operatorsetid("", 13),
+        ],
+    )
+    onnx.checker.check_model(model)
+    return ONNXModel(model)
 
 
 def conv_relu_model(opset_version=_DEFAULT_OPSET_VERSION):
