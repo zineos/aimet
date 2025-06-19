@@ -115,6 +115,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
+          # Only include (torch|onnx|tf)-(cpu|gpu)-wheel; exclude onnx-cpu-win-wheel
+          pattern: "*pu-wheel"
           path: artifacts-downloaded
 
       - name: Setup GitHub CLI
