@@ -3793,3 +3793,102 @@ class TestDynamicWeightSymmetryMapping:
             """
             onnx_qdq_model = sim._to_onnx_qdq()
             self._assert_uint_activation(onnx_qdq_model)
+
+
+def test_onnx_qdq_export_output_name_swapping():
+    """
+    Given:
+
+                      +------------------> (output_0)
+    x ---> Sigmoid ---+----> MaxPool ----> (output_1)
+    """
+    model = onnx.helper.make_model(
+        graph=onnx.helper.make_graph(
+            name="model",
+            nodes=[
+                onnx.helper.make_node(
+                    "Sigmoid",
+                    name="Sigmoid",
+                    inputs=["input"],
+                    outputs=["output_0"],
+                ),
+                onnx.helper.make_node(
+                    "MaxPool",
+                    name="MaxPool",
+                    inputs=["output_0"],
+                    outputs=["output_1"],
+                    kernel_shape=(3, 3),
+                ),
+            ],
+            inputs=[
+                onnx.helper.make_value_info(
+                    "input",
+                    onnx.helper.make_tensor_type_proto(
+                        onnx.TensorProto.FLOAT, (1, 3, 224, 224)
+                    ),
+                )
+            ],
+            outputs=[
+                onnx.helper.make_value_info(
+                    "output_0",
+                    onnx.helper.make_tensor_type_proto(
+                        onnx.TensorProto.FLOAT, (1, 3, 224, 224)
+                    ),
+                ),
+                onnx.helper.make_value_info(
+                    "output_1",
+                    onnx.helper.make_tensor_type_proto(
+                        onnx.TensorProto.FLOAT, (1, 3, 222, 222)
+                    ),
+                ),
+            ],
+        )
+    )
+    onnx.checker.check_model(model)
+
+    """
+    When: Export to onnx QDQ
+    """
+    x = np.random.randn(1, 3, 224, 224).astype(np.float32)
+    sim = QuantizationSimModel(model)
+    sim.compute_encodings(lambda sess: sess.run(None, {"input": x}))
+    onnx_qdq_model = sim._to_onnx_qdq()
+
+    """
+    Then: Exported model should look like this:
+
+                                        +-------------------> (output_0)
+            x -> QDQ -> Sigmoid -> QDQ -+-> MaxPool -> QDQ -> (output_1)
+
+
+    NOT like this:
+
+                                        +---> QDQ ----------> (output_0)
+            x -> QDQ -> Sigmoid --------+-> MaxPool -> QDQ -> (output_1)
+    """
+    onnx_qdq_model = sim._to_onnx_qdq()
+
+    # Assert all inputs/outputs of all nodes are associated with Q/DQ
+    q_nodes = [
+        node for node in onnx_qdq_model.graph.node if node.op_type == "QuantizeLinear"
+    ]
+    all_outputs = itertools.chain(
+        *(
+            node.output
+            for node in onnx_qdq_model.graph.node
+            if node.op_type not in ("QuantizeLinear", "DequantizeLinear")
+        )
+    )
+    for output in all_outputs:
+        assert any(output == q.input[0] for q in q_nodes)
+
+    dq_nodes = [
+        node for node in onnx_qdq_model.graph.node if node.op_type == "DequantizeLinear"
+    ]
+    all_inputs = itertools.chain(
+        node.input[0]
+        for node in onnx_qdq_model.graph.node
+        if node.op_type not in ("QuantizeLinear", "DequantizeLinear")
+    )
+    for input in all_inputs:
+        assert any(input == dq.output[0] for dq in dq_nodes)

@@ -1742,8 +1742,15 @@ class QuantizationSimModel:
                 continue
 
             i = list(last_node.output).index(graph_out.name)
-            q.input[0] = last_node.output[i] = dq.output[0]
-            dq.output[0] = graph_out.name
+            last_node.output[i], dq.output[0] = dq.output[0], last_node.output[i]
+
+            # Redirect "out" and "out_updated" to the right consumer
+            for node in model_copy.graph.node:
+                for j, inp in enumerate(node.input):
+                    if inp == last_node.output[i]:
+                        node.input[j] = dq.output[0]
+                    elif inp == dq.output[0]:
+                        node.input[j] = last_node.output[i]
 
         # TODO: Unfortunately, this sanity check doesn't pass yet because the
         #       QcQuantizeOp nodes inserted during QuantizationSimModel.__init__
