@@ -10,8 +10,6 @@ installation options based on your needs and preferences.
 
 - :ref:`PyPI <default-package>`
 - :ref:`Alternative packages <alternative-packages>`
-- :ref:`Host install from scratch <host-install-from-scratch>`
-- :ref:`Docker install <docker-install>`
 - :ref:`Building from source <building-from-source>`
 
 .. _default-package:
@@ -194,24 +192,6 @@ Old versions
 You can also view the release notes for older AIMET versions at https://github.com/quic/aimet/releases.
 Follow the documentation corresponding to that release to select and install the appropriate AIMET package.
 
-.. _host-install-from-scratch:
-
-Host install from scratch
-=========================
-
-The :ref:`Host install from scratch <install-host>` page contains the procedure to prepare the environment
-and manually install and setup AIMET (including prerequisites and dependencies for all framework and
-variants) on a fresh Linux host machine. Use it if you experienced problems installing and/or
-using AIMET via any of the previous installation procedures.
-
-.. _docker-install:
-
-Docker install
-==============
-
-The :ref:`Docker install <install-docker>` page describes how to install AIMET in a Docker
-container using pre-built or locally built Docker images.
-
 .. _building-from-source:
 
 Building from source
@@ -219,7 +199,7 @@ Building from source
 
 For most users, installing the pre-built AIMET package via the pip package manager offers the best
 experience. However, if you want to use the latest code or contribute to AIMET, you need to build it
-from source. To build the latest AIMET code from the source, see `build AIMET from source <https://github.com/quic/aimet/blob/develop/packaging/docker_install.md>`_.
+from source. To build the latest AIMET code from the source, see :ref:`Build AIMET from source <build-from-source>`.
 
 .. |torch_whl_suffix| replace:: \-py38-none-any.whl
 .. |whl_suffix| replace:: \-cp310-cp310-manylinux_2_34_x86_64.whl
