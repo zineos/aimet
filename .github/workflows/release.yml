@@ -28,7 +28,7 @@ on:
 
 # Cancel in-progress runs
 concurrency:
-  group: ${{ github.run_id }}
+  group: ${{ github.head_ref }}
   cancel-in-progress: true
 
 env:
