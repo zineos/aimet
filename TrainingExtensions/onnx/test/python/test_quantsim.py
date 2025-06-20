@@ -2362,7 +2362,7 @@ class TestQuantSim:
         with pytest.raises(RuntimeError):
             QuantizationSimModel(single_residual_model(), param_type=qtype.float(6, 1))
 
-    def test_quantsim_init_dtypes(self):
+    def test_quantsim_init_dtypes(self, tmp_path):
         sim = QuantizationSimModel(
             single_residual_model(), param_type="int4", activation_type="float16"
         )
@@ -2373,6 +2373,9 @@ class TestQuantSim:
         for name in sim.param_names:
             assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.int
             assert sim.qc_quantize_op_dict[name].bitwidth == 4
+
+        sim.compute_encodings([make_dummy_input(sim.model.model)])
+        sim.export(tmp_path, "model")
 
         sim = QuantizationSimModel(
             single_residual_model(),
