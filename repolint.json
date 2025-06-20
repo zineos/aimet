@@ -161,8 +161,7 @@
           },
           "lineCount": 40,
           "patterns": [
-            "Copyright.*Qualcomm Innovation Center, Inc|\\(c\\).*Qualcomm Innovation Center, Inc|Copyright \\(c\\) Qualcomm Technologies, Inc",
-            "SPDX-License-Identifier: BSD-3-Clause|SPDX-License-Identifier: BSD-3-Clause-Clear"
+            "Copyright.*Qualcomm Innovation Center|Copyright \\(c\\) Qualcomm Technologies"
           ],
           "flags": "i"
         }
