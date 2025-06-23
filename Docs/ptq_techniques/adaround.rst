@@ -1,4 +1,4 @@
-.. _featureguide-adaround:
+.. _ptq-adaround:
 
 #################
 Adaptive rounding
@@ -69,6 +69,28 @@ Setup
 .. tab-set::
     :sync-group: platform
 
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. container:: tab-heading
+
+            Load the model for AdaRound. The following code example converts PyTorch MobileNetV2 to ONNX and uses it in the subsequent code.
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Set up model
+            :end-before: # End of model
+
+        .. container:: tab-heading
+
+            AdaRound optimization requires an unlabeled dataset.
+            This example uses the ImageNet validation data.
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Set up dataloader
+            :end-before: # End of dataloader
+
     .. tab-item:: PyTorch
         :sync: torch
 
@@ -123,28 +145,6 @@ Setup
             :start-after: # Set up dataset
             :end-before: # End of dataset
 
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. container:: tab-heading
-
-            Load the model for AdaRound. The following code example converts PyTorch MobileNetV2 to ONNX and uses it in the subsequent code.
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Set up model
-            :end-before: # End of model
-
-        .. container:: tab-heading
-
-            AdaRound optimization requires an unlabeled dataset.
-            This example uses the ImageNet validation data.
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Set up dataloader
-            :end-before: # End of dataloader
-
 Step 1
 ~~~~~~
 
@@ -152,6 +152,14 @@ Apply AdaRound to the model.
 
 .. tab-set::
     :sync-group: platform
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Step 1
+            :end-before: # End of step 1
 
     .. tab-item:: PyTorch
         :sync: torch
@@ -169,14 +177,6 @@ Apply AdaRound to the model.
             :start-after: # Step 1
             :end-before: # End of step 1
 
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Step 1
-            :end-before: # End of step 1
-
 Step 2
 ~~~~~~
 
@@ -184,6 +184,16 @@ Use AIMET's QuantSim to simulate quantization.
 
 .. tab-set::
     :sync-group: platform
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        Recompute the activation encodings to account for changes in distributions after adaround.
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Step 2
+            :end-before: # End of step 2
 
     .. tab-item:: PyTorch
         :sync: torch
@@ -201,17 +211,6 @@ Use AIMET's QuantSim to simulate quantization.
             :start-after: # Step 2
             :end-before: # End of step 2
 
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        Recompute the activation encodings to account for changes in distributions after adaround.
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
-
-
 Step 3
 ~~~~~~
 
@@ -219,6 +218,14 @@ Evaluate the model.
 
 .. tab-set::
     :sync-group: platform
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Step 3
+            :end-before: # End of step 3
 
     .. tab-item:: PyTorch
         :sync: torch
@@ -236,14 +243,6 @@ Evaluate the model.
             :start-after: # Step 3
             :end-before: # End of step 3
 
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Step 3
-            :end-before: # End of step 3
-
 Step 4
 ~~~~~~
 
@@ -251,6 +250,14 @@ If AdaRound resulted in satisfactory accuracy, export the model.
 
 .. tab-set::
     :sync-group: platform
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. literalinclude:: ../snippets/onnx/apply_adaround.py
+            :language: python
+            :start-after: # Step 4
+            :end-before: # End of step 4
 
     .. tab-item:: PyTorch
         :sync: torch
@@ -267,14 +274,6 @@ If AdaRound resulted in satisfactory accuracy, export the model.
             :start-after: # Step 4
             :end-before: # End of step 4
 
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. literalinclude:: ../snippets/onnx/apply_adaround.py
-            :language: python
-            :start-after: # Step 4
-            :end-before: # End of step 4
-
 If the model is still not accurate enough, the next step is typically to try :ref:`quantization-aware training <featureguide-qat>`.
 
 
@@ -283,6 +282,13 @@ API
 
 .. tab-set::
     :sync-group: platform
+
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. include:: ../apiref/onnx/adaround.rst
+           :start-after: # start-after
 
     .. tab-item:: PyTorch
         :sync: torch
@@ -295,10 +301,3 @@ API
 
         .. include:: ../apiref/tensorflow/adaround.rst
            :start-after: # start-after
-
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. include:: ../apiref/onnx/adaround.rst
-           :start-after: # start-after
-

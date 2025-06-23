@@ -1,4 +1,4 @@
-.. _featureguide-autoquant:
+.. _ptq-autoquant:
 
 ######################
 Automatic quantization
@@ -33,9 +33,9 @@ Before entering the optimization workflow, AutoQuant prepares by:
 
 After the preparation steps, AutoQuant proceeds to try four PTQ techniques:
 
-1. :ref:`BatchNorm folding <featureguide-bnf>`
-2. :ref:`Cross-layer equalization (CLE) <featureguide-cle>`
-3. :ref:`Adaptive rounding (Adaround) <featureguide-adaround>` (if enabled)
+1. :ref:`BatchNorm folding <ptq-bnf>`
+2. :ref:`Cross-layer equalization (CLE) <ptq-cle>`
+3. :ref:`Adaptive rounding (Adaround) <ptq-adaround>` (if enabled)
 4. :ref:`Automatic Mixed Precision (AMP) <featureguide-amp>` (if enabled)
 
 These techniques are applied in a best-effort manner until the model meets the allowed accuracy drop.

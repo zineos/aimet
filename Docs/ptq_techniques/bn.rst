@@ -1,4 +1,4 @@
-.. _featureguide-bn:
+.. _ptq-bn-estimate:
 
 ########################
 Batch norm re-estimation
@@ -11,7 +11,7 @@ Batch norm re-estimation (BN re-estimation) uses a small subset of training data
 
 BN re-estimation is recommended under the following conditions:
 
-- When :ref:`batch norm folding <featureguide-bnf>` (BNF) reduces performance
+- When :ref:`batch norm folding <ptq-bnf>` (BNF) reduces performance
 - In models where the main issue is weight quantization
 - In quantization of depth-wise separable layers, as their batch norm statistics are sensitive to oscillations
 

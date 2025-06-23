@@ -1,12 +1,12 @@
 .. include:: ../abbreviation.txt
 
-.. _quantsim-blockwise:
+.. _techniques-blockwise:
 
 ######################
 Per-block quantization
 ######################
 
-This page describes blockwise techniques and tools for *calibration*, the process of determining quantization parameters. See :ref:`Calibration <quantsim-calibration>` for basic information about performing calibration.
+This page describes blockwise techniques and tools for *calibration*, the process of determining quantization parameters. See :ref:`Calibration <techniques-ptq>` for basic information about performing calibration.
 
 .. note::
     The terms "per-block quantization" and "blockwise quantization" are used interchangeably.

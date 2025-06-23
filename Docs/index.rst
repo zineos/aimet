@@ -11,52 +11,57 @@ AIMET Documentation
    :includehidden:
    :maxdepth: 2
 
-   Quick Start <install/quick-start>
-   Installation <install/index>
-   User Guide <userguide/index>
-   Quantization Simulation Guide <quantsim/index>
-   Feature Guide <featureguide/index>
-   Example Notebooks <examples/index>
+   Overview <overview/index>
+   Tutorials <tutorials/index>
+   Techniques <techniques/index>
+   PTQ Techniques <ptq_techniques/index>
    API Reference <apiref/index>
    Release Notes <release_notes>
    External Resources <external/index>
    Glossary <glossary>
 
-The AI Model Efficiency Toolkit (AIMET) is a software toolkit for quantizing and compressing trained models. The primary objective of model optimization is to facilitate its deployment on edge devices like mobile phones or laptops.
+The AI Model Efficiency Toolkit (AIMET) is a software toolkit for quantizing trained ML models. 
+
+AIMET improves the runtime performance of deep learning models by reducing compute load and memory footprint.
+
+Models quantized with AIMET facilitate its deployment on edge devices like mobile phones or laptops by reducing memory footprint 
 
 AIMET employs post-training and fine-tuning techniques to minimize accuracy loss during quantization and compression.
 
-AIMET supports models from the PyTorch, TensorFlow/Keras, and ONNX frameworks.
+AIMET supports models from the ONNX, PyTorch and TensorFlow/Keras frameworks.
 
-Quick Start
-===========
 
-To quickly install and begin using AIMET with PyTorch, see the :doc:`Quick Start Guide <../install/quick-start>`.
+Overview
+========
 
-Installation
-============
+Summary of what is AI Model Efficiency Toolkit(AIMET) and how you can use it, see the :doc:`Overview <../overview/index>`.
 
-For other install options, including for TensorFlow and ONNX platforms or to run AIMET in a Docker container, see :doc:`Installation <../install/index>`.
+To quickly install and begin using AIMET, see the :doc:`Quick Start Guide <../overview/install/quick-start>`.
 
-User Guide
-==========
 
-For a high-level explanation of how to use AIMET to optimize a model, see the :doc:`Quantization User Guide <../userguide/index>`.
+Tutorials
+=========
 
-Quantization Simulation Guide
-=============================
+Check curated tutorials to get started with quantization workflows and other techniques with AIMET, see the :doc:`Tutorials <../tutorials/index>`.
 
-Quantization simulation (QuantSim) emulates the behavior of quantized hardware in a model running on floating point hardware. For a guide to quantization simulation and its related techniques, see the :doc:`Quantization Simulation Guide <../quantsim/index>`.
-
-Feature Guide
-=============
-
-For instructions on applying individual AIMET features, see the :doc:`Feature Guide <../featureguide/index>`.
 
 Example Notebooks
 =================
 
-To view end-to-end examples of model quantization and compression, and to download the examples in Jupyter notebook format, see the :doc:`Example Notebooks <../examples/index>` page.
+To view end-to-end examples of model quantization and compression, and to download the examples in Jupyter notebook format, see the :doc:`Example Notebooks <../tutorials/notebooks>` page.
+
+
+Techniques
+==========
+
+For a high-level explanation of how to use AIMET to optimize a model, see the :doc:`Quantization User Guide <../techniques/index>`.
+
+
+Post Training Quantization Techniques
+=====================================
+
+For instructions on applying individual AIMET PTQ techniques, see the :doc:`PTQ Techniques <../ptq_techniques/index>`.
+
 
 API Reference
 =============

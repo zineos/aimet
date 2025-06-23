@@ -1,4 +1,4 @@
-.. _featureguide-compression-index:
+.. _techniques-compression:
 
 ###########
 Compression

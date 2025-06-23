@@ -1,6 +1,6 @@
 .. include:: ../abbreviation.txt
 
-.. _userguide-quantization-workflow:
+.. _tutorials-quantization-workflow:
 
 #####################
 Quantization workflow
@@ -9,6 +9,8 @@ Quantization workflow
 This page provides a methodology to evaluate and improve the accuracy and performance of machine-learning models on Qualcomm\ |reg| devices using the AI Model Efficiency Toolkit (AIMET).
 
 We recommend the following workflow for quantizing a model to improve its efficiency. 
+
+.. image:: ../images/quantization_workflow.png
 
 General guidelines
 ==================

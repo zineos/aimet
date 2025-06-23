@@ -1,6 +1,6 @@
 .. include:: ../abbreviation.txt
 
-.. _featureguide-bnf:
+.. _ptq-bnf:
 
 ##################
 Batch norm folding

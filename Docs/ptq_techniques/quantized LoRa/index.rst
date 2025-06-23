@@ -1,4 +1,4 @@
-.. _featureguide-quantized-lora-index:
+.. _ptq-lora:
 
 ###############
 Quantized LoRa

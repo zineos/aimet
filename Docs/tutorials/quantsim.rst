@@ -9,9 +9,9 @@ Quantization simulation guide
 .. toctree::
     :hidden:
 
-    Calibration <calibration>
-    QAT <qat>
-    Blockwise quantization <blockwise>
+    Post-Training Quantization (PTQ) <ptq>
+    Quantization Aware Training (QAT) <qat>
+    Blockwise Quantization <blockwise>
 
 Overview
 ========

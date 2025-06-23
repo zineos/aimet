@@ -7,6 +7,17 @@ AIMET API
 .. tab-set::
     :sync-group: platform
 
+
+    .. tab-item:: ONNX
+        :sync: onnx
+
+        .. container:: tab-heading
+
+            **aimet_onnx**
+
+        .. include:: ../apiref/onnx/index.rst
+            :start-after: # start-after
+
     .. tab-item:: PyTorch
         :sync: torch
 
@@ -33,14 +44,4 @@ AIMET API
             **aimet_tensorflow**
 
         .. include:: ../apiref/tensorflow/index.rst
-            :start-after: # start-after
-
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        .. container:: tab-heading
-
-            **aimet_onnx**
-
-        .. include:: ../apiref/onnx/index.rst
             :start-after: # start-after

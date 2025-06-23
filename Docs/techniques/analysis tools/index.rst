@@ -1,4 +1,4 @@
-.. _featureguide-analysis-tools-index:
+.. _techniques-analysis-tools:
 
 ##############
 Analysis tools

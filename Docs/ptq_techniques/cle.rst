@@ -1,4 +1,4 @@
-.. _featureguide-cle:
+.. _ptq-cle:
 
 ########################
 Cross-layer equalization
@@ -11,7 +11,7 @@ Quantization of floating-point models into lower bitwidths introduces quantizati
 AIMET includes a cross-layer equalization (CLE) tool that applies the following PTQ techniques:
 
 Batch Norm Folding
-  This feature folds batch norm layers into adjacent convolutional and linear layers. For more on BNF see :ref:`Batch norm folding <featureguide-bnf>`.
+  This feature folds batch norm layers into adjacent convolutional and linear layers. For more on BNF see :ref:`Batch norm folding <ptq-bnf>`.
   
 Cross Layer Scaling
   In some models, the parameter ranges for different channels in a layer show a wide variance. See the first chart in the following figure. 

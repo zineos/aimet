@@ -1,13 +1,13 @@
 .. _examples-index:
 
 ########
-Examples
+Example Notebooks
 ########
 
 AIMET end-to-end examples are **Jupyter Notebooks** that are intended to:
 
 - Familiarize you with the AIMET APIs,
-- Demonstrate how to apply AIMET to a pre-trained model from PyTorch, TensorFlow and ONNX frameworks,
+- Demonstrate how to apply AIMET to a pre-trained model from PyTorch, ONNX and TensorFlow frameworks,
 - Teach you how to use AIMET quantization and compression techniques.
 
 For a discussion of quantization and compression techniques, see :doc:`Optimization User Guide <../opt-guide/index>`.
@@ -27,41 +27,41 @@ and compression features. Instructions after the tables describe how to run the 
    :header-rows: 1
 
    * - Features
+     - ONNX
      - PyTorch
      - TensorFlow
-     - ONNX
    * - Quantization simulation (QuantSim)
+     - `Link <onnx/quantization/quantsim.ipynb>`_
      - `Link <torch/quantization/qat.ipynb>`_
      - `Link <tensorflow/quantization/keras/qat.ipynb>`_
-     - `Link <onnx/quantization/quantsim.ipynb>`_
    * - Quantization-aware training (QAT)
+     - Not implemented.
      - `Link <torch/quantization/qat_range_learning.ipynb>`_
      - `Link <tensorflow/quantization/keras/qat_range_learning.ipynb>`_
-     - Not implemented.
    * - Cross-layer equalization (CLE)
+     - `Link <onnx/quantization/cle.ipynb>`_
      - `Link <torch/quantization/cle_bc.ipynb>`_
      - `Link <tensorflow/quantization/keras/quantsim_cle.ipynb>`_
-     - `Link <onnx/quantization/cle.ipynb>`_
    * - Adaptive rounding (AdaRound)
+     - `Link <onnx/quantization/adaround.ipynb>`_
      - `Link <torch/quantization/adaround.ipynb>`_
      - `Link <tensorflow/quantization/keras/adaround.ipynb>`_
-     - `Link <onnx/quantization/adaround.ipynb>`_
    * - Automatic quantization (AutoQuant)
+     - Not implemented.
      - `Link <torch/quantization/autoquant.ipynb>`_
      - `Link <tensorflow/quantization/keras/autoquant.ipynb>`_
-     - Not implemented.
    * - Automatic mixed precision (AMP)
+     - `Link <onnx/quantization/AMP.ipynb>`_
      - `Link <torch/quantization/AMP.ipynb>`_
      - `Link <tensorflow/quantization/keras/KerasAMP.ipynb>`_
-     - `Link <onnx/quantization/AMP.ipynb>`_
    * - BatchNorm re-estimation
+     - Not implemented.
      - `Link <torch/quantization/bn_reestimation.ipynb>`_
      - `Link <tensorflow/quantization/keras/bn_reestimation.ipynb>`_
-     - Not implemented.
    * - Quant analyzer
+     - Not implemented.
      - `Link <torch/quantization/quant_analyzer.ipynb>`_
      - `Link <tensorflow/quantization/keras/quant_analyzer.ipynb>`_
-     - Not implemented.
 
 **Model Compression Examples**
 
@@ -149,12 +149,19 @@ Set up your workspace using the following steps:
 
 **Model quantization notebooks**
 
+- Examples/onnx/quantization/
 - Examples/torch/quantization/
 - Examples/tensorflow/quantization/keras/
-- Examples/onnx/quantization/
 
 **Model compression notebooks**
 
 - Examples/torch/compression/
 
 2. Follow the instructions in the notebook to execute the code.
+
+.. toctree::
+  :hidden:
+
+    Quantization Workflow <quantization-workflow>
+    QuantAnalyzer <quant_analyzer>
+    Automatic Mixed Precision <amp>

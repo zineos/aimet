@@ -1,4 +1,4 @@
-.. _quantsim-calibration:
+.. _techniques-ptq:
 
 ###########
 Calibration

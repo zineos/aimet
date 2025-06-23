@@ -99,7 +99,7 @@ A typical QAT workflow is illustrated here:
 
 .. image:: ../images/quant_use_case_2.PNG
 
-Quantization-aware training is described in :ref:`Quantization aware training <quantsim-qat>`.
+Quantization-aware training is described in :ref:`Quantization aware training <techniques-qat>`.
 
 
 Mixed precision

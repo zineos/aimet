@@ -1,4 +1,4 @@
-.. _featureguide-seq-mse:
+.. _ptq-seq-mse:
 
 ##############
 Sequential MSE

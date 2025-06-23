@@ -1,4 +1,4 @@
-.. _quantsim-qat:
+.. _techniques-qat:
 
 ###########################
 Quantization-aware training
@@ -44,7 +44,7 @@ Prerequisites
 
 You need a PyTorch or TensorFlow model. ONNX does not support QAT.
 
-.. _quantsim-qat-setup:
+.. _techniques-qat-setup:
 
 Step 1: Setup
 -------------
@@ -76,7 +76,7 @@ Set up the model, data loader, and training callback.
 
         Not supported.
 
-.. _quantsim-qat-encodings:
+.. _techniques-qat-encodings:
 
 Step 2: Computing the initial quantization parameters
 -----------------------------------------------------
@@ -120,7 +120,7 @@ Compute the quantization parameters and calculate quantized accuracy.
         Not supported.
 
 
-.. _quantsim-qat-calibrate:
+.. _techniques-qat-calibrate:
 
 Step 3: Calibrate the quantized model
 -------------------------------------
@@ -241,11 +241,11 @@ To use QAT with multi-GPU support, do the following. The instructions are the sa
 
         **Step 1: Setup**
 
-        Create a :class:`QuantizationSimModel` for your pre-trained PyTorch model per :ref:`Step 1 <quantsim-qat-setup>`. Do not use DataParallel mode.
+        Create a :class:`QuantizationSimModel` for your pre-trained PyTorch model per :ref:`Step 1 <techniques-qat-setup>`. Do not use DataParallel mode.
 
         **Step 2: Compute encodings**
 
-        Compute quantization encodings for the model per :ref:`Step 2 <quantsim-qat-encodings>`. Do not use a forward function that moves the model to multi-gpu and back.
+        Compute quantization encodings for the model per :ref:`Step 2 <techniques-qat-encodings>`. Do not use a forward function that moves the model to multi-gpu and back.
 
         **Step 2.5 (additional step)**
 
@@ -258,7 +258,7 @@ To use QAT with multi-GPU support, do the following. The instructions are the sa
 
         **Steps 3 - 5**
 
-        Evaluate, train, and export the model per :ref:`steps 3 - 5 <quantsim-qat-calibrate>`.
+        Evaluate, train, and export the model per :ref:`steps 3 - 5 <techniques-qat-calibrate>`.
 
     .. tab-item:: TensorFlow
         :sync: tf
