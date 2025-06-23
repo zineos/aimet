@@ -75,7 +75,7 @@ _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.QuantAnalyzer)
 if ort.__version__ < "1.20":
     _cudnn_conv_algo_search = "DEFAULT"
 else:
-    _cudnn_conv_algo_search = "EXHAUSTIVE"
+    _cudnn_conv_algo_search = "HEURISTIC"
 
 
 class QuantAnalyzer:
