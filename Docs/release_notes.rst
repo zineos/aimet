@@ -5,6 +5,39 @@
 #############
 Release notes
 #############
+
+2.9.0
+=====
+
+* Bug Fixes and Improvements
+    * ONNX
+        * Rename QuantizeLinear outputs from <...>_int to <...>_q in onnx QDQ export (`e78dbec`_)
+        * Preserve I/O names in onnx QDQ export (`35ad990`_)
+        * Allow freezing loaded encodings in load_encodings_to_sim (`911af75`_)
+        * Represent activation QDQ with uint in encodings 2.0.0 in onnx QDQ export (`92f63f5`_)
+        * Allow aimet-onnx to load partial encodings (`6636515`_)
+        * Fix onnx sim.export permanently removing quantizers (`9a2a407`_)
+        * Fix onnx QDQ export output name swapping bug (`6d1664c`_)
+        * Switch AdaRound API naming to num_iterations (`fea395f`_)
+    * PyTorch
+        * Add native support for Mistral-0.3 (`db99447`_)
+        * AdaScale: Update the learning rates for AdaScale learnable parameters (`7336ead`_)
+    * common
+        * Add docs to build aimet from source (`ae981f7`_)
+
+.. _e78dbec: https://github.com/quic/aimet/commit/e78dbecb76f5f278baabb6f32a45de299f03a75a
+.. _35ad990: https://github.com/quic/aimet/commit/35ad990c4e476f8ef2b51eecbafba1ff25d439cb
+.. _911af75: https://github.com/quic/aimet/commit/911af7587ef111e7d90d66db4988e5df218337ee
+.. _92f63f5: https://github.com/quic/aimet/commit/92f63f55127f90a6c939d4e8e7fd65189d741e4f
+.. _6636515: https://github.com/quic/aimet/commit/66365155f5f0d5620c1bb84321732099ce1d8719
+.. _9a2a407: https://github.com/quic/aimet/commit/9a2a40708a73d105cb56152ece5bd127e0ed9474
+.. _6d1664c: https://github.com/quic/aimet/commit/6d1664c110d86c401e9715f92cbad10230f489a0
+.. _fea395f: https://github.com/quic/aimet/commit/fea395f750de16147a5ce541f2a9723558f0a710
+.. _db99447: https://github.com/quic/aimet/commit/db99447da525b114d081acc81d60dfaa95863e79
+.. _7336ead: https://github.com/quic/aimet/commit/7336eadb286592eb5f798a689ee5b6e8b918483f
+.. _ae981f7: https://github.com/quic/aimet/commit/ae981f73f91580d26024c652a5bbda4d4d8ff77d
+
+
 2.8.0
 =====
 
