@@ -41,10 +41,9 @@ import os
 from typing import Dict, List
 
 from bokeh import plotting
-from bokeh.models import tickers, ColumnDataSource, Band, Span
+from bokeh.models import tickers, ColumnDataSource, Band, Span, HoverTool
 
 from aimet_common import libpymo
-
 
 DEFAULT_BOKEH_FIGURE_HEIGHT = 300
 
@@ -56,14 +55,20 @@ def export_per_layer_sensitivity_analysis_plot(
     Export per layer sensitivity analysis in html format.
 
     :param layer_wise_eval_score_dict: layer wise eval score dictionary. dict[layer_name] = eval_score.
-    :param results_dir: Directory to save the results.
+    :param filename: Filename for the HTML plot saved to disk
     :param title: Title of the plot.
     """
-    layer_names = []
-    eval_scores = []
-    for layer_name, eval_score in layer_wise_eval_score_dict.items():
-        layer_names.append(layer_name)
-        eval_scores.append(eval_score)
+    layer_names = list(layer_wise_eval_score_dict.keys())
+    eval_scores = list(layer_wise_eval_score_dict.values())
+    layer_indices = list(range(len(layer_names)))
+
+    ds = ColumnDataSource(
+        data=dict(
+            layer_names=layer_names,
+            layer_indices=layer_indices,
+            eval_scores=eval_scores,
+        )
+    )
 
     # Configure the output file to be saved.
     if not filename.endswith(".html"):
@@ -71,16 +76,24 @@ def export_per_layer_sensitivity_analysis_plot(
 
     plotting.output_file(filename)
     plot = plotting.figure(
-        x_range=layer_names,
         height=DEFAULT_BOKEH_FIGURE_HEIGHT,
         title=title,
         x_axis_label="Layers",
-        y_axis_label="Eval score",
+        y_axis_label="Eval Score",
     )
-    plot.line(x=layer_names, y=eval_scores)
+    plot.line(x="layer_indices", y="eval_scores", source=ds)
     plot.y_range.start = 0
     plot.xaxis.major_label_orientation = "vertical"
     plot.sizing_mode = "scale_width"
+
+    hover = HoverTool()
+
+    hover.tooltips = [
+        ("Layer", "@layer_names"),
+        ("Score", "@eval_scores"),
+    ]
+    plot.add_tools(hover)
+
     plotting.save(plot)
     return plot
 
