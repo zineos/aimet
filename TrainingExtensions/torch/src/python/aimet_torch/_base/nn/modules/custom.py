@@ -247,7 +247,7 @@ class CustomSiLU(torch.nn.Module):
         self.sigmoid = torch.nn.Sigmoid()
         self.mul = Multiply()
 
-    def forward(self, x: torch.Tensor) -> Any:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward-pass routine for custom SiLU
         """

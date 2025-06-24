@@ -749,13 +749,29 @@ class QuantizedGridSample(_DispatchMixin, QuantizationMixin, GridSample):
 # @QuantizationMixin.implements(Pow)
 # class QuantizedPow(QuantizationMixin, Pow):
 #     """ Quantized Pow """
-#
-#
-# @QuantizationMixin.implements(CustomSiLU)
-# class QuantizedCustomSiLU(QuantizationMixin, CustomSiLU):
-#     """ Quantized CustomSiLU """
-#
-#
+
+
+@QuantizationMixin.implements(CustomSiLU)
+class QuantizedCustomSiLU(QuantizationMixin, CustomSiLU):
+    """Quantized CustomSiLU"""
+
+    __quant_init__ = QuantizationMixin.__unary__
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # pylint: disable=arguments-differ
+        (input_qtzr,) = self.input_quantizers
+        (output_qtzr,) = self.output_quantizers
+
+        if input_qtzr:
+            x = input_qtzr(x)
+
+        out = super().forward(x)
+
+        if output_qtzr:
+            out = output_qtzr(out)
+
+        return out
+
+
 # @QuantizationMixin.implements(StridedSlice)
 # class QuantizedStridedSlice(QuantizationMixin, StridedSlice):
 #     """ Quantized StridedSlice """

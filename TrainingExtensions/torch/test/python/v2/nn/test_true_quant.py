@@ -1228,7 +1228,7 @@ def _create_quantized_module(module):
             (lambda: custom.RmsNorm([5, 2, 3], [2], 1e-5), lambda: (randn(5, 2, 3))),
             # (lambda custom.DynamicConv2d(),                 lambda: ...),
             # (lambda custom.Pow(),                           lambda: ...),
-            # (lambda custom.CustomSiLU(),                    lambda: ...),
+            (lambda: custom.CustomSiLU(), lambda: randn(100)),
             # (lambda custom.StridedSlice(),                  lambda: ...),
             # (lambda custom.ChannelShuffle(),                lambda: ...),
             # (lambda custom.Cast(),                          lambda: ...),
