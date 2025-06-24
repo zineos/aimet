@@ -167,9 +167,9 @@ class AdaroundOptimizer:
         adaround_quantizer = param_to_adaround_tensor_quantizer[
             module.params["weight"].name
         ]
-        torch_device = "cpu"
+        torch_device = torch.device("cpu")
         if use_cuda:
-            torch_device = "cuda:" + str(device)
+            torch_device = torch.device("cuda:" + str(device))
         weights = torch.from_numpy(
             numpy_helper.to_array(module.params["weight"].tensor)
         ).to(torch_device)
@@ -225,13 +225,16 @@ class AdaroundOptimizer:
 
         if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
             logger.debug("Caching intermediate activations data for optimization.")
-            all_inp_data, all_orig_out_data = (
+            all_inp_data_np, all_orig_out_data_np = (
                 act_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
             )
-            all_inp_data, all_orig_out_data = (
-                torch.from_numpy(all_inp_data[0]),
-                torch.from_numpy(all_orig_out_data[0]),
-            )
+            all_inp_data = [
+                torch.from_numpy(inp_data_np) for inp_data_np in all_inp_data_np
+            ]
+            all_orig_out_data = [
+                torch.from_numpy(orig_out_data_np)
+                for orig_out_data_np in all_orig_out_data_np
+            ]
 
             # Try to put all cached activations data on GPU for faster optimization if possible.
             if use_cuda:
@@ -241,17 +244,29 @@ class AdaroundOptimizer:
 
         for iteration in range(opt_params.num_iterations):
             if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
-                indices = torch.randperm(all_inp_data.size(0))[:BATCH_SIZE]
-                inp_data = all_inp_data[indices].to(torch_device)
-                orig_out_data = all_orig_out_data[indices].to(torch_device)
+                # batch idx is chosen using iteration % len(all_inp_data_np). Of all the samples in a given batch,
+                # min(batch size, BATCH_SIZE) is operated on in a single iteration
+                indices = torch.randperm(
+                    all_inp_data[iteration % len(all_inp_data_np)].size(0)
+                )[:BATCH_SIZE]
+                inp_data = all_inp_data[iteration % len(all_inp_data_np)][indices].to(
+                    torch_device
+                )
+                orig_out_data = all_orig_out_data[iteration % len(all_inp_data_np)][
+                    indices
+                ].to(torch_device)
             else:
                 model_inputs = cached_dataset[np.random.randint(len(cached_dataset))]
                 inp_data, orig_out_data = act_sampler.sample_acts(
                     create_input_dict(orig_model.model, model_inputs)
                 )
                 inp_data, orig_out_data = (
-                    torch.from_numpy(inp_data[0]).to(torch_device),
-                    torch.from_numpy(out_data[0]).to(torch_device),
+                    torch.from_numpy(inp_data[iteration % len(inp_data)]).to(
+                        torch_device
+                    ),
+                    torch.from_numpy(orig_out_data[iteration % len(inp_data)]).to(
+                        torch_device
+                    ),
                 )
                 # This assumes there's only 1 input and 1 output in the list output by sample_acts
 
@@ -511,8 +526,8 @@ class AdaroundOptimizer:
 
     @staticmethod
     def _place_cached_acts_data(
-        inp_data: torch.Tensor, out_data: torch.Tensor, device: torch.device
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        inp_data: List[torch.Tensor], out_data: List[torch.Tensor], device: torch.device
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
         """
         Function decides whether cached activation data can be placed on device or not. If yes, it puts
         cached activation data to given device. If there is not enough device memory, it keeps the
@@ -520,8 +535,8 @@ class AdaroundOptimizer:
 
         NOTE: The threshold value is empirically chosen. Threshold ensures the safety from OOM for remaining run.
 
-        :param inp_data: Input activations data.
-        :param out_data: Output activations data.
+        :param inp_data: List of input activations data.
+        :param out_data: List of output activations data.
         :param device: Device.
         :return: Input and output activations data.
         """
@@ -535,27 +550,23 @@ class AdaroundOptimizer:
         threshold_mem = threshold_mem * EMPIRICAL_THRESHOLD
 
         # required GPU memory in GB
-        data_size_in_bits = 16 if inp_data.dtype == torch.half else 32
-        req_mem = 0
-        req_mem += (
-            reduce(lambda x, y: x * y, inp_data.size())
-            * data_size_in_bits
-            / (1024 * 1024 * 1024 * 8)
-        )
-        req_mem += (
-            reduce(lambda x, y: x * y, out_data.size())
-            * data_size_in_bits
-            / (1024 * 1024 * 1024 * 8)
-        )
+        data_size_in_bits = 16 if inp_data[0].dtype == torch.half else 32
+
+        tensor_size = 0
+        for tensor in inp_data + out_data:
+            tensor_size += reduce(lambda x, y: x * y, tensor.size())
+
+        req_mem = tensor_size * data_size_in_bits / (1024 * 1024 * 1024 * 8)
 
         if req_mem < threshold_mem:
             try:
-                inp_data = inp_data.to(device)
-                out_data = out_data.to(device)
+                inp_data = [t.to(device) for t in inp_data]
+                out_data = [t.to(device) for t in out_data]
                 logger.debug("Placed cached activations data on GPU.")
             except RuntimeError as error:
-                inp_data = inp_data.cpu()
-                out_data = out_data.cpu()
+                inp_data = [t.to("cpu") for t in inp_data]
+                out_data = [t.to("cpu") for t in out_data]
+
                 logger.debug(
                     "Could not place cached activations data on GPU."
                     " Placed cached activations data on CPU. RuntimeError: %s",
