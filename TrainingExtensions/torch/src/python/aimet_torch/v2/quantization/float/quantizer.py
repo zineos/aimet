@@ -58,12 +58,6 @@ from ._finfo import _finfo, _torch_dtype_to_finfo
 __all__ = ["QuantizeDequantize", "FloatQuantizeDequantize"]
 
 
-def _ieee_float_max_representable_value(exponent_bits, mantissa_bits):
-    exponent_max = 2**exponent_bits - 1
-    exponent_bias = exponent_max // 2
-    return (2 - 2**-mantissa_bits) * 2 ** (exponent_max - exponent_bias - 1)
-
-
 class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
     r"""
     Simulates quantization by fake-casting the input
@@ -175,7 +169,7 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
 
         if self.encoding_analyzer:
             shape = self.encoding_analyzer.observer.shape
-            maxval = _ieee_float_max_representable_value(exponent_bits, mantissa_bits)
+            maxval = self._finfo.max
             self.register_buffer("maxval", torch.full(shape, maxval))
         else:
             self.register_buffer("maxval", None)
@@ -195,15 +189,6 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
                         "finite/unsigned_zero floating point has limited support.",
                         f"Expected PyTorch built-in data types, such as {torch_special_builtin_dtypes};",
                         f"got '{self._finfo.to_str()}'",
-                    ]
-                )
-                raise RuntimeError(msg)
-
-            if self.maxval is not None:
-                msg = " ".join(
-                    [
-                        "finite/unsigned_zero floating point has limited support.",
-                        "Expected 'maxval' to be None",
                     ]
                 )
                 raise RuntimeError(msg)
@@ -304,6 +289,20 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
             )
         return None
 
+    def get_scale(self) -> Optional[torch.Tensor]:
+        log2_scale = self._get_log2_scale()
+
+        if log2_scale is None:
+            return None
+
+        return 2**log2_scale
+
+    def _get_log2_scale(self) -> Optional[torch.Tensor]:
+        if self.maxval is None:
+            return None
+
+        return torch.log2(self.maxval.abs()) - math.log2(self._finfo.max)
+
     @classmethod
     def from_encodings(cls, encodings: FloatEncoding) -> "FloatQuantizeDequantize":
         if not isinstance(encodings, FloatEncoding):
@@ -370,6 +369,7 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
             return
 
         absmax = torch.maximum(min.abs(), max.abs()).expand_as(self.maxval)
+        absmax = absmax.to(dtype=self.maxval.dtype, device=self.maxval.device)
         with torch.no_grad():
             self.maxval.copy_(absmax)
 
@@ -389,27 +389,12 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
         encoding = self.get_encodings()
         assert encoding is not None
 
-        maxval = encoding.maxval
-        exponent_bits = encoding.exponent_bits
-        mantissa_bits = encoding.mantissa_bits
-        target_torch_dtype = self._finfo.to_torch_dtype()
-
-        if maxval is None and target_torch_dtype is not None:
-            # Fast forward using type casting
-            orig_dtype = input.dtype
-            output = input.to(target_torch_dtype).to(orig_dtype)
-        else:
-            if maxval is None:
-                maxval = _ieee_float_max_representable_value(
-                    exponent_bits, mantissa_bits
-                )
-
-            # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
-            # is known to introduce substantial CPU overhead.
-            # Cast types of the inputs to plain torch.Tensor for faster execution.
-            output = fake_cast_to_ieee_float(
-                input.as_subclass(torch.Tensor), maxval, exponent_bits, mantissa_bits
-            )
+        # Subclasses of torch.Tensor with custom __torch_function__ (in our case, QuantizedTensorBase)
+        # is known to introduce substantial CPU overhead.
+        # Cast types of the inputs to plain torch.Tensor for faster execution.
+        output = _fake_cast(
+            input.as_subclass(torch.Tensor), self._finfo, self.get_scale()
+        )
         output = output.as_subclass(DequantizedTensor)
         output.encoding = encoding
         return output
@@ -440,3 +425,50 @@ class QuantizeDequantize(FloatQuantizeDequantize):
     r"""
     Alias of FloatQuantizeDequantize
     """
+
+
+def _fake_cast(
+    input: torch.Tensor,
+    finfo: _finfo,
+    scale: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """
+    Fake-cast input to target float dtype.
+
+    Args:
+      input: Input tensor
+      finfo: Target float dtype
+      scale: Scaling factor
+    """
+    if finfo.to_torch_dtype():
+        # Well knwon data types. Use cast-decast for better performance
+        fake_cast = _cast_decast
+    elif not finfo.finite and not finfo.unsigned_zero:
+        # IEEE fake-cast is only valid when finite = unsigned_zero = false
+        fake_cast = _fake_cast_to_ieee_float
+    else:
+        raise NotImplementedError(
+            f"Fake-casting to {finfo.to_str()} is not implemented"
+        )
+
+    # Analogous to quantize
+    if scale is not None:
+        input = input / scale
+    input = input.clamp(-finfo.max, finfo.max)
+    input = fake_cast(input, finfo)
+
+    # Analogous to dequantize
+    if scale is not None:
+        input = input * scale
+
+    return input
+
+
+def _cast_decast(input: torch.Tensor, finfo: _finfo):
+    return input.to(finfo.to_torch_dtype()).to(input.dtype)
+
+
+def _fake_cast_to_ieee_float(input: torch.Tensor, finfo: _finfo):
+    return fake_cast_to_ieee_float(
+        input, finfo.max, finfo.exponent_bits, finfo.mantissa_bits
+    )

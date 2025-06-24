@@ -72,11 +72,29 @@ class _finfo(
 
         return f"float{e + m + 1}_e{e}m{m}{fn}{uz}"
 
-    def is_float16(self):
+    def is_float16(self) -> bool:
         return self == _float16
 
-    def is_bfloat16(self):
+    def is_bfloat16(self) -> bool:
         return self == _bfloat16
+
+    @property
+    def max(self) -> float:
+        torch_dtype = self.to_torch_dtype()
+
+        if torch_dtype:
+            return torch.finfo(torch_dtype).max
+
+        if not self.finite and not self.unsigned_zero:
+            return self._ieee_float_max_representable_value()
+
+        raise RuntimeError(f"Maximum representable value of {self.to_str()} is unkown")
+
+    def _ieee_float_max_representable_value(self):
+        exponent_bits, mantissa_bits, _, _ = self
+        exponent_max = 2**exponent_bits - 1
+        exponent_bias = exponent_max // 2
+        return (2 - 2**-mantissa_bits) * 2 ** (exponent_max - exponent_bias - 1)
 
 
 _float16 = _finfo(exponent_bits=5, mantissa_bits=10, finite=False, unsigned_zero=False)

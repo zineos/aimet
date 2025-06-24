@@ -46,9 +46,6 @@ from aimet_torch.v2.quantization.encoding_analyzer import MinMaxEncodingAnalyzer
 from aimet_torch.v2.quantization import DequantizedTensor
 from aimet_torch.v2.quantization.float import FloatQuantizeDequantize, FloatEncoding
 from aimet_torch.v2.quantization.float._finfo import _finfo
-from aimet_torch.v2.quantization.float.quantizer import (
-    _ieee_float_max_representable_value,
-)
 from aimet_torch.fp_quantization import fake_cast_to_ieee_float
 
 
@@ -167,9 +164,7 @@ def test_qdq_output_non_standard_dtypes(x, exponent_bits, mantissa_bits):
     Then: Output should be equal to fake-casting the input to the non-standard float
     """
     float_qdq = FloatQuantizeDequantize(exponent_bits, mantissa_bits)
-    max_representable_value = _ieee_float_max_representable_value(
-        exponent_bits, mantissa_bits
-    )
+    max_representable_value = _finfo(exponent_bits, mantissa_bits, False, False).max
     expected_output = fake_cast_to_ieee_float(
         x, max_representable_value, exponent_bits, mantissa_bits
     )
@@ -177,25 +172,46 @@ def test_qdq_output_non_standard_dtypes(x, exponent_bits, mantissa_bits):
 
 
 @torch.no_grad()
-def test_qdq_compute_encodings(x):
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        torch.float8_e5m2,
+        torch.float8_e4m3fn,
+        # NOTE: Not supported in torch 2.1
+        # torch.float8_e5m2fnuz,
+        # torch.float8_e4m3fnuz,
+    ],
+)
+def test_qdq_compute_encodings(dtype):
     """
     Given: Instantiated FloatQuantizeDequantize with a min-max encoding analyzer
     When: compute_encodings() and run forwad
     Then: Output should be equal to fake-casting the input
           with maximum representable value = observed maximum input
     """
-    encoding_analyzer = MinMaxEncodingAnalyzer((1, 100))
-    float16_qdq = FloatQuantizeDequantize(
-        dtype=torch.float16, encoding_analyzer=encoding_analyzer
-    )
-    with float16_qdq.compute_encodings():
-        _ = float16_qdq(x)
+    float8_tiny = torch.finfo(dtype).tiny
+    float8_max = torch.finfo(dtype).max
+    for x in [
+        torch.arange(-2, 2, 0.004) * float8_max,
+        torch.arange(-0.5, 0.5, 0.001) * float8_max,
+    ]:
+        x = x.view(10, 100)
 
-    maxval = x.abs().max(dim=0, keepdims=True).values
-    expected_output = fake_cast_to_ieee_float(
-        x, maxval, exponent_bits=5, mantissa_bits=10
-    )
-    assert torch.equal(float16_qdq(x), expected_output)
+        encoding_analyzer = MinMaxEncodingAnalyzer((100,))
+        float8_qdq = FloatQuantizeDequantize(
+            dtype=dtype, encoding_analyzer=encoding_analyzer
+        )
+        with float8_qdq.compute_encodings():
+            _ = float8_qdq(x)
+
+        scale = float8_qdq.get_scale()
+        expected_scale = x.abs().max(dim=0).values / float8_max
+        assert torch.allclose(scale, expected_scale)
+
+        expected_output = (x / scale).clamp(-float8_max, float8_max).to(dtype).to(
+            x.dtype
+        ) * scale
+        assert torch.allclose(float8_qdq(x), expected_output, atol=float8_tiny)
 
 
 def test_allow_overwrite(x):
