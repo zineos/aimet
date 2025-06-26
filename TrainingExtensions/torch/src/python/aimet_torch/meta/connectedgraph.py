@@ -202,6 +202,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
 
         self._input_structure = None
         self._output_structure = None
+        self._output_op = None
 
         self._generate_module_lookup_table(model)
         with in_eval_mode(model), torch.no_grad():
@@ -401,6 +402,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
             output_map,
             top_level_inputs,
             module_to_jit_trace=module_to_jit_trace,
+            top_level_model_output_node=next(trace.graph.outputs()).node(),
         )
 
     # pylint: disable=too-many-branches
@@ -412,6 +414,7 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         higher_level_inputs: List[torch._C.TensorType],
         module_to_jit_trace: Dict[torch.nn.Module, torch.jit.TracedModule],
         elementwise_info: Optional[Tuple[torch.nn.Module, torch.nn.Module]] = None,
+        top_level_model_output_node: Optional[torch._C.Node] = None,
     ):
         """
         Implements a depth-first graph extraction to create ops and products.
@@ -512,6 +515,10 @@ class ConnectedGraph(AimetCommonConnectedGraph):
                     op = self._create_new_multi_output_op(
                         op_type, residing_module=model
                     )
+
+                if top_level_model_output_node and node == top_level_model_output_node:
+                    self._output_op = op
+
                 # For prim and aten nodes, inputs[0] is a regular input to the module, so no need to take inputs[1:]
                 # pylint: disable=unnecessary-comprehension
                 self._add_products_for_op(
@@ -915,6 +922,8 @@ class ConnectedGraph(AimetCommonConnectedGraph):
         # be isolated then we do not know which one is correct.
         if len(output_structure) == 1:
             self._output_structure = next(iter(output_structure.values()))
+        elif self._output_op is not None and self._output_op.name in output_structure:
+            self._output_structure = output_structure[self._output_op.name]
         else:
             logger.warning("Unable to isolate model outputs.")
             self._output_structure = None
