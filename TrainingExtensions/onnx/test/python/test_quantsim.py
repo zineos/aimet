@@ -2952,6 +2952,125 @@ class TestEncodingPropagation:
         ) * np.array(input_qtzr.export_encodings("2.0.0")["y_scale"])
         assert np.allclose(bias_scale, expected)
 
+    @pytest.mark.parametrize(
+        "per_channel, weight_encoding",
+        [
+            (
+                True,
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_TENSOR",
+                    "is_sym": True,
+                    "offset": [0.0],
+                    "scale": [0.023529411764705882],
+                },
+            ),
+            (
+                False,
+                {
+                    "bw": 8,
+                    "dtype": "INT",
+                    "enc_type": "PER_CHANNEL",
+                    "is_sym": True,
+                    "offset": [0.0] * 8,
+                    "scale": [0.023529411764705882] * 8,
+                },
+            ),
+        ],
+    )
+    def test_concretize_bias_qtzr_with_mismatched_setting(
+        self, per_channel, weight_encoding
+    ):
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "True"},
+                "per_channel_quantization": str(per_channel),
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        """
+        Given: Model that contains matmul-add sequence that can be interpreted as
+               weight_matmul - bias_add
+        """
+        model = models_for_tests.conv_relu()
+        encodings = {
+            "param_encodings": [{**weight_encoding, "name": "conv_weight"}],
+            "activation_encodings": [],
+            "version": "1.0.0",
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            config_file = os.path.join(tempdir, "quantsim_config.json")
+            with open(config_file, "w") as f:
+                json.dump(quantsim_config, f)
+                f.close()
+
+            enc_overrides = os.path.join(tempdir, "enc_overrides.encodings")
+            with open(enc_overrides, "w") as f:
+                json.dump(encodings, f)
+                f.close()
+
+            sim = QuantizationSimModel(model, config_file=config_file)
+
+            """
+            When Quantsim is instantiated with PTQ, and the PCQ weight encodings are loaded into Qsim,
+            the weight quantizer setting changes to PCQ and vice-versa
+            """
+
+            if per_channel:
+                assert sim.qc_quantize_op_dict[
+                    "conv_weight"
+                ].quant_info.usePerChannelMode
+            else:
+                assert not sim.qc_quantize_op_dict[
+                    "conv_weight"
+                ].quant_info.usePerChannelMode
+
+            load_encodings_to_sim(
+                sim, enc_overrides, strict=False, allow_overwrite=False
+            )
+
+            if per_channel:
+                assert not sim.qc_quantize_op_dict[
+                    "conv_weight"
+                ].quant_info.usePerChannelMode
+            else:
+                assert sim.qc_quantize_op_dict[
+                    "conv_weight"
+                ].quant_info.usePerChannelMode
+
+            sim.compute_encodings([make_dummy_input(model)])
+
+            """
+            When Quantsim is instantiated with PTQ, and the PCQ weight encodings are loaded into Qsim,
+            the weight quantizer setting changes to PCQ. Now, when concretizing bias quantizers,
+            the bias quantizer setting should also change to PCQ (based on weight quantizer) and vice-versa.
+            """
+            if per_channel:
+                assert sim.qc_quantize_op_dict["conv_bias"].quant_info.usePerChannelMode
+            else:
+                assert not sim.qc_quantize_op_dict[
+                    "conv_bias"
+                ].quant_info.usePerChannelMode
+
+            sim._concretize_int32_bias_quantizers()
+
+            if per_channel:
+                assert not sim.qc_quantize_op_dict[
+                    "conv_bias"
+                ].quant_info.usePerChannelMode
+            else:
+                assert sim.qc_quantize_op_dict["conv_bias"].quant_info.usePerChannelMode
+
     def test_identity_conv_perchannel(self):
         model = models_for_tests.conv_with_weight_identity_input()
 

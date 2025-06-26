@@ -78,6 +78,7 @@ from aimet_common.defs import (
     QTYPE_ALIASES,
     Float,
     int8,
+    EncodingType,
     _quant_scheme_aliases,
 )
 from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_grid_preserving_op
@@ -1399,6 +1400,9 @@ class QuantizationSimModel:
             input, *_ = op.inputs
             bias_qtzr = self.qc_quantize_op_dict.get(bias.name)
 
+            weight_qtzr = self.qc_quantize_op_dict.get(weight.name)
+            encoding_type = weight_qtzr._encoding_type().name
+
             if bias_qtzr.data_type == QuantizationDataType.float:
                 # Float16 quantizers are not exported to onnx QDQ graph
                 continue
@@ -1407,6 +1411,19 @@ class QuantizationSimModel:
                 # Edge case: bias encoding already exists.
                 # Always honor the existing bias encoding
                 continue
+
+            if encoding_type == EncodingType.PER_TENSOR.name:
+                bias_qtzr.enable_per_channel_quantization(False)
+            elif encoding_type in [
+                EncodingType.PER_CHANNEL.name,
+                EncodingType.LPBQ.name,
+                EncodingType.PER_BLOCK.name,
+            ]:
+                bias_qtzr.enable_per_channel_quantization()
+            else:
+                raise RuntimeError(
+                    f"Unknown encoding type {encoding_type}, cannot concretize bias quantizers."
+                )
 
             if weight is None:
                 # Edge case: Op has no weight. Fall back to statistical bias scale
