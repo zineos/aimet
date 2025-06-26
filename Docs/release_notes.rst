@@ -63,6 +63,10 @@ Release notes
         * Made input quantizers always get enabled whenever the input wasn't already quantized (`a2adae2`_)
         * Deprecated saving PyTorch model object during :func:`QuantizationsimModel.export` (`b5521f3`_)
 
+* Known Issues
+  * ONNX
+      * Adaround runs over 2x slower with onnxruntime >=1.19. The root cause has been identified, and a fix is in progress
+
 .. _cbe67ae: https://github.com/quic/aimet/commit/cbe67ae291f3519f3207d438450d22964f5a8c0d
 .. _84edcf5: https://github.com/quic/aimet/commit/84edcf580ac76afa8d128316e03c7737f2599c2d
 .. _836ab1e: https://github.com/quic/aimet/commit/836ab1e56de792569155269dbe3c54d717649468
