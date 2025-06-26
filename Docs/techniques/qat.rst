@@ -9,47 +9,49 @@ by fine-tuning the model parameters in the presence of quantization noise. This 
 the usual costs of neural network training, including longer training times and the need for labeled data
 and hyperparameter search.
 
-QAT modes
-=========
+Variants of QAT
+===============
 
-There are two versions of QAT: without range learning and with range learning.
+There are two main variants of QAT: **without range learning** and **with range learning**.
 
 Without range learning
-      In QAT without range Learning, encoding values for activation quantizers are found once during calibration and are not updated again.
+      In this approach, activation quantization parameters (such as scale and offset) are *not learnable* and remain fixed throughout training.
 
 With range learning
-      In QAT with range Learning, encoding values for activation quantizers are set during calibration and are updated during training, yielding better scale and offset quantization parameters.
+      In this approach, activation quantization parameters are treated as learnable parameters. While this dynamic adjustment can *further reduce quantization noise*, this advantage comes at the cost of *significantly increased memory usage*.
 
-In both versions, parameter quantizer encoding values are updated in sync with the parameters during training.
+In both variants, quantization parameters for model parameters (such as weight) are treated as learnable.
 
-QAT recommendations
-===================
+Typical recommendations
+=======================
 
-These guidelines can improve performance and speed convergence with QAT.
+- **Initialization**: Apply PTQ techniques (such as :ref:`Sequential MSE <featureguide-seq-mse>`) before starting QAT.
 
-Initialization
-    - Apply PTQ techniques before applying QAT, especially if there is large drop in INT8 performance from the FP32 baseline.
+  *This is especially more important if there is a large drop in INT8 performance compared to the FP baseline.
+  QAT is a fine-tuning technique that relies on a reasonably well-performing quantized model as a starting point.
+  Without a solid baseline, its benefit tends to be limited.*
 
-Hyper-parameters
-    - Number of epochs: 15-20 epochs are usually sufficient for convergence.
-    - Learning rate: Comparable (or one order higher) to FP32 model's final learning rate at convergence.
-      Results in AIMET are with learning of the order 1e-6.
-    - Learning rate schedule: Divide learning rate by 10 every 5-10 epochs.
+- **Learning rate**: Use a small learning rate.
+
+  *Start with a small learning rate, and reduce it by a factor of 10 every few epochs.
+  The main goal of QAT is fine-tuning. Since quantization parameters are often sensitive to even minor updates, a small learning rate is typically recommended for stable convergence.*
+
+- **Target layers for QAT**: Whenever possible, apply QAT selectively to layers that are sensitive to quantization.
+
+  *Applying QAT to all layers is not only memory-intensive but can also negatively impact convergence.
+  Quantization parameters that were already near-optimal may drift away from the optimum during QAT.
+  For instance, INT16 quantization typically does not require QAT due to its high precision.
+  In constrast, lower-bit quantization formats such as INT8 or INT4 are more likely to benefit from QAT, as they are more susceptible to quantization noise*
 
 Workflow
 ========
-
-Prerequisites
--------------
-
-You need a PyTorch or TensorFlow model. ONNX does not support QAT.
 
 .. _techniques-qat-setup:
 
 Step 1: Setup
 -------------
 
-Set up the model, data loader, and training callback.
+Set up the model, data loader, and callback functions.
 
 .. tab-set::
     :sync-group: platform
@@ -78,10 +80,10 @@ Set up the model, data loader, and training callback.
 
 .. _techniques-qat-encodings:
 
-Step 2: Computing the initial quantization parameters
------------------------------------------------------
+Step 2: Compute initial quantization parameters
+-----------------------------------------------
 
-Compute the quantization parameters and calculate quantized accuracy.
+Compute initial quantization parameters and evaluate accuracy.
 
 .. tab-set::
     :sync-group: platform
@@ -122,10 +124,10 @@ Compute the quantization parameters and calculate quantized accuracy.
 
 .. _techniques-qat-calibrate:
 
-Step 3: Calibrate the quantized model
--------------------------------------
+Step 3: Run quantization-aware training
+---------------------------------------
 
-Train the model to fine-tune the parameters.
+Train the model to fine-tune quantization parameters.
 
 .. tab-set::
     :sync-group: platform
@@ -138,35 +140,6 @@ Train the model to fine-tune the parameters.
             :start-after: # step_2
             :end-before: # step_3
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
-
-    .. tab-item:: ONNX
-        :sync: ONNX
-
-        Not supported.
-
-Step 4: Evaluating the model
-----------------------------
-
-Evaluate the :class:`QuantizationSimModel` to determine the improvement in accuracy.
-
-.. tab-set::
-    :sync-group: platform
-
-    .. tab-item:: PyTorch
-        :sync: torch
-
-        .. literalinclude:: ../snippets/torch/apply_qat.py
-            :language: python
-            :start-after: # step_3
-            :end-before: # step_4
-
         .. rst-class:: script-output
 
             .. code-block:: none
@@ -176,94 +149,16 @@ Evaluate the :class:`QuantizationSimModel` to determine the improvement in accur
     .. tab-item:: TensorFlow
         :sync: tf
 
-         .. literalinclude:: ../snippets/tensorflow/apply_qat.py
+        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
             :language: python
-            :start-after: # Step 3
-            :end-before: # End of step 3
+            :start-after: # Step 2
+            :end-before: # End of step 2
 
         .. rst-class:: script-output
 
             .. code-block:: none
 
                 Model accuracy after QAT: 0.6910
-
-    .. tab-item:: ONNX
-        :sync: ONNX
-
-        Not supported.
-
-Step 5: Exporting the model
----------------------------
-
-Export the calibrated model to remove quantization operations and create the JSON encodings file containing quantization scale and offset parameters for the model's activation and weight tensors.
-
-.. tab-set::
-    :sync-group: platform
-
-    .. tab-item:: PyTorch
-        :sync: torch
-
-        .. literalinclude:: ../snippets/torch/apply_qat.py
-            :language: python
-            :start-after: # step_4
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
-            :language: python
-            :start-after: # Step 4
-            :end-before: # End of step 4
-
-    .. tab-item:: ONNX
-        :sync: ONNX
-
-        Not supported.
-
-Multi-GPU support
-=================
-
-To use QAT with multi-GPU support, do the following. The instructions are the same as above except:
-
-- Multi-GPU is supported only in PyTorch.
-- There is an additional step to parallelize the model.
-- It is important not to parallelize the model until after computing encodings.
-
-.. tab-set::
-    :sync-group: platform
-
-    .. tab-item:: PyTorch
-        :sync: torch
-
-        .. important::
-
-            Do not invoke DataParallel or multi-GPU mode until after you compute the encodings (quantization parameters).
-
-        **Step 1: Setup**
-
-        Create a :class:`QuantizationSimModel` for your pre-trained PyTorch model per :ref:`Step 1 <techniques-qat-setup>`. Do not use DataParallel mode.
-
-        **Step 2: Compute encodings**
-
-        Compute quantization encodings for the model per :ref:`Step 2 <techniques-qat-encodings>`. Do not use a forward function that moves the model to multi-gpu and back.
-
-        **Step 2.5 (additional step)**
-
-        Move :class:`QuantizationSimModel` to DataParallel as follows.
-
-            .. code-block:: python
-
-                # "sim" here refers to the QuantizationSimModel object.
-                sim.model = torch.nn.DataParallel(sim.model)
-
-        **Steps 3 - 5**
-
-        Evaluate, train, and export the model per :ref:`steps 3 - 5 <techniques-qat-calibrate>`.
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
 
     .. tab-item:: ONNX
         :sync: ONNX
@@ -282,15 +177,9 @@ API
 
         **Top level APIs**
 
-        .. autoclass:: aimet_torch.quantsim.QuantizationSimModel
-            :members: compute_encodings, export, load_encodings
+        .. autoclass:: aimet_torch.QuantizationSimModel
+            :members: compute_encodings, export
             :member-order: bysource
-            :no-index:
-
-        **Quant Scheme Enum**
-
-        .. autoclass:: aimet_common.defs.QuantScheme
-            :members:
             :no-index:
 
     .. tab-item:: TensorFlow

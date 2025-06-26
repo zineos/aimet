@@ -91,13 +91,6 @@ print(f'Quantized accuracy (W8A8): {accuracy:.4f}')
 
 # Step 2
 sim.model.fit(calibration_dataset, epochs=10)
-# End of step 2
-
-# Step 3
 _, accuracy = sim.model.evaluate(eval_dataset)
 print(f'Model accuracy after QAT: {accuracy:.4f}')
-# End of step 3
-
-# Step 4
-sim.export(path='/tmp', filename_prefix='quantized_mobilenet_v2')
-# End of step 4
+# End of step 2
