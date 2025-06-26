@@ -149,25 +149,18 @@ class TestLayerOutput:
         # Delete temp_dir
         shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
-    @pytest.mark.parametrize(
-        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
-    )
-    def test_get_quantsim_outputs(self, _QuantizationSimModel):
+    @pytest.mark.parametrize("cls", [QuantizationSimModelV1, QuantizationSimModelV2])
+    def test_get_quantsim_outputs(self, cls, tmpdir):
         """Test whether outputs are generated for all the layers of a quantsim model"""
 
         # Get quantsim artifacts
-        quantsim, layer_names, dummy_input = get_quantsim_artifacts(
-            _QuantizationSimModel
-        )
+        quantsim, layer_names, dummy_input = get_quantsim_artifacts(cls)
         layer_names = [re.sub(r"\W+", "_", name) for name in layer_names]
-
-        temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
 
         # Obtain layer-outputs of quantsim model
         layer_output = LayerOutput(
             model=quantsim.model,
-            dir_path=temp_dir_path,
+            dir_path=tmpdir,
             naming_scheme=NamingScheme.PYTORCH,
         )
         name_to_output_dict = layer_output.get_outputs(dummy_input)
@@ -179,12 +172,12 @@ class TestLayerOutput:
             )
 
         # Verify whether outputs are quantized outputs. This can only be checked for final output of the model
-        assert torch.equal(quantsim.model(dummy_input), name_to_output_dict["fc"]), (
-            "Output of last layer of quantsim model doesn't match with captured layer-output"
-        )
-
-        # Delete temp_dir
-        shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
+        with torch.no_grad():
+            assert torch.equal(
+                quantsim.model(dummy_input), name_to_output_dict["fc"]
+            ), (
+                "Output of last layer of quantsim model doesn't match with captured layer-output"
+            )
 
     @pytest.mark.parametrize(
         "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
@@ -252,41 +245,32 @@ def get_dataset_artifacts():
 
 
 class TestLayerOutputUtil:
-    @pytest.mark.parametrize(
-        "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]
-    )
-    def test_generate_layer_outputs(self, _QuantizationSimModel):
+    @pytest.mark.parametrize("cls", [QuantizationSimModelV1, QuantizationSimModelV2])
+    def test_generate_layer_outputs(self, cls, tmpdir):
         """Test whether input files and corresponding layer-output files are generated"""
 
         # Get quantsim artifacts
-        quantsim, layer_output_names, dummy_input = get_quantsim_artifacts(
-            _QuantizationSimModel
-        )
+        quantsim, layer_output_names, _ = get_quantsim_artifacts(cls)
         layer_output_names = [re.sub(r"\W+", "_", name) for name in layer_output_names]
 
         # Get dataset artifacts
         dummy_dataset, dummy_data_loader, data_count = get_dataset_artifacts()
 
-        temp_dir_path = os.path.dirname(os.path.abspath(__file__))
-        temp_dir_path = os.path.join(temp_dir_path, "temp_dir")
-
         # Generate layer-outputs
-        layer_output_util = LayerOutputUtil(
-            model=quantsim.model, dir_path=temp_dir_path
-        )
+        layer_output_util = LayerOutputUtil(model=quantsim.model, dir_path=tmpdir)
         for input_batch in dummy_data_loader:
             for single_input in input_batch:
                 layer_output_util.generate_layer_outputs(single_input.unsqueeze(0))
 
         # Verify number of inputs
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "inputs")))
+        assert data_count == len(os.listdir(os.path.join(tmpdir, "inputs")))
 
         # Verify number of layer-output folders
-        assert data_count == len(os.listdir(os.path.join(temp_dir_path, "outputs")))
+        assert data_count == len(os.listdir(os.path.join(tmpdir, "outputs")))
 
         # Verify number of layer-outputs
         saved_layer_outputs = os.listdir(
-            os.path.join(temp_dir_path, "outputs", "layer_outputs_0")
+            os.path.join(tmpdir, "outputs", "layer_outputs_0")
         )
         saved_layer_outputs = [i[: -len(".raw")] for i in saved_layer_outputs]
         for name in layer_output_names:
@@ -294,17 +278,13 @@ class TestLayerOutputUtil:
 
         # Ensure generated layer-outputs can be correctly loaded for layer-output comparison
         saved_last_layer_output = np.fromfile(
-            os.path.join(temp_dir_path, "outputs", "layer_outputs_0", "fc.raw"),
+            os.path.join(tmpdir, "outputs", "layer_outputs_0", "fc.raw"),
             dtype=np.float32,
         ).reshape((1, 1000))
         saved_last_layer_output = torch.from_numpy(saved_last_layer_output)
-        last_layer_output = quantsim.model(
-            torch.unsqueeze(dummy_dataset.__getitem__(0), dim=0)
-        )
+        with torch.no_grad():
+            last_layer_output = quantsim.model(torch.unsqueeze(dummy_dataset[0], dim=0))
         assert torch.equal(last_layer_output, saved_last_layer_output)
-
-        # Delete temp_dir
-        shutil.rmtree(temp_dir_path, ignore_errors=False, onerror=None)
 
     @pytest.mark.parametrize(
         "_QuantizationSimModel", [QuantizationSimModelV1, QuantizationSimModelV2]

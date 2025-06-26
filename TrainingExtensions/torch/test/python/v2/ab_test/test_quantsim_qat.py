@@ -45,9 +45,6 @@ import torch
 from torchvision import models
 from unittest.mock import patch
 
-
-from aimet_common.defs import QuantScheme
-
 from aimet_torch.v2.quantization import affine
 from aimet_torch.v2.quantization.affine.backends import torch_builtins
 from aimet_torch.v2.quantsim import QuantizationSimModel
@@ -128,67 +125,16 @@ def config_path():
         yield temp_config_path
 
 
-@pytest.mark.parametrize(
-    "quant_scheme",
-    [
-        QuantScheme.post_training_tf,
-        QuantScheme.training_range_learning_with_tf_init,
-        # QuantScheme.post_training_percentile, # TODO: not implemented
-    ],
-)
 @pytest.mark.parametrize("model_cls, input_shape", [(resnet18, (1, 3, 224, 224))])
 class TestQuantsimV2QAT:
-    def test_requires_grad_correctness(
-        self, model_cls, input_shape, quant_scheme, config_path
-    ):
-        model = model_cls()
-        dummy_input = torch.randn(input_shape)
-        sim = QuantizationSimModel(
-            model,
-            dummy_input,
-            quant_scheme,
-            config_file=config_path,
-            default_param_bw=8,
-            default_output_bw=4,
-        )
-        sim.compute_encodings(
-            lambda sim_model, _: sim_model(dummy_input), forward_pass_callback_args=None
-        )
-
-        for module in get_quantized_modules(sim.model):
-            quantization_parameters = []
-            quantizers = get_enabled_quantizers_from_quantized_module(module)
-            for quantizer in quantizers:
-                quantization_parameters.append(id(quantizer.min))
-                quantization_parameters.append(id(quantizer.max))
-
-            for _, param in module.named_parameters():
-                # Assertions for quantization parameter
-                if id(param) in quantization_parameters:
-                    if quant_scheme in (
-                        QuantScheme.training_range_learning_with_tf_init,
-                    ):
-                        assert param.requires_grad
-
-                    if quant_scheme in (
-                        QuantScheme.post_training_tf_enhanced,
-                        QuantScheme.post_training_tf,
-                        QuantScheme.post_training_percentile,
-                    ):
-                        assert not param.requires_grad
-                else:
-                    # Assertion for model parameters
-                    assert param.requires_grad
-
     # Based on https://github.com/quic/aimet/blob/75131de478af7ead6a8676dc36f4c46a6d3390ea/TrainingExtensions/torch/test/python/test_range_learning.py#L81
-    def test_grad_correctness(self, model_cls, input_shape, quant_scheme, config_path):
+    def test_grad_correctness(self, model_cls, input_shape, config_path):
         model = model_cls()
         dummy_input = torch.randn(input_shape)
 
         aimetgrad_qsim = QuantizationSimModel(
             model,
             dummy_input,
-            quant_scheme,
             config_file=config_path,
             default_param_bw=8,
             default_output_bw=4,
@@ -196,7 +142,6 @@ class TestQuantsimV2QAT:
         autograd_qsim = QuantizationSimModel(
             model,
             dummy_input,
-            quant_scheme,
             config_file=config_path,
             default_param_bw=8,
             default_output_bw=4,
@@ -232,13 +177,12 @@ class TestQuantsimV2QAT:
                 aimetgrad_param.grad, autograd_param.grad, rtol=1e-3, atol=1e-3
             )
 
-    def test_grad_accumulation(self, model_cls, input_shape, quant_scheme, config_path):
+    def test_grad_accumulation(self, model_cls, input_shape, config_path):
         model = model_cls()
         dummy_input = torch.randn(input_shape)
         sim = QuantizationSimModel(
             model,
             dummy_input,
-            quant_scheme,
             config_file=config_path,
             default_param_bw=8,
             default_output_bw=4,
@@ -262,15 +206,12 @@ class TestQuantsimV2QAT:
                     grad_after_first_backward[param_name] * 2, param.grad
                 )
 
-    def _test_weight_update(
-        self, model_cls, input_shape, quant_scheme, config_path, device
-    ):
+    def _test_weight_update(self, model_cls, input_shape, config_path, device):
         model = model_cls().to(device)
         dummy_input = torch.randn(input_shape).to(device)
         sim = QuantizationSimModel(
             model,
             dummy_input,
-            quant_scheme,
             config_file=config_path,
             default_param_bw=8,
             default_output_bw=4,
@@ -307,35 +248,32 @@ class TestQuantsimV2QAT:
                     - grad_after_backward[param_name] * learning_rate,
                 )
 
-    def test_qat_on_cpu(self, model_cls, input_shape, quant_scheme, config_path):
+    def test_qat_on_cpu(self, model_cls, input_shape, config_path):
         self._test_weight_update(
             model_cls,
             input_shape,
-            quant_scheme,
             config_path,
             device=torch.device("cpu"),
         )
 
     @pytest.mark.cuda
-    def test_qat_on_gpu(self, model_cls, input_shape, quant_scheme, config_path):
+    def test_qat_on_gpu(self, model_cls, input_shape, config_path):
         self._test_weight_update(
             model_cls,
             input_shape,
-            quant_scheme,
             config_path,
             device=torch.device("cuda"),
         )
 
     # Based on https://github.com/quic/aimet/blob/75131de478af7ead6a8676dc36f4c46a6d3390ea/TrainingExtensions/torch/test/python/test_quantizer.py#L1050
     @pytest.mark.cuda
-    def test_multi_gpu(self, model_cls, input_shape, quant_scheme, config_path):
+    def test_multi_gpu(self, model_cls, input_shape, config_path):
         device = torch.device("cuda")
         model = model_cls().to(device)
         dummy_input = torch.randn(input_shape).to(device)
         sim = QuantizationSimModel(
             model,
             dummy_input,
-            quant_scheme,
             config_file=config_path,
             default_param_bw=8,
             default_output_bw=4,

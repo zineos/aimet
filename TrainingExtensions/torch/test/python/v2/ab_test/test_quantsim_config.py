@@ -1958,61 +1958,6 @@ class TestQuantsimConfig:
                 atol=1e-1,
             )
 
-    @pytest.mark.parametrize(
-        "quant_scheme",
-        [
-            QuantScheme.post_training_tf,
-            QuantScheme.post_training_percentile,
-            QuantScheme.training_range_learning_with_tf_init,
-        ],
-    )
-    def test_requires_grad_is_set_by_quant_scheme(self, quant_scheme):
-        """Test that requires_grad property of quant params are set correctly with different quant scheme"""
-        model = SingleResidual()
-        model.eval()
-
-        quantsim_config = {
-            "defaults": {
-                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
-                "params": {"is_quantized": "True", "is_symmetric": "True"},
-                "per_channel_quantization": "True",
-            },
-            "params": {},
-            "op_type": {},
-            "supergroups": [],
-            "model_input": {},
-            "model_output": {},
-        }
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
-                json.dump(quantsim_config, f)
-
-            sim = QuantizationSimModel(
-                model,
-                quant_scheme=quant_scheme,
-                config_file=os.path.join(tmp_dir, "quantsim_config.json"),
-                dummy_input=torch.rand(1, 3, 32, 32),
-                in_place=True,
-            )
-            for _, module in sim.model.named_children():
-                assert isinstance(module, BaseQuantizationMixin)
-
-                for quantizer in itertools.chain(
-                    module.input_quantizers,
-                    module.output_quantizers,
-                    module.param_quantizers.values(),
-                ):
-                    if quantizer is not None:
-                        if quant_scheme in (
-                            QuantScheme.post_training_tf,
-                            QuantScheme.post_training_percentile,
-                        ):
-                            assert not quantizer.min.requires_grad
-                            assert not quantizer.max.requires_grad
-                        else:
-                            assert quantizer.min.requires_grad
-                            assert quantizer.max.requires_grad
-
     @pytest.mark.cuda
     def test_quantsim_device_and_dtype(self):
         model = SingleResidual().cuda()

@@ -146,9 +146,10 @@ class AdaroundWrapperBase(abc.ABC, torch.nn.Module):
         """
         Initialize adaround parameter using the original module
         """
-        self.broadcasted_delta, self.broadcasted_offset = (
-            self._get_weight_quantizer_delta_and_offset()
-        )
+        delta, offset = self._get_weight_quantizer_delta_and_offset()
+        # Adaround fixes the quantization parameters and only update model weights
+        self.broadcasted_delta = delta.detach()
+        self.broadcasted_offset = offset.detach()
         self.alpha = self._generate_alpha_parameter(self.weight, self.broadcasted_delta)
         self.bitwidth = self._get_weight_quantizer_bitwidth()
         self.use_soft_rounding = True

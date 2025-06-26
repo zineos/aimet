@@ -37,7 +37,6 @@
 # pylint: disable=import-outside-toplevel
 """v2 lazy quant wrapper / quantizer"""
 
-import itertools
 from typing import Sequence
 import torch
 
@@ -181,30 +180,9 @@ class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
             quantized_module.param_quantizers[param_name] = quant_builder.realize()
 
         self._apply_quant_param_value_constraints(quantized_module)
-        self._update_quant_param_requires_grad(quantized_module)
         quantized_module.supported_kernels = self.supported_kernels
 
         return quantized_module
-
-    def _update_quant_param_requires_grad(self, quantized_module):
-        """
-        Update requres_grad value of quantizers in quantized_module.
-
-        :param quantized_module: module containing quantizers whose requires_grad need to be updated
-        """
-        if self._quant_scheme in (
-            QuantScheme.post_training_tf_enhanced,
-            QuantScheme.post_training_tf,
-            QuantScheme.post_training_percentile,
-        ):
-            for quantizer in itertools.chain(
-                quantized_module.input_quantizers,
-                quantized_module.output_quantizers,
-                quantized_module.param_quantizers.values(),
-            ):
-                if quantizer is not None:
-                    for _, param in quantizer.named_parameters():
-                        param.requires_grad = False
 
     def _apply_quant_param_value_constraints(self, quantized_module):
         """

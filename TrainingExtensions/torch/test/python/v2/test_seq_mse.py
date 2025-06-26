@@ -520,8 +520,9 @@ class TestSeqMse:
             quant_scheme=QuantScheme.post_training_tf,
         )
         qconv = sim.model[0]
-        qconv.param_quantizers["weight"].min.copy_(-1)
-        qconv.param_quantizers["weight"].max.copy_(1)
+        with torch.no_grad():
+            qconv.param_quantizers["weight"].min.copy_(-1)
+            qconv.param_quantizers["weight"].max.copy_(1)
         sim.compute_encodings(lambda m: m(dummy_input))
 
         params = SeqMseParams(num_batches=2, inp_symmetry="asym", loss_fn="mse")
