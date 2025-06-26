@@ -2,7 +2,7 @@
 # =============================================================================
 #  @@-COPYRIGHT-START-@@
 #
-#  Copyright (c) 2024, Qualcomm Innovation Center, Inc. All rights reserved.
+#  Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -36,15 +36,40 @@
 # =============================================================================
 # pylint: disable=missing-docstring
 # [setup]
+import os
+import onnxruntime as ort
+import onnx
 import torch
-import torchvision
 from torchvision import transforms
+import torchvision
 
 # Load the model
-# General setup that can be changed as needed
-from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
-model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT).eval().to(device)
+pt_model = torchvision.models.mobilenet_v2(pretrained=True)
+input_shape = (1, 3, 224, 224)
+dummy_input = torch.randn(input_shape)
+
+# Modify file_path as you wish
+file_path = os.path.join(".", f"mobilenet_v2.onnx")
+torch.onnx.export(
+    pt_model,
+    (dummy_input,),
+    file_path,
+    input_names=["input"],
+    output_names=["output"],
+    dynamic_axes={
+        "input": {0: "batch_size"},
+        "output": {0: "batch_size"},
+    },
+)
+# Load exported ONNX model
+model = onnx.load_model(file_path)
+
+# Choose providers
+if "CUDAExecutionProvider" in ort.get_available_providers():
+    providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+else:
+    providers = ["CPUExecutionProvider"]
+
 # End of load the model
 
 # Prepare the dataloader
@@ -75,62 +100,52 @@ dataloader = torch.utils.data.DataLoader(
 )
 # End of dataloader
 
-# Create Quantization Simulation Model
-from aimet_torch.quantsim import QuantizationSimModel
 
-dummy_input = torch.randn(1, 3, 224, 224).to(device)
-sim = QuantizationSimModel(model,
-                           dummy_input=dummy_input,
-                           default_param_bw=4,
-                           default_output_bw=8)
-# End of QuantizationSimModel
+# Step 1
+# Create the QuantizationSimModel
+import aimet_onnx
 
-# Apply Seq MSE
+sim = aimet_onnx.QuantizationSimModel(
+    model,
+    param_type=aimet_onnx.int4,
+    activation_type=aimet_onnx.int8,
+    providers=providers
+)
+# End of step 1
+
+# Step 2
 import itertools
-from aimet_torch.seq_mse import  apply_seq_mse, SeqMseParams
 
-# Get unlabeled data
+# Get unlabeled onnx data
+input_name = model.graph.input[0].name
 num_batches = NUM_CALIBRATION_SAMPLES // BATCH_SIZE
-unlabeled_data = [data[0] for data in itertools.islice(dataloader, num_batches)]
+unlabeled_data = [{input_name: data.numpy()} for data, _ in itertools.islice(dataloader, num_batches)]
 
-# Configure SeqMSE parameters
-params = SeqMseParams(num_batches=num_batches,
-                      num_candidates=20)
+# Apply SeqMSE to the sim
+aimet_onnx.apply_seq_mse(sim, unlabeled_data)
+# End of step 2
 
-# Find and freeze optimal encodings candidate for parameters of supported layer(s)/operations(s).
-apply_seq_mse(model=model, sim=sim, data_loader=unlabeled_data, params=params)
-# End of Seq MSE
+# Step 3
+sim.compute_encodings(unlabeled_data)
+# End of step 3
 
-# Calibration callback
-@torch.no_grad()
-def forward_pass(model: torch.nn.Module):
-    for batch_idx, (images, _) in enumerate(dataloader):
-        if batch_idx >= num_batches:
-            break
-        model(images.to(device))
-
-# compute encodings for all activations and parameters of uninitialized layers.
-sim.compute_encodings(forward_pass)
-# End of compute_encodings
-
-# Evaluation
-# Determine simulated quantized accuracy
+# Step 4
 from tqdm import tqdm
+import numpy as np
 
 correct_predictions = 0
 total_samples = 0
 for inputs, labels in tqdm(dataloader):
-    inputs, labels = inputs.to(device), labels.to(device)
-    outputs = sim.model(inputs)
-    _, pred_labels = torch.max(outputs, 1)
-    correct_predictions += torch.sum(pred_labels == labels)
+    inputs, labels = inputs.numpy(), labels.numpy()
+    output, = sim.session.run(None, {input_name: inputs})
+    pred_labels = np.argmax(output, axis=1)
+    correct_predictions += np.sum(pred_labels == labels)
     total_samples += labels.shape[0]
 
 accuracy = correct_predictions / total_samples
 print(f"Quantized accuracy: {accuracy}")
-# End of evaluation
+# End of step 4
 
-# Export
-# Export the model for on-target inference.
-sim.export(path=".", filename_prefix="quantized_mobilenet_v2", dummy_input=dummy_input.cpu())
-# End of export
+# Step 5
+sim.export(path=".", filename_prefix="quantized_mobilenet_v2")
+# End of step 5
