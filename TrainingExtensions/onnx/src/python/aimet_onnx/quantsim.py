@@ -1640,11 +1640,24 @@ class QuantizationSimModel:
             for inp in op.inputs:
                 _set_src_qtzr(inp, src_qtzr=self.qc_quantize_op_dict[output_name])
 
+    def to_onnx_qdq(self) -> onnx.ModelProto:
+        """
+        Return a copy of ModelProto with all QcQuantizeOp nodes replaced with
+        QuantizeLinear and/or DequantizeLinear.
+
+        Example:
+
+            >>> len([qc_op for qc_op in sim.model.nodes() if dq.op_type == "QcQuantizeOp"])
+            10
+            >>> onnx_qdq = sim.to_onnx_qdq()
+            >>> len([qc_op for qc_op in sim.model.nodes() if dq.op_type == "QcQuantizeOp"])
+            0
+            >>> len([dq for dq in onnx_qdq.graph.node if dq.op_type == "DequantizeLinear"])
+            10
+        """
+        return self._to_onnx_qdq()
+
     def _to_onnx_qdq(self) -> onnx.ModelProto:
-        """
-        Return a copy of ModelProto with all QcQuantizeOp replaced with
-        onnx::QuantizeLinear and/or DequantizeLinear
-        """
         try:
             invalid_bitwidth = next(
                 qtzr.bitwidth
