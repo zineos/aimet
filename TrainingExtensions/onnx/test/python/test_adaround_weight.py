@@ -108,6 +108,7 @@ class TestAdaround:
             }
             assert params.issubset(param_names)
 
+    @pytest.mark.parametrize("pre_calibrate", (True, False))
     @pytest.mark.parametrize(
         "model",
         [
@@ -121,7 +122,7 @@ class TestAdaround:
         "providers",
         (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
     )
-    def test_apply_adaround(self, providers, model):
+    def test_apply_adaround(self, providers, model, pre_calibrate):
         if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
             pytest.skip("Cuda not available")
 
@@ -143,9 +144,8 @@ class TestAdaround:
 
         assert weight_tensors
 
-        with compute_encodings(sim):
-            for inp in inputs:
-                sim.session.run(None, inp)
+        if pre_calibrate:
+            sim.compute_encodings(inputs)
 
         apply_adaround(sim, inputs, num_iterations=5)
 

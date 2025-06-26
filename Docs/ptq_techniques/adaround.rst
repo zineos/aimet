@@ -188,7 +188,7 @@ Use AIMET's QuantSim to simulate quantization.
     .. tab-item:: ONNX
         :sync: onnx
 
-        Recompute the activation encodings to account for changes in distributions after adaround.
+        Compute activation encodings after applying qadaround.
 
         .. literalinclude:: ../snippets/onnx/apply_adaround.py
             :language: python

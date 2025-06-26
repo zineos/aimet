@@ -74,7 +74,7 @@ def apply_seq_mse(
     Sequentially optimizes the QuantizationSimModel's weight encodings to reduce MSE loss at layer outputs.
 
     Args:
-        sim (QuantizationSimModel): Calibrated QuantizationSimModel instance to optimize
+        sim (QuantizationSimModel): QuantizationSimModel instance to optimize
         inputs (Collection[Dict[str, np.ndarray]]): The set of input samples to use during optimization
         num_candidates (int): Number of encoding candidates to sweep for each weight. Decreasing this can reduce
             runtime but may lead to lower accuracy.

@@ -114,7 +114,7 @@ onnx_data = [{input_name: data.numpy()} for data, _ in itertools.islice(dataload
 
 
 # Step 1
-# Create and calibrate quantsim
+# Create QuantizationSimModel
 sim = QuantizationSimModel(
     model,
     quant_scheme=QuantScheme.min_max,
@@ -122,14 +122,13 @@ sim = QuantizationSimModel(
     activation_type=aimet_onnx.int8,
     providers=providers
 )
-sim.compute_encodings(onnx_data)
 
-# Apply adaround on the calibrated sim
+# Apply adaround on the sim
 aimet_onnx.apply_adaround(sim, onnx_data, num_iterations=15000)
 # End of step 1
 
 # Step 2
-# Recompute activation encodings (weight encodings are frozen)
+# Compute activation encodings (weight encodings are frozen)
 sim.compute_encodings(onnx_data)
 # End of step 2
 

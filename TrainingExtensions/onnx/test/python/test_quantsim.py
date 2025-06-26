@@ -2390,6 +2390,94 @@ class TestQuantSim:
             assert sim.qc_quantize_op_dict[name].data_type == QuantizationDataType.float
             assert sim.qc_quantize_op_dict[name].bitwidth == 16
 
+    def test_compute_param_encodings(self):
+        model = single_residual_model().model
+        calibration_input = make_dummy_input(model)
+        sim = QuantizationSimModel(copy.deepcopy(model))
+
+        for quantizer in sim.qc_quantize_op_dict.values():
+            assert not quantizer.is_initialized()
+
+        """
+        When: Call sim._compute_param_encodings()
+        Then: 1) All param quantizers should be calibrated
+              2) No activation quantizers should be calibrated
+              3) Set of enabled quantizers should not change
+        """
+        enabled_quantizers = {
+            name: quantizer
+            for name, quantizer in sim.qc_quantize_op_dict.items()
+            if quantizer.enabled
+        }
+        sim._compute_param_encodings()
+
+        assert enabled_quantizers == {
+            name: quantizer
+            for name, quantizer in sim.qc_quantize_op_dict.items()
+            if quantizer.enabled
+        }
+
+        for name, quantizer in enabled_quantizers.items():
+            if name in sim.param_names:
+                assert quantizer.is_initialized()
+
+            else:
+                assert not quantizer.is_initialized()
+
+        """
+        When: Call compute_encodings after sim._compute_param_encodings()
+        Then: Encodings should be identical to just calling sim.compute_encodings
+        """
+        # Create an identical QuantizationSimModel
+        sim_2 = QuantizationSimModel(copy.deepcopy(model))
+
+        # Compute encodings for both sims using the same input
+        sim.compute_encodings([calibration_input])
+        sim_2.compute_encodings([calibration_input])
+
+        # All encodings should be identical
+        for name, quantizer in enabled_quantizers.items():
+            quantizer_2 = sim_2.qc_quantize_op_dict[name]
+            assert quantizer.export_encodings("2.0.0") == quantizer_2.export_encodings(
+                "2.0.0"
+            )
+
+    def test_compute_param_encodings_overwrite(self):
+        model = models_for_tests.weight_matmul_model()
+        sim = QuantizationSimModel(model)
+        sim.compute_encodings([make_dummy_input(sim.model.model)])
+
+        weight_quantizer = sim.qc_quantize_op_dict["weight"]
+        weight_encoding_unclipped = weight_quantizer.export_encodings("2.0.0")
+
+        max_val = max(
+            weight_quantizer.get_encodings()[0].max,
+            -weight_quantizer.get_encodings()[0].min,
+        )
+
+        # Clip weight_quantizer encodings to a new value
+        weight_quantizer.clip_and_recompute_encodings(0.5 * max_val)
+        weight_encoding_clipped = weight_quantizer.export_encodings("2.0.0")
+
+        """
+        When: Compute param encodings with overwrite=False
+        Then: Encoding for calibrated quantizer should not change
+        """
+        sim._compute_param_encodings(
+            dummy_input=make_dummy_input(sim.model.model), overwrite=False
+        )
+
+        assert weight_quantizer.export_encodings("2.0.0") == weight_encoding_clipped
+
+        """
+        When: Compute param encodings with overwrite=True
+        Then: Encoding for calibrated quantizer should be changed
+        """
+        sim._compute_param_encodings(
+            dummy_input=make_dummy_input(sim.model.model), overwrite=True
+        )
+        assert weight_quantizer.export_encodings("2.0.0") == weight_encoding_unclipped
+
 
 class TestEncodingPropagation:
     def test_output(self):

@@ -300,7 +300,10 @@ def compute_encodings(sim: "QuantizationSimModel"):
         ...     for input in dataset:
         ...         _ = sim.session.run(None, {"input": input})
     """
-    for op_name, qc_op in sim.qc_quantize_op_dict.items():
+    enabled_quantizers = {
+        name: q for name, q in sim.qc_quantize_op_dict.items() if q.enabled
+    }
+    for op_name, qc_op in enabled_quantizers.items():
         qc_op.reset_encoding_stats()
         if op_name in sim.activation_names:
             qc_op.op_mode = OpMode.updateStats
@@ -311,7 +314,7 @@ def compute_encodings(sim: "QuantizationSimModel"):
 
     yield
 
-    for op_name, qc_op in sim.qc_quantize_op_dict.items():
+    for op_name, qc_op in enabled_quantizers.items():
         if (
             qc_op.data_type == QuantizationDataType.int
             and not qc_op.is_encoding_frozen()
@@ -1104,6 +1107,44 @@ class QuantizationSimModel:
 
         with compute_encodings(self):
             forward_pass_callback(*args)
+
+    def _compute_param_encodings(
+        self,
+        *,
+        dummy_input: Optional[Dict[str, np.ndarray]] = None,
+        overwrite: bool = True,
+    ):
+        """
+        Computes param encodings for the sim.
+
+        Args:
+            dummy_input: Input to pass during calibration. If None, input is randomly generated
+            overwrite: If true, overwrites all existing param encodings. Otherwise, only computes non-initialized param encodings
+        """
+        if dummy_input is None:
+            dummy_input = make_dummy_input(self.model.model)
+
+        quantizers_to_calibrate = {
+            name for name in self.param_names if self.qc_quantize_op_dict[name].enabled
+        }
+
+        # If not overwrite, exclude already-initialized quantizers
+        if not overwrite:
+            quantizers_to_calibrate -= {
+                name
+                for name in self.param_names
+                if self.qc_quantize_op_dict[name].is_initialized()
+            }
+
+        # Early exit if there's nothing to calibrate
+        if not quantizers_to_calibrate:
+            return
+
+        quantizers_to_disable = (
+            self.qc_quantize_op_dict.keys() - quantizers_to_calibrate
+        )
+        with utils.disable_quantizers(self, quantizers_to_disable):
+            self.compute_encodings([dummy_input])
 
     def _get_encodings(self, quantizer_names, enc_version):
         encoding_dict = {}
