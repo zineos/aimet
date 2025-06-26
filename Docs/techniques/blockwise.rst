@@ -3,29 +3,21 @@
 .. _techniques-blockwise:
 
 ######################
-Per-block quantization
+Blockwise quantization
 ######################
 
-This page describes blockwise techniques and tools for *calibration*, the process of determining quantization parameters. See :ref:`Calibration <techniques-ptq>` for basic information about performing calibration.
-
 .. note::
-    The terms "per-block quantization" and "blockwise quantization" are used interchangeably.
+   This section explains the general concept and usage of blockwise quantization.
+   However, generic blockwise quantization is not yet supported by Qualcomm hardware.
+   For a practical alternative of blockwise quantization supported by Qualcomm hardware, see :ref:`Low-Power Blockwise Quantization (LPBQ) <techniques-lpbq>`
 
-When performing calibration for a tensor, you can compute encodings for the whole tensor, or split the tensor into parts (channels or blocks) and compute encodings for each part.
+*Blockwise quantization*, also known as *per-block quantization*, is a quantization scheme that divides the input into multiple small *blocks*, with each block sharing the same quantization scale.
+Due to its finer granularity, blockwise quantization offers improved model accuracy compared to per-tensor or per-channel quantization.
 
-We recommended that you quantize as granularly as possible. Finer granularity typically results in better quantized accuracy. 
-
-In order of preference, use:
-
-1. Blockwise quantization (BQ)
-2. Per-channel quantization
-3. Per-tensor quantization
-
-.. note::
-  Blockwise and per-channel quantization are supported only for weights, not activations, on Qualcomm runtimes.
+.. image:: ../images/BQ.png
 
 
-Executing per-block quantization
+Executing blockwise quantization
 ================================
 
 To enable blockwise quantization, instantiate a `QuantizeDequantize` object with blockwise settings and replace an existing quantizer with the new quantizer.
@@ -139,14 +131,16 @@ The following code examples show how to configure convolution and linear layers 
         Not supported.
 
 
-Low power blockwise quantization
+.. _techniques-lpbq:
+
+Low-power blockwise quantization
 ================================
 
-|qnn| supports an alternative to blockwise quantization called Low Power Blockwise Quantization (LPBQ).
+|qnn| supports an alternative to blockwise quantization called *Low-Power Blockwise Quantization* (*LPBQ*).
 
 In LPBQ, blockwise encodings at a lower bit width are adjusted such that they lie on a common higher-bit-width per-channel grid. This enables models to run on existing per channel kernels and still benefit from blockwise quantization. 
 
-LPBQ encodings require less storage than blockwise quantization encodings because only the low bit-width integer scale expansion factors need to be stored per-block (the floating point encoding scales are stored per-channel).
+LPBQ encodings require less storage than blockwise quantization encodings because only the low bit-width integer scale expansion factors need to be stored blockwise (the floating point encoding scales are stored per-channel).
 
 LPBQ quantization is part of the :class:`aimet_torch.quantization.affine.GroupedBlockQuantizeDequantize` class.
 
