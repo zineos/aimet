@@ -65,7 +65,7 @@ Release notes
 
 * Known Issues
   * ONNX
-      * Adaround runs over 2x slower with onnxruntime >=1.19. The root cause has been identified, and a fix is in progress
+      * Adaround runs over 2x slower with onnxruntime 1.20 or higher. The root cause has been identified, and a fix is in progress
 
 .. _cbe67ae: https://github.com/quic/aimet/commit/cbe67ae291f3519f3207d438450d22964f5a8c0d
 .. _84edcf5: https://github.com/quic/aimet/commit/84edcf580ac76afa8d128316e03c7737f2599c2d
