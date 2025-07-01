@@ -10,9 +10,9 @@ Context
 =======
 
 Batch norm folding (BNF) is a technique widely used in deep learning inference runtimes, including |qnn|_.
-In BNF, batch normalization layers are folded into the weights and biases of adjacent convolution layers where possible to eliminate unnecessary computations. 
+In BNF, batch normalization layers are folded into the weights and biases of adjacent convolution layers to eliminate unnecessary computations.
 
-To accurately simulate inference in these runtimes, perform BNF on the floating-point model before applying quantization. Doing so not only speeds performance (inferences per second) but also often improves the accuracy of the quantized model by removing redundant computations and requantization. AIMET enables you to apply BNF to the pre-quantized model as a precursor to simulating this on-target behavior in the quantization simulation (QuantSim) model.
+To accurately simulate inference in these runtimes, perform BNF on the floating-point model before applying quantization. Doing so not only speeds performance (inferences per second) but also often improves the accuracy of the quantized model by removing redundant computations and requantization. AIMET enables you to apply BNF to the pre-quantized model as a precursor to simulating on-target behavior in the quantization simulation (QuantSim) model.
 
 Workflow
 ========

@@ -42,7 +42,7 @@ Examples/
 This section describes how to apply the various quantization and compression techniques.
 
 ### Post Training Quantization Examples
-- _Cross Layer Equalization and Bias Correction - [Torch](torch/quantization/cle_bc.py), [TensorFlow](tensorflow/quantization/cle_bc.py)_:
+- _Cross Layer Equalization- [Torch](torch/quantization/cle.ipynb), [ONNX](onnx/quantization/cle.py)_:
   - Cross Layer Equalization performs BatchNorm Folding, Cross Layer Scaling, and High Bias Fold
   - Bias Correction corrects shift in layer outputs introduced due to quantization
 - _Adaround (Adaptive Rounding) - [Torch](torch/quantization/adaround.py), [TensorFlow](tensorflow/quantization/adaround.py)_:
