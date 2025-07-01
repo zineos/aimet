@@ -66,7 +66,6 @@ if (ENABLE_CUDA)
     target_link_libraries(MoDlQuantizationTest
             MoDlQuantization
             MoDlQuantizationCuda
-            CUDA::cudart
             gtest_main
             )
 
