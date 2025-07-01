@@ -590,17 +590,14 @@ class QuantizationSimModel:
         """
         Get the data type for each activation through shape inference
         """
-        if self.model.model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
-            with tempfile.TemporaryDirectory(dir=self._path) as tempdir:
-                save_path = os.path.join(tempdir, "inferred_model.onnx")
-                save_model_with_external_weights(
-                    self.model.model, save_path, location=Path(save_path).name + ".data"
-                )
-                onnx.shape_inference.infer_shapes_path(save_path)
-                # Do not load the weights for the shape inference model, we only need to access the graph's `value_info`
-                inferred_model = onnx.load(save_path, load_external_data=False)
-        else:
-            inferred_model = onnx.shape_inference.infer_shapes(self.model.model)
+        with tempfile.TemporaryDirectory(dir=self._path) as tempdir:
+            save_path = os.path.join(tempdir, "inferred_model.onnx")
+            save_model_with_external_weights(
+                self.model.model, save_path, location=Path(save_path).name + ".data"
+            )
+            onnx.shape_inference.infer_shapes_path(save_path)
+            # Do not load the weights for the shape inference model, we only need to access the graph's `value_info`
+            inferred_model = onnx.load(save_path, load_external_data=False)
 
         activation_dtypes = {}
         for val_info in itertools.chain(
@@ -793,28 +790,17 @@ class QuantizationSimModel:
             for lib in user_onnx_libs:
                 sess_options.register_custom_ops_library(lib)
 
-        # Convert and save ONNX model to external data if larger than 2GB.
-        # External data will be saved under same directory.
-        if model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF:
-            with tempfile.TemporaryDirectory() as tempdir:
-                save_dir = path or tempdir
-                output_path = os.path.join(save_dir, "model.onnx")
+        with tempfile.TemporaryDirectory(dir=path) as tempdir:
+            output_path = os.path.join(tempdir, "model.onnx")
 
-                # Note: Saving as external data mutates the saved model, removing all initializer data
-                save_model_with_external_weights(
-                    model, output_path, location=Path(output_path).name + ".data"
-                )
-                return InferenceSession(
-                    path_or_bytes=output_path,
-                    sess_options=sess_options,
-                    providers=providers,
-                )
-
-        return InferenceSession(
-            path_or_bytes=model.SerializeToString(),
-            sess_options=sess_options,
-            providers=providers,
-        )
+            save_model_with_external_weights(
+                model, output_path, location=Path(output_path).name + ".data"
+            )
+            return InferenceSession(
+                path_or_bytes=output_path,
+                sess_options=sess_options,
+                providers=providers,
+            )
 
     def get_qc_quantize_op(self):
         """
