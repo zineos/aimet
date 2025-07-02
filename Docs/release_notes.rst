@@ -22,6 +22,8 @@ Release notes
     * PyTorch
         * Add native support for Mistral-0.3 (`db99447`_)
         * AdaScale: Update the learning rates for AdaScale learnable parameters (`7336ead`_)
+        * AdaScale: Add LR scheduler and add block input sampling probability (`2f05175`_)
+        * AdaScale: Maintain LR per model and fix first sample being used during loss computation(`ac05d10`_)
     * common
         * Add docs to build aimet from source (`ae981f7`_)
 
@@ -36,6 +38,8 @@ Release notes
 .. _db99447: https://github.com/quic/aimet/commit/db99447da525b114d081acc81d60dfaa95863e79
 .. _7336ead: https://github.com/quic/aimet/commit/7336eadb286592eb5f798a689ee5b6e8b918483f
 .. _ae981f7: https://github.com/quic/aimet/commit/ae981f73f91580d26024c652a5bbda4d4d8ff77d
+.. _2f05175: https://github.com/quic/aimet/commit/2f0517539ce02bff32c79b82501aca543dbefc33
+.. _ac05d10: https://github.com/quic/aimet/commit/ac05d10752c3f5034f475b483f2cf049e23d66f6
 
 
 2.8.0
