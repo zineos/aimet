@@ -6,6 +6,52 @@
 Release notes
 #############
 
+2.10.0
+======
+
+* New Feature
+    * Promote to_onnx_qdq to a public API (`f333188`_). Note: This is currently a beta feature
+
+* Bug fixes and Improvements
+    * Common
+        * Added hover tooltip to plot per layer sensitivity. Changed x-axis to plot layer indices instead of names (`c96894f`_)
+    * PyTorch
+        * Implement scaling factor in aimet-torch float QDQ (`9b8c655`_)
+        * Fix CustomSiLU bug (`499df9f`_)
+        * Added extra logic to isolate model outputs from connectedgraph (`4ad0703`_)
+        * Always instantiate quantizers with requires_grad=True (`5aac9c5`_)
+    * ONNX
+        * Allow AdaRound and SeqMSE to take uncalibrated sims(`31ca7fd`_)
+        * Modify bias quantizer setting based on weight quantizer (`b47a97e`_)
+        * Fix cnt overflow issue (`70029c5`_)
+        * Make memory saving optimization default in build_session and _infer_activation_dtypes (`4b94ca9`_)
+
+* Documentation
+    * Update SeqMSE feature guide (`fefd504`_)
+    * Fix links in example notebooks (`fe66376`_)
+    * Modify docs for CLE (`f9d0d6c`_)
+    * Edit automatic mixed precision feature guide (`22b5c94`_)
+    * Polish BQ user guide (`f547a49`_)
+    * Polish QAT user guide (`339a225`_)
+
+.. _c96894f: https://github.com/quic/aimet/commit/c96894f3795e1b0986ba0c2b6f0b04464d003d0f
+.. _9b8c655: https://github.com/quic/aimet/commit/9b8c655a6a17cc4339f494f17e063f36aa679383
+.. _499df9f: https://github.com/quic/aimet/commit/499df9f24054c291160272d2a4155ad82919d8b7
+.. _4ad0703: https://github.com/quic/aimet/commit/4ad0703ba3e6e6dd688831eb6f297f3c735a4e8b
+.. _5aac9c5: https://github.com/quic/aimet/commit/5aac9c503961aa832ae1350d3fdbc81fd2c10ff0
+.. _31ca7fd: https://github.com/quic/aimet/commit/31ca7fdead574bd8614720bba5a7cae2739c7841
+.. _b47a97e: https://github.com/quic/aimet/commit/b47a97eef0b89ea1becea3b4cbca0de018cc113c
+.. _f333188: https://github.com/quic/aimet/commit/f3331884a2e7da0dc22770fd1ae792564f0fa094
+.. _70029c5: https://github.com/quic/aimet/commit/70029c596cff1d188fcfbc308cc06f99bdff1fdf
+.. _4b94ca9: https://github.com/quic/aimet/commit/4b94ca9267cb9513f996fedc350b583e6f28ce30
+.. _fefd504: https://github.com/quic/aimet/commit/fefd504c79de738a99b82d051e7b70ffcb195a3e
+.. _fe66376: https://github.com/quic/aimet/commit/fe66376f5704b9fa4dc494dd8d22f8a2689fc0c4
+.. _f9d0d6c: https://github.com/quic/aimet/commit/f9d0d6cb1719ef8eaf2a51b8c0984c50240f01f6
+.. _22b5c94: https://github.com/quic/aimet/commit/22b5c94ecf3f743c3954a44fc93de31aab223a47
+.. _f547a49: https://github.com/quic/aimet/commit/f547a49db222011c354ad2df6703e0a60ef5c767
+.. _339a225: https://github.com/quic/aimet/commit/339a22514ef0aaa1961f82d4832e07d45817779f
+
+
 2.9.0
 =====
 
@@ -24,7 +70,7 @@ Release notes
         * AdaScale: Update the learning rates for AdaScale learnable parameters (`7336ead`_)
         * AdaScale: Add LR scheduler and add block input sampling probability (`2f05175`_)
         * AdaScale: Maintain LR per model and fix first sample being used during loss computation(`ac05d10`_)
-    * common
+    * Common
         * Add docs to build aimet from source (`ae981f7`_)
 
 .. _e78dbec: https://github.com/quic/aimet/commit/e78dbecb76f5f278baabb6f32a45de299f03a75a
