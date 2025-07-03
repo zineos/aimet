@@ -1,41 +1,8 @@
-# -*- mode: python -*-
-# =============================================================================
-#  @@-COPYRIGHT-START-@@
-#
-#  Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
-#
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#
-#  1. Redistributions of source code must retain the above copyright notice,
-#     this list of conditions and the following disclaimer.
-#
-#  2. Redistributions in binary form must reproduce the above copyright notice,
-#     this list of conditions and the following disclaimer in the documentation
-#     and/or other materials provided with the distribution.
-#
-#  3. Neither the name of the copyright holder nor the names of its contributors
-#     may be used to endorse or promote products derived from this software
-#     without specific prior written permission.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-#  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-#  POSSIBILITY OF SUCH DAMAGE.
-#
-#  SPDX-License-Identifier: BSD-3-Clause
-#
-#  @@-COPYRIGHT-END-@@
-# =============================================================================
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause
 """Optimizer for Spinquant"""
 
+from aimet_torch.experimental.spinquant.hadamard_utils import get_hadamard_matrix
 import torch
 from transformers.models.llama.modeling_llama import LlamaForCausalLM
 from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM
@@ -45,9 +12,31 @@ from aimet_common.utils import AimetLogger
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
 RMSNORM_LINEAR_PAIRS = "RMSNORM_LINEAR_PAIRS"
-R1_LINEAR_FUSION = "R1_LINEAR_FUSION"
+R1_FUSION_PAIRS = "R1_FUSION_PAIRS"
 
-# Dictionary of supported modules and associated information for RMSNORM Linear fusion pairs as well as R1 Linear fusion pairs.
+
+def _default_r1_fusion_func(llm_model):
+    """Default R1 fusion function"""
+    r1_direction_pairs = []
+    for layer in llm_model.model.layers:
+        r1_direction_pairs.extend(
+            [
+                (layer.self_attn.q_proj, True),
+                (layer.self_attn.k_proj, True),
+                (layer.self_attn.v_proj, True),
+                (layer.self_attn.o_proj, False),
+                (layer.mlp.gate_proj, True),
+                (layer.mlp.up_proj, True),
+                (layer.mlp.down_proj, False),
+            ]
+        )
+    r1_direction_pairs.extend(
+        [(llm_model.model.embed_tokens, False), (llm_model.lm_head, True)]
+    )
+    return r1_direction_pairs
+
+
+# Dictionary of supported modules and associated information for RMSNORM Linear fusion pairs as well as R1 fusion pairs.
 SUPPORTED_MODULE_DICT = {
     LlamaForCausalLM: {
         RMSNORM_LINEAR_PAIRS: lambda module: [
@@ -61,8 +50,18 @@ SUPPORTED_MODULE_DICT = {
             )
             for layer in module.model.layers
         ]
+        + [
+            (
+                layer.post_attention_layernorm,
+                [
+                    layer.mlp.gate_proj,
+                    layer.mlp.up_proj,
+                ],
+            )
+            for layer in module.model.layers
+        ]
         + [(module.model.norm, [module.lm_head])],
-        R1_LINEAR_FUSION: lambda _: [],  # TODO: fill this in when R1 fusion is implemented
+        R1_FUSION_PAIRS: _default_r1_fusion_func,
     },
     Qwen2ForCausalLM: {
         RMSNORM_LINEAR_PAIRS: lambda module: [
@@ -76,8 +75,18 @@ SUPPORTED_MODULE_DICT = {
             )
             for layer in module.model.layers
         ]
+        + [
+            (
+                layer.post_attention_layernorm,
+                [
+                    layer.mlp.gate_proj,
+                    layer.mlp.up_proj,
+                ],
+            )
+            for layer in module.model.layers
+        ]
         + [(module.model.norm, [module.lm_head])],
-        R1_LINEAR_FUSION: lambda _: [],  # TODO: fill this in when R1 fusion is implemented
+        R1_FUSION_PAIRS: _default_r1_fusion_func,
     },
 }
 
@@ -95,9 +104,9 @@ def apply_spinquant(model: torch.nn.Module):
             raise RuntimeError(
                 f"{RMSNORM_LINEAR_PAIRS} info missing for module type {supported_module_type.__name__}"
             )
-        if module_info.get(R1_LINEAR_FUSION) is None:
+        if module_info.get(R1_FUSION_PAIRS) is None:
             raise RuntimeError(
-                f"{R1_LINEAR_FUSION} info missing for module type {supported_module_type.__name__}"
+                f"{R1_FUSION_PAIRS} info missing for module type {supported_module_type.__name__}"
             )
 
     found_module = False
@@ -112,7 +121,7 @@ def apply_spinquant(model: torch.nn.Module):
             found_module = True
             _identify_and_fuse_rmsnorms_into_linears(module)
 
-            # TODO: Add R1 fusion here
+            _fuse_r1_rotations(module)
 
     if not found_module:
         _logger.warning(
@@ -142,3 +151,33 @@ def _fuse_rmsnorm_into_linear(rmsnorm, linear_layers):
                 linear.bias.data = linear.bias.data.to(linear_dtype)
 
     rmsnorm.weight.data = torch.ones_like(rmsnorm.weight.data)
+
+
+def _fuse_r1_rotations(llm_model: torch.nn.Module):
+    modules_and_fuse_directions = SUPPORTED_MODULE_DICT[type(llm_model)][
+        R1_FUSION_PAIRS
+    ](llm_model)
+    if modules_and_fuse_directions:
+        hidden_size = modules_and_fuse_directions[0][0].weight.shape[1]
+        had_matrix = get_hadamard_matrix(hidden_size).to(
+            modules_and_fuse_directions[0][0].weight.device
+        ) / torch.sqrt(torch.tensor(hidden_size))
+
+        for module, fuse_before in modules_and_fuse_directions:
+            _fuse_r1_rotation(module, fuse_before, had_matrix)
+
+
+def _fuse_r1_rotation(module, fuse_before, had_matrix):
+    with torch.no_grad():
+        if isinstance(module, torch.nn.Linear):
+            if fuse_before:
+                module.weight.copy_(module.weight @ had_matrix.T)
+            else:
+                module.weight.copy_((module.weight.T @ had_matrix.T).T)
+                if module.bias is not None:
+                    module.bias.copy_((module.bias.T @ had_matrix.T).T)
+        elif isinstance(module, torch.nn.Embedding):
+            if not fuse_before:
+                module.weight.copy_(module.weight @ had_matrix.T)
+            else:
+                raise RuntimeError("Embedding module is expected to fuse after only")
