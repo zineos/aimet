@@ -227,9 +227,11 @@ def recompute_grid_params(
     # check mode used to recompute delta and offset
     if use_symmetric_encoding:
         num_positive_steps = (2 ** (bitwidth - 1)) - 1
-        abs_max_val = max(abs(max_val), abs(min_val))
-        delta = abs_max_val / num_positive_steps
-        offset = -(num_positive_steps + int(not use_strict_symmetric))
+        num_negative_steps = 2 ** (bitwidth - 1)
+        delta = max(
+            abs(max_val / num_positive_steps), abs(min_val / num_negative_steps)
+        )
+        offset = -(num_negative_steps - int(use_strict_symmetric))
         # recompute min/max values
         min_val = delta * offset
         max_val = delta * num_positive_steps

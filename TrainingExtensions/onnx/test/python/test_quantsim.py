@@ -2209,39 +2209,63 @@ class TestQuantSim:
             assert quantizer.quant_info.blockSize == 0
             assert not quantizer.quant_info.isIntDataType
 
-    def test_encoding_constraints(self, tmp_path):
-        quantsim_config = {
-            "defaults": {
-                "ops": {"is_output_quantized": "True"},
-                "params": {"is_quantized": "True", "is_symmetric": "True"},
-                "per_channel_quantization": "False",
-                "strict_symmetric": "False",
-                "unsigned_symmetric": "False",
-            },
-            "params": {},
-            "op_type": {
-                "Softmax": {"encoding_constraints": {"min": 0.0, "max": 1.0}},
-                "Sigmoid": {"encoding_constraints": {"min": 0.0, "max": 2.0}},
-            },
-            "supergroups": [],
-            "model_input": {},
-            "model_output": {},
-        }
-        config_name = os.path.join(tmp_path, "quantsim_config.json")
-        with open(config_name, "w") as f:
-            json.dump(quantsim_config, f)
+    @pytest.mark.parametrize("activation_type", [aimet_onnx.int8, aimet_onnx.int16])
+    def test_encoding_constraints(self, activation_type):
+        """
+        When: Create quantsim with HTP quantsim config
+        Then:
+          - Softmax and Sigmoid output quantizers should be fixed to [0, 1]
+          - Tanh output quantizers should be fixed to [-1, 1]
+        """
         model = models_for_tests.softmax_model()
-        sim = QuantizationSimModel(model, config_file=config_name)
+        sim = QuantizationSimModel(
+            model, activation_type=activation_type, config_file="htp_v81"
+        )
         sim.compute_encodings([make_dummy_input(model)])
-        assert sim.qc_quantize_op_dict["model_output"].encodings[0].max == 2.0
+
+        assert sim.qc_quantize_op_dict["model_output"].encodings[0].max == 1.0
         assert sim.qc_quantize_op_dict["model_output"].encodings[0].min == 0.0
         assert sim.qc_quantize_op_dict["softmax.output"].encodings[0].max == 1.0
         assert sim.qc_quantize_op_dict["softmax.output"].encodings[0].min == 0.0
+
+        assert np.allclose(
+            sim.qc_quantize_op_dict["tanh.output"].encodings[0].max,
+            1.0,
+            atol=sim.qc_quantize_op_dict["tanh.output"].encodings[0].delta,
+        )
+        assert np.allclose(
+            sim.qc_quantize_op_dict["tanh.output"].encodings[0].min,
+            -1.0,
+            atol=sim.qc_quantize_op_dict["tanh.output"].encodings[0].delta,
+        )
+        assert sim.qc_quantize_op_dict["tanh.output"].use_symmetric_encodings
         assert sim.qc_quantize_op_dict["matmul.output"].encodings[0].max not in (
             1.0,
             2.0,
         )
         assert sim.qc_quantize_op_dict["matmul.output"].encodings[0].min != 0.0
+
+        """
+        When: Switch tanh output bitwidth from 8 to 16 or vice versa
+        Then: Tanh output encoding constraints should hold
+        """
+        if sim.qc_quantize_op_dict["tanh.output"].bitwidth == 8:
+            sim.qc_quantize_op_dict["tanh.output"].set_bitwidth(16)
+        else:
+            sim.qc_quantize_op_dict["tanh.output"].set_bitwidth(8)
+
+        sim.qc_quantize_op_dict["tanh.output"].compute_encodings()
+
+        assert np.allclose(
+            sim.qc_quantize_op_dict["tanh.output"].encodings[0].max,
+            1.0,
+            atol=sim.qc_quantize_op_dict["tanh.output"].encodings[0].delta,
+        )
+        assert np.allclose(
+            sim.qc_quantize_op_dict["tanh.output"].encodings[0].min,
+            -1.0,
+            atol=sim.qc_quantize_op_dict["tanh.output"].encodings[0].delta,
+        )
 
     def test_matmul_3d_weight(self, tmp_path):
         quantsim_config = {

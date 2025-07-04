@@ -38,6 +38,7 @@
 """v2 lazy quant wrapper / quantizer"""
 
 from typing import Sequence
+import numpy as np
 import torch
 
 from aimet_common.defs import QuantScheme, QuantizationDataType
@@ -214,8 +215,12 @@ class _V2LazyQuantizeWrapper(LazyQuantizeWrapper):
                 and "min" in quantizer._initial_parameters
                 and "max" in quantizer._initial_parameters
             ):
-                with torch.no_grad():
-                    quantizer.min.copy_(quantizer_info.encoding_min_max_fixed_vals[0])
-                    quantizer.max.copy_(quantizer_info.encoding_min_max_fixed_vals[1])
+                fixed_min, fixed_max = quantizer_info.encoding_min_max_fixed_vals
+
+                if np.allclose(fixed_min, -fixed_max):
+                    # Symmetric range. Set symmetric=True to ensure symmetry
+                    quantizer.symmetric = True
+
+                quantizer.set_range(fixed_min, fixed_max)
                 quantizer.allow_overwrite(False)
                 quantizer.requires_grad_(False)

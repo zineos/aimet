@@ -40,8 +40,8 @@ import tempfile
 
 import pytest
 import json
+import math
 import os
-import itertools
 import torch
 
 from aimet_common.connected_graph.connectedgraph_utils import CG_SPLIT
@@ -53,7 +53,8 @@ from aimet_common.defs import (
 )
 
 import aimet_torch._base.quantsim
-import aimet_torch.v1.quantsim
+
+# import aimet_torch.v1.quantsim
 from aimet_torch.quantsim_config import quantsim_config as qsim_config
 from aimet_torch.quantsim_config.quantsim_config import get_all_ops_in_neighborhood
 from aimet_torch import utils
@@ -1903,60 +1904,117 @@ class TestQuantsimConfig:
             assert isinstance(add2.output_quantizers[0], FloatQuantizeDequantize)
             assert add2.output_quantizers[0].is_float16()
 
-    def test_encoding_constraints(self):
+    @pytest.mark.parametrize("activation_bw", [8, 16])
+    def test_encoding_constraints(self, activation_bw):
         """Test encoding constraints setting"""
 
-        quantsim_config = {
-            "defaults": {
-                "ops": {"is_output_quantized": "True", "is_symmetric": "False"},
-                "params": {"is_quantized": "False", "is_symmetric": "True"},
-            },
-            "params": {},
-            "op_type": {
-                "Softmax": {
-                    "encoding_constraints": {"min": -5.0, "max": 5.0},
-                }
-            },
-            "supergroups": [],
-            "model_input": {},
-            "model_output": {},
-        }
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            with open(os.path.join(tmp_dir, "quantsim_config.json"), "w") as f:
-                json.dump(quantsim_config, f)
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.softmax = torch.nn.Softmax()
+                self.sigmoid = torch.nn.Sigmoid()
+                self.tanh = torch.nn.Tanh()
 
-            class SoftmaxModel(torch.nn.Module):
-                def __init__(self):
-                    super(SoftmaxModel, self).__init__()
-                    self.softmax = torch.nn.Softmax()
+            def forward(self, x):
+                x = self.softmax(x)
+                x = self.sigmoid(x)
+                x = self.tanh(x)
+                return x
 
-                def forward(self, inp):
-                    x = self.softmax(inp)
-                    return x
+        """
+        When: Create quantsim with HTP quantsim config
+        Then:
+          - Softmax and Sigmoid output quantizers should be fixed to [0, 1]
+          - Tanh output quantizers should be fixed to [-1, 1]
+        """
+        model = Model()
+        dummy_input = torch.randn(100, 100)
+        qsim = QuantizationSimModel(
+            model,
+            dummy_input,
+            default_output_bw=activation_bw,
+            config_file="htp_v81",
+        )
 
-            model = SoftmaxModel()
-            dummy_input = torch.tensor([0.5, 0.5])
-            config_file = os.path.join(tmp_dir, "quantsim_config.json")
-            qsim = QuantizationSimModel(
-                model,
-                dummy_input,
-                quant_scheme=QuantScheme.post_training_tf,
-                config_file=config_file,
-            )
-            assert isinstance(
-                qsim.model.softmax.output_quantizers[0].encoding_analyzer,
-                MinMaxEncodingAnalyzer,
-            )
-            assert torch.allclose(
-                qsim.model.softmax.output_quantizers[0].min,
-                torch.tensor([-5.0]),
-                atol=1e-1,
-            )
-            assert torch.allclose(
-                qsim.model.softmax.output_quantizers[0].max,
-                torch.tensor([5.0]),
-                atol=1e-1,
-            )
+        num_bins = (
+            qsim.model.tanh.output_quantizers[0].qmax
+            - qsim.model.tanh.output_quantizers[0].qmin
+        )
+
+        assert qsim.model.softmax.output_quantizers[0].get_min() == 0.0
+        assert qsim.model.softmax.output_quantizers[0].get_max() == 1.0
+
+        assert qsim.model.sigmoid.output_quantizers[0].get_min() == 0.0
+        assert qsim.model.sigmoid.output_quantizers[0].get_max() == 1.0
+
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_min(),
+            torch.tensor(-1.0),
+            atol=1 / num_bins,
+        )
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_max(),
+            torch.tensor(1.0),
+            atol=1 / num_bins,
+        )
+        assert qsim.model.tanh.output_quantizers[0].get_offset() == -math.ceil(
+            num_bins / 2
+        )
+        assert qsim.model.tanh.output_quantizers[0].symmetric
+
+        """
+        When: Comupte encodings
+        Then: Same should hold
+        """
+        qsim.compute_encodings(lambda model: model(dummy_input))
+
+        assert qsim.model.softmax.output_quantizers[0].get_min() == 0.0
+        assert qsim.model.softmax.output_quantizers[0].get_max() == 1.0
+
+        assert qsim.model.sigmoid.output_quantizers[0].get_min() == 0.0
+        assert qsim.model.sigmoid.output_quantizers[0].get_max() == 1.0
+
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_min(),
+            torch.tensor(-1.0),
+            atol=1 / num_bins,
+        )
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_max(),
+            torch.tensor(1.0),
+            atol=1 / num_bins,
+        )
+        assert qsim.model.tanh.output_quantizers[0].get_offset() == -math.ceil(
+            num_bins / 2
+        )
+
+        """
+        When: Switch tanh output bitwidth from 8 to 16 or vice versa
+        Then: Tanh output encoding constraints should hold
+        """
+        if activation_bw == 8:
+            qsim.model.tanh.output_quantizers[0].bitwidth = 16
+        else:
+            qsim.model.tanh.output_quantizers[0].bitwidth = 8
+
+        num_bins = (
+            qsim.model.tanh.output_quantizers[0].qmax
+            - qsim.model.tanh.output_quantizers[0].qmin
+        )
+
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_min(),
+            torch.tensor(-1.0),
+            atol=1 / num_bins,
+        )
+        assert torch.allclose(
+            qsim.model.tanh.output_quantizers[0].get_max(),
+            torch.tensor(1.0),
+            atol=1 / num_bins,
+        )
+        assert qsim.model.tanh.output_quantizers[0].get_offset() == -math.ceil(
+            num_bins / 2
+        )
 
     @pytest.mark.cuda
     def test_quantsim_device_and_dtype(self):

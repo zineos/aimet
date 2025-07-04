@@ -3092,8 +3092,14 @@ def softmax_model():
                     name="softmax",
                 ),
                 helper.make_node(
-                    "Sigmoid",
+                    "Tanh",
                     inputs=["softmax.output"],
+                    outputs=["tanh.output"],
+                    name="tanh",
+                ),
+                helper.make_node(
+                    "Sigmoid",
+                    inputs=["tanh.output"],
                     outputs=["model_output"],
                     name="sigmoid",
                 ),

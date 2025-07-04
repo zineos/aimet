@@ -39,6 +39,7 @@
 from abc import abstractmethod
 from typing import List, Dict, Tuple, Union
 
+import numpy as np
 import onnx
 from packaging import version
 
@@ -586,12 +587,14 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
                 elif setting_name == ConfigDictKeys.IS_SYMMETRIC:
                     quantizer.use_symmetric_encodings = quantizer_setting
                 elif setting_name == ConfigDictKeys.ENCODING_CONSTRAINTS:
-                    quantizer.set_fixed_encoding_range(
-                        (
-                            quantizer_setting[ConfigDictKeys.MIN],
-                            quantizer_setting[ConfigDictKeys.MAX],
-                        )
-                    )
+                    fixed_min = quantizer_setting[ConfigDictKeys.MIN]
+                    fixed_max = quantizer_setting[ConfigDictKeys.MAX]
+
+                    if np.allclose(fixed_min, -fixed_max):
+                        # Symmetric range. Set symmetric=True to ensure symmetry
+                        quantizer.use_symmetric_encodings = True
+
+                    quantizer.set_fixed_encoding_range((fixed_min, fixed_max))
                 if quantizer not in modified_quantize_ops:
                     modified_quantize_ops[quantizer] = {setting_type}
                 else:
