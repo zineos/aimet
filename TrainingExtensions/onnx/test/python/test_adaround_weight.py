@@ -40,8 +40,9 @@
 import copy
 import os
 import json
-from contextlib import contextmanager
 import tempfile
+from unittest.mock import patch
+
 import numpy as np
 import torch
 from onnxruntime import SessionOptions, GraphOptimizationLevel, InferenceSession
@@ -50,8 +51,7 @@ from onnxsim import simplify
 import onnx
 
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
-from aimet_common import libquant_info
-from aimet_onnx import apply_adaround, QuantizationSimModel, compute_encodings
+from aimet_onnx import apply_adaround, QuantizationSimModel
 from aimet_onnx.adaround.adaround_weight import (
     Adaround,
     AdaroundParameters,
@@ -108,7 +108,7 @@ class TestAdaround:
             }
             assert params.issubset(param_names)
 
-    @pytest.mark.parametrize("pre_calibrate", (True, False))
+    @pytest.mark.parametrize("pre_calibrate", [True, False])
     @pytest.mark.parametrize(
         "model",
         [
@@ -122,7 +122,7 @@ class TestAdaround:
         "providers",
         (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
     )
-    def test_apply_adaround(self, providers, model, pre_calibrate):
+    def test_apply_adaround_2(self, providers, model, pre_calibrate):
         if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
             pytest.skip("Cuda not available")
 
@@ -419,6 +419,70 @@ class TestAdaround:
                 assert (
                     len(param_encodings["conv4.weight"]["scale"]) == 8
                 )  # out_channels
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            # model, ops_to_optimize input to pass, expected result
+            (
+                models_for_tests.single_residual_model().model,
+                [],
+                [
+                    "/conv1/Conv",
+                    "/conv2/Conv",
+                    "/conv3/Conv",
+                    "/conv4/Conv",
+                    "/fc/Gemm",
+                ],
+            ),
+            (
+                models_for_tests.single_residual_model().model,
+                ["/conv1/Conv"],
+                ["/conv1/Conv"],
+            ),
+            (
+                models_for_tests.single_residual_model().model,
+                ["/conv2/Conv"],
+                ["/conv2/Conv"],
+            ),
+            (
+                models_for_tests.single_residual_model().model,
+                [
+                    "/conv1/Conv",
+                    "/conv4/Conv",
+                    "/conv2/Conv",
+                    "/conv3/Conv",
+                ],
+                ["/conv1/Conv", "/conv4/Conv", "/conv2/Conv", "/conv3/Conv"],
+            ),
+        ],
+    )
+    def test_whitelist_functionality(self, config):
+        model, whitelist_ops, expected = config
+        inputs = [make_dummy_input(model) for _ in range(2)]
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=["CPUExecutionProvider"],
+        )
+
+        param_to_op_name_dict = {}
+        for cg_op in sim.connected_graph.get_all_ops().values():
+            if cg_op.type in AdaroundSupportedModules:
+                param_to_op_name_dict[cg_op.inputs[1].name] = cg_op.name
+
+        ops_processed = []
+
+        def mock_adaround_module(module, *args, **kwargs):
+            ops_processed.append(param_to_op_name_dict[module.params["weight"].name])
+
+        with patch(
+            "aimet_onnx.adaround.adaround_optimizer.AdaroundOptimizer.adaround_module",
+            mock_adaround_module,
+        ):
+            apply_adaround(sim, inputs, num_iterations=5, ops_to_optimize=whitelist_ops)
+
+            print([name for name in ops_processed])
+            assert ops_processed.sort() == expected.sort()
 
 
 def dataloader(input_shape: tuple, batch_size=2):

@@ -75,6 +75,7 @@ def apply_adaround(
     sim: QuantizationSimModel,
     inputs: Collection[Dict[str, np.ndarray]],
     num_iterations: int = 10000,
+    ops_to_optimize: List = None,
 ):
     """
     Optimizes the rounding direction of weights in the QuantizationSimModel to reduce quantization error.
@@ -87,6 +88,8 @@ def apply_adaround(
         inputs (Collection[Dict[str, np.ndarray]]): The set of input samples to use during optimization.
         num_iterations (int): Number of optimization steps to take for each layer. Recommended value is
             10K for weight bitwidths >= 8-bits, 15K for weight bitwidths < 8 bits.
+        ops_to_optimize: List of ops to optimize. If None, all the ops(under supported op types) will be optimized.
+
     """
     sim._compute_param_encodings(overwrite=False)
 
@@ -118,6 +121,7 @@ def apply_adaround(
                 .get("CUDAExecutionProvider", {})
                 .get("device_id", "0")
             ),
+            ops_to_optimize=ops_to_optimize,
         )
 
     # Re-build session since weights have been updated
@@ -319,6 +323,7 @@ class Adaround:
         use_cuda: bool = False,
         device: int = 0,
         user_onnx_libs: List[str] = None,
+        ops_to_optimize: List[str] = None,
     ):
         """
         Optimize weight rounding of every module (AdaroundSupportedModules) of model in sequential manner
@@ -332,6 +337,7 @@ class Adaround:
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
         :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
+        :param ops_to_optimize: List of ops to optimize. If None, all the ops(under supported op types) will be optimized.
         """
         # pylint: disable=too-many-locals, protected-access
 
@@ -374,7 +380,16 @@ class Adaround:
             for module in tqdm(modules):
                 name = module.name
                 module_info = model_data.module_to_info[name]
-                if cls._is_supported_layer_type(module_info):
+
+                if ops_to_optimize and module.name not in ops_to_optimize:
+                    continue
+
+                if (
+                    cls._is_supported_layer_type(module_info)
+                    and param_to_tensor_quantizer_dict[
+                        module_info.params["weight"].name
+                    ]._enabled
+                ):
                     # Get module's next following activation function
                     act_func = module_act_func_pair[name]
                     quantized_input_name = quantized_layer_to_input_tensor_name[name]
