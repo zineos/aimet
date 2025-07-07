@@ -7,9 +7,10 @@ from abc import ABC, abstractmethod
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import PreTrainedTokenizer, GenerationConfig
+from transformers import PreTrainedTokenizer, GenerationConfig, TextStreamer
 
 from GenAITests.shared.helpers.yaml_config_parser import YAMLConfigParser
+from GenAITests.shared.models.generator import Generator
 from .datasets import (
     Wikitext,
     TinyMMLU as TinyMMLUDataset,
@@ -24,7 +25,7 @@ class EvaluationMetric(ABC):
     @classmethod
     @abstractmethod
     def evaluate(
-        cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int
+        cls, model: Generator, tokenizer: PreTrainedTokenizer, context_length: int
     ) -> float:
         """Perform evaluation on provided model"""
 
@@ -57,7 +58,7 @@ class PPL(EvaluationMetric):
     @torch.no_grad()
     def evaluate(
         cls,
-        model: torch.nn.Module,
+        model: Generator,
         tokenizer: PreTrainedTokenizer,
         context_length: int,
         batch_size: int = 1,
@@ -91,7 +92,7 @@ class GenericMMLU(EvaluationMetric):
     @classmethod
     def evaluate(
         cls,
-        model: torch.nn.Module,
+        model: Generator,
         tokenizer: PreTrainedTokenizer,
         context_length: int,
         **kwargs,
@@ -178,7 +179,7 @@ class MMMLU(GenericMMLU):
 class Interactive(EvaluationMetric):
     @classmethod
     def evaluate(
-        cls, model: torch.nn.Module, tokenizer: PreTrainedTokenizer, context_length: int
+        cls, model: Generator, tokenizer: PreTrainedTokenizer, context_length: int
     ) -> float:
         while True:
             user_input_prompt = input("Enter your prompt or 'exit' to quit: ")
@@ -200,21 +201,21 @@ class Interactive(EvaluationMetric):
                 formatted_user_input, return_tensors="pt"
             ).to(model.device)
 
-            generation_config = GenerationConfig(
+            model.generation_config = GenerationConfig(
                 max_new_tokens=1000,
                 eos_token_id=tokenizer.eos_token_id,
                 pad_token_id=tokenizer.pad_token_id,
+                do_sample=True,
+                top_k=40,
+                top_p=0.95,
+                temperature=0.8,
             )
 
-            output = model.model.generate(
+            streamer = TextStreamer(tokenizer=tokenizer, skip_prompt=True)
+            model.generate(
                 inputs=tokenized_user_input["input_ids"],
                 attention_mask=tokenized_user_input["attention_mask"],
-                generation_config=generation_config,
+                generation_config=model.generation_config,
+                streamer=streamer,
             )
-
-            print("-------- Response Summary --------")
-            print(f"Prompt: {formatted_user_input}")
-            prompt_length = tokenized_user_input["input_ids"][0].shape[-1]
-            print(f"Response: {tokenizer.decode(output[0][prompt_length:])}")
-
         return float("nan")
