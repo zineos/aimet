@@ -39,7 +39,6 @@
 """Top level API for Adaptive Rounding - Post-Training Quantization (PTQ)"""
 
 import copy
-from contextlib import contextmanager
 import os
 import tempfile
 import json
@@ -54,7 +53,6 @@ from aimet_common import quantsim
 from aimet_common.utils import AimetLogger, deprecated
 from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
 
-from aimet_onnx.adaround.adaround_loss import AdaroundHyperParameters
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import OpMode
@@ -62,6 +60,7 @@ from aimet_onnx.meta.utils import get_module_act_func_pair, get_ordered_ops
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx import utils
 from aimet_onnx.adaround.adaround_optimizer import AdaroundOptimizer
+from aimet_onnx.adaround.adaround_loss import _REG_PARAM, _BETA_RANGE, _WARM_START
 from aimet_onnx.adaround.utils import ModelData, ModuleInfo
 
 
@@ -97,9 +96,9 @@ def apply_adaround(
         inputs,
         len(inputs),
         num_iterations,
-        AdaroundParameters.DEFAULT_REG_PARAM,
-        AdaroundParameters.DEFAULT_BETA_RANGE,
-        AdaroundParameters.DEFAULT_WARM_START,
+        _REG_PARAM,
+        _BETA_RANGE,
+        _WARM_START,
     )
 
     module_act_func_pair = get_module_act_func_pair(sim.connected_graph)
@@ -128,23 +127,20 @@ def apply_adaround(
     sim._rebuild_session()
 
 
+@deprecated(f"Use `aimet_onnx.apply_adaround` instead")
 class AdaroundParameters:
     """
     Configuration parameters for Adaround
     """
-
-    DEFAULT_REG_PARAM: float = 0.01
-    DEFAULT_BETA_RANGE: Tuple = (20, 2)
-    DEFAULT_WARM_START: float = 0.2
 
     def __init__(
         self,
         data_loader,
         num_batches: int,
         default_num_iterations: int = None,
-        default_reg_param: float = DEFAULT_REG_PARAM,
-        default_beta_range: Tuple = DEFAULT_BETA_RANGE,
-        default_warm_start: float = DEFAULT_WARM_START,
+        default_reg_param: float = _REG_PARAM,
+        default_beta_range: Tuple = _BETA_RANGE,
+        default_warm_start: float = _WARM_START,
         forward_fn: Callable = None,
         forward_pass_callback_args=None,
     ):
@@ -169,6 +165,24 @@ class AdaroundParameters:
             raise ValueError(
                 f"Can not fetch {num_batches} batches from "
                 f"a data loader of length {len(data_loader)}."
+            )
+
+        if default_reg_param != _REG_PARAM:
+            raise ValueError(
+                f"AdaroundParameters will be deprecated soon. "
+                f"Please set aimet_onnx.adaround.adaround_loss._REG_PARAM to {default_reg_param} instead"
+            )
+
+        if default_beta_range != _BETA_RANGE:
+            raise ValueError(
+                f"AdaroundParameters will be deprecated soon. "
+                f"Please set aimet_onnx.adaround.adaround_loss._BETA_RANGE to {default_beta_range} instead"
+            )
+
+        if default_warm_start != _WARM_START:
+            raise ValueError(
+                f"AdaroundParameters will be deprecated soon. "
+                f"Please set aimet_onnx.adaround.adaround_loss._WARM_START to {default_warm_start} instead"
             )
 
         self.data_loader = data_loader
@@ -364,10 +378,6 @@ class Adaround:
                 params.data_loader, params.num_batches, tmp_dir
             )
 
-            # Optimization Hyper parameters
-            opt_params = AdaroundHyperParameters(
-                num_iterations, params.reg_param, params.beta_range, params.warm_start
-            )
             param_to_tensor_quantizer_dict = (
                 Adaround._create_param_to_tensor_quantizer_dict(quant_sim)
             )
@@ -403,7 +413,7 @@ class Adaround:
                         quant_sim.model,
                         act_func,
                         cached_dataset,
-                        opt_params,
+                        num_iterations,
                         param_to_tensor_quantizer_dict,
                         use_cuda,
                         device,
@@ -473,9 +483,6 @@ class Adaround:
                 quantizer.enabled,
                 ch_axis,
             )
-
-            adaround_quantizer.use_strict_symmetric = quantizer.use_strict_symmetric
-            adaround_quantizer.use_unsigned_symmetric = quantizer.use_unsigned_symmetric
 
             # Set the encodings and replace by Adaround tensor quantizer
             adaround_quantizer.encoding = quantizer.encodings

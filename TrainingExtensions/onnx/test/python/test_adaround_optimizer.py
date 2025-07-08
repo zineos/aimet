@@ -43,7 +43,6 @@ import numpy as np
 from onnx import numpy_helper
 from aimet_common import libpymo
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
-from aimet_onnx.adaround.adaround_loss import AdaroundHyperParameters
 from aimet_onnx.adaround.adaround_optimizer import AdaroundOptimizer
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.adaround.utils import ModelData
@@ -78,12 +77,7 @@ class TestAdaroundOptimizer:
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             cached_dataset = CachedDataset(data_loader, 1, tmp_dir)
-            opt_params = AdaroundHyperParameters(
-                num_iterations=10,
-                reg_param=0.01,
-                beta_range=(20, 2),
-                warm_start=warm_start,
-            )
+            num_iterations = 10
 
             AdaroundOptimizer.adaround_module(
                 quant_module,
@@ -92,7 +86,7 @@ class TestAdaroundOptimizer:
                 sim.model,
                 "Relu",
                 cached_dataset,
-                opt_params,
+                num_iterations,
                 param_to_tq_dict,
                 True,
                 0,
@@ -201,9 +195,6 @@ def create_param_to_tensor_quantizer_dict(quant_sim):
             quantizer.enabled,
             ch_axis,
         )
-
-        adaround_quantizer.use_strict_symmetric = quantizer.use_strict_symmetric
-        adaround_quantizer.use_unsigned_symmetric = quantizer.use_unsigned_symmetric
 
         encodings = libpymo.TfEncoding()
         encodings.bw = 8

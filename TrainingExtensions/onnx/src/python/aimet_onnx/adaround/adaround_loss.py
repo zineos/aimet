@@ -44,29 +44,13 @@ import torch
 # Import AIMET specific modules
 from aimet_common.defs import AdaroundConstants
 
-
-class AdaroundHyperParameters:
-    """
-    Hyper parameters for Adaround
-    """
-
-    def __init__(
-        self,
-        num_iterations: int,
-        reg_param: float,
-        beta_range: Tuple,
-        warm_start: float,
-    ):
-        """
-        :param num_iterations: Number of maximum iterations to adaround layer
-        :param reg_param: Regularization parameter, trading off between rounding loss vs reconstruction loss
-        :param beta_range: Start and stop parameters for annealing of rounding loss (start_beta, end_beta)
-        :param warm_start: Warm up period, during which rounding loss has zero effect
-        """
-        self.num_iterations = num_iterations
-        self.reg_param = reg_param
-        self.beta_range = beta_range
-        self.warm_start = warm_start
+# AdaRound hyperparameters
+_REG_PARAM: float = 0.01  # Regularization parameter, trading off between rounding loss vs reconstruction loss
+_BETA_RANGE: Tuple = (
+    20,
+    2,
+)  # Start and stop parameters for annealing of rounding loss (start_beta, end_beta)
+_WARM_START: float = 0.2  # Warm up period, during which rounding loss has zero effect
 
 
 class AdaroundLoss:
@@ -93,16 +77,16 @@ class AdaroundLoss:
 
     @classmethod
     def compute_round_loss(
-        cls, alpha: torch.Tensor, opt_params: AdaroundHyperParameters, cur_iter: int
+        cls, alpha: torch.Tensor, num_iterations: int, cur_iter: int
     ) -> torch.Tensor:
         """
         Compute Rounding Loss - second part of Combined Loss
         :param alpha: parameter 'alpha' to be optimized, float32 tensor same shape as weight tensor
-        :param opt_params: Optimization parameters for Adaround
+        :param num_iterations: Number of iterations to adaround the layer
         :param cur_iter: current iteration
         :return: rounding loss
         """
-        if cur_iter < opt_params.num_iterations * opt_params.warm_start:
+        if cur_iter < num_iterations * _WARM_START:
             # Warm Start duration
             round_loss = 0
 
@@ -118,10 +102,8 @@ class AdaroundLoss:
 
             # compute beta parameter to anneal the rounding loss
             beta = cls._compute_beta(
-                opt_params.num_iterations,
                 cur_iter,
-                opt_params.beta_range,
-                opt_params.warm_start,
+                num_iterations,
             )
 
             # calculate regularization term - which ensures parameter to converge to exactly zeros and ones
@@ -129,20 +111,16 @@ class AdaroundLoss:
             reg_term = torch.add(1, -(torch.add(2 * h_alpha, -1).abs()).pow(beta)).sum()
 
             # calculate the rounding loss
-            round_loss = opt_params.reg_param * reg_term
+            round_loss = _REG_PARAM * reg_term
 
         return round_loss
 
     @staticmethod
-    def _compute_beta(
-        max_iter: int, cur_iter: int, beta_range: Tuple, warm_start: float
-    ) -> float:
+    def _compute_beta(cur_iter: int, max_iter: int) -> float:
         """
         Compute beta parameter used in regularization function using cosine decay
-        :param max_iter: total maximum number of iterations
         :param cur_iter: current iteration
-        :param beta_range: range for beta decay (start_beta, end_beta)
-        :param warm_start: warm up period, during which rounding loss has zero effect
+        :param max_iter: total maximum number of iterations
         :return: parameter beta
         """
         assert cur_iter < max_iter, (
@@ -150,10 +128,10 @@ class AdaroundLoss:
         )
 
         #  Start and stop beta for annealing of rounding loss (start_beta, end_beta)
-        start_beta, end_beta = beta_range
+        start_beta, end_beta = _BETA_RANGE
 
         # iteration at end of warm start period, which is 20% of max iterations
-        warm_start_end_iter = warm_start * max_iter
+        warm_start_end_iter = _WARM_START * max_iter
 
         # compute relative iteration of current iteration
         rel_iter = (cur_iter - warm_start_end_iter) / (max_iter - warm_start_end_iter)

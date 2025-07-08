@@ -54,7 +54,7 @@ from aimet_onnx.adaround.activation_sampler import ActivationSampler
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.adaround.utils import ModuleInfo, read_attributes_for_op
 from aimet_onnx.utils import create_input_dict
-from aimet_onnx.adaround.adaround_loss import AdaroundLoss, AdaroundHyperParameters
+from aimet_onnx.adaround.adaround_loss import AdaroundLoss
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -91,7 +91,7 @@ class AdaroundOptimizer:
         quant_model: QuantizationSimModel,
         act_func: Union[torch.nn.Module, None],
         cached_dataset: Dataset,
-        opt_params: AdaroundHyperParameters,
+        num_iterations: int,
         param_to_adaround_tensor_quantizer: Dict,
         use_cuda: bool,
         device: int = 0,
@@ -107,7 +107,7 @@ class AdaroundOptimizer:
         :param act_func: Activation function
         :param cached_dataset: Cached dataset
          yielded from the data loader
-        :param opt_params: Optimization parameters
+        :param num_iterations: Num of iterations to adaround a layer
         :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
@@ -123,7 +123,7 @@ class AdaroundOptimizer:
             quant_model,
             act_func,
             cached_dataset,
-            opt_params,
+            num_iterations,
             param_to_adaround_tensor_quantizer,
             use_cuda,
             device,
@@ -145,7 +145,7 @@ class AdaroundOptimizer:
         quant_model: QuantizationSimModel,
         act_func: Union[None, str],
         cached_dataset: Dataset,
-        opt_params: AdaroundHyperParameters,
+        num_iterations: int,
         param_to_adaround_tensor_quantizer: Dict,
         use_cuda: bool,
         device: int = 0,
@@ -159,7 +159,7 @@ class AdaroundOptimizer:
         :param quant_model: QuantSim model
         :param act_func: Activation function
         :param cached_dataset: Cached dataset
-        :param opt_params: Optimization parameters
+        :param num_iterations:  Num of iterations to adaround a layer
         :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
         :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         """
@@ -242,7 +242,7 @@ class AdaroundOptimizer:
                     all_inp_data, all_orig_out_data, torch_device
                 )
 
-        for iteration in range(opt_params.num_iterations):
+        for iteration in range(num_iterations):
             if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
                 # batch idx is chosen using iteration % len(all_inp_data_np). Of all the samples in a given batch,
                 # min(batch size, BATCH_SIZE) is operated on in a single iteration
@@ -286,7 +286,7 @@ class AdaroundOptimizer:
             # Calculate total loss
             recon_loss = AdaroundLoss.compute_recon_loss(quant_out_data, orig_out_data)
             round_loss = AdaroundLoss.compute_round_loss(
-                adaround_quantizer.alpha, opt_params, iteration
+                adaround_quantizer.alpha, num_iterations, iteration
             )
             total_loss = recon_loss + round_loss
 
