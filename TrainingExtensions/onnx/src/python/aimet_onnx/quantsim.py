@@ -2380,6 +2380,7 @@ def set_blockwise_quantization_for_weights(
     symmetric: bool,
     block_size: int,
     strict: bool = False,
+    excluded_nodes: List[str] = None,
 ):
     """
     Set weight quantizers for the given operator types to use blockwise affine quantization.
@@ -2392,6 +2393,8 @@ def set_blockwise_quantization_for_weights(
         dimension, while per-channel will be used for the weight's output features dimension
     :param strict: If False, only enable blockwise quant for layers with dimensions evenly divisible by block_size.
         If True, throw an error for layers with incompatible shapes.
+    :param excluded_nodes: List of onnx node names to exclude from blockwise weight quantization. It can be empty if no nodes are excluded
+
 
     Examples:
 
@@ -2401,14 +2404,21 @@ def set_blockwise_quantization_for_weights(
         ...                                        op_types=("Gemm", "MatMul", "Conv"),
         ...                                        bitwidth=4,
         ...                                        symmetric=True,
-        ...                                        block_size=64)
+        ...                                        block_size=64,
+    ...                                            excluded_nodes = ['conv1'])
     """
 
     if isinstance(op_types, str):
         op_types = (op_types,)
 
+    if not excluded_nodes:
+        excluded_nodes = []
+
     for op in sim.connected_graph.ordered_ops:
         if op.type not in op_types:
+            continue
+
+        if op.name in excluded_nodes:
             continue
 
         _, _, param_quantizers = sim.get_op_quantizers(op)
@@ -2446,6 +2456,7 @@ def set_grouped_blockwise_quantization_for_weights(
     decompressed_bw: int,
     block_size: int,
     strict: bool = False,
+    excluded_nodes: List[str] = None,
 ):
     """
     Set weight parameter quantizers of modules to grouped blockwise quantization.
@@ -2456,6 +2467,7 @@ def set_grouped_blockwise_quantization_for_weights(
     :param decompressed_bw: Decompressed bw for grouped block quantization
     :param block_size: Block size for affine quantization. The block size will be applied to the weight's input features
         dimension, while per-channel will be used for the weight's output features dimension
+    :param excluded_nodes: List of onnx node names to exclude from blockwise weight quantization. It can be empty if no nodes are excluded
 
     Examples:
 
@@ -2465,14 +2477,21 @@ def set_grouped_blockwise_quantization_for_weights(
         ...                                                op_types=("Gemm", "MatMul", "Conv"),
         ...                                                bitwidth=4,
         ...                                                decompressed_bw=8,
-        ...                                                block_size=64)
+        ...                                                block_size=64,
+        ...                                                excluded_nodes = ['conv1'])
     """
 
     if isinstance(op_types, str):
         op_types = (op_types,)
 
+    if not excluded_nodes:
+        excluded_nodes = []
+
     for op in sim.connected_graph.ordered_ops:
         if op.type not in op_types:
+            continue
+
+        if op.name in excluded_nodes:
             continue
 
         _, _, param_quantizers = sim.get_op_quantizers(op)

@@ -1919,6 +1919,26 @@ class TestQuantSim:
         assert weight_quantizer.quant_info.blockSize == 0
         sim.session.run(None, make_dummy_input(model))
 
+    def test_blockwise_quantization_excluded_ops(self):
+        model = models_for_tests.weight_matmul_model(in_features=16, out_features=32)
+        ops = [node for node in model.graph.node]
+        excluded_ops = [ops[0].name]  # Exclude matmul, set_blockwise should be a no op
+        sim = QuantizationSimModel(model)
+
+        set_blockwise_quantization_for_weights(
+            sim,
+            ("MatMul", "Gemm"),
+            4,
+            True,
+            block_size=7,
+            strict=False,
+            excluded_nodes=excluded_ops,
+        )
+
+        weight_quantizer = sim.get_qc_quantize_op()["weight"]
+        assert weight_quantizer.quant_info.blockSize == 0
+        sim.session.run(None, make_dummy_input(model))
+
     @pytest.mark.parametrize(
         "model, block_size",
         (
@@ -2155,6 +2175,68 @@ class TestQuantSim:
         )
 
         sim.compute_encodings([dummy_input])
+        for name, quantizer in sim.qc_quantize_op_dict.items():
+            if not quantizer.enabled:
+                continue
+            if name in bq_weights:
+                assert isinstance(quantizer, GroupedBlockQuantizeDequantize)
+                assert quantizer.quant_info.usePerChannelMode
+                assert quantizer.quant_info.blockSize == block_size
+                assert len(quantizer.encodings) > 1
+            else:
+                assert quantizer.quant_info.blockSize == 0
+
+        with set_encoding_version("1.0.0"):
+            sim.export(tmpdir, "tmp_model")
+
+        with open(os.path.join(tmpdir, "tmp_model.encodings")) as f:
+            encodings = json.load(f)
+
+        for enc in encodings["param_encodings"]:
+            if enc["name"] not in bq_weights:
+                assert enc["enc_type"] in (
+                    EncodingType.PER_TENSOR.name,
+                    EncodingType.PER_CHANNEL.name,
+                )
+            else:
+                assert enc["enc_type"] == EncodingType.LPBQ.name
+                assert enc["compressed_bw"] == bitwidth
+                assert enc["bw"] == decompressed_bw
+
+    def test_low_power_blockwise_quantization_with_excluded_ops(self, tmpdir):
+        model = models_for_tests.single_residual_model()
+        block_size = 4
+        dummy_input = make_dummy_input(model.model)
+        bq_layers = ["MatMul", "Conv", "Gemm"]
+        bq_weights = set()
+        bitwidth = 4
+        decompressed_bw = 8
+        ops = [node for node in model.graph().node]
+        excluded_ops = [ops[3].name]  # Exclude conv3
+        for node in model.graph().node:
+            if node.name in excluded_ops:
+                continue
+            elif node.op_type in bq_layers:
+                bq_weights.add(node.input[1])
+
+        # Input shape is not compatible with block size
+        bq_weights.remove(model.graph().node[0].input[1])
+
+        sim = QuantizationSimModel(
+            model, dummy_input, default_param_bw=16, default_activation_bw=16
+        )
+        set_grouped_blockwise_quantization_for_weights(
+            sim,
+            bq_layers,
+            bitwidth,
+            decompressed_bw,
+            block_size,
+            strict=False,
+            excluded_nodes=excluded_ops,
+        )
+
+        sim.compute_encodings(lambda session, _: session.run(None, dummy_input), None)
+        assert len(bq_weights) == 3
         for name, quantizer in sim.qc_quantize_op_dict.items():
             if not quantizer.enabled:
                 continue
