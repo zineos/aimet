@@ -46,6 +46,7 @@ from safetensors.numpy import save_file, load_file
 import torch
 from typing import Union, Callable
 import time
+from tqdm import tqdm
 
 from aimet_torch._base.quantsim import logger
 from aimet_torch.blockwise_sampler import (
@@ -220,12 +221,20 @@ class Omniquant:
                 optimizer = torch.optim.AdamW(grouped_params)
                 loss_fn = torch.nn.MSELoss(reduction="sum")
                 curr_iteration = 0
+                pbar = tqdm(
+                    total=num_iterations,
+                    leave=False,
+                    position=1,
+                    desc="Iterations completed",
+                )
 
                 while curr_iteration < num_iterations:
                     sqnr_list, loss_list = [], []
                     for batch_num in range(num_batch):
                         curr_iteration += 1
+                        pbar.update(1)
                         if curr_iteration > num_iterations:
+                            pbar.close()
                             break
                         # Do block-wise training.
                         with torch.set_grad_enabled(True):

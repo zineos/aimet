@@ -41,6 +41,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from types import NoneType
 from typing import Callable, List, Any, Tuple, Type
+from tqdm import tqdm
 
 import torch
 from torch.utils.data import DataLoader
@@ -218,11 +219,19 @@ class AdaScale:
                         fp_out.append(fp_block_results)
                         del fp_args, fp_kwargs
 
+                pbar = tqdm(
+                    total=num_iterations,
+                    leave=False,
+                    position=1,
+                    desc="Iterations completed",
+                )
                 curr_iteration = 0
                 while curr_iteration < num_iterations:
                     for batch_idx in range(len(data_loader)):
+                        pbar.update(1)
                         curr_iteration += 1
                         if curr_iteration > num_iterations:
+                            pbar.close()
                             break
                         with torch.set_grad_enabled(True):
                             with patch_attr(

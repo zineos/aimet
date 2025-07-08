@@ -235,7 +235,7 @@ class AdaScale(QuantizationTechnique):
             num_iterations,
         )
 
-        _compute_encodings(quantsim, dataloader, num_iterations=20)
+        _compute_encodings(quantsim, generator, dataloader, num_iterations=20)
 
 
 @YAMLConfigParser.register_recipe
@@ -281,4 +281,4 @@ class OmniQuant(QuantizationTechnique):
             num_iterations=num_iterations,
         )
 
-        _compute_encodings(quantsim, dataloader, num_iterations=40)
+        _compute_encodings(quantsim, generator, dataloader, num_iterations=40)
