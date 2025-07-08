@@ -1999,6 +1999,43 @@ class QuantizationSimModel:
         for op in reversed(data_movement_ops):
             propogate_quantizer(op)
 
+    def _get_enabled_quantizer(self, tensor_name: str) -> QcQuantizeOp:
+        """
+        Returns closest enabled quantizer to tensor traversing upwards only through invariant ops
+
+        :param tensor_name: Name of tensor for which to find quantizer
+        """
+        quantizer = self.qc_quantize_op_dict.get(tensor_name, None)
+        if quantizer and quantizer.enabled:
+            return quantizer
+
+        prod_dict = self.connected_graph.get_all_products()
+        product = prod_dict.get(tensor_name, None)
+
+        if product == None:
+            if tensor_name.endswith(("_updated", "_qdq")):
+                raise KeyError(
+                    f"Could not find quantizer for tensor {tensor_name}. Input tensor_name must be the name of a tensor in the original (unquantized) graph"
+                )
+            else:
+                raise KeyError(
+                    f"Could not find quantizer for tensor {tensor_name}. Tensor name does not exist in the graph"
+                )
+
+        producer = product.producer
+
+        if producer == None:
+            return None
+
+        if not (_is_grid_preserving_op(producer.type)):
+            return None
+
+        if len(producer.inputs) == 0:
+            return None
+
+        upstream_tensor = producer.inputs[0]
+        return self._get_enabled_quantizer(upstream_tensor.name)
+
 
 def _to_unsigned_encoding(encoding: dict) -> dict:
     if ("output_dtype" not in encoding) or ("y_scale" not in encoding):

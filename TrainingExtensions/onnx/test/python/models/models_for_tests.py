@@ -4164,3 +4164,55 @@ def reshape_with_multiple_consumers():
     )
     onnx.checker.check_model(model, True)
     return model
+
+
+def diverse_ops():
+    """
+    input -> Relu -+-> Reshape ------> MaxPool -> output
+    """
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="reshape_with_multiple_consumers",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[3, 1024]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 3, 1022]
+                ),
+            ],
+            nodes=[
+                helper.make_node(
+                    "Relu",
+                    inputs=["input"],
+                    outputs=["relu_output"],
+                    name="relu",
+                ),
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["shape"],
+                    name="shape",
+                    value_ints=[1, 3, 1024],
+                ),
+                helper.make_node(
+                    "Reshape",
+                    inputs=["relu_output", "shape"],
+                    outputs=["reshape_output"],
+                    name="reshape",
+                ),
+                helper.make_node(
+                    "MaxPool",
+                    inputs=["reshape_output"],
+                    outputs=["output"],
+                    name="maxpool",
+                    kernel_shape=[3],
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+    return model

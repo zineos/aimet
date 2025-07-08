@@ -58,6 +58,7 @@ from aimet_common import quantsim
 from aimet_common import libquant_info
 from aimet_common import libpymo
 from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType, qtype
+from aimet_common.defs import QuantScheme, QuantizationDataType, EncodingType
 from aimet_common.onnx.opset10 import unpack_int4x2_to_int8
 from aimet_common.quantsim_config.utils import (
     get_path_for_per_channel_config,
@@ -75,7 +76,7 @@ from aimet_onnx.quantsim import (
 )
 import aimet_onnx
 from aimet_onnx.qc_quantize_op import OpMode, GroupedBlockQuantizeDequantize
-from aimet_onnx.utils import make_dummy_input
+from aimet_onnx.utils import make_dummy_input, disable_quantizers
 from .models import models_for_tests, test_models
 from .models.models_for_tests import (
     batchnorm_model,
@@ -2583,6 +2584,23 @@ class TestQuantSim:
             dummy_input=make_dummy_input(sim.model.model), overwrite=True
         )
         assert weight_quantizer.export_encodings("2.0.0") == weight_encoding_unclipped
+
+    def test_get_enabled_quantizer(self):
+        model = models_for_tests.diverse_ops()
+        sim = QuantizationSimModel(model)
+
+        quantizer = sim._get_enabled_quantizer("output")
+        assert quantizer == sim.qc_quantize_op_dict["output"]
+
+        sim.qc_quantize_op_dict["output"].enabled = False
+
+        quantizer = sim._get_enabled_quantizer("output")
+        assert quantizer == sim.qc_quantize_op_dict["relu_output"]
+
+        sim.qc_quantize_op_dict["relu_output"].enabled = False
+
+        quantizer = sim._get_enabled_quantizer("output")
+        assert quantizer == None
 
 
 class TestEncodingPropagation:
