@@ -479,7 +479,9 @@ class TestAdaround:
             "aimet_onnx.adaround.adaround_optimizer.AdaroundOptimizer.adaround_module",
             mock_adaround_module,
         ):
-            apply_adaround(sim, inputs, num_iterations=5, ops_to_optimize=whitelist_ops)
+            apply_adaround(
+                sim, inputs, num_iterations=5, node_names_to_optimize=whitelist_ops
+            )
 
             print([name for name in ops_processed])
             assert ops_processed.sort() == expected.sort()
