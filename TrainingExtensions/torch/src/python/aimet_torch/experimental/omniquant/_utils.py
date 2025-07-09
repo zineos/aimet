@@ -59,6 +59,9 @@ from aimet_torch.v2.nn.transformers.models.gemma3.modeling_gemma3 import (
 from aimet_torch.v2.nn.transformers.models.qwen2.modeling_qwen2 import (
     QuantizedQwen2RMSNorm,
 )
+from aimet_torch.v2.nn.transformers.models.mistral.modeling_mistral import (
+    QuantizedMistralRMSNorm,
+)
 
 import torch
 import numpy as np
@@ -71,6 +74,7 @@ SUPPORTED_QUANTIZED_MODULES = (
     QuantizedLlamaRMSNorm,
     QuantizedGemma3RMSNorm,
     QuantizedQwen2RMSNorm,
+    QuantizedMistralRMSNorm,
 )
 LWC_MODULES = (QuantizedLinear, QuantizedConv2d)
 OMQ_QUANTIZERS = (OmqQuantizeDequantize, OmqGemmaWeightQuantizer)

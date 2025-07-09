@@ -43,6 +43,12 @@ from transformers.models.qwen2.modeling_qwen2 import (
     Qwen2DecoderLayer,
     Qwen2ForCausalLM,
 )
+from transformers.models.mistral.modeling_mistral import (
+    MistralModel,
+    MistralDecoderLayer,
+    MistralForCausalLM,
+)
+
 from aimet_torch import QuantizationSimModel
 from typing import List
 import torch
@@ -51,16 +57,19 @@ from .defs import _LetPair
 
 LlamaModelGroup = (LlamaModel, LlamaForCausalLM)
 QwenModelGroup = (Qwen2Model, Qwen2ForCausalLM)
+MistralModelGroup = (MistralModel, MistralForCausalLM)
+
 model_to_block_mapping = {
     LlamaModel: LlamaDecoderLayer,
     Qwen2Model: Qwen2DecoderLayer,
+    MistralModel: MistralDecoderLayer,
 }
 
 
 def get_transformer_processor(qsim: QuantizationSimModel):
     """Return transformer_processor based on model class family."""
     for module in qsim.model.modules():
-        if isinstance(module, (LlamaModelGroup, QwenModelGroup)):
+        if isinstance(module, (LlamaModelGroup, QwenModelGroup, MistralModelGroup)):
             return TransformerProcessor(qsim.model)
 
     def _get_supporting_model_class():
@@ -102,8 +111,8 @@ class TransformerProcessor:
 
     def get_let_module_pair(self, decoder_block) -> List:
         """Method to get a list of let module pairs in a decoder_block."""
-        if isinstance(decoder_block, LlamaDecoderLayer) or isinstance(
-            decoder_block, Qwen2DecoderLayer
+        if isinstance(
+            decoder_block, (LlamaDecoderLayer, Qwen2DecoderLayer, MistralDecoderLayer)
         ):
             input_layernorm = decoder_block.get_submodule("input_layernorm")
             q_proj = decoder_block.get_submodule("self_attn.q_proj")

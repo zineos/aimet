@@ -48,6 +48,11 @@ from torch.utils.data import DataLoader
 
 from transformers.models.llama.modeling_llama import LlamaModel, LlamaDecoderLayer
 from transformers.models.qwen2.modeling_qwen2 import Qwen2Model, Qwen2DecoderLayer
+from transformers.models.mistral.modeling_mistral import (
+    MistralModel,
+    MistralDecoderLayer,
+)
+
 
 from aimet_common.utils import AimetLogger
 from aimet_torch import QuantizationSimModel
@@ -84,6 +89,9 @@ adascale_model_config_dict = {
     ),
     Qwen2Model: AdaScaleModelConfig(
         block_type=Qwen2DecoderLayer, beta_gamma_lr=1e-3, scales_lr=5e-4
+    ),
+    MistralModel: AdaScaleModelConfig(
+        block_type=MistralDecoderLayer, beta_gamma_lr=1e-3, scales_lr=5e-4
     ),
 }
 
