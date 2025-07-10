@@ -37,11 +37,13 @@
 
 import numpy as np
 import copy
+import pytest
 import torch
 from onnxruntime import SessionOptions, GraphOptimizationLevel, InferenceSession
 from onnx import numpy_helper
 
 from aimet_common.cross_layer_equalization import GraphSearchUtils
+from aimet_onnx.utils import make_dummy_input
 from aimet_onnx.meta.connectedgraph import ConnectedGraph, WEIGHT_INDEX
 from aimet_onnx.cross_layer_equalization import (
     get_ordered_list_of_conv_modules,
@@ -51,6 +53,17 @@ from aimet_onnx.cross_layer_equalization import (
     HighBiasFold,
     equalize_model,
 )
+
+from .models.models_for_tests import (
+    BNAfterConv,
+    BNBeforeConv,
+    BNAfterConv1d,
+    BNAfterLinear,
+    BNBeforeLinear,
+    _convert_to_onnx_no_fold,
+)
+
+
 from aimet_onnx.utils import ParamUtils, replace_relu6_with_relu
 from aimet_onnx.batch_norm_fold import fold_all_batch_norms_to_weight
 
@@ -270,6 +283,27 @@ class TestCLS:
         cls_set_infos = cls.scale_model()
         # Squeezenet1_0 doesn't have any scalable sets
         assert not cls_set_infos
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            _convert_to_onnx_no_fold(BNBeforeLinear(), torch.randn((32, 10))),
+            _convert_to_onnx_no_fold(BNAfterLinear(bias=True), torch.randn((32, 10))),
+            _convert_to_onnx_no_fold(
+                BNAfterConv1d(bias=True), torch.randn((2, 10, 24))
+            ),
+            _convert_to_onnx_no_fold(BNBeforeConv(), torch.randn((2, 10, 24, 24))),
+            _convert_to_onnx_no_fold(BNAfterConv(), torch.randn((2, 10, 24, 24))),
+        ],
+    )
+    def test_equalize_model(self, model):
+        test_input = make_dummy_input(model.model)
+        session = _build_session(model)
+        output_before_cle = session.run(None, test_input)[0]
+        equalize_model(model)
+        session = _build_session(model)
+        output_after_cle = session.run(None, test_input)[0]
+        assert np.allclose(output_before_cle, output_after_cle, rtol=1e-3, atol=1e-5)
 
 
 class TestHighBiasFold:

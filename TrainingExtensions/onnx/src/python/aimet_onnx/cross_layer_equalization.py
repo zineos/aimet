@@ -493,11 +493,10 @@ def equalize_model(model: ModelProto):
     replace_relu6_with_relu(model)
 
     bn_dict = {}
-    for conv_bn in conv_bn_pairs:
-        bn_dict[conv_bn[0].name] = conv_bn[1]
 
-    for bn_conv in bn_conv_pairs:
-        bn_dict[bn_conv[1].name] = bn_conv[0]
+    # Note: bn_conv_pairs is still ordered (conv, bn)
+    for conv_bn in conv_bn_pairs + bn_conv_pairs:
+        bn_dict[conv_bn[0].name] = conv_bn[1]
 
     # perform cross-layer scaling on applicable layer sets
     cls = CrossLayerScaling(model)
