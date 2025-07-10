@@ -332,7 +332,7 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
             num_steps = self.qmax - self.qmin
             scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
 
-        return scale.to(dtype)
+        return torch.abs(scale.to(dtype))
 
     def get_offset(self, dtype=None) -> Optional[torch.Tensor]:
         """
@@ -345,6 +345,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
         Returns:
             Quantization offset
         """
+        return self._get_offset(dtype=dtype)
+
+    def _get_offset(self, scale=None, dtype=None) -> Optional[torch.Tensor]:
         if not self.is_initialized():
             return None
 
@@ -358,7 +361,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
         elif self._is_scale_offset_quantizer():
             offset = ste_round(self.offset)
         else:
-            offset = ste_round(self.min.to(dtype) / self.get_scale(dtype)) - self.qmin
+            scale = scale if scale is not None else self.get_scale(dtype)
+            min = torch.minimum(self.min, self.max)
+            offset = ste_round(min / scale) - self.qmin
 
         return offset.to(dtype)
 
@@ -395,9 +400,12 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
         Return the quantizer's encodings as an AffineEncoding object
         """
         if self.is_initialized():
+            scale = self.get_scale(dtype=torch.float32)
+            offset = self._get_offset(scale=scale, dtype=torch.float32)
+
             return AffineEncoding(
-                self.get_scale(dtype=torch.float32),
-                self.get_offset(dtype=torch.float32),
+                scale,
+                offset,
                 self.qmin,
                 self.qmax,
                 self._symmetric,
