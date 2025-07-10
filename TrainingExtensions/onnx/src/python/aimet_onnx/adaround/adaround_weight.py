@@ -56,13 +56,12 @@ from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import OpMode
-from aimet_onnx.meta.utils import get_module_act_func_pair, get_ordered_ops
+from aimet_onnx.meta.utils import get_module_act_func_pair
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx import utils
 from aimet_onnx.adaround.adaround_optimizer import AdaroundOptimizer
 from aimet_onnx.adaround.adaround_loss import _REG_PARAM, _BETA_RANGE, _WARM_START
-from aimet_onnx.adaround.utils import ModelData, ModuleInfo
-
+from aimet_onnx.adaround.utils import ModelData, ModuleInfo, read_attributes_for_op
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 
@@ -103,18 +102,12 @@ def apply_adaround(
 
     module_act_func_pair = get_module_act_func_pair(sim.connected_graph)
 
-    # TODO: Refactor AdaRound to remove the need for separate unquantized model
-    model = copy.deepcopy(sim.model.model)
-    model = QuantizationSimModel.remove_quantizers(model)
-
     with utils.disable_quantizers(sim, set(sim.activation_names)):
         Adaround._adaround_model(
-            ONNXModel(model),
             sim,
             module_act_func_pair,
             parameters,
             use_cuda="CUDAExecutionProvider" in sim.session.get_providers(),
-            user_onnx_libs=sim._user_onnx_libs,
             device=int(
                 sim.session.get_provider_options()
                 .get("CUDAExecutionProvider", {})
@@ -252,6 +245,7 @@ class Adaround:
             user_onnx_libs=user_onnx_libs,
             use_cuda=use_cuda,
         )
+        del model
 
         # For the params in the param_bw_override_list, override the default parameter bitwidths in the QuantSim
         if param_bw_override_list:
@@ -265,26 +259,22 @@ class Adaround:
 
         return cls._apply_adaround(
             quant_sim,
-            model,
             params,
             path,
             filename_prefix,
             use_cuda,
             device,
-            user_onnx_libs,
         )
 
     @classmethod
     def _apply_adaround(
         cls,
         quant_sim: QuantizationSimModel,
-        model: onnx_pb.ModelProto,
         params: AdaroundParameters,
         path: str,
         filename_prefix: str,
         use_cuda: bool = False,
         device: int = 0,
-        user_onnx_libs: List[str] = None,
     ) -> onnx_pb.ModelProto:
         """
         Returns model with optimized weight rounding of every module (Conv and Linear) and also saves the
@@ -293,13 +283,11 @@ class Adaround:
 
         :param quant_sim: QuantizationSimModel object to optimize weight rounding.
                           The activation quantizers are expected to have been disabled.
-        :param model: Original fp32 model from which quant_sim was created.
         :param params: Parameters for Adaround
         :param path: path where to store parameter encodings
         :param filename_prefix: Prefix to use for filename of the encodings file
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         :return: Model with Adarounded weights and saves corresponding parameter encodings JSON file at provided path
         """
 
@@ -308,16 +296,14 @@ class Adaround:
             assert not quant_sim.qc_quantize_op_dict[quantizer_name].enabled
 
         # Get the module - activation function pair using ConnectedGraph
-        module_act_func_pair = get_module_act_func_pair(ConnectedGraph(model))
+        module_act_func_pair = get_module_act_func_pair(quant_sim.connected_graph)
 
         cls._adaround_model(
-            model,
             quant_sim,
             module_act_func_pair,
             params,
             use_cuda,
             device,
-            user_onnx_libs,
         )
 
         # Export quantization encodings to JSON-formatted file
@@ -330,27 +316,23 @@ class Adaround:
     @classmethod
     def _adaround_model(
         cls,
-        model: onnx_pb.ModelProto,
         quant_sim: QuantizationSimModel,
         module_act_func_pair: Dict,
         params: AdaroundParameters,
         use_cuda: bool = False,
         device: int = 0,
-        user_onnx_libs: List[str] = None,
         node_names_to_optimize: List[str] = None,
     ):
         """
         Optimize weight rounding of every module (AdaroundSupportedModules) of model in sequential manner
         based on occurrence
 
-        :param model: Original fp32 model from which quant_sim was created.
         :param quant_sim: QuantizationSimModel object to optimize weight rounding.
                           The activation quantizers are expected to have been disabled.
         :param module_act_func_pair: Dictionary of module to immediate following activation function
         :param params: Adaround parameters
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         :param node_names_to_optimize: List of node names to optimize. If None, all the nodes(under supported types) will be optimized
         """
         # pylint: disable=too-many-locals, protected-access
@@ -381,13 +363,12 @@ class Adaround:
             param_to_tensor_quantizer_dict = (
                 Adaround._create_param_to_tensor_quantizer_dict(quant_sim)
             )
-            model_data = ModelData(model.model)
+            model_data = ModelData(quant_sim)
             quantized_layer_to_input_tensor_name = (
                 Adaround._get_quantized_layer_input_tensor_name(quant_sim)
             )
             # AdaRound must be applied to modules in the order of occurrence
-            modules = get_ordered_ops(model)
-            for module in tqdm(modules):
+            for module in tqdm(quant_sim.connected_graph.ordered_ops):
                 name = module.name
                 module_info = model_data.module_to_info[name]
 
@@ -409,15 +390,13 @@ class Adaround:
                     AdaroundOptimizer.adaround_module(
                         module_info,
                         quantized_input_name,
-                        model,
-                        quant_sim.model,
+                        quant_sim,
                         act_func,
                         cached_dataset,
                         num_iterations,
                         param_to_tensor_quantizer_dict,
                         use_cuda,
                         device,
-                        user_onnx_libs,
                     )
                     # Freeze quantizer's encodings
                     weight_name = module_info.params["weight"].name
@@ -431,9 +410,20 @@ class Adaround:
         if not "weight" in module_info.params:
             return False
 
-        if module_info.type in ("Conv", "ConvTranspose"):
+        if (
+            module_info.type in ("Conv", "ConvTranspose")
+            and len(module_info.params["weight"].shape) != 4
+        ):
             # Only 2d conv/convtranspose is supported
-            return len(module_info.params["weight"].shape) == 4
+            return False
+
+        attributes = read_attributes_for_op(module_info)
+        if "pads" in attributes:
+            if len(attributes["pads"]) > 4:
+                logger.info(
+                    "Skipping the Convolution layer because padding size greater than 4 is not supported for optimization"
+                )
+                return False
 
         return True
 

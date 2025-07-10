@@ -63,8 +63,8 @@ class TestAdaroundOptimizer:
         np.random.seed(0)
         torch.manual_seed(0)
         model = test_models.single_residual_model()
-        model_data = ModelData(model.model)
-        sim = QuantizationSimModel(copy.deepcopy(model))
+        model_data = ModelData(QuantizationSimModel(copy.deepcopy(model)))
+        sim = QuantizationSimModel(model)
         param_to_tq_dict = create_param_to_tensor_quantizer_dict(sim)
 
         quant_module = model_data.module_to_info["/conv1/Conv"]
@@ -82,8 +82,7 @@ class TestAdaroundOptimizer:
             AdaroundOptimizer.adaround_module(
                 quant_module,
                 "input_updated",
-                model,
-                sim.model,
+                sim,
                 "Relu",
                 cached_dataset,
                 num_iterations,
@@ -108,8 +107,8 @@ class TestAdaroundOptimizer:
         np.random.seed(0)
         torch.manual_seed(0)
         model = test_models.single_residual_model()
-        model_data = ModelData(model.model)
         sim = QuantizationSimModel(model)
+        model_data = ModelData(sim)
         param_to_tq_dict = create_param_to_tensor_quantizer_dict(sim)
 
         quant_module = model_data.module_to_info["/conv1/Conv"]
@@ -123,9 +122,9 @@ class TestAdaroundOptimizer:
 
     def test_compute_output_with_adarounded_weights(self):
         model = test_models.single_residual_model()
-        model_data = ModelData(model.model)
 
         sim = QuantizationSimModel(model)
+        model_data = ModelData(sim)
         param_to_tq_dict = create_param_to_tensor_quantizer_dict(sim)
 
         quant_module = model_data.module_to_info["/conv2/Conv"]
@@ -156,9 +155,9 @@ class TestAdaroundOptimizer:
         assert out_data.shape == torch.Size([1, 10])
 
         model = test_models.transposed_conv_model_without_bn()
-        model_data = ModelData(model.model)
 
         sim = QuantizationSimModel(model)
+        model_data = ModelData(sim)
         param_to_tq_dict = create_param_to_tensor_quantizer_dict(sim)
 
         quant_module = model_data.module_to_info["/conv1/ConvTranspose"]

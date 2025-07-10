@@ -359,7 +359,8 @@ def patch_ptq_techniques(
         setattr(model, "applied_bn_folding", True)
         setattr(model, "applied_cle", True)
 
-    def adaround(sim, model, *_, **__):
+    def adaround(sim, *_, **__):
+        model = QuantizationSimModel.remove_quantizers(sim.model)
         setattr(model, "applied_adaround", True)
         return model
 

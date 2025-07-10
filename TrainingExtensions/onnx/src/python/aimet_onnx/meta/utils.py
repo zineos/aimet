@@ -113,14 +113,3 @@ def get_module_act_func_pair(graph: ConnectedGraph) -> Dict[str, str]:
                 module_act_func_pair[op.name] = next_op.type
 
     return module_act_func_pair
-
-
-def get_ordered_ops(model: ModelProto) -> List:
-    """
-    Gets list of ordered ops
-
-    :param model: ONNX model
-    :return: A list of ordered ops
-    """
-    cg = ConnectedGraph(model)
-    return cg.ordered_ops

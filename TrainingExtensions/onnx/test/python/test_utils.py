@@ -217,7 +217,8 @@ class TestUtils:
 
     def test_create_model_data_single_residual_model(self):
         model = models_for_tests.transposed_conv_model_without_bn()
-        model_data = ModelData(model.model)
+        sim = QuantizationSimModel(model)
+        model_data = ModelData(sim)
         assert len(model_data.module_to_info) == 3
 
     def test_disable_quantizers(self):

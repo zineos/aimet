@@ -562,7 +562,6 @@ class _AutoQuant:  # pylint: disable=too-many-instance-attributes
 
         model = Adaround._apply_adaround(
             sim,
-            model,
             self.adaround_params,  # pylint: disable=protected-access
             path=self.results_dir,
             filename_prefix=filename_prefix,

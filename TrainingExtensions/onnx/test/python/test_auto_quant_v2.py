@@ -252,7 +252,8 @@ def patch_ptq_techniques(
         setattr(model, "applied_bn_folding", True)
         setattr(model, "applied_cle", True)
 
-    def adaround(sim, model, *_, **__):
+    def adaround(sim, *_, **__):
+        model = QuantizationSimModel.remove_quantizers(sim.model)
         setattr(model, "applied_adaround", True)
         return model
 
@@ -936,5 +937,5 @@ class TestAutoQuant:
                 adaround_acc,
             )
             adaround_args, _ = mocks.apply_adaround.call_args
-            _, _, actual_adaround_params = adaround_args
+            _, actual_adaround_params = adaround_args
             assert adaround_params == actual_adaround_params

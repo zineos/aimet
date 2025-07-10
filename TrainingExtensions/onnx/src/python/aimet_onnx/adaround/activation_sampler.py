@@ -37,6 +37,7 @@
 
 """Sample output from original module for Adaround feature"""
 
+import copy
 from typing import Tuple, List, Dict, Union
 
 import numpy as np
@@ -77,30 +78,28 @@ class ActivationSampler:
 
     def __init__(
         self,
-        orig_op: str,
-        quant_op: str,
-        orig_model: ModelProto,
+        module_input_fp: str,
+        module_output_quant: str,
         quant_model: QuantizationSimModel,
         use_cuda: bool,
         device: int = 0,
-        user_onnx_libs: List[str] = None,
     ):
         """
-        :param orig_op: Single un quantized op from the original session
-        :param quant_op: Corresponding quant op from the Quant sim session
-        :param orig_model: Session with the original model
+        :param module_input_fp: FP input tensor name of the module to retrieve
+        :param module_output_quant: Quant output tensor name of the module to retrieve
         :param quant_model: Session with the model with quantization simulations ops
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         :return: Input data to quant op, Output data from original op
         """
-        self._org_model = orig_model
-        self._use_cuda = use_cuda
+        self._quant_model = quant_model
 
         if "CUDAExecutionProvider" not in ort.get_available_providers():
-            self._use_cuda = False
-        if self._use_cuda:
+            logger.warning(
+                "CUDAExecutionProvider not in ort available providers. use_cuda is set to False"
+            )
+            use_cuda = False
+        if use_cuda:
             self.providers = [
                 (
                     "CUDAExecutionProvider",
@@ -114,11 +113,17 @@ class ActivationSampler:
         else:
             self.providers = ["CPUExecutionProvider"]
 
+        orig_model = copy.deepcopy(quant_model.model)
+        orig_model = QuantizationSimModel.remove_quantizers(orig_model)
+
         self._orig_module_collector = ModuleData(
-            orig_model, orig_op, self.providers, user_onnx_libs
+            orig_model, module_input_fp, self.providers, quant_model._user_onnx_libs
         )
         self._quant_module_collector = ModuleData(
-            quant_model, quant_op, self.providers, user_onnx_libs
+            quant_model.model,
+            module_output_quant,
+            self.providers,
+            quant_model._user_onnx_libs,
         )
 
     def sample_and_place_all_acts_on_cpu(self, dataset) -> Tuple:
@@ -139,7 +144,7 @@ class ActivationSampler:
         for batch_index in range(len(dataset)):
             model_inputs = next(iterator)
             inp_data, out_data = self.sample_acts(
-                create_input_dict(self._org_model.model, model_inputs)
+                create_input_dict(self._quant_model.model.model, model_inputs)
             )
 
             all_inp_data.append(inp_data[0])
@@ -162,68 +167,53 @@ class ActivationSampler:
         """
         # Collect input activation data to quantized wrapper module
         # (with all preceding weight modules quantized)
-        inp_data, _ = self._quant_module_collector.collect_inp_out_data(
-            model_inputs, collect_input=True, collect_output=False
-        )
+        inp_data = self._quant_module_collector.collect_activation(model_inputs)
         # Collect output activation data from original module
-        _, out_data = self._orig_module_collector.collect_inp_out_data(
-            model_inputs, collect_input=False, collect_output=True
-        )
+        out_data = self._orig_module_collector.collect_activation(model_inputs)
         return inp_data, out_data
 
 
 class ModuleData:
     """
-    Collect input and output data to and from module
+    Collect activation tensor for the given model and model input
     """
 
     def __init__(
         self,
         model: ModelProto,
-        node_name: str,
+        activation_name: str,
         providers: List,
         user_onnx_libs: List[str] = None,
     ):
         """
-        :param session: ONNX session
-        :param node: Module reference
+        :param model: ONNX model
+        :param activation_name: tensor corresponding to activation name to fetch
         :param providers: CPU/GPU execution providers
         :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         """
         self._model = model
-        self._module_name = node_name
+        self._activation_name = activation_name
         self._providers = providers
         self._user_onnx_libs = user_onnx_libs
 
-    def collect_inp_out_data(
-        self,
-        model_input: Dict[str, List[np.ndarray]],
-        collect_input: bool,
-        collect_output: bool,
-    ) -> Union[Tuple[None, List], Tuple[List, None]]:
+    def collect_activation(self, model_input: Dict[str, List[np.ndarray]]) -> List:
         """
-        Collect input and output data depending on the collect_input and collect_output flag
+        Collect activation using the model_input
 
         :param model_input: Input to model
-        :param collect_input: Boolean to collect input or not
-        :param collect_output: Boolean to collect output or not
-        :return: Module's input and output data
+        :return: Activation corresponding to the model_input passed
         """
 
-        handle = add_hook_to_get_activation(self._model.model, self._module_name)
+        handle = add_hook_to_get_activation(self._model.model, self._activation_name)
         sess = QuantizationSimModel.build_session(
             self._model.model, self._providers, self._user_onnx_libs
         )
-        if self._module_name in model_input:
+        if self._activation_name in model_input:
             # Workaround memory corruption bug in onnxruntime >= 1.19 when a graph output is also a graph input
             # https://github.com/microsoft/onnxruntime/issues/21922
-            outputs = [model_input[self._module_name]]
+            outputs = [model_input[self._activation_name]]
         else:
-            outputs = sess.run([self._module_name], model_input)
+            outputs = sess.run([self._activation_name], model_input)
         remove_activation_hooks(self._model.model, handle)
 
-        if collect_output:
-            return None, outputs
-        if collect_input:
-            return outputs, None
-        return None, None
+        return outputs

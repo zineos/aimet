@@ -41,6 +41,7 @@ from collections import defaultdict
 import onnx
 from packaging import version
 
+from aimet_onnx import QuantizationSimModel
 from aimet_onnx.meta.connectedgraph import ConnectedGraph
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -67,17 +68,16 @@ class ModelData:
     Class to collect data for each module of a class
     """
 
-    def __init__(self, model: ModelProto):
+    def __init__(self, quant_sim: QuantizationSimModel):
         """
-        :param model: ONNX Model
+        :param quant_sim: quantization sim model object
         """
-        self.model = model
+        self.quant_sim = quant_sim
         self.module_to_info = {}
         self._populate_model_data()
 
     def _populate_model_data(self):
-        cg = ConnectedGraph(self.model)
-        for op in cg.ordered_ops:
+        for op in self.quant_sim.connected_graph.ordered_ops:
             self.module_to_info[op.name] = ModuleInfo()
             if op.type in ["Conv", "ConvTranspose", "Gemm", "MatMul"]:
                 self.module_to_info[op.name].type = op.type
@@ -86,7 +86,7 @@ class ModelData:
                     self.module_to_info[op.name].attributes = op.get_module().attribute
             for param, param_type in op.parameters.values():
                 self.module_to_info[op.name].params[param_type] = param
-        for node in self.model.graph.node:
+        for node in self.quant_sim.model.nodes():
             if node.name in self.module_to_info:
                 module_info = self.module_to_info[node.name]
                 param = {param.name for param in module_info.params.values()}

@@ -87,7 +87,6 @@ class AdaroundOptimizer:
         cls,
         module: ModuleInfo,
         quantized_input_name: str,
-        orig_model: ModelProto,
         quant_model: QuantizationSimModel,
         act_func: Union[torch.nn.Module, None],
         cached_dataset: Dataset,
@@ -95,14 +94,12 @@ class AdaroundOptimizer:
         param_to_adaround_tensor_quantizer: Dict,
         use_cuda: bool,
         device: int = 0,
-        user_onnx_libs: List[str] = None,
     ):
         """
         Adaround module
 
         :param module: Original module's information
         :param quantized_input_name: Name of input to the quantized layer/ layer to be adarounded
-        :param orig_model: The original, un quantized, model
         :param quant_model: QuantSim model
         :param act_func: Activation function
         :param cached_dataset: Cached dataset
@@ -111,7 +108,6 @@ class AdaroundOptimizer:
         :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         """
         # pylint: disable=too-many-arguments
 
@@ -119,7 +115,6 @@ class AdaroundOptimizer:
         cls._optimize_rounding(
             module,
             quantized_input_name,
-            orig_model,
             quant_model,
             act_func,
             cached_dataset,
@@ -127,7 +122,6 @@ class AdaroundOptimizer:
             param_to_adaround_tensor_quantizer,
             use_cuda,
             device,
-            user_onnx_libs,
         )
 
         # After optimization, set the optimized layer's rounding mode to "Hard rounding"
@@ -141,7 +135,6 @@ class AdaroundOptimizer:
         cls,
         module: ModuleInfo,
         quantized_input_name,
-        orig_model: ModelProto,
         quant_model: QuantizationSimModel,
         act_func: Union[None, str],
         cached_dataset: Dataset,
@@ -149,19 +142,16 @@ class AdaroundOptimizer:
         param_to_adaround_tensor_quantizer: Dict,
         use_cuda: bool,
         device: int = 0,
-        user_onnx_libs: List[str] = None,
     ):
         """
         Optimizes the weight rounding of quantized wrapper module
         :param module: Original module
         :param quantized_input_name: Name of input to the quantized layer/ layer to be adarounded
-        :param orig_model: The original, un quantized, model
         :param quant_model: QuantSim model
         :param act_func: Activation function
         :param cached_dataset: Cached dataset
         :param num_iterations:  Num of iterations to adaround a layer
         :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
         """
         # pylint: disable=too-many-locals, too-many-arguments
         adaround_quantizer = param_to_adaround_tensor_quantizer[
@@ -195,14 +185,12 @@ class AdaroundOptimizer:
         act_sampler = ActivationSampler(
             module.outputs[0],
             quantized_input_name,
-            orig_model,
             quant_model,
             use_cuda,
             device,
-            user_onnx_libs,
         )
         inp_data, out_data = act_sampler.sample_acts(
-            create_input_dict(orig_model.model, model_inputs)
+            create_input_dict(quant_model.model.model, model_inputs)
         )
         inp_data_torch, out_data_torch = (
             torch.from_numpy(inp_data[0]),
@@ -214,14 +202,6 @@ class AdaroundOptimizer:
             out_data_torch.shape,
             inp_data_torch.dtype,
         )
-
-        attributes = read_attributes_for_op(module)
-        if "pads" in attributes:
-            if len(attributes["pads"]) > 4:
-                logger.info(
-                    "Skipping the Convolution layer because padding size greater than 4 is not supported for optimization"
-                )
-                return
 
         if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
             logger.debug("Caching intermediate activations data for optimization.")
@@ -258,7 +238,7 @@ class AdaroundOptimizer:
             else:
                 model_inputs = cached_dataset[np.random.randint(len(cached_dataset))]
                 inp_data, orig_out_data = act_sampler.sample_acts(
-                    create_input_dict(orig_model.model, model_inputs)
+                    create_input_dict(quant_model.model.model, model_inputs)
                 )
                 inp_data, orig_out_data = (
                     torch.from_numpy(inp_data[iteration % len(inp_data)]).to(
@@ -307,7 +287,7 @@ class AdaroundOptimizer:
         adarounded_weights = adaround_quantizer.adaround_weights(weights)
         weights = adarounded_weights.detach().cpu().numpy().tobytes()
         weight_name = module.params["weight"].name
-        update_sim_weight(quant_model, weights, weight_name)
+        update_sim_weight(quant_model.model, weights, weight_name)
 
     @classmethod
     def _compute_recons_metrics(

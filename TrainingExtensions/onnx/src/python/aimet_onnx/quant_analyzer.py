@@ -760,12 +760,8 @@ class QuantAnalyzer:
         batch_index = 0
         for model_inputs in self._unlabeled_dataset_iterable:
             model_inputs = utils.create_input_dict(fp32_model.model, model_inputs)
-            _, quantized_out_acts = quant_module_collector.collect_inp_out_data(
-                model_inputs, collect_input=False, collect_output=True
-            )
-            _, fp32_out_acts = orig_module_collector.collect_inp_out_data(
-                model_inputs, collect_input=False, collect_output=True
-            )
+            quantized_out_acts = quant_module_collector.collect_activation(model_inputs)
+            fp32_out_acts = orig_module_collector.collect_activation(model_inputs)
             loss += mean_squared_error(
                 fp32_out_acts[0].reshape(fp32_out_acts[0].shape[0], -1),
                 quantized_out_acts[0].reshape(fp32_out_acts[0].shape[0], -1),
