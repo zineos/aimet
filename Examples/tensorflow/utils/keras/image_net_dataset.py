@@ -38,6 +38,7 @@
 """
 Creates data-loader for Image-Net dataset
 """
+
 import os
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image_dataset_from_directory
@@ -46,9 +47,15 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 
 class ImageNetDataset:
-    """ Dataset for ImageNet with Keras """
+    """Dataset for ImageNet with Keras"""
 
-    def __init__(self, dataset_dir: str, image_size: int = 224, batch_size: int = 128, is_training: bool = False):
+    def __init__(
+        self,
+        dataset_dir: str,
+        image_size: int = 224,
+        batch_size: int = 128,
+        is_training: bool = False,
+    ):
         """
         :param dataset_dir: The path to the dataset's directory
         :param image_size: Required size for images. Images will be resized to image_size x image_size
@@ -59,12 +66,14 @@ class ImageNetDataset:
         if not dataset_dir:
             raise ValueError("dataset_dir cannot be None")
 
-        self._dataset = image_dataset_from_directory(directory=dataset_dir,
-                                                     labels="inferred",
-                                                     label_mode="categorical",
-                                                     batch_size=batch_size,
-                                                     shuffle=is_training,
-                                                     image_size=(image_size, image_size))
+        self._dataset = image_dataset_from_directory(
+            directory=dataset_dir,
+            labels="inferred",
+            label_mode="categorical",
+            batch_size=batch_size,
+            shuffle=is_training,
+            image_size=(image_size, image_size),
+        )
 
         self._batch_size = batch_size
 

@@ -39,6 +39,7 @@
 """
 Creates Evaluator for Image-Net dataset
 """
+
 import os
 import logging
 
@@ -60,7 +61,13 @@ class ImageNetEvaluator:
 
     # pylint: disable=too-many-arguments
     # pylint: disable=dangerous-default-value
-    def __init__(self, dataset_dir: str, image_size: int = 224, batch_size: int = 128, model_type: str = "resnet50"):
+    def __init__(
+        self,
+        dataset_dir: str,
+        image_size: int = 224,
+        batch_size: int = 128,
+        model_type: str = "resnet50",
+    ):
         """
         Constructor
         :param dataset_dir: The directory path to the data
@@ -86,17 +93,24 @@ class ImageNetEvaluator:
         # Get specific model's preprocessing and decode functions
         # pylint: disable=import-outside-toplevel
         if self._model_type == "resnet50":
-            from tensorflow.keras.applications.resnet import preprocess_input, decode_predictions
+            from tensorflow.keras.applications.resnet import (
+                preprocess_input,
+                decode_predictions,
+            )
         elif self._model_type == "mobilenetv1":
-            from tensorflow.keras.applications.mobilenet import preprocess_input, decode_predictions
+            from tensorflow.keras.applications.mobilenet import (
+                preprocess_input,
+                decode_predictions,
+            )
         else:
-            raise ValueError(
-                "This notebook only support ResNet50 or MobileNet")
+            raise ValueError("This notebook only support ResNet50 or MobileNet")
 
         # If no iterations specified, set to full validation set
         if iterations is None or iterations > len(self._val_dataset):
-            logger.info("Iterations is None or greater than the number of batches in the validation set. "
-                        "Using full validation set.")
+            logger.info(
+                "Iterations is None or greater than the number of batches in the validation set. "
+                "Using full validation set."
+            )
             iterations = image_net_config.dataset["val_images_len"]
         else:
             iterations *= self._batch_size
@@ -106,23 +120,33 @@ class ImageNetEvaluator:
         total = 0
         curr_iter = 0
 
-        for (img, label) in self._val_dataset:
+        for img, label in self._val_dataset:
             progbar = Progbar(iterations, stateful_metrics=["Top1", "Top5"])
-            preds = model.predict(preprocess_input(
-                img), batch_size=self._batch_size)
+            preds = model.predict(preprocess_input(img), batch_size=self._batch_size)
             label = np.where(label)[1]
             label = [self._val_dataset.class_names[int(i)] for i in label]
-            cnt = sum([1 for a, b in zip(label, decode_predictions(
-                preds, top=1)) if str(a) == b[0][0]])
+            cnt = sum(
+                [
+                    1
+                    for a, b in zip(label, decode_predictions(preds, top=1))
+                    if str(a) == b[0][0]
+                ]
+            )
             top1 += cnt
-            cnt = sum([1 for a, b in zip(label, decode_predictions(
-                preds, top=5)) if str(a) in [i[0] for i in b]])
+            cnt = sum(
+                [
+                    1
+                    for a, b in zip(label, decode_predictions(preds, top=5))
+                    if str(a) in [i[0] for i in b]
+                ]
+            )
             top5 += cnt
             total += len(label)
 
             curr_iter += 1
 
             progbar.update(
-                total, values=[("Top1", top1 / total), ("Top5", top5 / total)])
+                total, values=[("Top1", top1 / total), ("Top5", top5 / total)]
+            )
             if total >= iterations:
                 break

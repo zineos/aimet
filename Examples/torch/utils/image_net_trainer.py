@@ -38,6 +38,7 @@
 """
 Creates trainer for Image-Net dataset
 """
+
 import logging
 
 from tqdm import tqdm
@@ -47,7 +48,7 @@ from torch import nn, optim
 from Examples.torch.utils.image_net_data_loader import ImageNetDataLoader
 from Examples.torch.utils.image_net_evaluator import ImageNetEvaluator
 
-logger = logging.getLogger('Trainer')
+logger = logging.getLogger("Trainer")
 
 
 class ImageNetTrainer:
@@ -56,8 +57,14 @@ class ImageNetTrainer:
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self, images_dir: str, image_size: int, batch_size: int = 128,
-                 num_workers: int = 32, num_train_samples_per_class: int = None):
+    def __init__(
+        self,
+        images_dir: str,
+        image_size: int,
+        batch_size: int = 128,
+        num_workers: int = 32,
+        num_train_samples_per_class: int = None,
+    ):
         """
         :param images_dir: The path to the data directory
         :param image_size: The length of the image
@@ -66,16 +73,33 @@ class ImageNetTrainer:
         :param num_train_samples_per_class: Number of samples to use per class.
         """
 
-        self._train_loader = ImageNetDataLoader(images_dir=images_dir, image_size=image_size, batch_size=batch_size,
-                                                is_training=True, num_workers=num_workers,
-                                                num_samples_per_class=num_train_samples_per_class).data_loader
+        self._train_loader = ImageNetDataLoader(
+            images_dir=images_dir,
+            image_size=image_size,
+            batch_size=batch_size,
+            is_training=True,
+            num_workers=num_workers,
+            num_samples_per_class=num_train_samples_per_class,
+        ).data_loader
 
-        self._evaluator = ImageNetEvaluator(images_dir=images_dir, image_size=image_size, batch_size=batch_size,
-                                            num_workers=num_workers)
+        self._evaluator = ImageNetEvaluator(
+            images_dir=images_dir,
+            image_size=image_size,
+            batch_size=batch_size,
+            num_workers=num_workers,
+        )
 
-    def _train_loop(self, model: nn.Module, criterion: torch.nn.modules.loss, optimizer: torch.optim,
-                    max_iterations: int, current_epoch: int, max_epochs: int,
-                    debug_steps: int = 1000, use_cuda: bool = False):
+    def _train_loop(
+        self,
+        model: nn.Module,
+        criterion: torch.nn.modules.loss,
+        optimizer: torch.optim,
+        max_iterations: int,
+        current_epoch: int,
+        max_epochs: int,
+        debug_steps: int = 1000,
+        use_cuda: bool = False,
+    ):
         """
         Train the specified model using the ImageNet dataset for one epoch.
         :param model: The model to train.
@@ -90,12 +114,12 @@ class ImageNetTrainer:
         :return: None
         """
         # pylint: disable-msg=too-many-locals
-        device = torch.device('cpu')
+        device = torch.device("cpu")
         if use_cuda:
             if torch.cuda.is_available():
-                device = torch.device('cuda')
+                device = torch.device("cuda")
             else:
-                logger.error('use_cuda is selected but no cuda device found.')
+                logger.error("use_cuda is selected but no cuda device found.")
                 raise RuntimeError("Found no CUDA Device while use_cuda is selected")
 
         # switch to training mode
@@ -104,7 +128,9 @@ class ImageNetTrainer:
 
         avg_loss = 0.0
 
-        for i, (images, target) in tqdm(enumerate(self._train_loader), total=max_iterations):
+        for i, (images, target) in tqdm(
+            enumerate(self._train_loader), total=max_iterations
+        ):
             if i == max_iterations:
                 break
 
@@ -121,22 +147,41 @@ class ImageNetTrainer:
             loss.backward()
             optimizer.step()
 
-            if (i+1) % debug_steps == 0:
+            if (i + 1) % debug_steps == 0:
                 eval_accuracy = self._evaluator.evaluate(model, use_cuda=use_cuda)
-                logger.info('Epoch #%d/%d: iteration #%d/%d: Global Avg Loss=%f, Eval Accuracy=%f',
-                            current_epoch, max_epochs, i, max_iterations,
-                            avg_loss / i, eval_accuracy)
+                logger.info(
+                    "Epoch #%d/%d: iteration #%d/%d: Global Avg Loss=%f, Eval Accuracy=%f",
+                    current_epoch,
+                    max_epochs,
+                    i,
+                    max_iterations,
+                    avg_loss / i,
+                    eval_accuracy,
+                )
                 # switch to training mode after evaluation
                 model.train()
 
         eval_accuracy = self._evaluator.evaluate(model, use_cuda=use_cuda)
         print("eval : ", eval_accuracy)
-        logger.info('At the end of Epoch #%d/%d: Global Avg Loss=%f, Eval Accuracy=%f',
-                    current_epoch, max_epochs, avg_loss / max_iterations, eval_accuracy)
+        logger.info(
+            "At the end of Epoch #%d/%d: Global Avg Loss=%f, Eval Accuracy=%f",
+            current_epoch,
+            max_epochs,
+            avg_loss / max_iterations,
+            eval_accuracy,
+        )
 
-    def train(self, model: nn.Module, max_epochs: int = 20, learning_rate: int = 0.1,
-              weight_decay: float = 1e-4, decay_rate: float = 0.1, learning_rate_schedule: list = None,
-              debug_steps: int = 1000, use_cuda: bool = False):
+    def train(
+        self,
+        model: nn.Module,
+        max_epochs: int = 20,
+        learning_rate: int = 0.1,
+        weight_decay: float = 1e-4,
+        decay_rate: float = 0.1,
+        learning_rate_schedule: list = None,
+        debug_steps: int = 1000,
+        use_cuda: bool = False,
+    ):
         """
         Train the specified model using the ImageNet dataset.
         :param model: The model to train.
@@ -153,15 +198,29 @@ class ImageNetTrainer:
         max_iterations = len(self._train_loader)
 
         loss = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9, weight_decay=weight_decay)
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=learning_rate,
+            momentum=0.9,
+            weight_decay=weight_decay,
+        )
 
         if learning_rate_schedule:
-            learning_rate_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, learning_rate_schedule,
-                                                                     gamma=decay_rate)
+            learning_rate_scheduler = optim.lr_scheduler.MultiStepLR(
+                optimizer, learning_rate_schedule, gamma=decay_rate
+            )
 
         for current_epoch in range(max_epochs):
-            self._train_loop(model, loss, optimizer, max_iterations, current_epoch + 1, max_epochs, debug_steps,
-                             use_cuda)
+            self._train_loop(
+                model,
+                loss,
+                optimizer,
+                max_iterations,
+                current_epoch + 1,
+                max_epochs,
+                debug_steps,
+                use_cuda,
+            )
 
             if learning_rate_schedule:
                 learning_rate_scheduler.step()

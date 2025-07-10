@@ -47,17 +47,16 @@ Args:
 
 """
 
-
 import io
 import re
 import argparse
 import contextlib
 
 # Lazy regex matching anything inside first set of double """ or '''
-DOCSTRING_PATTERN = re.compile('("""(.|\n)*?""")|(\'\'\'(.|\n)*?\'\'\')')
+DOCSTRING_PATTERN = re.compile("(\"\"\"(.|\n)*?\"\"\")|('''(.|\n)*?''')")
 
 # 20 or more '#' symbols followed by any number of '# <rst text>` lines
-RST_TEXT_PATTERN = re.compile("#" * 20 + ".*" + "\n" "((#.*)\n)*")
+RST_TEXT_PATTERN = re.compile("#" * 20 + ".*" + "\n((#.*)\n)*")
 
 START_CODE = "\n.. code-block:: Python\n\n"
 START_OUTPUT = "\n\n.. rst-class:: script-output\n\n  .. code-block:: none\n\n"
@@ -92,7 +91,6 @@ def process_suite(suite):
 
 
 def process_rst(rst):
-
     def remove_pound(string):
         return string[1:] if len(string) == 1 else string[2:]
 
@@ -102,9 +100,7 @@ def process_rst(rst):
     return "\n".join(remove_pound(line) for line in rst_lines) + "\n\n"
 
 
-
 def convert(args):
-
     output_str = ""
 
     with open(args.source, "r") as source:
@@ -114,15 +110,15 @@ def convert(args):
 
     if docstring:
         output_str += docstring.group().strip("'\"")
-        source_code = source_code[docstring.span()[1]:]
+        source_code = source_code[docstring.span()[1] :]
 
     while source_code:
         next_text = re.search(RST_TEXT_PATTERN, source_code)
 
         if next_text:
-            suite = source_code[:next_text.span()[0]]
+            suite = source_code[: next_text.span()[0]]
             rst_text = next_text.group()
-            source_code = source_code[next_text.span()[1]:]
+            source_code = source_code[next_text.span()[1] :]
         else:
             suite = source_code
             rst_text = ""
@@ -137,9 +133,7 @@ def convert(args):
         out_file.write(output_str)
 
 
-
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source")
     parser.add_argument("--output")

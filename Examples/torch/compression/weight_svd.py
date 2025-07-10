@@ -59,8 +59,8 @@ from Examples.common import image_net_config
 from Examples.torch.utils.image_net_evaluator import ImageNetEvaluator
 from Examples.torch.utils.image_net_trainer import ImageNetTrainer
 
-logger = logging.getLogger('TorchWeightSVD')
-formatter = logging.Formatter('%(asctime)s : %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("TorchWeightSVD")
+formatter = logging.Formatter("%(asctime)s : %(name)s - %(levelname)s - %(message)s")
 logging.basicConfig(format=formatter)
 
 
@@ -79,6 +79,7 @@ logging.basicConfig(format=formatter)
 #    - Learning rate schedule: [5,10]
 ###
 
+
 class ImageNetDataPipeline:
     """
     Provides APIs for model compression using AIMET weight SVD, evaluation and finetuning.
@@ -90,7 +91,9 @@ class ImageNetDataPipeline:
         """
         self._config = _config
 
-    def evaluate(self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False) -> float:
+    def evaluate(
+        self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False
+    ) -> float:
         """
         Evaluate the specified model using the specified number of samples from the validation set.
         AIMET's compress_model() expects the function with this signature to its eval_callback
@@ -104,9 +107,12 @@ class ImageNetDataPipeline:
 
         # your code goes here instead of the example from below
 
-        evaluator = ImageNetEvaluator(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                      batch_size=image_net_config.evaluation['batch_size'],
-                                      num_workers=image_net_config.evaluation['num_workers'])
+        evaluator = ImageNetEvaluator(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.evaluation["batch_size"],
+            num_workers=image_net_config.evaluation["num_workers"],
+        )
 
         return evaluator.evaluate(model, iterations, use_cuda)
 
@@ -120,19 +126,27 @@ class ImageNetDataPipeline:
 
         # Your code goes here instead of the example from below
 
-        trainer = ImageNetTrainer(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                  batch_size=image_net_config.train['batch_size'],
-                                  num_workers=image_net_config.train['num_workers'])
+        trainer = ImageNetTrainer(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.train["batch_size"],
+            num_workers=image_net_config.train["num_workers"],
+        )
 
-        trainer.train(model, max_epochs=self._config.epochs, learning_rate=self._config.learning_rate,
-                      learning_rate_schedule=self._config.learning_rate_schedule, use_cuda=self._config.use_cuda)
+        trainer.train(
+            model,
+            max_epochs=self._config.epochs,
+            learning_rate=self._config.learning_rate,
+            learning_rate_schedule=self._config.learning_rate_schedule,
+            use_cuda=self._config.use_cuda,
+        )
 
-        torch.save(model, os.path.join(self._config.logdir, 'finetuned_model.pth'))
+        torch.save(model, os.path.join(self._config.logdir, "finetuned_model.pth"))
 
 
-def aimet_weight_svd(model: torch.nn.Module,
-                     evaluator: aimet_common.defs.EvalFunction) -> Tuple[torch.nn.Module,
-                                                                         aimet_common.defs.CompressionStats]:
+def aimet_weight_svd(
+    model: torch.nn.Module, evaluator: aimet_common.defs.EvalFunction
+) -> Tuple[torch.nn.Module, aimet_common.defs.CompressionStats]:
     """
     Compresses the model using AIMET's Weight SVD auto mode compression scheme.
 
@@ -156,8 +170,10 @@ def aimet_weight_svd(model: torch.nn.Module,
     num_comp_ratio_candidates = 10
 
     # Creating Greedy selection parameters:
-    greedy_params = aimet_torch.defs.GreedySelectionParameters(target_comp_ratio=target_comp_ratio,
-                                                               num_comp_ratio_candidates=num_comp_ratio_candidates)
+    greedy_params = aimet_torch.defs.GreedySelectionParameters(
+        target_comp_ratio=target_comp_ratio,
+        num_comp_ratio_candidates=num_comp_ratio_candidates,
+    )
 
     # Selecting 'greedy' for rank select scheme:
     rank_select_scheme = aimet_common.defs.RankSelectScheme.greedy
@@ -166,13 +182,16 @@ def aimet_weight_svd(model: torch.nn.Module,
     modules_to_ignore = [model.conv1]
 
     # Creating Auto mode Parameters:
-    auto_params = aimet_torch.defs.WeightSvdParameters.AutoModeParams(rank_select_scheme=rank_select_scheme,
-                                                                      select_params=greedy_params,
-                                                                      modules_to_ignore=modules_to_ignore)
+    auto_params = aimet_torch.defs.WeightSvdParameters.AutoModeParams(
+        rank_select_scheme=rank_select_scheme,
+        select_params=greedy_params,
+        modules_to_ignore=modules_to_ignore,
+    )
 
     # Creating Weight SVD parameters with Auto Mode:
-    params = aimet_torch.defs.WeightSvdParameters(aimet_torch.defs.WeightSvdParameters.Mode.auto,
-                                                  auto_params)
+    params = aimet_torch.defs.WeightSvdParameters(
+        aimet_torch.defs.WeightSvdParameters.Mode.auto, auto_params
+    )
 
     # Scheme is Weight SVD:
     scheme = aimet_common.defs.CompressionScheme.weight_svd
@@ -181,8 +200,12 @@ def aimet_weight_svd(model: torch.nn.Module,
     cost_metric = aimet_common.defs.CostMetric.mac
 
     # Input image shape
-    image_shape = (1, image_net_config.dataset['image_channels'],
-                   image_net_config.dataset['image_width'], image_net_config.dataset['image_height'])
+    image_shape = (
+        1,
+        image_net_config.dataset["image_channels"],
+        image_net_config.dataset["image_width"],
+        image_net_config.dataset["image_height"],
+    )
 
     # Calling model compression using Weight SVD:
     # Here evaluator is passed which is used by the API to evaluate the
@@ -190,13 +213,15 @@ def aimet_weight_svd(model: torch.nn.Module,
     # the process, only 10 batches of data is being used inside evaluator
     # (by passing eval_iterations=10) instead of running evaluation on
     # complete dataset.
-    results = ModelCompressor.compress_model(model=model,
-                                             eval_callback=evaluator,
-                                             eval_iterations=10,
-                                             input_shape=image_shape,
-                                             compress_scheme=scheme,
-                                             cost_metric=cost_metric,
-                                             parameters=params)
+    results = ModelCompressor.compress_model(
+        model=model,
+        eval_callback=evaluator,
+        eval_iterations=10,
+        input_shape=image_shape,
+        compress_scheme=scheme,
+        cost_metric=cost_metric,
+        parameters=params,
+    )
 
     return results
 
@@ -234,7 +259,7 @@ def weight_svd_example(config: argparse.Namespace):
     # Load the pretrained resnet18 model
     model = models.resnet18(pretrained=True)
     if config.use_cuda:
-        model.to(torch.device('cuda'))
+        model.to(torch.device("cuda"))
     model.eval()
 
     # Calculate floating point accuracy
@@ -243,10 +268,12 @@ def weight_svd_example(config: argparse.Namespace):
 
     # Compress the model using AIMET Weight SVD
     logger.info("Starting Weight SVD")
-    compressed_model, stats = aimet_weight_svd(model=model, evaluator=data_pipeline.evaluate)
+    compressed_model, stats = aimet_weight_svd(
+        model=model, evaluator=data_pipeline.evaluate
+    )
 
     logger.info(stats)
-    with open(os.path.join(config.logdir, 'log.txt'), "w") as outfile:
+    with open(os.path.join(config.logdir, "log.txt"), "w") as outfile:
         outfile.write("%s\n\n" % (stats))
 
     # Calculate and log the accuracy of compressed model
@@ -266,42 +293,63 @@ def weight_svd_example(config: argparse.Namespace):
     logger.info("Model Finetuning Complete")
 
     # Save the compressed model
-    torch.save(compressed_model, os.path.join(config.logdir, 'compressed_model.pth'))
+    torch.save(compressed_model, os.path.join(config.logdir, "compressed_model.pth"))
 
 
-if __name__ == '__main__':
-    default_logdir = os.path.join("benchmark_output", "weight_svd_" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+if __name__ == "__main__":
+    default_logdir = os.path.join(
+        "benchmark_output", "weight_svd_" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    )
 
     parser = argparse.ArgumentParser(
-        description='Apply Weight SVD on pretrained ResNet18 model and finetune it for ImageNet dataset')
+        description="Apply Weight SVD on pretrained ResNet18 model and finetune it for ImageNet dataset"
+    )
 
-    parser.add_argument('--dataset_dir', type=str,
-                        required=True,
-                        help="Path to a directory containing ImageNet dataset.\n\
+    parser.add_argument(
+        "--dataset_dir",
+        type=str,
+        required=True,
+        help="Path to a directory containing ImageNet dataset.\n\
                               This folder should conatin at least 2 subfolders:\n\
-                              'train': for training dataset and 'val': for validation dataset")
-    parser.add_argument('--use_cuda', action='store_true',
-                        required=True,
-                        help='Add this flag to run the test on GPU.')
+                              'train': for training dataset and 'val': for validation dataset",
+    )
+    parser.add_argument(
+        "--use_cuda",
+        action="store_true",
+        required=True,
+        help="Add this flag to run the test on GPU.",
+    )
 
-    parser.add_argument('--logdir', type=str,
-                        default=default_logdir,
-                        help="Path to a directory for logging.\
-                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'")
+    parser.add_argument(
+        "--logdir",
+        type=str,
+        default=default_logdir,
+        help="Path to a directory for logging.\
+                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'",
+    )
 
-    parser.add_argument('--epochs', type=int,
-                        default=15,
-                        help="Number of epochs for finetuning.\n\
-                              Default is 15")
-    parser.add_argument('--learning_rate', type=float,
-                        default=1e-2,
-                        help="A float type learning rate for model finetuning.\n\
-                              Default is 0.01")
-    parser.add_argument('--learning_rate_schedule', type=list,
-                        default=[5, 10],
-                        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=15,
+        help="Number of epochs for finetuning.\n\
+                              Default is 15",
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-2,
+        help="A float type learning rate for model finetuning.\n\
+                              Default is 0.01",
+    )
+    parser.add_argument(
+        "--learning_rate_schedule",
+        type=list,
+        default=[5, 10],
+        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
                               Check https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#MultiStepLR for more details.\n\
-                              Default is [5, 10]")
+                              Default is [5, 10]",
+    )
 
     _config = parser.parse_args()
 
@@ -312,7 +360,7 @@ if __name__ == '__main__':
     logger.addHandler(fileHandler)
 
     if _config.use_cuda and not torch.cuda.is_available():
-        logger.error('use_cuda is selected but no cuda device found.')
+        logger.error("use_cuda is selected but no cuda device found.")
         raise RuntimeError("Found no CUDA Device while use_cuda is selected")
 
     weight_svd_example(_config)

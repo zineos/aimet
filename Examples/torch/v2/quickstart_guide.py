@@ -73,23 +73,41 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 # 1) Start with some data loaders to train, evaluate, and calibrate the model
 
-cifar10_train_data = torchvision.datasets.FashionMNIST('/tmp/cifar10', train=True, download=True, transform=torchvision.transforms.ToTensor())
-cifar10_test_data = torchvision.datasets.FashionMNIST('/tmp/cifar10', train=True, download=True, transform=torchvision.transforms.ToTensor())
+cifar10_train_data = torchvision.datasets.FashionMNIST(
+    "/tmp/cifar10",
+    train=True,
+    download=True,
+    transform=torchvision.transforms.ToTensor(),
+)
+cifar10_test_data = torchvision.datasets.FashionMNIST(
+    "/tmp/cifar10",
+    train=True,
+    download=True,
+    transform=torchvision.transforms.ToTensor(),
+)
 
-train_loader = torch.utils.data.DataLoader(cifar10_train_data, batch_size=128, shuffle=True)
-test_loader = torch.utils.data.DataLoader(cifar10_train_data, batch_size=128, shuffle=True)
+train_loader = torch.utils.data.DataLoader(
+    cifar10_train_data, batch_size=128, shuffle=True
+)
+test_loader = torch.utils.data.DataLoader(
+    cifar10_train_data, batch_size=128, shuffle=True
+)
 
 # 2) Define a simple model to train on this dataset
 
-class Network(torch.nn.Module):
 
+class Network(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = torch.nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, padding=1, stride=2)
+        self.conv1 = torch.nn.Conv2d(
+            in_channels=1, out_channels=128, kernel_size=3, padding=1, stride=2
+        )
         self.bn_1 = torch.nn.BatchNorm2d(128)
-        self.conv2 = torch.nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1, stride=2)
+        self.conv2 = torch.nn.Conv2d(
+            in_channels=128, out_channels=256, kernel_size=3, padding=1, stride=2
+        )
         self.bn_2 = torch.nn.BatchNorm2d(256)
-        self.linear = torch.nn.Linear(in_features=7*7*256, out_features=10)
+        self.linear = torch.nn.Linear(in_features=7 * 7 * 256, out_features=10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -102,6 +120,7 @@ class Network(torch.nn.Module):
 
 # 3) Define an evaluation loop for the model
 
+
 def evaluate(model, data_loader):
     model.eval()
     correct = total = 0
@@ -111,8 +130,9 @@ def evaluate(model, data_loader):
         correct += (torch.argmax(output, dim=1) == y).sum()
         total += x.shape[0]
 
-    accuracy = correct / total * 100.
+    accuracy = correct / total * 100.0
     return accuracy
+
 
 ###############################################################################
 # Now, let's instantiate a network and train for a few epochs on our dataset to establish a baseline floating-point model
@@ -210,10 +230,12 @@ from aimet_torch.v2 import quantsim
 
 # QuantizationSimModel will convert each nn.Module in prepared_model into a quantized equivalent module and configure the module's quantizers
 # In this case, we will quantize all parameters to 4 bits and all activations to 8 bits.
-sim = quantsim.QuantizationSimModel(prepared_model,
-                                    dummy_input=sample_input.to(device),
-                                    default_output_bw=8,                                # Simulate 8-bit activations
-                                    default_param_bw=4)                                 # Simulate 4-bit weights
+sim = quantsim.QuantizationSimModel(
+    prepared_model,
+    dummy_input=sample_input.to(device),
+    default_output_bw=8,  # Simulate 8-bit activations
+    default_param_bw=4,
+)  # Simulate 4-bit weights
 
 # Inside the compute_encodings context, quantizers will observe the statistics of the activations passing through them. These statistics will be used
 # to compute properly calibrated encodings upon exiting the context.
@@ -229,8 +251,10 @@ quantized_accuracy = evaluate(sim.model, test_loader)
 
 print(sim.model)
 
-print(f"Floating point model accuracy: {fp_accuracy} %\n"
-      f"Quantized model accuracy: {quantized_accuracy} %")
+print(
+    f"Floating point model accuracy: {fp_accuracy} %\n"
+    f"Quantized model accuracy: {quantized_accuracy} %"
+)
 
 ###############################################################################
 # Here, we can see that ``sim.model`` is nothing more than the ``prepared_model`` with every layer replaced with a
@@ -268,8 +292,10 @@ for epoch in range(1):
 # Compare the accuracy before and after QAT:
 post_QAT_accuracy = evaluate(sim.model, test_loader)
 
-print(f"Original quantized model accuracy: {quantized_accuracy} %\n"
-      f"Post-QAT model accuracy: {post_QAT_accuracy} %")
+print(
+    f"Original quantized model accuracy: {quantized_accuracy} %\n"
+    f"Post-QAT model accuracy: {post_QAT_accuracy} %"
+)
 
 ###############################################################################
 # Export the quantsim model
@@ -289,4 +315,3 @@ sim.export(export_path, model_name, dummy_input=sample_input)
 # quantized runtime such as Qualcomm\ |reg| Neural Processing SDK.
 #
 # .. |reg|    unicode:: U+000AE .. REGISTERED SIGN
-

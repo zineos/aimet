@@ -37,6 +37,7 @@
 """
 Creates data-loader for Image-Net dataset
 """
+
 import logging
 import os
 
@@ -48,12 +49,14 @@ import torch.utils.data as torch_data
 
 from Examples.common import image_net_config
 
-logger = logging.getLogger('Dataloader')
+logger = logging.getLogger("Dataloader")
 
-IMG_EXTENSIONS = '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif'
+IMG_EXTENSIONS = ".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif"
 
 
-def make_dataset(directory: str, class_to_idx: dict, extensions: tuple, num_samples_per_class: int) -> list:
+def make_dataset(
+    directory: str, class_to_idx: dict, extensions: tuple, num_samples_per_class: int
+) -> list:
     """
     Creates a dataset of images with num_samples_per_class images in each class
 
@@ -71,7 +74,9 @@ def make_dataset(directory: str, class_to_idx: dict, extensions: tuple, num_samp
         class_path = os.path.join(directory, class_name)
         if os.path.isdir(class_path):
             class_idx = class_to_idx[class_name]
-            class_images = add_images_for_class(class_path, extensions, num_samples_per_class, class_idx)
+            class_images = add_images_for_class(
+                class_path, extensions, num_samples_per_class, class_idx
+            )
             images.extend(class_images)
             num_classes += 1
 
@@ -79,7 +84,9 @@ def make_dataset(directory: str, class_to_idx: dict, extensions: tuple, num_samp
     return images
 
 
-def add_images_for_class(class_path: str, extensions: tuple, num_samples_per_class: int, class_idx: int) -> list:
+def add_images_for_class(
+    class_path: str, extensions: tuple, num_samples_per_class: int, class_idx: int
+) -> list:
     """
     For a given class, adds num_samples_per_class images to a list.
 
@@ -110,9 +117,13 @@ class ImageFolder(Dataset):
         individual files grouped by category.
     """
 
-    def __init__(self, root: str, transform=None, target_transform=None,
-                 num_samples_per_class: int = None):
-
+    def __init__(
+        self,
+        root: str,
+        transform=None,
+        target_transform=None,
+        num_samples_per_class: int = None,
+    ):
         """
         :param root: The path to the data directory.
         :param transform: The required processing to be applied on the sample.
@@ -122,11 +133,17 @@ class ImageFolder(Dataset):
         """
         Dataset.__init__(self)
         classes, class_to_idx = self._find_classes(root)
-        self.samples = make_dataset(root, class_to_idx, IMG_EXTENSIONS, num_samples_per_class)
+        self.samples = make_dataset(
+            root, class_to_idx, IMG_EXTENSIONS, num_samples_per_class
+        )
         if not self.samples:
-            raise (RuntimeError(
-                "Found 0 files in sub folders of: {}\nSupported extensions are: {}".format(
-                    root, ",".join(IMG_EXTENSIONS))))
+            raise (
+                RuntimeError(
+                    "Found 0 files in sub folders of: {}\nSupported extensions are: {}".format(
+                        root, ",".join(IMG_EXTENSIONS)
+                    )
+                )
+            )
 
         self.root = root
         self.loader = default_loader
@@ -143,8 +160,11 @@ class ImageFolder(Dataset):
 
     @staticmethod
     def _find_classes(directory: str):
-        classes = [d for d in os.listdir(directory) if
-                   os.path.isdir(os.path.join(directory, d))]
+        classes = [
+            d
+            for d in os.listdir(directory)
+            if os.path.isdir(os.path.join(directory, d))
+        ]
         classes.sort()
         class_to_idx = {classes[i]: i for i in range(len(classes))}
         return classes, class_to_idx
@@ -168,8 +188,15 @@ class ImageNetDataLoader:
     For loading Validation data from the ImageNet dataset.
     """
 
-    def __init__(self, images_dir: str, image_size: int, batch_size: int = 128,
-                 is_training: bool = False, num_workers: int = 8, num_samples_per_class: int = None):
+    def __init__(
+        self,
+        images_dir: str,
+        image_size: int,
+        batch_size: int = 128,
+        is_training: bool = False,
+        num_workers: int = 8,
+        num_samples_per_class: int = None,
+    ):
         """
         :param images_dir: The path to the data directory
         :param image_size: The length of the image
@@ -181,33 +208,49 @@ class ImageNetDataLoader:
 
         # For normalization, mean and std dev values are calculated per channel
         # and can be found on the web.
-        normalize = transforms.Normalize(mean=image_net_config.dataset['images_mean'],
-                                         std=image_net_config.dataset['images_std'])
+        normalize = transforms.Normalize(
+            mean=image_net_config.dataset["images_mean"],
+            std=image_net_config.dataset["images_std"],
+        )
 
-        self.train_transforms = transforms.Compose([
-            transforms.RandomResizedCrop(image_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize])
+        self.train_transforms = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(image_size),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        )
 
-        self.val_transforms = transforms.Compose([
-            transforms.Resize(image_size + 24),
-            transforms.CenterCrop(image_size),
-            transforms.ToTensor(),
-            normalize])
+        self.val_transforms = transforms.Compose(
+            [
+                transforms.Resize(image_size + 24),
+                transforms.CenterCrop(image_size),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        )
 
         if is_training:
             data_set = ImageFolder(
-                root=os.path.join(images_dir, 'train'), transform=self.train_transforms,
-                num_samples_per_class=num_samples_per_class)
+                root=os.path.join(images_dir, "train"),
+                transform=self.train_transforms,
+                num_samples_per_class=num_samples_per_class,
+            )
         else:
             data_set = ImageFolder(
-                root=os.path.join(images_dir, 'val'), transform=self.val_transforms,
-                num_samples_per_class=num_samples_per_class)
+                root=os.path.join(images_dir, "val"),
+                transform=self.val_transforms,
+                num_samples_per_class=num_samples_per_class,
+            )
 
         self._data_loader = torch_data.DataLoader(
-            data_set, batch_size=batch_size, shuffle=is_training,
-            num_workers=num_workers, pin_memory=True)
+            data_set,
+            batch_size=batch_size,
+            shuffle=is_training,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
 
     @property
     def data_loader(self) -> torch_data.DataLoader:

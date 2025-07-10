@@ -63,8 +63,8 @@ from Examples.torch.utils.image_net_data_loader import ImageNetDataLoader
 from Examples.torch.utils.image_net_evaluator import ImageNetEvaluator
 from Examples.torch.utils.image_net_trainer import ImageNetTrainer
 
-logger = logging.getLogger('TorchQAT')
-formatter = logging.Formatter('%(asctime)s : %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("TorchQAT")
+formatter = logging.Formatter("%(asctime)s : %(name)s - %(levelname)s - %(message)s")
 logging.basicConfig(format=formatter)
 
 
@@ -79,11 +79,12 @@ logging.basicConfig(format=formatter)
 #    - Quant Scheme: 'tf'
 #    - rounding_mode: 'nearest'
 #    - default_output_bw: 8, default_param_bw: 8
-#	 - Encoding computation using 5 batches of data
+# - Encoding computation using 5 batches of data
 #    - Input shape: [1, 3, 224, 224]
 #    - Learning rate: 0.001
 #    - Decay Steps: 5
 ###
+
 
 class ImageNetDataPipeline:
     """
@@ -96,7 +97,9 @@ class ImageNetDataPipeline:
         """
         self._config = _config
 
-    def evaluate(self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False) -> float:
+    def evaluate(
+        self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False
+    ) -> float:
         """
         Evaluate the specified model using the specified number of samples from the validation set.
 
@@ -108,9 +111,12 @@ class ImageNetDataPipeline:
 
         # your code goes here instead of the example from below
 
-        evaluator = ImageNetEvaluator(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                      batch_size=image_net_config.evaluation['batch_size'],
-                                      num_workers=image_net_config.evaluation['num_workers'])
+        evaluator = ImageNetEvaluator(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.evaluation["batch_size"],
+            num_workers=image_net_config.evaluation["num_workers"],
+        )
 
         return evaluator.evaluate(model, iterations, use_cuda)
 
@@ -123,14 +129,22 @@ class ImageNetDataPipeline:
 
         # Your code goes here instead of the example from below
 
-        trainer = ImageNetTrainer(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                  batch_size=image_net_config.train['batch_size'],
-                                  num_workers=image_net_config.train['num_workers'])
+        trainer = ImageNetTrainer(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.train["batch_size"],
+            num_workers=image_net_config.train["num_workers"],
+        )
 
-        trainer.train(model, max_epochs=self._config.epochs, learning_rate=self._config.learning_rate,
-                      learning_rate_schedule=self._config.learning_rate_schedule, use_cuda=self._config.use_cuda)
+        trainer.train(
+            model,
+            max_epochs=self._config.epochs,
+            learning_rate=self._config.learning_rate,
+            learning_rate_schedule=self._config.learning_rate_schedule,
+            use_cuda=self._config.use_cuda,
+        )
 
-        torch.save(model, os.path.join(self._config.logdir, 'finetuned_model.pth'))
+        torch.save(model, os.path.join(self._config.logdir, "finetuned_model.pth"))
 
 
 def apply_cross_layer_equalization(model: torch.nn.Module, input_shape: tuple):
@@ -159,7 +173,7 @@ def apply_bias_correction(model: torch.nn.Module, data_loader: torch_data.DataLo
     :return: None
     """
     # Rounding mode can be 'nearest' or 'stochastic'
-    rounding_mode = 'nearest'
+    rounding_mode = "nearest"
 
     # Number of samples used during quantization
     num_quant_samples = 16
@@ -167,15 +181,26 @@ def apply_bias_correction(model: torch.nn.Module, data_loader: torch_data.DataLo
     # Number of samples used for bias correction
     num_bias_correct_samples = 16
 
-    params = QuantParams(weight_bw=8, act_bw=8, round_mode=rounding_mode, quant_scheme='tf_enhanced')
+    params = QuantParams(
+        weight_bw=8, act_bw=8, round_mode=rounding_mode, quant_scheme="tf_enhanced"
+    )
 
     # Perform Bias Correction
-    bias_correction.correct_bias(model.to(device="cuda"), params, num_quant_samples=num_quant_samples,
-                                 data_loader=data_loader, num_bias_correct_samples=num_bias_correct_samples)
+    bias_correction.correct_bias(
+        model.to(device="cuda"),
+        params,
+        num_quant_samples=num_quant_samples,
+        data_loader=data_loader,
+        num_bias_correct_samples=num_bias_correct_samples,
+    )
 
 
-def calculate_quantsim_accuracy(model: torch.nn.Module, evaluator: aimet_common.defs.EvalFunction,
-                                use_cuda: bool = False, logdir: str = '') -> Tuple[torch.nn.Module, float]:
+def calculate_quantsim_accuracy(
+    model: torch.nn.Module,
+    evaluator: aimet_common.defs.EvalFunction,
+    use_cuda: bool = False,
+    logdir: str = "",
+) -> Tuple[torch.nn.Module, float]:
     """
     Calculates model accuracy on quantized simulator and returns quantized model with accuracy.
 
@@ -190,11 +215,14 @@ def calculate_quantsim_accuracy(model: torch.nn.Module, evaluator: aimet_common.
     :return: a tuple of quantsim and accuracy of model on this quantsim
     """
 
-    input_shape = (1, image_net_config.dataset['image_channels'],
-                   image_net_config.dataset['image_width'],
-                   image_net_config.dataset['image_height'],)
+    input_shape = (
+        1,
+        image_net_config.dataset["image_channels"],
+        image_net_config.dataset["image_width"],
+        image_net_config.dataset["image_height"],
+    )
     if use_cuda:
-        model.to(torch.device('cuda'))
+        model.to(torch.device("cuda"))
         dummy_input = torch.rand(input_shape).cuda()
     else:
         dummy_input = torch.rand(input_shape)
@@ -205,14 +233,24 @@ def calculate_quantsim_accuracy(model: torch.nn.Module, evaluator: aimet_common.
     # compute encodings
     iterations = 5
 
-    quantsim = QuantizationSimModel(model=model, quant_scheme='tf_enhanced',
-                                    dummy_input=dummy_input, rounding_mode='nearest',
-                                    default_output_bw=8, default_param_bw=8, in_place=False)
+    quantsim = QuantizationSimModel(
+        model=model,
+        quant_scheme="tf_enhanced",
+        dummy_input=dummy_input,
+        rounding_mode="nearest",
+        default_output_bw=8,
+        default_param_bw=8,
+        in_place=False,
+    )
 
-    quantsim.compute_encodings(forward_pass_callback=partial(evaluator, use_cuda=use_cuda),
-                               forward_pass_callback_args=iterations)
+    quantsim.compute_encodings(
+        forward_pass_callback=partial(evaluator, use_cuda=use_cuda),
+        forward_pass_callback_args=iterations,
+    )
 
-    quantsim.export(path=logdir, filename_prefix='resnet_encodings', dummy_input=dummy_input.cpu())
+    quantsim.export(
+        path=logdir, filename_prefix="resnet_encodings", dummy_input=dummy_input.cpu()
+    )
     accuracy = evaluator(quantsim.model, use_cuda=use_cuda)
 
     return quantsim, accuracy
@@ -243,7 +281,7 @@ def quantization_aware_training_example(config: argparse.Namespace):
     # Load the pretrained resnet18 model
     model = models.resnet18(pretrained=True)
     if config.use_cuda:
-        model.to(torch.device('cuda'))
+        model.to(torch.device("cuda"))
     model = model.eval()
 
     # Calculate FP32 accuracy
@@ -253,21 +291,31 @@ def quantization_aware_training_example(config: argparse.Namespace):
     logger.info("Starting Model Quantization")
 
     # Quantize the model using AIMET QAT (quantization aware training) and calculate accuracy on Quant Simulator
-    quantsim, accuracy = calculate_quantsim_accuracy(model=model, evaluator=data_pipeline.evaluate,
-                                                     use_cuda=config.use_cuda,
-                                                     logdir=config.logdir)
+    quantsim, accuracy = calculate_quantsim_accuracy(
+        model=model,
+        evaluator=data_pipeline.evaluate,
+        use_cuda=config.use_cuda,
+        logdir=config.logdir,
+    )
 
     logger.info("Quantized Model top-1 accuracy = %.2f", accuracy)
 
     # For good initialization apply, apply Post Training Quantization (PTQ) methods
     # such as Cross Layer Equalization (CLE) and Bias Correction (BC) (optional)
-    data_loader = ImageNetDataLoader(is_training=False, images_dir=config.dataset_dir,
-                                     image_size=image_net_config.dataset['image_size']).data_loader
+    data_loader = ImageNetDataLoader(
+        is_training=False,
+        images_dir=config.dataset_dir,
+        image_size=image_net_config.dataset["image_size"],
+    ).data_loader
     apply_cross_layer_equalization(model=model, input_shape=(1, 3, 224, 224))
     apply_bias_correction(model=model, data_loader=data_loader)
 
-    quantsim, _ = calculate_quantsim_accuracy(model=model, evaluator=data_pipeline.evaluate, use_cuda=config.use_cuda,
-                                              logdir=config.logdir)
+    quantsim, _ = calculate_quantsim_accuracy(
+        model=model,
+        evaluator=data_pipeline.evaluate,
+        use_cuda=config.use_cuda,
+        logdir=config.logdir,
+    )
 
     logger.info("Post Training Quantization (PTQ) Complete")
 
@@ -285,42 +333,65 @@ def quantization_aware_training_example(config: argparse.Namespace):
     dummy_input = torch.rand(input_shape)
 
     # Save the quantized model
-    quantsim.export(path=config.logdir, filename_prefix='QAT_resnet', dummy_input=dummy_input.cpu())
+    quantsim.export(
+        path=config.logdir, filename_prefix="QAT_resnet", dummy_input=dummy_input.cpu()
+    )
 
 
-if __name__ == '__main__':
-    default_logdir = os.path.join("benchmark_output", "QAT" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+if __name__ == "__main__":
+    default_logdir = os.path.join(
+        "benchmark_output", "QAT" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    )
 
     parser = argparse.ArgumentParser(
-        description='Apply Quantization Aware Training (QAT) on pretrained ResNet18 model and evaluate on ImageNet dataset')
+        description="Apply Quantization Aware Training (QAT) on pretrained ResNet18 model and evaluate on ImageNet dataset"
+    )
 
-    parser.add_argument('--dataset_dir', type=str,
-                        required=True,
-                        help="Path to a directory containing ImageNet dataset.\n\
+    parser.add_argument(
+        "--dataset_dir",
+        type=str,
+        required=True,
+        help="Path to a directory containing ImageNet dataset.\n\
                               This folder should conatin at least 2 subfolders:\n\
-                              'train': for training dataset and 'val': for validation dataset")
-    parser.add_argument('--use_cuda', action='store_true',
-                        required=True,
-                        help='Add this flag to run the test on GPU.')
+                              'train': for training dataset and 'val': for validation dataset",
+    )
+    parser.add_argument(
+        "--use_cuda",
+        action="store_true",
+        required=True,
+        help="Add this flag to run the test on GPU.",
+    )
 
-    parser.add_argument('--logdir', type=str,
-                        default=default_logdir,
-                        help="Path to a directory for logging.\
-                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'")
+    parser.add_argument(
+        "--logdir",
+        type=str,
+        default=default_logdir,
+        help="Path to a directory for logging.\
+                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'",
+    )
 
-    parser.add_argument('--epochs', type=int,
-                        default=15,
-                        help="Number of epochs for finetuning.\n\
-                              Default is 15")
-    parser.add_argument('--learning_rate', type=float,
-                        default=1e-2,
-                        help="A float type learning rate for model finetuning.\n\
-                              Default is 0.01")
-    parser.add_argument('--learning_rate_schedule', type=list,
-                        default=[5, 10],
-                        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=15,
+        help="Number of epochs for finetuning.\n\
+                              Default is 15",
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-2,
+        help="A float type learning rate for model finetuning.\n\
+                              Default is 0.01",
+    )
+    parser.add_argument(
+        "--learning_rate_schedule",
+        type=list,
+        default=[5, 10],
+        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
                               Check https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#MultiStepLR for more details.\n\
-                              Default is [5, 10]")
+                              Default is [5, 10]",
+    )
 
     _config = parser.parse_args()
 
@@ -331,7 +402,7 @@ if __name__ == '__main__':
     logger.addHandler(fileHandler)
 
     if _config.use_cuda and not torch.cuda.is_available():
-        logger.error('use_cuda is selected but no cuda device found.')
+        logger.error("use_cuda is selected but no cuda device found.")
         raise RuntimeError("Found no CUDA Device while use_cuda is selected")
 
     quantization_aware_training_example(_config)

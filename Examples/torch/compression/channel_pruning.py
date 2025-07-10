@@ -62,8 +62,8 @@ from Examples.torch.utils.image_net_data_loader import ImageNetDataLoader
 from Examples.torch.utils.image_net_evaluator import ImageNetEvaluator
 from Examples.torch.utils.image_net_trainer import ImageNetTrainer
 
-logger = logging.getLogger('TorchChannelPruning')
-formatter = logging.Formatter('%(asctime)s : %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("TorchChannelPruning")
+formatter = logging.Formatter("%(asctime)s : %(name)s - %(levelname)s - %(message)s")
 logging.basicConfig(format=formatter)
 
 
@@ -82,6 +82,7 @@ logging.basicConfig(format=formatter)
 #    - Learning rate schedule: [5,10]
 #
 
+
 class ImageNetDataPipeline:
     """
     Provides APIs for model compression using AIMET weight SVD, evaluation and finetuning.
@@ -93,7 +94,9 @@ class ImageNetDataPipeline:
         """
         self._config = _config
 
-    def evaluate(self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False) -> float:
+    def evaluate(
+        self, model: torch.nn.Module, iterations: int = None, use_cuda: bool = False
+    ) -> float:
         """
         Evaluate the specified model using the specified number of samples from the validation set.
         AIMET's compress_model() expects the function with this signature to its eval_callback
@@ -107,9 +110,12 @@ class ImageNetDataPipeline:
 
         # your code goes here instead of the example from below
 
-        evaluator = ImageNetEvaluator(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                      batch_size=image_net_config.evaluation['batch_size'],
-                                      num_workers=image_net_config.evaluation['num_workers'])
+        evaluator = ImageNetEvaluator(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.evaluation["batch_size"],
+            num_workers=image_net_config.evaluation["num_workers"],
+        )
 
         return evaluator.evaluate(model, iterations, use_cuda)
 
@@ -124,18 +130,29 @@ class ImageNetDataPipeline:
 
         # Your code goes here instead of the example from below
 
-        trainer = ImageNetTrainer(self._config.dataset_dir, image_size=image_net_config.dataset['image_size'],
-                                  batch_size=image_net_config.train['batch_size'],
-                                  num_workers=image_net_config.train['num_workers'])
+        trainer = ImageNetTrainer(
+            self._config.dataset_dir,
+            image_size=image_net_config.dataset["image_size"],
+            batch_size=image_net_config.train["batch_size"],
+            num_workers=image_net_config.train["num_workers"],
+        )
 
-        trainer.train(model, max_epochs=self._config.epochs, learning_rate=self._config.learning_rate,
-                      learning_rate_schedule=self._config.learning_rate_schedule, use_cuda=self._config.use_cuda)
+        trainer.train(
+            model,
+            max_epochs=self._config.epochs,
+            learning_rate=self._config.learning_rate,
+            learning_rate_schedule=self._config.learning_rate_schedule,
+            use_cuda=self._config.use_cuda,
+        )
 
-        torch.save(model, os.path.join(self._config.logdir, 'finetuned_model.pth'))
+        torch.save(model, os.path.join(self._config.logdir, "finetuned_model.pth"))
 
 
-def aimet_channel_pruning(model: torch.nn.Module, evaluator: aimet_common.defs.EvalFunction,
-                          data_loader: torch_data.DataLoader) -> Tuple[torch.nn.Module, aimet_common.defs.CompressionStats]:
+def aimet_channel_pruning(
+    model: torch.nn.Module,
+    evaluator: aimet_common.defs.EvalFunction,
+    data_loader: torch_data.DataLoader,
+) -> Tuple[torch.nn.Module, aimet_common.defs.CompressionStats]:
     """
     Compresses the model using AIMET's channel pruning feature
 
@@ -146,31 +163,39 @@ def aimet_channel_pruning(model: torch.nn.Module, evaluator: aimet_common.defs.E
     """
 
     # Configure the greedy comp-ratio selection algorithm
-    greedy_params = aimet_torch.defs.GreedySelectionParameters(target_comp_ratio=Decimal(0.5),
-                                                               num_comp_ratio_candidates=10)
+    greedy_params = aimet_torch.defs.GreedySelectionParameters(
+        target_comp_ratio=Decimal(0.5), num_comp_ratio_candidates=10
+    )
 
     # Configure the auto mode compression. Ignore the first layer of the model (model.conv1).
-    auto_params = aimet_torch.defs.ChannelPruningParameters.AutoModeParams(greedy_params,
-                                                                           modules_to_ignore=[model.conv1])
+    auto_params = aimet_torch.defs.ChannelPruningParameters.AutoModeParams(
+        greedy_params, modules_to_ignore=[model.conv1]
+    )
 
     # Configure the parameters for channel pruning compression
     # 50000 reconstruction samples will give better results and is recommended; however we use 5000 here as an example.
-    params = aimet_torch.defs.ChannelPruningParameters(data_loader=data_loader,
-                                                       num_reconstruction_samples=5000,
-                                                       allow_custom_downsample_ops=False,
-                                                       mode=aimet_torch.defs.ChannelPruningParameters.Mode.auto,
-                                                       params=auto_params)
+    params = aimet_torch.defs.ChannelPruningParameters(
+        data_loader=data_loader,
+        num_reconstruction_samples=5000,
+        allow_custom_downsample_ops=False,
+        mode=aimet_torch.defs.ChannelPruningParameters.Mode.auto,
+        params=auto_params,
+    )
 
-    scheme = aimet_common.defs.CompressionScheme.channel_pruning  # spatial_svd, weight_svd or channel_pruning
+    scheme = (
+        aimet_common.defs.CompressionScheme.channel_pruning
+    )  # spatial_svd, weight_svd or channel_pruning
     metric = aimet_common.defs.CostMetric.mac  # mac or memory
 
-    results = ModelCompressor.compress_model(model=model,
-                                             eval_callback=evaluator,
-                                             eval_iterations=10,
-                                             input_shape=(1, 3, 224, 224),
-                                             compress_scheme=scheme,
-                                             cost_metric=metric,
-                                             parameters=params)
+    results = ModelCompressor.compress_model(
+        model=model,
+        eval_callback=evaluator,
+        eval_iterations=10,
+        input_shape=(1, 3, 224, 224),
+        compress_scheme=scheme,
+        cost_metric=metric,
+        parameters=params,
+    )
     return results
 
 
@@ -207,7 +232,7 @@ def channel_pruning_example(config: argparse.Namespace):
     # Load the pretrained resnet18 model
     model = models.resnet18(pretrained=True)
     if config.use_cuda:
-        model.to(torch.device('cuda'))
+        model.to(torch.device("cuda"))
     model.eval()
 
     # Calculate floating point accuracy
@@ -218,12 +243,15 @@ def channel_pruning_example(config: argparse.Namespace):
 
     # Compress the model using AIMET Channel Pruning
     # in auto mode, AIMET uses the Greedy Compression-Ratio Selection algorithm
-    data_loader = ImageNetDataLoader(is_training=True, images_dir=_config.dataset_dir, image_size=224).data_loader
-    compressed_model, stats = aimet_channel_pruning(model=model, evaluator=data_pipeline.evaluate,
-                                                    data_loader=data_loader)
+    data_loader = ImageNetDataLoader(
+        is_training=True, images_dir=_config.dataset_dir, image_size=224
+    ).data_loader
+    compressed_model, stats = aimet_channel_pruning(
+        model=model, evaluator=data_pipeline.evaluate, data_loader=data_loader
+    )
 
     logger.info(stats)
-    with open(os.path.join(config.logdir, 'log.txt'), "w") as outfile:
+    with open(os.path.join(config.logdir, "log.txt"), "w") as outfile:
         outfile.write("%s\n\n" % (stats))
 
     # Calculate and log the accuracy of compressed model
@@ -242,43 +270,64 @@ def channel_pruning_example(config: argparse.Namespace):
     logger.info("Model Finetuning Complete")
 
     # Save the compressed model
-    torch.save(compressed_model, os.path.join(config.logdir, 'compressed_model.pth'))
+    torch.save(compressed_model, os.path.join(config.logdir, "compressed_model.pth"))
 
 
-if __name__ == '__main__':
-    default_logdir = os.path.join("benchmark_output",
-                                  "channel_prunning_" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+if __name__ == "__main__":
+    default_logdir = os.path.join(
+        "benchmark_output",
+        "channel_prunning_" + datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
+    )
 
     parser = argparse.ArgumentParser(
-        description='Apply Channel Pruning on pretrained ResNet18 model and finetune it for ImageNet dataset')
+        description="Apply Channel Pruning on pretrained ResNet18 model and finetune it for ImageNet dataset"
+    )
 
-    parser.add_argument('--dataset_dir', type=str,
-                        required=True,
-                        help="Path to a directory containing ImageNet dataset.\n\
+    parser.add_argument(
+        "--dataset_dir",
+        type=str,
+        required=True,
+        help="Path to a directory containing ImageNet dataset.\n\
                               This folder should conatin at least 2 subfolders:\n\
-                              'train': for training dataset and 'val': for validation dataset")
-    parser.add_argument('--use_cuda', action='store_true',
-                        required=True,
-                        help='Add this flag to run the test on GPU.')
+                              'train': for training dataset and 'val': for validation dataset",
+    )
+    parser.add_argument(
+        "--use_cuda",
+        action="store_true",
+        required=True,
+        help="Add this flag to run the test on GPU.",
+    )
 
-    parser.add_argument('--logdir', type=str,
-                        default=default_logdir,
-                        help="Path to a directory for logging.\
-                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'")
+    parser.add_argument(
+        "--logdir",
+        type=str,
+        default=default_logdir,
+        help="Path to a directory for logging.\
+                              Default value is 'benchmark_output/weight_svd_<Y-m-d-H-M-S>'",
+    )
 
-    parser.add_argument('--epochs', type=int,
-                        default=15,
-                        help="Number of epochs for finetuning.\n\
-                              Default is 15")
-    parser.add_argument('--learning_rate', type=float,
-                        default=1e-2,
-                        help="A float type learning rate for model finetuning.\n\
-                              Default is 0.01")
-    parser.add_argument('--learning_rate_schedule', type=list,
-                        default=[5, 10],
-                        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=15,
+        help="Number of epochs for finetuning.\n\
+                              Default is 15",
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-2,
+        help="A float type learning rate for model finetuning.\n\
+                              Default is 0.01",
+    )
+    parser.add_argument(
+        "--learning_rate_schedule",
+        type=list,
+        default=[5, 10],
+        help="A list of epoch indices for learning rate schedule used in finetuning.\n\
                               Check https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#MultiStepLR for more details.\n\
-                              Default is [5, 10]")
+                              Default is [5, 10]",
+    )
 
     _config = parser.parse_args()
 
@@ -289,7 +338,7 @@ if __name__ == '__main__':
     logger.addHandler(fileHandler)
 
     if _config.use_cuda and not torch.cuda.is_available():
-        logger.error('use_cuda is selected but no cuda device found.')
+        logger.error("use_cuda is selected but no cuda device found.")
         raise RuntimeError("Found no CUDA Device while use_cuda is selected")
 
     channel_pruning_example(_config)

@@ -95,7 +95,12 @@ def dist_eval_func(model, imagenet_dir, batch_size, world_size):
     port_id = str(find_free_network_port())
     # The evaluate_ddp function gets copied to each of the process and runs, torchmetrics helps combine the
     # results on each process
-    mp.spawn(evaluate_ddp, args=(world_size, port_id, model, imagenet_dir, batch_size, res), nprocs=world_size, join=True)
+    mp.spawn(
+        evaluate_ddp,
+        args=(world_size, port_id, model, imagenet_dir, batch_size, res),
+        nprocs=world_size,
+        join=True,
+    )
     return res
 
 
@@ -106,25 +111,32 @@ def get_quant_eval(imagenet_dir, batch_size, device):
     :param batch_size: Batch size used for eval
     :param device: Which device (Cuda/CPU) model is on
     """
+
     def evaluate_quant(model, _):
-        val_dir = os.path.join(imagenet_dir, 'val')
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                         std=[0.229, 0.224, 0.225])
+        val_dir = os.path.join(imagenet_dir, "val")
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+        )
 
         val_set = datasets.ImageFolder(
             val_dir,
-            transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ]))
+            transforms.Compose(
+                [
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    normalize,
+                ]
+            ),
+        )
 
-        val_loader = torch.utils.data.DataLoader(val_set,
-                                                 batch_size=batch_size,
-                                                 shuffle=False,
-                                                 num_workers=1,
-                                                 pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(
+            val_set,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=1,
+            pin_memory=True,
+        )
 
         model.to(device)
         model.eval()
@@ -164,28 +176,34 @@ def evaluate_ddp(rank, world_size, port_id, model, imagenet_dir, batch_size, res
     num_workers = 1
 
     # Get validation data
-    val_dir = os.path.join(imagenet_dir, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+    val_dir = os.path.join(imagenet_dir, "val")
+    normalize = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    )
 
     val_set = datasets.ImageFolder(
         val_dir,
-        transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ]))
+        transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ]
+        ),
+    )
 
     # Used so that each process sees a different data
     val_sampler = DistributedSampler(dataset=val_set)
 
-    val_loader = torch.utils.data.DataLoader(val_set,
-                                             batch_size=batch_size,
-                                             shuffle=False,
-                                             num_workers=num_workers,
-                                             sampler=val_sampler,
-                                             pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(
+        val_set,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        sampler=val_sampler,
+        pin_memory=True,
+    )
 
     model.metric = metric
 
@@ -217,7 +235,7 @@ def evaluate_ddp(rank, world_size, port_id, model, imagenet_dir, batch_size, res
         metric.reset()
 
     if rank == 0:
-        results['top-1 acc'] = float(acc)
+        results["top-1 acc"] = float(acc)
     # cleanup
     dist.destroy_process_group()
 
@@ -226,22 +244,26 @@ def main():
     """
     Main function
     """
-    parser = argparse.ArgumentParser(description='PyTorch DDP Eval')
-    parser.add_argument('--world_size', default=2, type=int, help="number of total nodes")
-    parser.add_argument('-b', '--batch_size', default=64, type=int, metavar='N')
+    parser = argparse.ArgumentParser(description="PyTorch DDP Eval")
     parser.add_argument(
-        '--model_path',
-        help="path to the quantized model's saved checkpoint for QAT",
-        default='na'
+        "--world_size", default=2, type=int, help="number of total nodes"
     )
-    parser.add_argument('--imagenet_dir', help="path to imagenet_dir", required=True)
-    parser.add_argument('--output_file', help="path to quantsim output file", required=True)
+    parser.add_argument("-b", "--batch_size", default=64, type=int, metavar="N")
+    parser.add_argument(
+        "--model_path",
+        help="path to the quantized model's saved checkpoint for QAT",
+        default="na",
+    )
+    parser.add_argument("--imagenet_dir", help="path to imagenet_dir", required=True)
+    parser.add_argument(
+        "--output_file", help="path to quantsim output file", required=True
+    )
     args = parser.parse_args()
 
     # STEP 1
     # We instantiate a MV2 model
     model = torchvision.models.mobilenet_v2(pretrained=True)
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     forward_pass_callback = get_quant_eval(args.imagenet_dir, args.batch_size, device)
 
     # Perform AIMET Quantization
@@ -256,7 +278,7 @@ def main():
         dummy_input=dummy_input,
         quant_scheme=QuantScheme.training_range_learning_with_tf_init,
         default_param_bw=8,
-        default_output_bw=8
+        default_output_bw=8,
     )
 
     # Compute Encodings
@@ -264,10 +286,12 @@ def main():
     print("Finished Compute Encodings")
 
     # STEP 2
-    dist_eval_func(quant_sim.model.cpu(), args.imagenet_dir, args.batch_size, args.world_size)
+    dist_eval_func(
+        quant_sim.model.cpu(), args.imagenet_dir, args.batch_size, args.world_size
+    )
 
     # STEP 3
-    quant_sim.model.to('cpu')
+    quant_sim.model.to("cpu")
     quantsim.save_checkpoint(quant_sim, args.output_file)
 
 
