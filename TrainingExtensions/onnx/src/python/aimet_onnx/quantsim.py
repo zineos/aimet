@@ -87,7 +87,7 @@ from aimet_common.quantsim import (
     VALID_ENCODING_VERSIONS,
     _INT32_MINIMUM_SCALE,
 )
-from aimet_common.utils import save_json_yaml, AimetLogger, _red
+from aimet_common.utils import save_json_yaml, AimetLogger, _red, deprecated
 from aimet_common.quant_utils import _convert_encoding_format_0_6_1_to_1_0_0
 from aimet_common.quantsim_config.quantsim_config import _config_file_aliases
 from aimet_common.connected_graph.product import Product
@@ -872,7 +872,7 @@ class QuantizationSimModel:
                 .get("weight", {})
                 .get("is_symmetric", default_symmetry)
             )
-            input_weight_quantizer = self._get_closest_enabled_quantizer(op_weights)
+            input_weight_quantizer = self._get_enabled_quantizer(op_weights.name)
 
             if input_weight_quantizer is None:
                 logger.warning(
@@ -911,11 +911,11 @@ class QuantizationSimModel:
                 # Apply exception rule only to dynamic matmuls
                 if op.inputs[1].name in self.param_names:
                     continue
-                target_quantizer_for_first_input = self._get_closest_enabled_quantizer(
-                    op.inputs[0]
+                target_quantizer_for_first_input = self._get_enabled_quantizer(
+                    op.inputs[0].name
                 )
-                target_quantizer_for_second_input = self._get_closest_enabled_quantizer(
-                    op.inputs[1]
+                target_quantizer_for_second_input = self._get_enabled_quantizer(
+                    op.inputs[1].name
                 )
 
                 # According to opdef for Matmul in HTP:
@@ -976,8 +976,11 @@ class QuantizationSimModel:
                         weight_qtzr.quant_info.usePerChannelMode
                     )
 
+    @deprecated("Use _get_enabled_quantizer instead")
     def _get_closest_enabled_quantizer(self, tensor: Product):
         """
+        Deprecated. Use :meth:`_get_enabled_quantizer` to get the quantizer instead.
+
         Returns closest enabled quantizer to `tensor` traversing upwards
 
         :param tensor: Tensor for which to find quantizer
@@ -1300,7 +1303,7 @@ class QuantizationSimModel:
                 # Since weight_scale isn't avaiable, fall back to statictical bias scale
                 return get_statistical_bias_scale(input, weight, bias)
 
-            input_qtzr = self._get_closest_enabled_quantizer(input)
+            input_qtzr = self._get_enabled_quantizer(input.name)
 
             if not (input_qtzr and input_qtzr.enabled and input_qtzr.is_initialized()):
                 return get_statistical_bias_scale(input, weight, bias)
