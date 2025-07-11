@@ -3848,25 +3848,11 @@ def test_onnx_qdq_lpbq(seed: int):
     sim._insert_data_movement_op_output_quantizers()
     onnx_qdq_model = sim._to_onnx_qdq()
 
-    # NOTE: ORT Cast doesn't support int4 inputs yet.
-    # To work around this limitation, temporarily convert uint4 to uint8
-    for init in onnx_qdq_model.graph.initializer:
-        if init.name == f"weight_per_block_uint_scale":
-            init.data_type = onnx.TensorProto.UINT8
-            int4x2_scale = np.frombuffer(init.raw_data, dtype=np.uint8)
-            init.raw_data = unpack_int4x2_to_int8(
-                int4x2_scale, dtype=np.uint8
-            ).tobytes()
-
     """
-    Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of ENABLED QcQuantizers
+    Then: Onnx QDQ model should contain as many QuantizeLinear as the number of of ENABLED QcQuantizers
     """
     assert len(
-        [
-            node
-            for node in onnx_qdq_model.graph.node
-            if node.op_type == "DequantizeLinear"
-        ]
+        [node for node in onnx_qdq_model.graph.node if node.op_type == "QuantizeLinear"]
     ) == len(
         [
             qtzr

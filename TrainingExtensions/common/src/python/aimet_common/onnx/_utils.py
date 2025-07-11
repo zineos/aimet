@@ -43,7 +43,6 @@ from typing import Iterable, Optional, Sequence, Dict, List
 import numpy as np
 import onnx
 from onnx import ModelProto, NodeProto, TensorProto
-from onnx.helper import make_node
 from onnx.numpy_helper import from_array, to_array
 
 from aimet_common.onnx import opset10, opset13, opset21
@@ -154,15 +153,22 @@ def _add_onnx_qdq_nodes(
             #
             # Strategy: Derive y_scale from per_channel_float_scale and per_block_uint_scale
             #
-            # per_channel_float_scale -> Reshape --+
-            #        (FLOAT)                       |
-            #                                      +--> Mul -> (y_scale)
-            #                  1.0 --+             |
-            # per_block_uint_scale --+-> Add ------+
-            #        (UINT4)
+            #           (FLOAT)
+            # per_channel_float_scale -----+
+            #                              +--> DequantizeLinear -----+ (blockwise scale)
+            #    per_block_uint_scale -----+                          |
+            #           (UINT8)                               +-------+---------+
+            #                                                 V                 V
+            #                              weight ---> QuantizeLinear -> DequantizeLinear -> ...
             if output_dtype != "int4":
                 raise RuntimeError(
-                    "LPBQ can be only exported with int4 or int8; got {output_dtype}"
+                    f"LPBQ can be only exported with int4; got {output_dtype}"
+                )
+
+            if axis not in (0, 1):
+                raise RuntimeError(
+                    "LPBQ can be only applied to 2D matrices when exported to onnx QDQ. "
+                    f"Got axis {axis}"
                 )
 
             tensors_to_add.extend(
@@ -170,63 +176,24 @@ def _add_onnx_qdq_nodes(
                     from_array(
                         y_scale.flatten(), name=f"{input_name}_per_channel_float_scale"
                     ),
-                    opset.DequantizeLinear.make_int_arr(
-                        per_block_int_scale - 1,
-                        dtype="uint4",
+                    from_array(
+                        per_block_int_scale.astype(np.uint8),
                         name=f"{input_name}_per_block_uint_scale",
                     ),
                 ]
             )
             nodes_to_add.extend(
                 [
-                    make_node(
-                        "Constant",
-                        name=f"{input_name}_scale/Constant_0",
-                        inputs=[],
-                        outputs=[f"{input_name}_per_block_scale/shape"],
-                        value_ints=y_scale.shape,
-                    ),
-                    make_node(
-                        "Reshape",
-                        name=f"{input_name}_scale/Reshape",
+                    opset.DequantizeLinear.make_node(
+                        name=f"{node_name_prefix}_scale_dq",
                         inputs=[
+                            f"{input_name}_per_block_uint_scale",
                             f"{input_name}_per_channel_float_scale",
-                            f"{input_name}_per_block_scale/shape",
                         ],
-                        outputs=[f"{input_name}_per_block_scale_0"],
-                    ),
-                    make_node(
-                        "Constant",
-                        name=f"{input_name}_scale/Constant_1",
-                        inputs=[],
-                        outputs=[f"{input_name}_per_block_scale/one"],
-                        value_float=1.0,
-                    ),
-                    make_node(
-                        "Cast",
-                        name=f"{input_name}_scale/Cast",
-                        inputs=[f"{input_name}_per_block_uint_scale"],
-                        outputs=[f"{input_name}_per_block_scale/Cast_output"],
-                        to=TensorProto.FLOAT,
-                    ),
-                    make_node(
-                        "Add",
-                        name=f"{input_name}_per_block_scale/Add",
-                        inputs=[
-                            f"{input_name}_per_block_scale/Cast_output",
-                            f"{input_name}_per_block_scale/one",
-                        ],
-                        outputs=[f"{input_name}_per_block_scale_1"],
-                    ),
-                    make_node(
-                        "Mul",
-                        name=f"{input_name}_per_block_scale/Mul",
-                        inputs=[
-                            f"{input_name}_per_block_scale_0",
-                            f"{input_name}_per_block_scale_1",
-                        ],
-                        outputs=[f"{input_name}_scale"],
-                    ),
+                        output=f"{input_name}_scale",
+                        dtype="uint8",
+                        axis=0 if axis == 1 else 1,  # == channel axis
+                    )
                 ]
             )
 
