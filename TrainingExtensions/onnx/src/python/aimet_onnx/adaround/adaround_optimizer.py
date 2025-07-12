@@ -286,6 +286,7 @@ class AdaroundOptimizer:
         weights = adarounded_weights.detach().cpu().numpy().tobytes()
         weight_name = module.params["weight"].name
         update_sim_weight(quant_model.model, weights, weight_name)
+        act_sampler.restore_graph()
 
     @classmethod
     def _compute_recons_metrics(

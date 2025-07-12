@@ -51,6 +51,7 @@ from aimet_onnx.utils import (
     add_hook_to_get_activation,
     remove_activation_hooks,
     create_input_dict,
+    disable_quantizers,
 )
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -72,27 +73,28 @@ else:
 
 class ActivationSampler:
     """
-    For a module in the original model and the corresponding module in the weight quantized QuantSim model,
-    collect the module's output and input activation data respectively
+    For a module in the model, collect the module's FP output and Quantized input activation data
     """
 
     def __init__(
         self,
-        module_input_fp: str,
-        module_output_quant: str,
-        quant_model: QuantizationSimModel,
+        fp_act_name: str,
+        quant_act_name: str,
+        quant_sim: QuantizationSimModel,
         use_cuda: bool,
         device: int = 0,
     ):
         """
-        :param module_input_fp: FP input tensor name of the module to retrieve
-        :param module_output_quant: Quant output tensor name of the module to retrieve
-        :param quant_model: Session with the model with quantization simulations ops
+        :param fp_act_name: FP output tensor name of the module to retrieve
+        :param quant_act_name: Quant input tensor name of the module to retrieve
+        :param quant_sim: QuantizationSimModel object
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
         :return: Input data to quant op, Output data from original op
         """
-        self._quant_model = quant_model
+        self._quant_sim = quant_sim
+        self._fp_act_name = fp_act_name
+        self._quant_act_name = quant_act_name
 
         if "CUDAExecutionProvider" not in ort.get_available_providers():
             logger.warning(
@@ -113,29 +115,56 @@ class ActivationSampler:
         else:
             self.providers = ["CPUExecutionProvider"]
 
-        orig_model = copy.deepcopy(quant_model.model)
-        orig_model = QuantizationSimModel.remove_quantizers(orig_model)
+        self.handles, self.sess = self.create_session([fp_act_name, quant_act_name])
 
-        self._orig_module_collector = ModuleData(
-            orig_model, module_input_fp, self.providers, quant_model._user_onnx_libs
-        )
-        self._quant_module_collector = ModuleData(
-            quant_model.model,
-            module_output_quant,
+    def create_session(self, activation_names: List[str]):
+        """
+        Helper to create a session using both module's input and output tensor names
+
+        :param activation_names: List of activation names to add hook to
+        """
+        handles = []
+        for activation_name in activation_names:
+            handles.append(
+                add_hook_to_get_activation(self._quant_sim.model.model, activation_name)
+            )
+        sess = QuantizationSimModel.build_session(
+            self._quant_sim.model.model,
             self.providers,
-            quant_model._user_onnx_libs,
+            self._quant_sim._user_onnx_libs,
         )
+        return handles, sess
+
+    def restore_graph(self):
+        """
+        Remove all the additional model outputs added to the graph and restore its original state
+        """
+        for handle in self.handles:
+            remove_activation_hooks(self._quant_sim.model.model, handle)
+
+    def run_session(
+        self, model_inputs: Dict[str, List[np.ndarray]], activation_name: str
+    ) -> np.ndarray:
+        """
+        Return quantized module input and fp module outputs using the given model_inputs
+        :param model_inputs: inputs to the model
+        :param activation_name: list of activation names to retrieve the output
+        :return: outputs corresponding to the activation_names of the session given model inputs
+        """
+
+        if activation_name in model_inputs:
+            # Workaround memory corruption bug in onnxruntime >= 1.19 when a graph output is also a graph input
+            # https://github.com/microsoft/onnxruntime/issues/21922
+            act_output = model_inputs[activation_name]
+        else:
+            act_output = self.sess.run([activation_name], model_inputs)[0]
+        return act_output
 
     def sample_and_place_all_acts_on_cpu(self, dataset) -> Tuple:
         """
-        From the original module, collect output activations and input activations
-        to corresponding quantized module.
-
-        NOTE: Keeps collected activation data on CPU memory so this function should only be invoked
-        if collected activation data can be fit entirely in CPU memory.
-
-        :param dataset: Cached dataset.
-        :return: Input data, output data
+        Given the dataset, compute the activation tensors corresponding to the tensors: fp_act_name, quant_act_name
+        :param dataset: input dataset
+        :return: outputs corresponding to the activation tensors registered
         """
         all_inp_data = []
         all_out_data = []
@@ -144,33 +173,29 @@ class ActivationSampler:
         for batch_index in range(len(dataset)):
             model_inputs = next(iterator)
             inp_data, out_data = self.sample_acts(
-                create_input_dict(self._quant_model.model.model, model_inputs)
+                create_input_dict(self._quant_sim.model.model, model_inputs)
             )
 
-            all_inp_data.append(inp_data[0])
-            all_out_data.append(out_data[0])
-
-            if batch_index == len(dataset) - 1:
-                break
+            all_inp_data.append(inp_data)
+            all_out_data.append(out_data)
 
         return all_inp_data, all_out_data
 
-    def sample_acts(
-        self, model_inputs: Dict[str, List[np.ndarray]]
-    ) -> Tuple[List, List]:
+    def sample_acts(self, model_inputs: Dict[str, List[np.ndarray]]):
         """
-        For given model_inputs, collect input activations data to quant module and
-        output activations data from original module.
+        Given the model_inputs retrieve the activation tensors corresponding to the tensors: fp_act_name, quant_act_name
+        :param model_inputs: inputs to the model
+        :return: Tuple of module's quantized input activation and its fp activation output
+        """
 
-        :param model_inputs: Model inputs.
-        :return: Input and output activations data.
-        """
-        # Collect input activation data to quantized wrapper module
-        # (with all preceding weight modules quantized)
-        inp_data = self._quant_module_collector.collect_activation(model_inputs)
-        # Collect output activation data from original module
-        out_data = self._orig_module_collector.collect_activation(model_inputs)
-        return inp_data, out_data
+        module_input_act = self.run_session(model_inputs, self._quant_act_name)
+
+        with disable_quantizers(
+            self._quant_sim, self._quant_sim.qc_quantize_op_dict.keys()
+        ):
+            module_output_act = self.run_session(model_inputs, self._fp_act_name)
+
+        return module_input_act, module_output_act
 
 
 class ModuleData:

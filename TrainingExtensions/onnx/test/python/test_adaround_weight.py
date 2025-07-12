@@ -125,6 +125,7 @@ class TestAdaround:
 
         inputs = [make_dummy_input(model) for _ in range(2)]
         sim = QuantizationSimModel(copy.deepcopy(model), providers=providers)
+        graph_outputs = sim.model.graph().output
         is_enabled = {name: q.enabled for name, q in sim.qc_quantize_op_dict.items()}
 
         adaroundable_ops = [
@@ -160,6 +161,8 @@ class TestAdaround:
                 ParamUtils.get_param_by_name(sim.model.model, name)
             )
             assert not np.all(old_weight == new_weight)
+
+        assert graph_outputs == sim.model.graph().output
 
     def test_apply_adaround_for_custom_op(self):
         from onnxruntime_extensions import get_library_path
