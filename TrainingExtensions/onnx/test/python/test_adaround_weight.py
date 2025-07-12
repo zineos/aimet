@@ -52,11 +52,8 @@ import onnx
 
 from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_onnx import apply_adaround, QuantizationSimModel
-from aimet_onnx.adaround.adaround_weight import (
-    Adaround,
-    AdaroundParameters,
-    AdaroundSupportedModules,
-)
+from aimet_onnx.adaround.adaround_weight import Adaround, AdaroundParameters
+from aimet_onnx.adaround.utils import AdaroundSupportedModules
 from aimet_onnx.utils import make_dummy_input, ParamUtils
 from .models import models_for_tests
 

@@ -95,7 +95,7 @@ class AdaroundTensorQuantizer:  # pylint: disable=too-many-instance-attributes
         # alpha is the "V" parameter in Equation 2 of the Systems HLD which is defined as a FP32 tensor of the
         # same shape as the weight tensor
         if self.alpha is None:
-            self.initialize_alpha(tensor, self.broadcasted_delta)
+            self.initialize_alpha(tensor)
 
         alpha = self.alpha.to(device=tensor.device, dtype=tensor.dtype)
 
@@ -155,14 +155,14 @@ class AdaroundTensorQuantizer:  # pylint: disable=too-many-instance-attributes
                 tensor, offset, self._ch_axis
             ).to(tensor.dtype)
 
-    def initialize_alpha(self, tensor: torch.Tensor, delta):
+    def initialize_alpha(self, tensor: torch.Tensor):
         """
         Initializes alpha parameter, same shape as the weight tensor
         :param tensor: The weight tensor to be ada rounded
         """
-        tensor_floor = torch.floor(tensor / delta)
+        tensor_floor = torch.floor(tensor / self.broadcasted_delta)
 
-        tensor = (tensor / delta) - tensor_floor
+        tensor = (tensor / self.broadcasted_delta) - tensor_floor
         alpha = -torch.log(
             (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)
             / (tensor - AdaroundConstants.GAMMA)

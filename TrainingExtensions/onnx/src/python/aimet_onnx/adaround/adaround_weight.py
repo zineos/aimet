@@ -51,22 +51,23 @@ import numpy as np
 # Import AIMET specific modules
 from aimet_common import quantsim
 from aimet_common.utils import AimetLogger, deprecated
-from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
+from aimet_common.defs import QuantScheme, qtype
 
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.qc_quantize_op import OpMode
 from aimet_onnx.meta.utils import get_module_act_func_pair
-from aimet_onnx.meta.connectedgraph import ConnectedGraph
 from aimet_onnx import utils
 from aimet_onnx.adaround.adaround_optimizer import AdaroundOptimizer
 from aimet_onnx.adaround.adaround_loss import _REG_PARAM, _BETA_RANGE, _WARM_START
-from aimet_onnx.adaround.utils import ModelData, ModuleInfo, read_attributes_for_op
+from aimet_onnx.adaround.utils import (
+    ModelData,
+    ModuleInfo,
+    read_attributes_for_op,
+    AdaroundSupportedModules,
+)
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
-
-# The following modules with weights are supported by Adaround
-AdaroundSupportedModules = ["Conv", "ConvTranspose", "MatMul", "Gemm"]
 
 
 def apply_adaround(
@@ -252,7 +253,10 @@ class Adaround:
             cls._override_param_bitwidth(quant_sim, param_bw_override_list)
 
         if ignore_quant_ops_list:
-            cls._exclude_modules(quant_sim, ignore_quant_ops_list)
+            logger.error(
+                "ignore_quant_ops_list input is unsupported. Please use `aimet_onnx.apply_adaround` and set "
+                "node_names_to_optimize accordingly instead"
+            )
 
         # Compute only param encodings
         cls._compute_param_encodings(quant_sim, params)
@@ -337,23 +341,6 @@ class Adaround:
         """
         # pylint: disable=too-many-locals, protected-access
 
-        num_iterations = params.num_iterations
-
-        if num_iterations is None:
-            lowest_weight_bw = 32
-            for param_name in quant_sim.param_names:
-                quantizer = quant_sim.qc_quantize_op_dict[param_name]
-                if (
-                    quantizer.enabled
-                    and quantizer.data_type == QuantizationDataType.int
-                ):
-                    lowest_weight_bw = min(lowest_weight_bw, quantizer.bitwidth)
-            # If the lowest wegith bitwidth is < 8, then set num_iterations to 15K by default
-            if lowest_weight_bw < 8:
-                num_iterations = 15000
-            else:
-                num_iterations = 10000
-
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Cache model input data to temporary directory
             cached_dataset = utils.CachedDataset(
@@ -382,7 +369,7 @@ class Adaround:
                     ]._enabled
                 ):
                     # Get module's next following activation function
-                    act_func = module_act_func_pair[name]
+                    act_func = module_act_func_pair.get(name)
                     quantized_input_name = quantized_layer_to_input_tensor_name[name]
                     logger.info(
                         "Started Optimizing weight rounding of module: %s", name
@@ -393,7 +380,7 @@ class Adaround:
                         quant_sim,
                         act_func,
                         cached_dataset,
-                        num_iterations,
+                        params.num_iterations,
                         param_to_tensor_quantizer_dict,
                         use_cuda,
                         device,
@@ -517,20 +504,6 @@ class Adaround:
         # For the params specified in the param_bw_override_list, set the weight quantizer bitwidth
         for param_name, bw in param_bw_override_list:
             quant_sim.qc_quantize_op_dict[param_name] = bw
-
-    @classmethod
-    def _exclude_modules(
-        cls, quant_sim: QuantizationSimModel, ignore_quant_ops_list: List[str]
-    ):
-        """
-        For the modules mentioned in the ignore_quant_ops_list, remove the corresponding quant wrappers from the
-        quantSim and excludes modules from adaround optimization.
-
-        :param model: The original model
-        :param quant_sim: The QuantSim that was created using a deepcopy of the original model.
-        :param ignore_quant_ops_list: The list of quantizers for which the Quantization wrappers are removed from the
-                                      QuantSim object.
-        """
 
     @staticmethod
     def _get_quantized_layer_input_tensor_name(sim):

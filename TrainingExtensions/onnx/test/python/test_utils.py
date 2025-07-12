@@ -41,7 +41,7 @@ import pytest
 
 import aimet_onnx.utils as utils
 from aimet_onnx.utils import ParamUtils, disable_quantizers
-from aimet_onnx.adaround.utils import ModelData, read_attributes_for_op
+from aimet_onnx.adaround.utils import ModelData
 from aimet_onnx.quantsim import QuantizationSimModel
 
 from .models import models_for_tests

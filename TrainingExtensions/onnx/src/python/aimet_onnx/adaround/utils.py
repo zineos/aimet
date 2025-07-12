@@ -36,19 +36,21 @@
 # =============================================================================
 """Utilities for Adaround ONNX"""
 
-from typing import Dict
+from typing import Dict, List
 from collections import defaultdict
 import onnx
 from packaging import version
 
 from aimet_onnx import QuantizationSimModel
-from aimet_onnx.meta.connectedgraph import ConnectedGraph
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
     from onnx import ModelProto
 else:
     from onnx.onnx_pb import ModelProto
+
+# The following modules with weights are supported by Adaround
+AdaroundSupportedModules = ["Conv", "ConvTranspose", "MatMul", "Gemm"]
 
 
 class ModuleInfo:
@@ -79,7 +81,7 @@ class ModelData:
     def _populate_model_data(self):
         for op in self.quant_sim.connected_graph.ordered_ops:
             self.module_to_info[op.name] = ModuleInfo()
-            if op.type in ["Conv", "ConvTranspose", "Gemm", "MatMul"]:
+            if op.type in AdaroundSupportedModules:
                 self.module_to_info[op.name].type = op.type
                 self.module_to_info[op.name].transposed_params = op.transposed_params
                 if hasattr(op.get_module(), "attribute"):

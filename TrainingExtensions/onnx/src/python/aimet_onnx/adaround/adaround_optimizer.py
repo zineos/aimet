@@ -166,9 +166,7 @@ class AdaroundOptimizer:
         enable_grad(weights)
 
         adaround_quantizer.broadcast_offset_delta(weights)
-        adaround_quantizer.initialize_alpha(
-            weights, adaround_quantizer.broadcasted_delta
-        )
+        adaround_quantizer.initialize_alpha(weights)
 
         assert adaround_quantizer.use_soft_rounding, (
             "optimization should use soft rounding only."
