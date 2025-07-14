@@ -316,13 +316,13 @@ def _check_non_standard_quantizer(model: torch.nn.Module):
 
         if isinstance(qtzr, GroupedBlockQuantizeDequantize):
             raise NotImplementedError(
-                "torch.onnx.exoprt doesn't support GroupedBlockQuantizeDequantize (a.k.a LPBQ) yet; "
+                "torch.onnx.export doesn't support GroupedBlockQuantizeDequantize (a.k.a LPBQ) yet; "
                 f"got '{name}' of type GroupedBlockQuantizeDequantize"
             )
 
         if qtzr.bitwidth not in (4, 8, 16, 32):
             raise RuntimeError(
-                "torch.onnx.exoprt only supports 4/8/16/32-bit integers; "
+                "torch.onnx.export only supports 4/8/16/32-bit integers; "
                 f"got '{name}' with bitwidth={qtzr.bitwidth}"
             )
 

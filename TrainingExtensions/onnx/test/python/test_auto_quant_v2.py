@@ -524,10 +524,10 @@ class TestAutoQuant:
                 strict_validation=None,
             )
 
-        # Bitwidth < 4 or bitwidth > 32
+        # Param bitwidth < 2 or bitwidth > 32, activation bitwidth < 4 or bitwidth > 32
         with pytest.raises(ValueError):
             AutoQuant(
-                onnx_model, dummy_input, unlabeled_data_loader, lambda: None, param_bw=2
+                onnx_model, dummy_input, unlabeled_data_loader, lambda: None, param_bw=1
             )
 
         with pytest.raises(ValueError):

@@ -1805,7 +1805,7 @@ def test_qmin_qmax_consistency(qmin, qmax, bitwidth, symmetric):
         expected_qmax = (expected_qmax + 1) * 2 - 1
         expected_bitwidth += 1
 
-    while q.bitwidth > 4:
+    while q.bitwidth >= 2:
         assert q.qmin == expected_qmin
         assert q.qmax == expected_qmax
         assert q.bitwidth == expected_bitwidth
@@ -2139,6 +2139,8 @@ def _onnx_QuantizeLinear(
 @pytest.mark.parametrize(
     "qmin,   qmax,     symmetric, offset, output_dtype",
     [
+        (-2, 1, True, 0, "int2"),
+        (0, 3, False, -2, "uint2"),
         (-8, 7, True, 0, "int4"),
         (-8, 7, False, -5, "int4"),
         (-8, 7, False, 0, "int4"),

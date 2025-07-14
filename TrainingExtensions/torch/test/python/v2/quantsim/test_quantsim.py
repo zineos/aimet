@@ -122,6 +122,38 @@ class ConvModel(torch.nn.Module):
 class TestQuantsim:
     """Test Percentile quantization scheme"""
 
+    @pytest.mark.parametrize(
+        "weight_bw, act_bw, is_valid",
+        [
+            (16, 16, True),
+            (4, 4, True),
+            (2, 32, True),
+            (4, 2, False),
+            (1, 8, False),
+            (4, 32, True),
+            (4, 33, False),
+            (32, 4, True),
+            (33, 4, False),
+        ],
+    )
+    def test_invalid_bw_instantiation(self, weight_bw, act_bw, is_valid):
+        model = test_models.BasicConv2d(kernel_size=3)
+        dummy_input = torch.rand(1, 64, 16, 16)
+        if is_valid:
+            qsim = QuantizationSimModel(
+                model, dummy_input, default_param_bw=weight_bw, default_output_bw=act_bw
+            )
+            assert qsim.model.conv.param_quantizers["weight"].bitwidth == weight_bw
+            assert qsim.model.relu.output_quantizers[0].bitwidth == act_bw
+        else:
+            with pytest.raises(ValueError):
+                qsim = QuantizationSimModel(
+                    model,
+                    dummy_input,
+                    default_param_bw=weight_bw,
+                    default_output_bw=act_bw,
+                )
+
     def test_set_percentile_value(self):
         """Test pecentile scheme by setting different percentile values"""
 

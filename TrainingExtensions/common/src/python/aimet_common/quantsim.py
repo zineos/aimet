@@ -300,9 +300,9 @@ def _validate_bitwidth(
     default_param_bw: int,
     data_type: QuantizationDataType = QuantizationDataType.int,
 ):
-    if default_param_bw < 4 or default_param_bw > 32:
+    if default_param_bw < 2 or default_param_bw > 32:
         raise ValueError(
-            "Default bitwidth for parameters must be between 4 and 32, not "
+            "Default bitwidth for parameters must be between 2 and 32, not "
             + str(default_param_bw)
         )
 

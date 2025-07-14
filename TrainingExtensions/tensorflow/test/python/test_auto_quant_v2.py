@@ -500,8 +500,9 @@ class TestAutoQuant:
         with pytest.raises(ValueError):
             AutoQuant(model, lambda: None, unlabeled_dataset, strict_validation=None)
 
+        # Param bitwidth < 2 or bitwidth > 32, activation bitwidth < 4 or bitwidth > 32
         with pytest.raises(ValueError):
-            AutoQuant(model, lambda: None, unlabeled_dataset, param_bw=2)
+            AutoQuant(model, lambda: None, unlabeled_dataset, param_bw=1)
         with pytest.raises(ValueError):
             AutoQuant(model, lambda: None, unlabeled_dataset, param_bw=64)
         with pytest.raises(ValueError):

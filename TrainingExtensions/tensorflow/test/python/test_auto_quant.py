@@ -406,9 +406,9 @@ class TestAutoQuant:
         with pytest.raises(ValueError):
             _ = AutoQuant(-1.0, MagicMock(), MagicMock(), MagicMock())
 
-        # Bitwidth < 4 or bitwidth > 32
+        # Param bitwidth < 2 or bitwidth > 32, activation bitwidth < 4 or bitwidth > 32
         with pytest.raises(ValueError):
-            _ = AutoQuant(0, MagicMock(), MagicMock(), default_param_bw=2)
+            _ = AutoQuant(0, MagicMock(), MagicMock(), default_param_bw=1)
 
         with pytest.raises(ValueError):
             _ = AutoQuant(0, MagicMock(), MagicMock(), default_param_bw=64)
