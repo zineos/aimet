@@ -881,6 +881,70 @@ class QcQuantizeOp:
                         is_unsigned_symmetric,
                     )
 
+    def _merge_constraints(self, other: "QcQuantizeOp") -> None:
+        """
+        Merge configuration with other QcQuantizeOp.
+        """
+        # pylint: disable=protected-access
+        if self.quant_info.usePerChannelMode != other.quant_info.usePerChannelMode:
+            raise RuntimeError("Can't merge per-tensor and per-channel quantizer")
+
+        if (
+            self.quant_info.usePerChannelMode
+            and self.tensor_quantizer_params
+            and other.quant_info.usePerChannelMode
+            and other.tensor_quantizer_params
+        ):
+            if (
+                self.tensor_quantizer_params.channel_axis
+                != other.tensor_quantizer_params.channel_axis
+            ):
+                raise RuntimeError(
+                    "Can't merge quantizers with different channel axes: "
+                    f"{self.tensor_quantizer_params.channel_axis} vs "
+                    f"{other.tensor_quantizer_params.channel_axis}"
+                )
+
+            if (
+                self.tensor_quantizer_params.block_axis
+                != other.tensor_quantizer_params.block_axis
+            ):
+                raise RuntimeError(
+                    "Can't merge quantizers with different block axes: "
+                    f"{self.tensor_quantizer_params.block_axis} vs "
+                    f"{other.tensor_quantizer_params.block_axis}"
+                )
+
+            if self.quant_info.blockSize != other.quant_info.blockSize:
+                raise RuntimeError(
+                    "Can't merge quantizers with different block sizes: "
+                    f"{self.quant_info.blockSize} vs {other.quant_info.blockSize}"
+                )
+
+        if (
+            self._encoding_min_max_fixed_vals
+            and other._encoding_min_max_fixed_vals
+            and self._encoding_min_max_fixed_vals != other._encoding_min_max_fixed_vals
+        ):
+            raise RuntimeError(
+                "Can't merge quantizers with different fixed ranges: "
+                f"{self._encoding_min_max_fixed_vals} vs "
+                f"{other._encoding_min_max_fixed_vals}"
+            )
+
+        self.bitwidth = min(self.bitwidth, other.bitwidth)
+        self.use_symmetric_encodings |= other.use_symmetric_encodings
+        self.use_unsigned_symmetric |= other.use_unsigned_symmetric
+
+        fixed_range = (
+            self._encoding_min_max_fixed_vals or other._encoding_min_max_fixed_vals
+        )
+
+        if self.use_symmetric_encodings and fixed_range:
+            _min, _max = fixed_range
+            absmax = max(abs(_min), abs(_max))
+            self._encoding_min_max_fixed_vals = (-absmax, absmax)
+
 
 class GroupedBlockQuantizeDequantize(QcQuantizeOp):
     """Class for performing Grouped Block Quantize Dequantize"""
@@ -1123,6 +1187,27 @@ class GroupedBlockQuantizeDequantize(QcQuantizeOp):
                 self.decompressed_bw,
                 encoding_dict["bw"],
             )
+
+    def _merge_constraints(self, other: "QcQuantizeOp") -> None:
+        """
+        Merge configuration with other QcQuantizeOp.
+        """
+        if not isinstance(other, GroupedBlockQuantizeDequantize):
+            raise RuntimeError("Can't merge regular quantizer into LPBQ quantizer")
+
+        if self.bitwidth != other.bitwidth:
+            raise RuntimeError(
+                "Can't merge LPBQ quantizers with different bitwidths: "
+                f"{self.bitwidth} vs {other.bitwidth}"
+            )
+
+        if self.decompressed_bw != other.decompressed_bw:
+            raise RuntimeError(
+                "Can't merge LPBQ quantizers with different decompressed bitwidths: "
+                f"{self.decompressed_bw} vs {other.decompressed_bw}"
+            )
+
+        return super()._merge_constraints(other)
 
 
 def _get_symmetric_properties(

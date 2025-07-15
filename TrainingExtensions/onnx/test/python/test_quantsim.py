@@ -2762,6 +2762,111 @@ class TestEncodingPropagation:
                         sim.qc_quantize_op_dict["output"].encodings[0],
                     )
 
+    @pytest.mark.parametrize("bitwidth", [8, 16])
+    def test_encoding_constraints(self, bitwidth: int):
+        """
+        Given: model as below
+
+        [input] -> Sigmoid -> MaxPool -> Softmax -> Resize -> Reshape -+
+                                                                       V
+                                                              ... -> MatMul -> [output]
+        """
+
+        class Model(torch.nn.Module):
+            def forward(self, x: torch.Tensor):
+                x = torch.nn.functional.sigmoid(x)
+                x = torch.nn.functional.max_pool2d(x, (3, 3))
+                x *= 100
+                x = torch.nn.functional.softmax(x)
+                x = torch.nn.functional.interpolate(x, size=(50, 50), mode="bilinear")
+                return torch.ones(50, 50) @ x.reshape(50, 150)
+
+        """
+        When: _apply_constraints(True)
+        Then:
+          1. Sigmoid output encoding should be fixed to [0, 1]
+          2. Sigmoid output quantizer and MaxPool output quantizer should be identical
+          3. Softmax output encoding should be symmetric and fixed to [-1, 1]
+          4. Softmax output quantizer and Resize output quantizer should be identical
+        """
+        pt_model = Model().eval()
+        dummy_input = torch.randn(1, 3, 224, 224)
+        model = _convert_to_onnx(pt_model, dummy_input)
+        dummy_input = make_dummy_input(model.model)
+        with _apply_constraints(True):
+            sim = QuantizationSimModel(
+                model,
+                activation_type=aimet_onnx.int8 if bitwidth == 8 else aimet_onnx.int16,
+                config_file="htp_v81",
+            )
+            sim.compute_encodings([dummy_input])
+
+        assert (
+            sim.qc_quantize_op_dict["/Sigmoid_output_0"]
+            is sim.qc_quantize_op_dict["/MaxPool_output_0"]
+        )
+        (output_encoding,) = sim.qc_quantize_op_dict[
+            "/Sigmoid_output_0"
+        ].get_encodings()
+        expected_scale = 1 / (2**bitwidth - 1)
+        assert output_encoding.min == 0
+        assert output_encoding.max == 1
+        assert output_encoding.offset == 0
+        assert np.allclose(
+            output_encoding.delta, expected_scale, atol=np.finfo(np.float32).eps
+        )
+
+        assert (
+            sim.qc_quantize_op_dict["/Softmax_output_0"]
+            is sim.qc_quantize_op_dict["/Resize_output_0"]
+        )
+        (output_encoding,) = sim.qc_quantize_op_dict[
+            "/Softmax_output_0"
+        ].get_encodings()
+        expected_scale = 1 / (2 ** (bitwidth - 1) - 1)
+        assert np.allclose(output_encoding.min, -1, atol=expected_scale)
+        assert output_encoding.max == 1
+        assert output_encoding.offset == -(2 ** (bitwidth - 1))
+        assert np.allclose(
+            output_encoding.delta, expected_scale, atol=np.finfo(np.float32).eps
+        )
+
+    def test_encoding_constraints2(self):
+        """
+        Given: model as below
+
+        [input] -> Conv -> Reshape -> Resize -> [output]
+        """
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.conv = torch.nn.Conv2d(3, 3, 3)
+
+            def forward(self, x: torch.Tensor):
+                x = self.conv(x)
+                x = x.reshape(9, 1, 222, 222)
+                return torch.nn.functional.interpolate(
+                    x, size=(50, 50), mode="bilinear"
+                )
+
+        """
+        When: _apply_constraints(True)
+        Then: Resize output encoding should inherit Conv output encoding (not Reshape)
+        """
+        pt_model = Model().eval()
+        dummy_input = torch.randn(3, 3, 224, 224)
+        model = _convert_to_onnx(pt_model, dummy_input)
+        dummy_input = make_dummy_input(model.model)
+        with _apply_constraints(True):
+            sim = QuantizationSimModel(model, config_file="htp_v81")
+            sim.compute_encodings([dummy_input])
+
+        assert (
+            sim.qc_quantize_op_dict["/conv/Conv_output_0"]
+            is sim.qc_quantize_op_dict["output"]
+        )
+
     @pytest.mark.parametrize(
         "op_type_under_test",
         [torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.Upsample],

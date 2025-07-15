@@ -52,6 +52,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    Set,
     Sequence,
     Iterable,
 )
@@ -1594,6 +1595,17 @@ class QuantizationSimModel:
 
         :param op_types_to_tie: List of onnx ops for which to tie quantizers
         """
+        self._propagate_input_encodings({x for x in op_types_to_tie if x != "Concat"})
+
+        if "Concat" in op_types_to_tie:
+            self._propagate_output_encodings({"Concat"})
+
+    def _propagate_output_encodings(self, op_types_to_tie: Set[str]):
+        """
+        Let input quantizers inherit output encodings
+
+        :param op_types_to_tie: List of onnx ops for which to tie quantizers
+        """
 
         cg = self.connected_graph
 
@@ -1625,13 +1637,77 @@ class QuantizationSimModel:
             if len(op.outputs) != 1:
                 msg = (
                     "Encoding propagation is only supported for ops with exactly "
-                    f"1 output quantizer, but found {len(op.outputs)} "
-                    "output quantizers"
+                    f"1 output, but {op.name} (type: {op.type}) has {len(op.outputs)} "
+                    "outputs"
                 )
                 raise RuntimeError(msg)
 
             for inp in op.inputs:
                 _set_src_qtzr(inp, src_qtzr=self.qc_quantize_op_dict[output_name])
+
+    def _propagate_input_encodings(self, op_types_to_tie: Set[str]):
+        """
+        Let output quantizers inherit input encodings
+
+        :param op_types_to_tie: List of onnx ops for which to tie quantizers
+        """
+
+        cg = self.connected_graph
+
+        def _get_src_qtzr(x: Product) -> Optional[QcQuantizeOp]:
+            qc_quantize_op = self.qc_quantize_op_dict.get(x.name)
+
+            if qc_quantize_op:
+                return qc_quantize_op
+
+            producer = x.producer
+
+            if not producer or not producer.inputs:
+                return None
+
+            return _get_src_qtzr(producer.inputs[0])
+
+        for op in cg.ordered_ops:
+            if op.type not in op_types_to_tie:
+                continue
+
+            if not op.inputs:
+                msg = (
+                    "Encoding propagation is only supported for ops with at least "
+                    f"1 input, but {op.name} (type: {op.type}) has no input"
+                )
+                raise RuntimeError(msg)
+
+            input_qtzr = _get_src_qtzr(op.inputs[0])
+
+            if not input_qtzr:
+                continue
+
+            for out in op.outputs:
+                output_qtzr = self.qc_quantize_op_dict.get(out.name)
+
+                if output_qtzr and output_qtzr.enabled:
+                    # If output quantizer already exists,
+                    # "merge" the quantization constraints into single quantizer
+                    #
+                    # This logic was added specifically to resolve conflicting
+                    # constraints between Softmax output and the second input of MatMul.
+                    #   Softmax ------------> ... ------------> MatMul
+                    #             [0, 1]            symmetric
+                    #
+                    # Ideally, this conflict should be resolved by
+                    # simulating & exporting two independent quantizers like this:
+                    #   Softmax ---> QDQ ------> QDQ ---> MatMul
+                    #               [0, 1]     symmetric
+                    #
+                    # However, this is currently not allowed by QAIRT.
+                    # As an ad-hoc workaround, we "merge" the two configurations as below:
+                    #   Softmax ---------> QDQ ---------> MatMul
+                    #                    [-1, 1]
+                    #                    symmetric
+                    input_qtzr._merge_constraints(output_qtzr)  # pylint: disable=protected-access
+
+                self._set_quantizer(out.name, input_qtzr)
 
     def to_onnx_qdq(self) -> onnx.ModelProto:
         """

@@ -706,6 +706,163 @@ class TestQcQuantizeOp:
         assert 0 <= delta * (offset + num_steps) <= FLOAT32_MAX
         assert np.allclose(max, delta * (offset + num_steps))
 
+    def test_merge_constraints(self):
+        """
+        Given:
+          - q1: Symmetric quantizer
+          - q2: Quantizer with fixed range [x, y]
+        When: _merge_constraints
+        Then: Resulting quantizer should be a symmetric quantizer with range[-z, z]
+              (z = max(abs(x), abs(y)))
+        """
+        q1 = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=16,
+            use_symmetric_encodings=True,
+        )
+        q2 = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+        )
+        q2._encoding_min_max_fixed_vals = (-2, 1)
+        q1._merge_constraints(q2)
+
+        assert q1.bitwidth == 8
+        assert q1.use_symmetric_encodings
+        assert q1._encoding_min_max_fixed_vals == (-2, 2)
+
+        """
+        Given: Quantizers with different granularity
+        When: _merge_constraints
+        Then: Throw runtime error
+        """
+        per_tensor_qtzr = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+        )
+        per_channel_qtzr = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+            tensor_quantizer_params=TensorQuantizerParams(
+                tensor_shape=(10, 10),
+                channel_axis=0,
+            ),
+        )
+        per_channel_qtzr.enable_per_channel_quantization(True)
+        with pytest.raises(RuntimeError):
+            per_tensor_qtzr._merge_constraints(per_channel_qtzr)
+
+        blockwise_qtzr = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+            tensor_quantizer_params=TensorQuantizerParams(
+                tensor_shape=(10, 10),
+                channel_axis=0,
+                block_axis=1,
+            ),
+        )
+        blockwise_qtzr.enable_per_channel_quantization(True)
+        blockwise_qtzr._enable_blockwise_quantization(block_size=5)
+        with pytest.raises(RuntimeError):
+            per_channel_qtzr._merge_constraints(blockwise_qtzr)
+
+        """
+        Given: Quantizers with different channel/block axis
+        When: _merge_constraints
+        Then: Throw runtime error
+        """
+        per_channel_qtzr_ = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+            tensor_quantizer_params=TensorQuantizerParams(
+                tensor_shape=(10, 10),
+                channel_axis=1,
+            ),
+        )
+        per_channel_qtzr_.enable_per_channel_quantization(True)
+        with pytest.raises(RuntimeError):
+            per_channel_qtzr._merge_constraints(per_channel_qtzr_)
+
+        blockwise_qtzr_ = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+            tensor_quantizer_params=TensorQuantizerParams(
+                tensor_shape=(10, 10),
+                channel_axis=1,
+                block_axis=0,
+            ),
+        )
+        blockwise_qtzr_.enable_per_channel_quantization(True)
+        blockwise_qtzr_._enable_blockwise_quantization(block_size=5)
+        with pytest.raises(RuntimeError):
+            blockwise_qtzr_._merge_constraints(blockwise_qtzr)
+
+        """
+        Given: Quantizers with different block size
+        When: _merge_constraints
+        Then: Throw runtime error
+        """
+        blockwise_qtzr__ = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+            tensor_quantizer_params=TensorQuantizerParams(
+                tensor_shape=(10, 10),
+                channel_axis=1,
+                block_axis=0,
+            ),
+        )
+        blockwise_qtzr__.enable_per_channel_quantization(True)
+        blockwise_qtzr__._enable_blockwise_quantization(block_size=2)
+        with pytest.raises(RuntimeError):
+            blockwise_qtzr__._merge_constraints(blockwise_qtzr_)
+
+        """
+        Given: Quantizers with different fixed output range
+        When: _merge_constraints
+        Then: Throw runtime error
+        """
+        q1 = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+        )
+        q1._encoding_min_max_fixed_vals = (-1, 1)
+        q2 = QcQuantizeOp(
+            libquant_info.QcQuantizeInfo(),
+            quant_scheme=QuantScheme.post_training_tf,
+            op_mode=OpMode.quantizeDequantize,
+            bitwidth=8,
+            use_symmetric_encodings=False,
+        )
+        q2._encoding_min_max_fixed_vals = (-2, 1)
+        with pytest.raises(RuntimeError):
+            q1._merge_constraints(q2)
+
 
 blockwise_qdq_test_1 = {
     "input_shape": (2, 3, 4),
