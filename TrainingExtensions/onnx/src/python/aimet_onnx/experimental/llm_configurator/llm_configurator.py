@@ -123,7 +123,7 @@ def _set_tensors_to_output_8b_sym(quantsim_model: QuantSimOnnx, out_tensors: lis
         _set_tensor_to_8_bit_symmetric(quantsim_model, out_tensor)
 
 
-def _default_llm_configuration(
+def _apply_int8_kv_cache_tying_and_lm_head(
     sim: QuantSimOnnx, kv_io_map: dict[str, str], lm_head_tensor_name: str
 ):
     sim._tie_quantizers_for_op_types(["Concat"])  # pylint: disable=protected-access

@@ -11,7 +11,7 @@ from aimet_common.defs import QuantScheme
 from aimet_onnx.quantsim import QuantizationSimModel as QuantSimOnnx
 
 from aimet_onnx.experimental.llm_configurator.llm_configurator import (
-    _default_llm_configuration,
+    _apply_int8_kv_cache_tying_and_lm_head,
 )
 
 import onnx
@@ -326,7 +326,7 @@ def apply_to_model(model_id, tmp_path):
             if dimensions[-1] == vocab_size:
                 lm_head_tensor_name = weight.name
 
-    configured_quant_sim = _default_llm_configuration(
+    configured_quant_sim = _apply_int8_kv_cache_tying_and_lm_head(
         quant_sim, kv_io_map, lm_head_tensor_name
     )
 
