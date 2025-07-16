@@ -2867,6 +2867,52 @@ class TestEncodingPropagation:
             is sim.qc_quantize_op_dict["output"]
         )
 
+    def test_encoding_constraints3(self):
+        """
+        Given: model as below
+
+        [input] -+-> Sigmoid -> Concat -> [output]
+                 +-> Softmax ----^
+        """
+
+        class Model(torch.nn.Module):
+            def forward(self, x: torch.Tensor):
+                return torch.cat(
+                    (
+                        torch.sigmoid(x),
+                        torch.nn.functional.softmax(x),
+                    )
+                )
+
+        """
+        When: _apply_constraints(True)
+        Then: Concat output quantizers should be fixed to range [0, 1]
+        """
+        pt_model = Model().eval()
+        dummy_input = torch.randn(1, 3, 224, 224)
+        model = _convert_to_onnx(pt_model, dummy_input)
+        dummy_input = make_dummy_input(model.model)
+        with _apply_constraints(True):
+            sim = QuantizationSimModel(model, config_file="htp_v81")
+            sim.compute_encodings([dummy_input])
+
+        assert (
+            sim.qc_quantize_op_dict["/Sigmoid_output_0"]
+            is sim.qc_quantize_op_dict["/Softmax_output_0"]
+        )
+        assert (
+            sim.qc_quantize_op_dict["/Softmax_output_0"]
+            is sim.qc_quantize_op_dict["output"]
+        )
+        (output_encoding,) = sim.qc_quantize_op_dict["output"].get_encodings()
+        expected_scale = 1 / 255
+        assert output_encoding.min == 0
+        assert output_encoding.max == 1
+        assert output_encoding.offset == 0
+        assert np.allclose(
+            output_encoding.delta, expected_scale, atol=np.finfo(np.float32).eps
+        )
+
     @pytest.mark.parametrize(
         "op_type_under_test",
         [torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.Upsample],

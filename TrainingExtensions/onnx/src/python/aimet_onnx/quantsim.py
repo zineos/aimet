@@ -1629,10 +1629,35 @@ class QuantizationSimModel:
                 )
                 raise RuntimeError(msg)
 
+            src_qtzrs = {}
+
             for inp in op.inputs:
                 src_qtzr = self._get_enabled_quantizer(inp.name)
                 if src_qtzr:
                     src_name = qtzr_to_name[src_qtzr]
+                else:
+                    src_name = inp.name
+
+                src_qtzrs[src_name] = src_qtzr
+
+            # If all inputs are quantized and have the same fixed quantization range,
+            # output quantizer will inherit the fixed range.
+            # In practice, this will be most relevant when
+            # Concat takes all its inputs from Softmax/Sigmoid.
+            #            [0, 1]          [0, 1]
+            #   Softmax -------> Concat ------>
+            #   Softmax -----------^
+            #            [0, 1]
+            if all(qtzr is not None for qtzr in src_qtzrs.values()):
+                src_min_max_ranges = set(
+                    src_qtzr._encoding_min_max_fixed_vals  # pylint: disable=protected-access
+                    for src_qtzr in src_qtzrs.values()
+                )
+                if len(src_min_max_ranges) == 1:
+                    output_qtzr.set_fixed_encoding_range(src_min_max_ranges.pop())
+
+            for src_name, src_qtzr in src_qtzrs.items():
+                if src_qtzr:
                     self._set_quantizer(src_name, output_qtzr)
 
     def _propagate_input_encodings(self, op_types_to_tie: Set[str]):
