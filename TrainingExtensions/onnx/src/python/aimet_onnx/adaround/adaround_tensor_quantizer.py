@@ -38,10 +38,8 @@
 """Custom Tensor Quantizer for quantizing weights using Adaround"""
 
 import torch
-import torch.nn
 
-# Import AIMET specific modules
-from aimet_common.defs import AdaroundConstants, QuantizationDataType, QuantScheme
+from aimet_common.defs import AdaroundConstants
 
 
 class AdaroundTensorQuantizer:  # pylint: disable=too-many-instance-attributes
@@ -50,40 +48,30 @@ class AdaroundTensorQuantizer:  # pylint: disable=too-many-instance-attributes
     """
 
     def __init__(
-        self,
-        bitwidth: int,
-        round_mode: str,
-        quant_scheme: QuantScheme,
-        use_symmetric_encodings: bool,
-        enabled_by_default: bool,
-        channel_axis: int,
+        self, bitwidth: int, enabled_by_default: bool, encoding, channel_axis: int
     ):
         """
-        Constructor
         :param bitwidth: Quantization bitwidth
-        :param round_mode: Rounding mode (e.g. Nearest)
-        :param quant_scheme: Quantization scheme (e.g. Range Learning)
-        :param use_symmetric_encodings: True if symmetric encoding is used.  False otherwise.
         :param enabled_by_default: True if quantization of tensor is enabled.  False otherwise.
-        :param channel_axis: Channel axis of parameter tensor. Only used during per channel Adaround.
+        :param encoding: Encoding of the tensor
+        :param channel_axis: Channel axis of parameter tensor. Only used during per channel Adaround
         """
-        self._round_mode = round_mode
-        self._quant_scheme = quant_scheme
-        self.use_symmetric_encodings = use_symmetric_encodings
         self.bitwidth = bitwidth
         self._enabled = enabled_by_default
-        self._data_type = QuantizationDataType.int
-        self.encoding = None
-        self.alpha = None
-        self.use_soft_rounding = True
+        self.encoding = encoding
         self._ch_axis = channel_axis
+        self.alpha = None
         self.broadcasted_delta = None
         self.broadcasted_offset = None
 
-    def adaround_weights(self, tensor: torch.Tensor) -> torch.Tensor:
+    def adaround_weights(
+        self, tensor: torch.Tensor, use_soft_rounding: bool
+    ) -> torch.Tensor:
         """
         Adaround the weight tensor
-        :param tensor: The weight tensor to be ada rounded.
+        :param tensor: The weight tensor to be ada rounded
+        :param use_soft_rounding: Soft rounding maps alpha parameter between zero and one using rectified sigmoid function,
+         and hard rounding maps it to exactly zero or one
         :return: AdaRounded weight tensor
         """
         assert self.encoding, (
@@ -105,7 +93,7 @@ class AdaroundTensorQuantizer:  # pylint: disable=too-many-instance-attributes
         # Soft rounding maps alpha parameter between zero and one using
         # rectified sigmoid function and hard rounding maps it to exactly zero or one
 
-        if self.use_soft_rounding:
+        if use_soft_rounding:
             h_alpha = torch.clamp(
                 torch.sigmoid(alpha)
                 * (AdaroundConstants.ZETA - AdaroundConstants.GAMMA)

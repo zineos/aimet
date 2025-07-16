@@ -88,7 +88,7 @@ class AdaroundOptimizer:
         module: ModuleInfo,
         quantized_input_name: str,
         quant_model: QuantizationSimModel,
-        act_func: Union[torch.nn.Module, None],
+        act_func: Union[str, None],
         cached_dataset: Dataset,
         num_iterations: int,
         param_to_adaround_tensor_quantizer: Dict,
@@ -109,51 +109,7 @@ class AdaroundOptimizer:
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
         """
-        # pylint: disable=too-many-arguments
-
-        # Optimize weight rounding
-        cls._optimize_rounding(
-            module,
-            quantized_input_name,
-            quant_model,
-            act_func,
-            cached_dataset,
-            num_iterations,
-            param_to_adaround_tensor_quantizer,
-            use_cuda,
-            device,
-        )
-
-        # After optimization, set the optimized layer's rounding mode to "Hard rounding"
-        param_to_adaround_tensor_quantizer[
-            module.params["weight"].name
-        ].use_soft_rounding = False
-
-    # pylint: disable=too-many-statements
-    @classmethod
-    def _optimize_rounding(
-        cls,
-        module: ModuleInfo,
-        quantized_input_name,
-        quant_model: QuantizationSimModel,
-        act_func: Union[None, str],
-        cached_dataset: Dataset,
-        num_iterations: int,
-        param_to_adaround_tensor_quantizer: Dict,
-        use_cuda: bool,
-        device: int = 0,
-    ):
-        """
-        Optimizes the weight rounding of quantized wrapper module
-        :param module: Original module
-        :param quantized_input_name: Name of input to the quantized layer/ layer to be adarounded
-        :param quant_model: QuantSim model
-        :param act_func: Activation function
-        :param cached_dataset: Cached dataset
-        :param num_iterations:  Num of iterations to adaround a layer
-        :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
-        """
-        # pylint: disable=too-many-locals, too-many-arguments
+        # pylint: disable=too-many-locals, too-many-arguments, too-many-statements
         adaround_quantizer = param_to_adaround_tensor_quantizer[
             module.params["weight"].name
         ]
@@ -168,9 +124,6 @@ class AdaroundOptimizer:
         adaround_quantizer.broadcast_offset_delta(weights)
         adaround_quantizer.initialize_alpha(weights)
 
-        assert adaround_quantizer.use_soft_rounding, (
-            "optimization should use soft rounding only."
-        )
         assert adaround_quantizer.alpha is not None, (
             "alpha parameter should be initialized."
         )
@@ -253,7 +206,7 @@ class AdaroundOptimizer:
 
             # Get the module's output activations using AdaRounded weights
             quant_out_data = cls._compute_output_with_adarounded_weights(
-                weights, module, inp_data, adaround_quantizer
+                weights, module, inp_data, adaround_quantizer, True
             )
 
             # If followed by an activation function
@@ -281,8 +234,7 @@ class AdaroundOptimizer:
                     float(round_loss),
                 )
 
-        adaround_quantizer.use_soft_rounding = True
-        adarounded_weights = adaround_quantizer.adaround_weights(weights)
+        adarounded_weights = adaround_quantizer.adaround_weights(weights, True)
         weights = adarounded_weights.detach().cpu().numpy().tobytes()
         weight_name = module.params["weight"].name
         update_sim_weight(quant_model.model, weights, weight_name)
@@ -323,15 +275,13 @@ class AdaroundOptimizer:
         ).to(torch_device)
         inp_data = inp_data.to(torch_device)
         # Enable hard rounding and get quantized wrapper module's output
-        adaround_quantizer.use_soft_rounding = False
         out_data_hard = cls._compute_output_with_adarounded_weights(
-            weights, quant_module, inp_data, adaround_quantizer
+            weights, quant_module, inp_data, adaround_quantizer, False
         )
 
         # Enable soft rounding and get quantized wrapper module's output
-        adaround_quantizer.use_soft_rounding = True
         out_data_soft = cls._compute_output_with_adarounded_weights(
-            weights, quant_module, inp_data, adaround_quantizer
+            weights, quant_module, inp_data, adaround_quantizer, True
         )
 
         # If followed by an activation function
@@ -351,6 +301,7 @@ class AdaroundOptimizer:
         quant_module,
         inp_data: torch.Tensor,
         adaround_quantizer: AdaroundTensorQuantizer,
+        use_soft_rounding: bool,
     ):
         """
         Compute output of AdaroundSupportedModules with adarounded weights
@@ -359,6 +310,8 @@ class AdaroundOptimizer:
         :param quant_module: Quantized wrapper module
         :param inp_data: The input data to be used for computing the output
         :param adaround_quantizer: Adaround tensor quantizer
+        :param use_soft_rounding: Soft rounding maps alpha parameter between zero and one using rectified sigmoid function,
+         and hard rounding maps it to exactly zero or one
         :return: output of the module computed with AdaRounded weights
         """
         # Compute adarounded weights
@@ -368,7 +321,9 @@ class AdaroundOptimizer:
         if inp_data.is_cuda:
             device = inp_data.device
 
-        adarounded_weights = adaround_quantizer.adaround_weights(weights)
+        adarounded_weights = adaround_quantizer.adaround_weights(
+            weights, use_soft_rounding
+        )
 
         if quant_module.type == "Conv":
             attributes = read_attributes_for_op(quant_module)

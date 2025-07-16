@@ -454,15 +454,10 @@ class Adaround:
                 ch_axis = quantizer.quant_info.channelAxis
             adaround_quantizer = AdaroundTensorQuantizer(
                 quantizer.bitwidth,
-                "Adaptive",
-                quantizer.quant_scheme,
-                quantizer.use_symmetric_encodings,
                 quantizer.enabled,
+                quantizer.encodings,
                 ch_axis,
             )
-
-            # Set the encodings and replace by Adaround tensor quantizer
-            adaround_quantizer.encoding = quantizer.encodings
             param_to_tq_dict[param_name] = adaround_quantizer
 
         return param_to_tq_dict

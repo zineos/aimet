@@ -137,6 +137,7 @@ class TestAdaroundOptimizer:
             quant_module,
             inp_data,
             param_to_tq_dict[quant_module.params["weight"].name],
+            True,
         )
         assert out_data.requires_grad == True
         assert out_data.shape == torch.Size([1, 16, 18, 18])
@@ -151,6 +152,7 @@ class TestAdaroundOptimizer:
             quant_module,
             inp_data,
             param_to_tq_dict[quant_module.params["weight"].name],
+            True,
         )
         assert out_data.shape == torch.Size([1, 10])
 
@@ -170,6 +172,7 @@ class TestAdaroundOptimizer:
             quant_module,
             inp_data,
             param_to_tq_dict[quant_module.params["weight"].name],
+            True,
         )
         assert out_data.shape == torch.Size([10, 10, 6, 6])
 
@@ -186,14 +189,6 @@ def create_param_to_tensor_quantizer_dict(quant_sim):
         ch_axis = -1
         if quantizer.quant_info.usePerChannelMode:
             ch_axis = quantizer.quant_info.channelAxis
-        adaround_quantizer = AdaroundTensorQuantizer(
-            quantizer.bitwidth,
-            "Adaptive",
-            quantizer.quant_scheme,
-            quantizer.use_symmetric_encodings,
-            quantizer.enabled,
-            ch_axis,
-        )
 
         encodings = libpymo.TfEncoding()
         encodings.bw = 8
@@ -201,8 +196,10 @@ def create_param_to_tensor_quantizer_dict(quant_sim):
         encodings.min = 0.0
         encodings.offset = 0.2
         encodings.delta = 1
-        # Set the encodings and replace by Adaround tensor quantizer
-        adaround_quantizer.encoding = encodings
+
+        adaround_quantizer = AdaroundTensorQuantizer(
+            quantizer.bitwidth, quantizer.enabled, encodings, ch_axis
+        )
         param_to_tq_dict[param_name] = adaround_quantizer
 
     return param_to_tq_dict
