@@ -45,7 +45,6 @@ from bs4 import BeautifulSoup
 import pytest
 from typing import Callable, Dict, List
 
-import onnx
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 import numpy as np
 
@@ -289,6 +288,9 @@ def patch_ptq_techniques(
         def set_and_freeze_param_encodings(self, _):
             pass
 
+    def _build_session(*_, **__):
+        return MagicMock()
+
     def mock_eval_callback(session, _):
         if isinstance(session, MagicMock):
             # Not quantized: return fp32 accuracy
@@ -314,6 +316,7 @@ def patch_ptq_techniques(
         equalize_model: MagicMock
         apply_adaround: MagicMock
         PtqResult: MagicMock
+        build_session: MagicMock
 
     with (
         patch(
@@ -331,6 +334,9 @@ def patch_ptq_techniques(
         patch(
             "aimet_onnx.auto_quant_v2._PtqResult", side_effect=_PtqResult
         ) as mock_ptq,
+        patch(
+            "aimet_onnx.utils.build_session", side_effect=_build_session
+        ) as mock_build_session,
         patch("aimet_onnx.auto_quant_v2.Spinner"),
     ):
         try:
@@ -341,6 +347,7 @@ def patch_ptq_techniques(
                 equalize_model=mock_cle,
                 apply_adaround=mock_adaround,
                 PtqResult=mock_ptq,
+                build_session=mock_build_session,
             )
         finally:
             pass

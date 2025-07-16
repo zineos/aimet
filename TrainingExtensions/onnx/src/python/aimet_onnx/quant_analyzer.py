@@ -63,9 +63,9 @@ from aimet_common.quant_analyzer import (
 from aimet_onnx.qc_quantize_op import QcQuantizeOp
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx.batch_norm_fold import fold_all_batch_norms_to_weight
-from aimet_onnx.adaround.activation_sampler import ModuleData
 from aimet_onnx import utils
 from aimet_onnx.meta.operations import Op
+from aimet_onnx.utils import ModuleData
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.QuantAnalyzer)
 

@@ -59,7 +59,7 @@ from aimet_onnx.sequential_mse.dependency_graph import (
     DependencyGraph,
     SUPPORTED_MODULES,
 )
-from aimet_onnx.utils import disable_quantizers
+from aimet_onnx.utils import disable_quantizers, build_session
 from aimet_onnx.sequential_mse.dependency_graph import DependencyNode
 
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.SeqMse)
@@ -665,7 +665,7 @@ class SequentialMse:
         :return: Session
         """
         try:
-            session = QuantizationSimModel.build_session(
+            session = build_session(
                 model,
                 self.sim.providers,
                 user_onnx_libs=self.sim._user_onnx_libs,

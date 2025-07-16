@@ -101,12 +101,9 @@ def apply_adaround(
         _WARM_START,
     )
 
-    module_act_func_pair = get_module_act_func_pair(sim.connected_graph)
-
     with utils.disable_quantizers(sim, set(sim.activation_names)):
         Adaround._adaround_model(
             sim,
-            module_act_func_pair,
             parameters,
             use_cuda="CUDAExecutionProvider" in sim.session.get_providers(),
             device=int(
@@ -299,12 +296,8 @@ class Adaround:
         for quantizer_name in quant_sim.activation_names:
             assert not quant_sim.qc_quantize_op_dict[quantizer_name].enabled
 
-        # Get the module - activation function pair using ConnectedGraph
-        module_act_func_pair = get_module_act_func_pair(quant_sim.connected_graph)
-
         cls._adaround_model(
             quant_sim,
-            module_act_func_pair,
             params,
             use_cuda,
             device,
@@ -321,7 +314,6 @@ class Adaround:
     def _adaround_model(
         cls,
         quant_sim: QuantizationSimModel,
-        module_act_func_pair: Dict,
         params: AdaroundParameters,
         use_cuda: bool = False,
         device: int = 0,
@@ -333,7 +325,6 @@ class Adaround:
 
         :param quant_sim: QuantizationSimModel object to optimize weight rounding.
                           The activation quantizers are expected to have been disabled.
-        :param module_act_func_pair: Dictionary of module to immediate following activation function
         :param params: Adaround parameters
         :param use_cuda: If we should use cuda
         :param device: CUDA device ID
@@ -341,6 +332,7 @@ class Adaround:
         """
         # pylint: disable=too-many-locals, protected-access
 
+        module_act_func_pair = get_module_act_func_pair(quant_sim.connected_graph)
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Cache model input data to temporary directory
             cached_dataset = utils.CachedDataset(

@@ -88,8 +88,7 @@ def get_param_shape_using_connected_graph(
 
 def get_module_act_func_pair(graph: ConnectedGraph) -> Dict[str, str]:
     """
-    For given graph, returns dictionary of module to immediate following activation function else maps
-    module to None.
+    For given graph, returns dictionary of module to immediate following activation function if present
 
     Activation functions should be defined as nn.Modules in model and not as functional in the forward pass.
 
@@ -103,8 +102,6 @@ def get_module_act_func_pair(graph: ConnectedGraph) -> Dict[str, str]:
     all_ops = graph.get_all_ops()
 
     for op in all_ops.values():
-        module_act_func_pair[op.name] = None
-
         if op.output_ops:
             # Get the next op
             next_op = op.output_ops[0]

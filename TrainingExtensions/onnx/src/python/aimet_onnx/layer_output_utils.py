@@ -48,8 +48,11 @@ from packaging import version
 from aimet_common.utils import AimetLogger
 from aimet_common.layer_output_utils import SaveInputOutput, save_layer_output_names
 
-from aimet_onnx.quantsim import QuantizationSimModel
-from aimet_onnx.utils import create_input_dict, add_hook_to_get_activation
+from aimet_onnx.utils import (
+    create_input_dict,
+    add_hook_to_get_activation,
+    build_session,
+)
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
@@ -148,7 +151,7 @@ class LayerOutput:
 
         LayerOutput.register_activations(self.model, self.activation_names)
 
-        self.session = QuantizationSimModel.build_session(self.model, providers)
+        self.session = build_session(self.model, providers)
 
         # Replace special characters with underscore. This gives valid file names to store activation tensors.
         self.sanitized_activation_names = [

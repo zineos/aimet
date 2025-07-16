@@ -407,6 +407,9 @@ def patch_ptq_techniques(
             acc = adaround_acc
         return acc
 
+    def _build_session(*_, **__):
+        return MagicMock()
+
     @dataclass
     class Mocks:
         eval_callback: Callable
@@ -416,6 +419,7 @@ def patch_ptq_techniques(
         equalize_model: MagicMock
         apply_adaround: MagicMock
         GreedyMixedPrecisionAlgo: MagicMock
+        build_session: MagicMock
 
     with (
         patch(
@@ -437,6 +441,9 @@ def patch_ptq_techniques(
             "aimet_onnx.auto_quant_v2.GreedyMixedPrecisionAlgo",
             side_effect=_GreedyMixedPrecisionAlgo,
         ) as mock_amp,
+        patch(
+            "aimet_onnx.utils.build_session", side_effect=_build_session
+        ) as mock_build_session,
         patch("aimet_onnx.auto_quant_v2.Spinner"),
     ):
         try:
@@ -448,6 +455,7 @@ def patch_ptq_techniques(
                 equalize_model=mock_cle,
                 apply_adaround=mock_adaround,
                 GreedyMixedPrecisionAlgo=mock_amp,
+                build_session=mock_build_session,
             )
         finally:
             pass

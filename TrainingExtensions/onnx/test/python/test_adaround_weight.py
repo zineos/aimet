@@ -45,7 +45,6 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
-from onnxruntime import SessionOptions, GraphOptimizationLevel, InferenceSession
 import pytest
 from onnxsim import simplify
 import onnx
@@ -54,7 +53,7 @@ from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
 from aimet_onnx import apply_adaround, QuantizationSimModel
 from aimet_onnx.adaround.adaround_weight import Adaround, AdaroundParameters
 from aimet_onnx.adaround.utils import AdaroundSupportedModules
-from aimet_onnx.utils import make_dummy_input, ParamUtils
+from aimet_onnx.utils import make_dummy_input, ParamUtils, build_session
 from .models import models_for_tests
 
 
@@ -63,16 +62,19 @@ class TestAdaround:
     AdaRound Weights Unit Test Cases
     """
 
-    @pytest.mark.parametrize("use_cuda", (True, False))
-    def test_apply_adaround(self, use_cuda):
-        if use_cuda and not torch.cuda.is_available():
+    @pytest.mark.parametrize(
+        "providers",
+        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
+    )
+    def test_apply_adaround(self, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
             pytest.skip("Cuda not available")
         np.random.seed(0)
         torch.manual_seed(0)
         model = models_for_tests.single_residual_model()
         data_loader = dataloader(input_shape=(1, 3, 32, 32))
         dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-        sess = build_session(model, None)
+        sess = build_session(model.model, providers)
         out_before_ada = sess.run(None, dummy_input)
 
         def callback(session, args):
@@ -88,9 +90,13 @@ class TestAdaround:
         )
         with tempfile.TemporaryDirectory() as tempdir:
             ada_rounded_model = Adaround.apply_adaround(
-                model, params, tempdir, "dummy", use_cuda=use_cuda
+                model,
+                params,
+                tempdir,
+                "dummy",
+                use_cuda="CUDAExecutionProvider" in providers,
             )
-            sess = build_session(ada_rounded_model, None)
+            sess = build_session(ada_rounded_model.model, providers)
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
@@ -164,7 +170,13 @@ class TestAdaround:
 
         assert graph_outputs == sim.model.graph().output
 
-    def test_apply_adaround_for_custom_op(self):
+    @pytest.mark.parametrize(
+        "providers",
+        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
+    )
+    def test_apply_adaround_for_custom_op(self, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
         from onnxruntime_extensions import get_library_path
 
         onnx_library = get_library_path()
@@ -174,7 +186,7 @@ class TestAdaround:
         model = models_for_tests.custom_add_model()
         data_loader = dataloader(input_shape=(1, 3, 64, 64))
         dummy_input = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
-        sess = build_session(model, [onnx_library])
+        sess = build_session(model.model, providers, [onnx_library])
         out_before_ada = sess.run(None, dummy_input)
 
         def callback(session, args):
@@ -196,9 +208,9 @@ class TestAdaround:
                 tempdir,
                 "dummy",
                 user_onnx_libs=[onnx_library],
-                use_cuda=torch.cuda.is_available(),
+                use_cuda="CUDAExecutionProvider" in providers,
             )
-            sess = build_session(ada_rounded_model, [onnx_library])
+            sess = build_session(ada_rounded_model.model, providers, [onnx_library])
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
@@ -371,16 +383,20 @@ class TestAdaround:
 
         Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
 
-    @pytest.mark.parametrize("use_cuda", (True, False))
-    def test_apply_adaround_per_channel(self, use_cuda):
-        if use_cuda and not torch.cuda.is_available():
+    @pytest.mark.parametrize(
+        "providers",
+        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
+    )
+    def test_apply_adaround_per_channel(self, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
             pytest.skip("Cuda not available")
+
         np.random.seed(0)
         torch.manual_seed(0)
         model = models_for_tests.single_residual_model()
         data_loader = dataloader(input_shape=(1, 3, 32, 32))
         dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-        sess = build_session(model, None)
+        sess = build_session(model.model, providers)
         out_before_ada = sess.run(None, dummy_input)
 
         def callback(session, args):
@@ -400,10 +416,10 @@ class TestAdaround:
                 params,
                 tempdir,
                 "dummy",
-                use_cuda=use_cuda,
+                use_cuda="CUDAExecutionProvider" in providers,
                 default_config_file=get_path_for_per_channel_config(),
             )
-            sess = build_session(ada_rounded_model, None)
+            sess = build_session(ada_rounded_model.model, providers)
             out_after_ada = sess.run(None, dummy_input)
             assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
@@ -510,21 +526,3 @@ def dataloader(input_shape: tuple, batch_size=2):
 
     dummy_dataloader = DataLoader(batch_size=batch_size, input_shape=input_shape)
     return dummy_dataloader
-
-
-def build_session(model, user_onnx_libs):
-    """
-    Build and return onnxruntime inference session
-    :param providers: providers to execute onnxruntime
-    """
-    sess_options = SessionOptions()
-    sess_options.graph_optimization_level = GraphOptimizationLevel.ORT_DISABLE_ALL
-    if user_onnx_libs is not None:
-        for lib in user_onnx_libs:
-            sess_options.register_custom_ops_library(lib)
-    session = InferenceSession(
-        path_or_bytes=model.model.SerializeToString(),
-        sess_options=sess_options,
-        providers=["CPUExecutionProvider"],
-    )
-    return session

@@ -46,6 +46,7 @@ from aimet_onnx.meta.connectedgraph import ConnectedGraph, WEIGHT_INDEX
 from aimet_onnx.amp.quantizer_groups import QuantizerGroup
 from aimet_onnx import utils
 from aimet_onnx.quantsim import QuantizationSimModel
+from aimet_onnx.utils import build_session
 
 
 def get_activation_shapes(sim: QuantizationSimModel) -> Dict[str, Any]:
@@ -61,9 +62,7 @@ def get_activation_shapes(sim: QuantizationSimModel) -> Dict[str, Any]:
         hooks.append(utils.add_hook_to_get_activation(sim.model.model, name))
     dummy_input = utils.make_dummy_input(sim.model.model)
     # pylint: disable=protected-access
-    sess = QuantizationSimModel.build_session(
-        sim.model.model, ["CPUExecutionProvider"], sim._user_onnx_libs
-    )
+    sess = build_session(sim.model.model, ["CPUExecutionProvider"], sim._user_onnx_libs)
     outputs = sess.run(None, dummy_input)
     activation_shapes = {}
     for idx, node in enumerate(sim.model.graph().output):

@@ -38,6 +38,9 @@
 
 import copy
 import itertools
+import platform
+import tempfile
+from pathlib import Path
 from typing import Dict, Iterable, List, Union, Tuple
 from contextlib import contextmanager
 import os
@@ -46,7 +49,9 @@ import numpy as np
 import torch
 import onnx
 from onnx import helper, numpy_helper, mapping
+from onnxruntime import SessionOptions, InferenceSession
 
+from aimet_common import libquant_info
 from aimet_common.utils import AimetLogger
 from aimet_common.onnx._utils import _ParamUtils
 from packaging import version
@@ -576,3 +581,86 @@ def create_input_dict(
         )
 
     return dict(zip(input_names, input_batch_list))
+
+
+def build_session(
+    model: onnx.ModelProto,
+    providers: List,
+    user_onnx_libs: List[str] = None,
+    path: str = None,
+):
+    """
+    Build and return onnxruntime inference session
+
+    :param model: onnx model
+    :param providers: providers to execute onnxruntime
+    :param user_onnx_libs: list of paths to user custom ONNX op libraries
+    :param path: path where to store model external data
+    """
+    sess_options = SessionOptions()
+    shared_library = os.path.join(
+        os.path.dirname(libquant_info.__file__),
+        "libaimet_onnxrt_ops.dll"
+        if platform.system() == "Windows"
+        else "libaimet_onnxrt_ops.so",
+    )
+    sess_options.register_custom_ops_library(shared_library)
+    if user_onnx_libs is not None:
+        for lib in user_onnx_libs:
+            sess_options.register_custom_ops_library(lib)
+
+    with tempfile.TemporaryDirectory(dir=path) as tempdir:
+        output_path = os.path.join(tempdir, "model.onnx")
+
+        save_model_with_external_weights(
+            model, output_path, location=Path(output_path).name + ".data"
+        )
+        return InferenceSession(
+            path_or_bytes=output_path,
+            sess_options=sess_options,
+            providers=providers,
+        )
+
+
+class ModuleData:
+    """
+    Collect activation tensor for the given model and model input
+    """
+
+    def __init__(
+        self,
+        model: ModelProto,
+        activation_name: str,
+        providers: List,
+        user_onnx_libs: List[str] = None,
+    ):
+        """
+        :param model: ONNX model
+        :param activation_name: tensor corresponding to activation name to fetch
+        :param providers: CPU/GPU execution providers
+        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
+        """
+        self._model = model
+        self._activation_name = activation_name
+        self._providers = providers
+        self._user_onnx_libs = user_onnx_libs
+
+    def collect_activation(self, model_input: Dict[str, List[np.ndarray]]) -> List:
+        """
+        Collect activation using the model_input
+
+        :param model_input: Input to model
+        :return: Activation corresponding to the model_input passed
+        """
+
+        handle = add_hook_to_get_activation(self._model.model, self._activation_name)
+        sess = build_session(self._model.model, self._providers, self._user_onnx_libs)
+        if self._activation_name in model_input:
+            # Workaround memory corruption bug in onnxruntime >= 1.19 when a graph output is also a graph input
+            # https://github.com/microsoft/onnxruntime/issues/21922
+            outputs = [model_input[self._activation_name]]
+        else:
+            outputs = sess.run([self._activation_name], model_input)
+        remove_activation_hooks(self._model.model, handle)
+
+        return outputs

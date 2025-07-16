@@ -89,7 +89,6 @@ from aimet_common.amp.utils import (
 )
 from aimet_common import quantsim
 
-
 _logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.AutoQuant)
 
 cache = Cache()
@@ -602,9 +601,9 @@ class _AutoQuant:  # pylint: disable=too-many-instance-attributes
                     ]
                 else:
                     providers = ["CPUExecutionProvider"]
-                fp32_model_session = QuantizationSimModel.build_session(
-                    self.fp32_model.model, providers
-                )
+                from aimet_onnx.utils import build_session as _b
+
+                fp32_model_session = _b(self.fp32_model.model, providers)
                 self._fp32_acc = self._evaluate_model_performance(fp32_model_session)
                 target_acc = self._fp32_acc - allowed_accuracy_drop
                 _logger.info("Target eval score: %f", target_acc)

@@ -52,6 +52,7 @@ from aimet_onnx.utils import (
     remove_activation_hooks,
     create_input_dict,
     disable_quantizers,
+    build_session,
 )
 
 # pylint: disable=no-name-in-module, ungrouped-imports
@@ -128,7 +129,7 @@ class ActivationSampler:
             handles.append(
                 add_hook_to_get_activation(self._quant_sim.model.model, activation_name)
             )
-        sess = QuantizationSimModel.build_session(
+        sess = build_session(
             self._quant_sim.model.model,
             self.providers,
             self._quant_sim._user_onnx_libs,
@@ -196,49 +197,3 @@ class ActivationSampler:
             module_output_act = self.run_session(model_inputs, self._fp_act_name)
 
         return module_input_act, module_output_act
-
-
-class ModuleData:
-    """
-    Collect activation tensor for the given model and model input
-    """
-
-    def __init__(
-        self,
-        model: ModelProto,
-        activation_name: str,
-        providers: List,
-        user_onnx_libs: List[str] = None,
-    ):
-        """
-        :param model: ONNX model
-        :param activation_name: tensor corresponding to activation name to fetch
-        :param providers: CPU/GPU execution providers
-        :param user_onnx_libs: List of paths to all compiled ONNX custom ops libraries
-        """
-        self._model = model
-        self._activation_name = activation_name
-        self._providers = providers
-        self._user_onnx_libs = user_onnx_libs
-
-    def collect_activation(self, model_input: Dict[str, List[np.ndarray]]) -> List:
-        """
-        Collect activation using the model_input
-
-        :param model_input: Input to model
-        :return: Activation corresponding to the model_input passed
-        """
-
-        handle = add_hook_to_get_activation(self._model.model, self._activation_name)
-        sess = QuantizationSimModel.build_session(
-            self._model.model, self._providers, self._user_onnx_libs
-        )
-        if self._activation_name in model_input:
-            # Workaround memory corruption bug in onnxruntime >= 1.19 when a graph output is also a graph input
-            # https://github.com/microsoft/onnxruntime/issues/21922
-            outputs = [model_input[self._activation_name]]
-        else:
-            outputs = sess.run([self._activation_name], model_input)
-        remove_activation_hooks(self._model.model, handle)
-
-        return outputs

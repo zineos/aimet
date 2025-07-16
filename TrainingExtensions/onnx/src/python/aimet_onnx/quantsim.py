@@ -40,7 +40,6 @@
 import contextlib
 import tempfile
 from pathlib import Path
-import platform
 import os
 from typing import (
     Any,
@@ -66,7 +65,6 @@ import onnx
 from onnx import helper
 from onnx.numpy_helper import to_array
 import onnxruntime as ort
-from onnxruntime import SessionOptions, InferenceSession
 from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from packaging import version
 
@@ -117,6 +115,7 @@ from aimet_onnx.utils import (
     save_model_with_external_weights,
     add_hook_to_get_activation,
     remove_activation_hooks,
+    build_session,
 )
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
@@ -443,7 +442,7 @@ class QuantizationSimModel:
             self._tie_quantizers_for_op_types(op_types_to_tie_qtzrs)
 
         # Build onnxruntime inference session
-        self.session = QuantizationSimModel.build_session(
+        self.session = build_session(
             self.model.model,
             self.providers,
             user_onnx_libs=self._user_onnx_libs,
@@ -627,7 +626,7 @@ class QuantizationSimModel:
         hooks = []
         for name in activations:
             hooks.append(add_hook_to_get_activation(self.model.model, name))
-        sess = QuantizationSimModel.build_session(
+        sess = build_session(
             self.model.model,
             ["CPUExecutionProvider"],
             user_onnx_libs=self._user_onnx_libs,
@@ -769,6 +768,7 @@ class QuantizationSimModel:
         self.qc_quantize_op_dict[input_name].data_type = dtype
 
     @staticmethod
+    @deprecated("Use `aimet_onnx.utils.build_session` instead")
     def build_session(
         model: onnx.ModelProto,
         providers: List,
@@ -777,35 +777,12 @@ class QuantizationSimModel:
     ):
         """
         Build and return onnxruntime inference session
-
         :param model: onnx model
         :param providers: providers to execute onnxruntime
         :param user_onnx_libs: list of paths to user custom ONNX op libraries
         :param path: path where to store model external data
         """
-        sess_options = SessionOptions()
-        shared_library = os.path.join(
-            os.path.dirname(libquant_info.__file__),
-            "libaimet_onnxrt_ops.dll"
-            if platform.system() == "Windows"
-            else "libaimet_onnxrt_ops.so",
-        )
-        sess_options.register_custom_ops_library(shared_library)
-        if user_onnx_libs is not None:
-            for lib in user_onnx_libs:
-                sess_options.register_custom_ops_library(lib)
-
-        with tempfile.TemporaryDirectory(dir=path) as tempdir:
-            output_path = os.path.join(tempdir, "model.onnx")
-
-            save_model_with_external_weights(
-                model, output_path, location=Path(output_path).name + ".data"
-            )
-            return InferenceSession(
-                path_or_bytes=output_path,
-                sess_options=sess_options,
-                providers=providers,
-            )
+        return build_session(model, providers, user_onnx_libs=user_onnx_libs, path=path)
 
     def get_qc_quantize_op(self):
         """
@@ -1536,7 +1513,7 @@ class QuantizationSimModel:
         """
         Rebuilds `self.session` object to reflect any changes in the source model.
         """
-        self.session = self.build_session(
+        self.session = build_session(
             self.model.model,
             self.providers,
             user_onnx_libs=self._user_onnx_libs,
@@ -1942,7 +1919,7 @@ class QuantizationSimModel:
         if not partial_model.graph.output:
             return {}
 
-        sess = self.build_session(partial_model, ["CPUExecutionProvider"])
+        sess = build_session(partial_model, ["CPUExecutionProvider"])
         out = sess.run(list(qdq_params.keys()), {})
         return {
             qdq_param_name: qdq_param
