@@ -172,7 +172,7 @@ def _add_onnx_qdq_nodes(
                     f"LPBQ can be only exported with int4; got {output_dtype}"
                 )
 
-            if axis not in (0, 1):
+            if axis not in (-2, -1, 0, 1):
                 raise RuntimeError(
                     "LPBQ can be only applied to 2D matrices when exported to onnx QDQ. "
                     f"Got axis {axis}"
@@ -199,7 +199,7 @@ def _add_onnx_qdq_nodes(
                         ],
                         output=f"{input_name}_scale",
                         dtype="uint8",
-                        axis=0 if axis == 1 else 1,  # == channel axis
+                        axis=0 if axis in (-1, 1) else 1,  # == channel axis
                     )
                 ]
             )
