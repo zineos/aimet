@@ -1606,23 +1606,9 @@ class QuantizationSimModel:
 
         :param op_types_to_tie: List of onnx ops for which to tie quantizers
         """
+        qtzr_to_name = {qtzr: name for name, qtzr in self.qc_quantize_op_dict.items()}
 
-        cg = self.connected_graph
-
-        def _set_src_qtzr(x: Product, src_qtzr):
-            if x.name in self.qc_quantize_op_dict:
-                self._set_quantizer(x.name, src_qtzr)
-
-            else:
-                producer = x.producer
-
-                # 1. There is no output quantizer associated with the graph node ``producer``, or
-                # 2. op is a math invariant op (reshape, permute, etc.).
-                # In these cases, propagate encoding to first input
-                if producer and producer.inputs:
-                    _set_src_qtzr(producer.inputs[0], src_qtzr=src_qtzr)
-
-        for op in reversed(cg.ordered_ops):
+        for op in reversed(self.connected_graph.ordered_ops):
             if op.type not in op_types_to_tie:
                 continue
 
@@ -1630,8 +1616,9 @@ class QuantizationSimModel:
                 continue
 
             output_name = op.outputs[0].name
+            output_qtzr = self.qc_quantize_op_dict.get(output_name)
 
-            if output_name not in self.qc_quantize_op_dict:
+            if not output_qtzr:
                 continue
 
             if len(op.outputs) != 1:
@@ -1643,7 +1630,10 @@ class QuantizationSimModel:
                 raise RuntimeError(msg)
 
             for inp in op.inputs:
-                _set_src_qtzr(inp, src_qtzr=self.qc_quantize_op_dict[output_name])
+                src_qtzr = self._get_enabled_quantizer(inp.name)
+                if src_qtzr:
+                    src_name = qtzr_to_name[src_qtzr]
+                    self._set_quantizer(src_name, output_qtzr)
 
     def _propagate_input_encodings(self, op_types_to_tie: Set[str]):
         """
@@ -1651,23 +1641,7 @@ class QuantizationSimModel:
 
         :param op_types_to_tie: List of onnx ops for which to tie quantizers
         """
-
-        cg = self.connected_graph
-
-        def _get_src_qtzr(x: Product) -> Optional[QcQuantizeOp]:
-            qc_quantize_op = self.qc_quantize_op_dict.get(x.name)
-
-            if qc_quantize_op:
-                return qc_quantize_op
-
-            producer = x.producer
-
-            if not producer or not producer.inputs:
-                return None
-
-            return _get_src_qtzr(producer.inputs[0])
-
-        for op in cg.ordered_ops:
+        for op in self.connected_graph.ordered_ops:
             if op.type not in op_types_to_tie:
                 continue
 
@@ -1678,7 +1652,7 @@ class QuantizationSimModel:
                 )
                 raise RuntimeError(msg)
 
-            input_qtzr = _get_src_qtzr(op.inputs[0])
+            input_qtzr = self._get_enabled_quantizer(op.inputs[0].name)
 
             if not input_qtzr:
                 continue
