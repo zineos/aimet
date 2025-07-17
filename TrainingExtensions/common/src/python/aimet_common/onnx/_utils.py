@@ -172,6 +172,19 @@ def _add_onnx_qdq_nodes(
                     f"LPBQ can be only exported with int4; got {output_dtype}"
                 )
 
+            try:
+                weight_dims = next(
+                    init for init in model.graph.initializer if init.name == input_name
+                ).dims
+            except StopIteration:
+                weight_dims = None
+
+            if weight_dims is not None and len(weight_dims) != 2:
+                raise RuntimeError(
+                    "LPBQ can be only applied to 2D matrices when exported to onnx QDQ. "
+                    f'Got "{input_name}" with shape {weight_dims}'
+                )
+
             if axis not in (-2, -1, 0, 1):
                 raise RuntimeError(
                     "LPBQ can be only applied to 2D matrices when exported to onnx QDQ. "
