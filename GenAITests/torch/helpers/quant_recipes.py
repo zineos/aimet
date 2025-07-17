@@ -12,6 +12,8 @@ import torch
 from torch.utils.data import DataLoader, Subset, Dataset
 
 from aimet_torch.experimental.adascale.adascale_optimizer import apply_adascale
+from aimet_torch.experimental.spinquant.spinquant_optimizer import apply_spinquant
+from aimet_torch.quantization.affine import QuantizeDequantize
 from aimet_torch.v2.nn.true_quant import QuantizedConv2d, QuantizedLinear
 from aimet_torch.v2.quantsim.config_utils import (
     set_grouped_blockwise_quantization_for_weights,
@@ -281,4 +283,37 @@ class OmniQuant(QuantizationTechnique):
             num_iterations=num_iterations,
         )
 
+        _compute_encodings(quantsim, generator, dataloader, num_iterations=40)
+
+
+@YAMLConfigParser.register_recipe
+class SpinQuant(QuantizationTechnique):
+    @staticmethod
+    @torch.no_grad()
+    def apply(
+        quantsim: QuantizationSimModel, generator: Generator, dataloader: DataLoader
+    ):
+        # Set linear layers to 8 bit to more easily observe effects of SpinQuant
+        for quant_module in quantsim.qmodules():
+            if isinstance(quant_module, torch.nn.Linear):
+                quant_module.param_quantizers["weight"] = QuantizeDequantize(
+                    quant_module.param_quantizers["weight"].shape,
+                    bitwidth=8,
+                    symmetric=True,
+                )
+                quant_module.param_quantizers["weight"].to(quant_module.weight.device)
+
+        # Untie embed_tokens and lm_head if needed
+        if (
+            quantsim.model.model.model.embed_tokens.weight
+            is quantsim.model.model.lm_head.weight
+        ):
+            old_weight = quantsim.model.model.lm_head.weight
+            new_weight = torch.nn.Parameter(
+                old_weight.data.clone().detach().to(old_weight.device),
+                requires_grad=True,
+            )
+            quantsim.model.model.lm_head.weight = new_weight
+
+        apply_spinquant(quantsim.model)
         _compute_encodings(quantsim, generator, dataloader, num_iterations=40)

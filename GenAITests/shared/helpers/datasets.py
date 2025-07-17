@@ -61,7 +61,11 @@ class Wikitext(Dataset):
         cls, tokenizer: PreTrainedTokenizer, context_length: int, split: str
     ):
         dataset_split = cls.load_dataset(split)
-        join_token = "\n\n" if split == "test" else tokenizer.bos_token
+        join_token = (
+            "\n\n"
+            if split == "test" or tokenizer.bos_token is None
+            else tokenizer.bos_token
+        )
         encoded_dataset_split = tokenizer(
             join_token.join(dataset_split["text"]),
             return_tensors="pt",

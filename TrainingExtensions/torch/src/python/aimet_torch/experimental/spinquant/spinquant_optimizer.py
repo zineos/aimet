@@ -6,6 +6,7 @@ from aimet_torch.experimental.spinquant.hadamard_utils import get_hadamard_matri
 import torch
 from transformers.models.llama.modeling_llama import LlamaForCausalLM
 from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM
+from transformers.models.mistral.modeling_mistral import MistralForCausalLM
 
 from aimet_common.utils import AimetLogger
 
@@ -36,56 +37,49 @@ def _default_r1_fusion_func(llm_model):
     return r1_direction_pairs
 
 
+def _default_rmsnorm_linear_pairs_func(llm_model):
+    """Default RMSNorm Linear pairs function"""
+    rmsnorm_linear_pairs = []
+    for layer in llm_model.model.layers:
+        rmsnorm_linear_pairs.extend(
+            [
+                (
+                    layer.input_layernorm,
+                    [
+                        layer.self_attn.q_proj,
+                        layer.self_attn.k_proj,
+                        layer.self_attn.v_proj,
+                    ],
+                )
+            ]
+        )
+        rmsnorm_linear_pairs.extend(
+            [
+                (
+                    layer.post_attention_layernorm,
+                    [
+                        layer.mlp.gate_proj,
+                        layer.mlp.up_proj,
+                    ],
+                )
+            ]
+        )
+    rmsnorm_linear_pairs.extend([(llm_model.model.norm, [llm_model.lm_head])])
+    return rmsnorm_linear_pairs
+
+
 # Dictionary of supported modules and associated information for RMSNORM Linear fusion pairs as well as R1 fusion pairs.
 SUPPORTED_MODULE_DICT = {
     LlamaForCausalLM: {
-        RMSNORM_LINEAR_PAIRS: lambda module: [
-            (
-                layer.input_layernorm,
-                [
-                    layer.self_attn.q_proj,
-                    layer.self_attn.k_proj,
-                    layer.self_attn.v_proj,
-                ],
-            )
-            for layer in module.model.layers
-        ]
-        + [
-            (
-                layer.post_attention_layernorm,
-                [
-                    layer.mlp.gate_proj,
-                    layer.mlp.up_proj,
-                ],
-            )
-            for layer in module.model.layers
-        ]
-        + [(module.model.norm, [module.lm_head])],
+        RMSNORM_LINEAR_PAIRS: _default_rmsnorm_linear_pairs_func,
         R1_FUSION_PAIRS: _default_r1_fusion_func,
     },
     Qwen2ForCausalLM: {
-        RMSNORM_LINEAR_PAIRS: lambda module: [
-            (
-                layer.input_layernorm,
-                [
-                    layer.self_attn.q_proj,
-                    layer.self_attn.k_proj,
-                    layer.self_attn.v_proj,
-                ],
-            )
-            for layer in module.model.layers
-        ]
-        + [
-            (
-                layer.post_attention_layernorm,
-                [
-                    layer.mlp.gate_proj,
-                    layer.mlp.up_proj,
-                ],
-            )
-            for layer in module.model.layers
-        ]
-        + [(module.model.norm, [module.lm_head])],
+        RMSNORM_LINEAR_PAIRS: _default_rmsnorm_linear_pairs_func,
+        R1_FUSION_PAIRS: _default_r1_fusion_func,
+    },
+    MistralForCausalLM: {
+        RMSNORM_LINEAR_PAIRS: _default_rmsnorm_linear_pairs_func,
         R1_FUSION_PAIRS: _default_r1_fusion_func,
     },
 }

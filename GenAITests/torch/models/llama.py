@@ -3,10 +3,16 @@
 
 """Llama model class"""
 
+import contextlib
 import torch
+from torch import nn
+
+from transformers.models.llama import modeling_llama
 
 from aimet_common.defs import QuantScheme
 from aimet_torch import QuantizationSimModel
+from aimet_torch.nn.modules import custom
+
 from aimet_torch.v2.nn.transformers.models.llama.modeling_llama import (
     QuantizedLlamaRMSNorm,
 )
@@ -15,6 +21,79 @@ from GenAITests.shared.helpers.yaml_config_parser import YAMLConfigParser
 from GenAITests.shared.models.generator import Generator
 from GenAITests.shared.models.utils.model_utils import ONNXExportableModuleWithCache
 from GenAITests.shared.models.llama import Llama_32
+
+
+class LlamaDecoderLayer(nn.Module):
+    def __init__(self, config, layer_idx: int):
+        super().__init__()
+        self.hidden_size = config.hidden_size
+
+        self.self_attn = modeling_llama.LlamaAttention(
+            config=config, layer_idx=layer_idx
+        )
+
+        self.mlp = modeling_llama.LlamaMLP(config)
+        self.input_layernorm = modeling_llama.LlamaRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
+        self.post_attention_layernorm = modeling_llama.LlamaRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
+        self.attn_add = custom.Add()
+        self.mlp_add = custom.Add()
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask=None,
+        position_ids=None,
+        past_key_value=None,
+        output_attentions=False,
+        use_cache=False,
+        cache_position=None,
+        position_embeddings=None,  # necessary, but kept here for BC
+        **kwargs,
+    ):
+        residual = hidden_states
+
+        hidden_states = self.input_layernorm(hidden_states)
+
+        # Self Attention
+        hidden_states, self_attn_weights = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            position_embeddings=position_embeddings,
+            **kwargs,
+        )
+        hidden_states = self.attn_add(residual, hidden_states)
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp_add(residual, hidden_states)
+
+        outputs = (hidden_states,)
+        if output_attentions:
+            outputs += (self_attn_weights,)
+
+        return outputs
+
+
+@contextlib.contextmanager
+def swap_decoder_module():
+    old_decoder = modeling_llama.LlamaDecoderLayer
+    modeling_llama.LlamaDecoderLayer = LlamaDecoderLayer
+
+    try:
+        yield
+    finally:
+        modeling_llama.LlamaDecoderLayer = old_decoder
 
 
 @YAMLConfigParser.register_model
@@ -29,7 +108,8 @@ class Llama_32_Torch(Llama_32):
         sequence_length: int,
         small_model: bool = False,
     ) -> QuantizationSimModel:
-        model = cls.instantiate_model(model_id, small_model)
+        with swap_decoder_module():
+            model = cls.instantiate_model(model_id, small_model)
 
         # Need to wrap model in this in order to enable JIT trace
         traceable_model = ONNXExportableModuleWithCache(model)
