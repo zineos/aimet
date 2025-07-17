@@ -50,6 +50,7 @@ add_executable(MoDlQuantizationTest
       TestGraphQuantizer.cpp
       TestUtilities.cpp
       TestPercentileEncodingAnalyzer.cpp
+      TestMinMaxEncodingAnalyzer.cpp
       TestMseEncodingAnalyzer.cpp
       TestEntropyEncodingAnalyzer.cpp
       TestQuantizationFunctions.cpp

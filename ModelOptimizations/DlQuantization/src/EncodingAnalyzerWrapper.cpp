@@ -36,10 +36,8 @@
 //
 //==============================================================================
 
-#include <numeric>
-
-#include "DlQuantization/QuantizerFactory.hpp"
 #include "EncodingAnalyzerWrapper.h"
+#include "DlQuantization/QuantizerFactory.hpp"
 #include "math_functions.hpp"
 #include "quantization_utils.hpp"
 #include "tensor_utils.hpp"
@@ -49,8 +47,9 @@ namespace DlQuantization
 {
 
 template <typename DTYPE>
-EncodingAnalyzerWrapper<DTYPE>::EncodingAnalyzerWrapper(TensorDims shape, QuantizationMode mode) : _shape(shape)
+EncodingAnalyzerWrapper<DTYPE>::EncodingAnalyzerWrapper(TensorDims shape, QuantizationMode mode)
 {
+    this->_shape     = shape;
     size_t numBlocks = getNumel(shape);
     _encodingAnalyzers.resize(numBlocks);
     for (auto& ptr: _encodingAnalyzers)
@@ -60,60 +59,9 @@ EncodingAnalyzerWrapper<DTYPE>::EncodingAnalyzerWrapper(TensorDims shape, Quanti
 }
 
 template <typename DTYPE>
-void EncodingAnalyzerWrapper<DTYPE>::updateStats(const DTYPE* tensor, const TensorDims& tensorShape,
-                                                 ComputationMode tensorCpuGpuMode, IAllocator* allocator, void* stream)
-{
-    auto numBlocks = _encodingAnalyzers.size();
-    auto numel     = getNumel(tensorShape);
-
-    // Early exit for per-tensor mode
-    if (numBlocks == 1)
-    {
-        return _updateStatsContiguous(tensor, tensorCpuGpuMode, numel, allocator, stream);
-    }
-
-    // View tensor and encoding as broadcastable shapes
-    auto bcShapes      = getBroadcastableShapes(tensorShape, _shape);
-    auto bcTensorShape = std::get<0>(bcShapes);
-    auto bcEncShape    = std::get<1>(bcShapes);
-
-    size_t blockSize = numel / numBlocks;
-
-    std::vector<size_t> broadcastDims, nonBroadcastDims;
-
-    // Determine the dim ordering such that all indexes in a single quantization block are contiguous
-    for (size_t i = 0; i < bcTensorShape.size(); i++)
-    {
-        if (bcEncShape[i] == 1 && bcTensorShape[i] != 1)
-        {
-            broadcastDims.push_back(i);
-        }
-        else
-        {
-            nonBroadcastDims.push_back(i);
-        }
-    }
-    std::vector<size_t> dimOrder = nonBroadcastDims;
-    dimOrder.insert(dimOrder.end(), broadcastDims.begin(), broadcastDims.end());
-
-    // Permute the input to have contiguous blocks if necessary and update stats
-    if (not hasContiguousBlocks(bcTensorShape, bcEncShape))
-    {
-        DTYPE* tempBuffer = static_cast<DTYPE*>(allocator ? allocator->allocateRaw(sizeof(DTYPE) * numel)
-                                                          : MemoryAllocation(tensorCpuGpuMode, sizeof(DTYPE) * numel));
-        permute(tensor, tempBuffer, bcTensorShape, dimOrder, tensorCpuGpuMode, stream);
-        _updateStatsContiguous(tempBuffer, tensorCpuGpuMode, blockSize, allocator, stream);
-        allocator ? allocator->deleteRaw(tempBuffer) : MemoryFree(tensorCpuGpuMode, tempBuffer);
-    }
-    else
-    {
-        _updateStatsContiguous(tensor, tensorCpuGpuMode, blockSize, allocator, stream);
-    }
-}
-
-template <typename DTYPE>
-void EncodingAnalyzerWrapper<DTYPE>::_updateStatsContiguous(const DTYPE* tensor, ComputationMode tensorCpuGpuMode,
-                                                            size_t blockSize, IAllocator* allocator, void* stream)
+void EncodingAnalyzerWrapper<DTYPE>::updateStatsContiguous(const DTYPE* tensor, const TensorDims& shape,
+                                                           size_t blockSize, ComputationMode tensorCpuGpuMode,
+                                                           IAllocator* allocator, void* stream)
 {
     synchronizeStream(tensorCpuGpuMode, stream);
     for (size_t idx = 0; idx < _encodingAnalyzers.size(); idx++)
@@ -170,13 +118,6 @@ float EncodingAnalyzerWrapper<DTYPE>::getPercentileValue()
 {
     return _encodingAnalyzers[0]->getPercentileValue();
 }
-
-template <typename DTYPE>
-TensorDims EncodingAnalyzerWrapper<DTYPE>::getShape()
-{
-    return _shape;
-}
-
 
 template class EncodingAnalyzerWrapper<double>;
 

@@ -110,7 +110,47 @@ std::tuple<DTYPE, DTYPE> GetMinMax(const DTYPE* data, uint64_t cnt, ComputationM
 #ifdef GPU_QUANTIZATION_ENABLED
         return GetMinMax_gpu(data, cnt);
 #else
-            throw runtime_error("Not compiled for GPU mode.");
+        throw runtime_error("Not compiled for GPU mode.");
+#endif
+    default:
+        throw runtime_error("Unknown computation mode.");
+    }
+}
+
+
+template <typename DTYPE>
+std::tuple<std::vector<DTYPE>, std::vector<DTYPE>> GetMinMax_cpu(const DTYPE* data, uint64_t cnt, uint64_t blockSize)
+{
+    size_t numBlocks = cnt / blockSize;
+    std::vector<DTYPE> minVals(numBlocks);
+    std::vector<DTYPE> maxVals(numBlocks);
+    for (size_t idx = 0; idx < numBlocks; idx++)
+    {
+        minVals[idx] = GetMin_cpu(data + idx * blockSize, blockSize);
+        maxVals[idx] = GetMax_cpu(data + idx * blockSize, blockSize);
+    }
+    return std::make_tuple(std::move(minVals), std::move(maxVals));
+}
+
+template <typename DTYPE>
+std::tuple<std::vector<DTYPE>, std::vector<DTYPE>>
+GetMinMax(const DTYPE* data, uint64_t cnt, uint64_t blockSize, ComputationMode cpuGpuMode, IAllocator* allocator, void* stream)
+{
+    // Faster for per-tensor mode
+    if (cnt == blockSize)
+    {
+        auto minMax = GetMinMax(data, cnt, cpuGpuMode);
+        return std::make_tuple<std::vector<DTYPE>, std::vector<DTYPE> >({std::get<0>(minMax)}, {std::get<1>(minMax)});
+    }
+    switch (cpuGpuMode)
+    {
+    case COMP_MODE_CPU:
+        return GetMinMax_cpu(data, cnt, blockSize);
+    case COMP_MODE_GPU:
+#ifdef GPU_QUANTIZATION_ENABLED
+        return GetMinMax_gpu(data, cnt, blockSize, allocator, stream);
+#else
+        throw runtime_error("Not compiled for GPU mode.");
 #endif
     default:
         throw runtime_error("Unknown computation mode.");
@@ -648,6 +688,12 @@ template float GetMin(const float* data, uint64_t cnt, ComputationMode mode_cpu_
 template std::tuple<float, float> GetMinMax(const float* data, uint64_t cnt, ComputationMode cpuGpuMode);
 
 template std::tuple<double, double> GetMinMax(const double* data, uint64_t cnt, ComputationMode cpuGpuMode);
+
+template std::tuple<std::vector<float>, std::vector<float>>
+GetMinMax(const float* data, uint64_t cnt, uint64_t blockSize, ComputationMode cpuGpuMode, IAllocator* allocator, void* stream);
+
+template std::tuple<std::vector<double>, std::vector<double>>
+GetMinMax(const double* data, uint64_t cnt, uint64_t blockSize, ComputationMode cpuGpuMode, IAllocator* allocator, void* stream);
 
 template void UpdatePdf(const double* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bool signed_vals, PDF& pdf,
                         IAllocator* allocator);

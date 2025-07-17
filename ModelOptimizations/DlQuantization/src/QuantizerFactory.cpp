@@ -47,6 +47,7 @@
 #include "DlQuantization/QuantizerFactory.hpp"
 #include "EntropyEncodingAnalyzer.h"
 #include "MainQuantizationClass.hpp"
+#include "MinMaxEncodingAnalyzer.h"
 #include "MseEncodingAnalyzer.h"
 #include "PercentileEncodingAnalyzer.h"
 #include "TensorQuantizationSim.h"
@@ -100,6 +101,10 @@ std::unique_ptr<IQuantizationEncodingAnalyzer<DTYPE>> getEncodingAnalyzerInstanc
 template <typename DTYPE>
 std::unique_ptr<IBlockEncodingAnalyzer<DTYPE>> getBlockEncodingAnalyzerInstance(QuantizationMode quantization_mode, const TensorDims& shape)
 {
+    if (quantization_mode == QUANTIZATION_TF)
+    {
+        return std::unique_ptr<IBlockEncodingAnalyzer<DTYPE>>(new MinMaxEncodingAnalyzer<DTYPE>(shape));
+    }
     return std::unique_ptr<IBlockEncodingAnalyzer<DTYPE>>(new EncodingAnalyzerWrapper<DTYPE>(shape, quantization_mode));
 }
 

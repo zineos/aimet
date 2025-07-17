@@ -96,6 +96,10 @@ DTYPE GetMin(const DTYPE* data, uint64_t cnt, ComputationMode cpuGpuMode);
 template <typename DTYPE>
 std::tuple<DTYPE, DTYPE> GetMinMax(const DTYPE* data, uint64_t cnt, ComputationMode cpuGpuMode);
 
+template <typename DTYPE>
+std::tuple<std::vector<DTYPE>, std::vector<DTYPE>>
+GetMinMax(const DTYPE* data, uint64_t cnt, uint64_t blockSize, ComputationMode cpuGpuMode, IAllocator* allocator, void* stream);
+
 // Android compiler doesn't have std::log2, so define it here
 double logBase2(double d);
 
@@ -218,6 +222,10 @@ DTYPE GetMin_gpu(const DTYPE* data, uint64_t cnt);
 
 template <typename DTYPE>
 std::tuple<DTYPE, DTYPE> GetMinMax_gpu(const DTYPE* data, uint64_t cnt);
+
+template <typename DTYPE>
+std::tuple<std::vector<DTYPE>, std::vector<DTYPE>> GetMinMax_gpu(const DTYPE* data, uint64_t cnt, uint64_t blockSize,
+                                                                 IAllocator* allocator, void* stream);
 
 void ElementwiseMult_gpu(const float* in, size_t cnt, float factor, float* out);
 

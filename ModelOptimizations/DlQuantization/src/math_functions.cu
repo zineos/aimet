@@ -65,6 +65,73 @@ DTYPE GetMin_gpu(const DTYPE* data, uint64_t cnt)
 }
 
 
+
+struct _ApplyScale
+{
+    _ApplyScale(int scale) : scale(scale)
+    {
+    }
+
+    __host__ __device__ float operator()(int x) const
+    {
+        return x * scale;
+    }
+
+private:
+    int scale;
+};
+
+
+template <typename DTYPE>
+std::tuple<std::vector<DTYPE>, std::vector<DTYPE>> GetMinMax_gpu(const DTYPE* data, uint64_t cnt, uint64_t blockSize,
+                                                                 IAllocator* allocator, void* stream)
+{
+    auto computeStream         = static_cast<cudaStream_t>(stream);
+    size_t numBlocks           = cnt / blockSize;
+    void* dTempStorage         = nullptr;
+    size_t tempStorageBytesMin = 0;
+    size_t tempStorageBytesMax = 0;
+    size_t memSize             = sizeof(DTYPE) * 2 * numBlocks;
+    std::vector<DTYPE> minMaxOut(2 * numBlocks);
+    DTYPE* dMinMaxOut;
+    dMinMaxOut = static_cast<DTYPE*>(allocator ? allocator->allocateRaw(memSize) : MemoryAllocation_gpu(memSize));
+
+    auto offsetIterator = thrust::make_transform_iterator(thrust::make_counting_iterator(0), _ApplyScale(blockSize));
+
+    // When dTempStorage is nullptr, this does not do any device computation, but sets tempStorageBytes to the size of
+    // temporary storage necessary for computation.
+    // Use the maximum storage needed for min and max calculations (these will likely be identical, this is just to be
+    // safe)
+    cub::DeviceSegmentedReduce::Min(dTempStorage, tempStorageBytesMin, data, dMinMaxOut, numBlocks, offsetIterator,
+                                    offsetIterator + 1);
+    cub::DeviceSegmentedReduce::Max(dTempStorage, tempStorageBytesMax, data, dMinMaxOut + numBlocks, numBlocks,
+                                    offsetIterator, offsetIterator + 1);
+    size_t tempStorageBytes = std::max(tempStorageBytesMin, tempStorageBytesMax);
+
+    // Allocate the temporary device storage
+    dTempStorage = static_cast<DTYPE*>(allocator ? allocator->allocateRaw(tempStorageBytes)
+                                                 : MemoryAllocation_gpu(tempStorageBytes));
+
+    // Perform the actual min/max reductions
+    cub::DeviceSegmentedReduce::Min(dTempStorage, tempStorageBytes, data, dMinMaxOut, numBlocks, offsetIterator,
+                                    offsetIterator + 1, computeStream);
+    cub::DeviceSegmentedReduce::Max(dTempStorage, tempStorageBytes, data, dMinMaxOut + numBlocks, numBlocks,
+                                    offsetIterator, offsetIterator + 1, computeStream);
+
+    // Transfer reduced min/max to CPU
+    cudaStreamSynchronize(computeStream);
+    cudaMemcpy(minMaxOut.data(), dMinMaxOut, 2 * sizeof(DTYPE) * numBlocks, cudaMemcpyDeviceToHost);
+
+    std::vector<DTYPE> minOut(minMaxOut.begin(), minMaxOut.begin() + numBlocks);
+    std::vector<DTYPE> maxOut(minMaxOut.begin() + numBlocks, minMaxOut.end());
+
+    // Free allocated device memory
+    allocator ? allocator->deleteRaw(dTempStorage) : (void) MemoryFree_gpu(dTempStorage);
+    allocator ? allocator->deleteRaw(dMinMaxOut) : (void) MemoryFree_gpu(dMinMaxOut);
+
+    return std::make_tuple(std::move(minOut), std::move(maxOut));
+}
+
 template <typename DTYPE>
 std::tuple<DTYPE, DTYPE> GetMinMax_gpu(const DTYPE* data, uint64_t cnt)
 {
@@ -140,6 +207,12 @@ template float GetMax_gpu(const float* data, uint64_t cnt);
 template double GetMin_gpu(const double* data, uint64_t cnt);
 
 template float GetMin_gpu(const float* data, uint64_t cnt);
+
+template std::tuple<std::vector<double>, std::vector<double>> GetMinMax_gpu(const double* data, uint64_t cnt, uint64_t blockSize,
+                                                                            IAllocator* allocator, void* stream);
+
+template std::tuple<std::vector<float>, std::vector<float>> GetMinMax_gpu(const float* data, uint64_t cnt, uint64_t blockSize,
+                                                                          IAllocator* allocator, void* stream);
 
 template std::tuple<float, float> GetMinMax_gpu(const float* data, uint64_t cnt);
 

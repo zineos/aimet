@@ -36,50 +36,48 @@
 //
 //==============================================================================
 
-#ifndef DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
-#define DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
+#ifndef I_CONTIGUOUS_ENCODING_ANALYZER_HPP
+#define I_CONTIGUOUS_ENCODING_ANALYZER_HPP
 
-#include <cstdint>
-#include <memory>
+#include "DlQuantization/IQuantizationEncodingAnalyzer.hpp"
 
-#include "ContiguousEncodingAnalyzer.h"
 
 namespace DlQuantization
 {
 
 /**
- * @class EncodingAnalyzerWrapper
- * @brief Wrapper over legacy encoding analyzers enabling blockwise behavior
+ * @class ContiguousEncodingAnalyzerBase
+ * @brief Base class for blockwise encoding analyzers which require data for each block
+ *        to be contiguous in memory.
  */
 template <typename DTYPE>
-class EncodingAnalyzerWrapper : public ContiguousEncodingAnalyzerBase<DTYPE>
+class ContiguousEncodingAnalyzerBase : public IBlockEncodingAnalyzer<DTYPE>
 {
 public:
-    EncodingAnalyzerWrapper(TensorDims shape, QuantizationMode mode);
+    virtual ~ContiguousEncodingAnalyzerBase() = default;
 
-    void resetStats() override;
+    virtual void resetStats() = 0;
 
-    std::vector<TfEncoding> computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
-                                            bool useUnsignedSymmetric) const override;
+    void updateStats(const DTYPE* tensor, const TensorDims& tensorShape, ComputationMode tensorCpuGpuMode,
+                     IAllocator* allocator = nullptr, void* stream = nullptr) override;
 
-    std::vector<std::vector<std::tuple<double, double>>> getStatsHistogram() const override;
+    virtual std::vector<TfEncoding> computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
+                                                    bool useUnsignedSymmetric) const = 0;
 
-    void setPercentileValue(float percentile) override;
+    virtual std::vector<std::vector<std::tuple<double, double>>> getStatsHistogram() const = 0;
 
-    float getPercentileValue() override;
-
+    TensorDims getShape();
 
 protected:
-    void updateStatsContiguous(const DTYPE* tensor, const TensorDims& shape, size_t blockSize,
-                               ComputationMode tensorCpuGpuMode, IAllocator* allocator = nullptr,
-                               void* stream = nullptr) override;
+    virtual void updateStatsContiguous(const DTYPE* tensor, const TensorDims& shape, size_t blockSize,
+                                       ComputationMode tensorCpuGpuMode, IAllocator* allocator = nullptr,
+                                       void* stream = nullptr) = 0;
 
-private:
-    std::vector<std::unique_ptr<IQuantizationEncodingAnalyzer<DTYPE>>> _encodingAnalyzers;
+    TensorDims _shape;
 };
 
 
 }   // namespace DlQuantization
 
 
-#endif   // DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
+#endif   // I_CONTIGUOUS_ENCODING_ANALYZER_HPP

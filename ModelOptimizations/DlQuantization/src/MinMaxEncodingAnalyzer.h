@@ -2,7 +2,7 @@
 //
 //  @@-COPYRIGHT-START-@@
 //
-//  Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+//  Copyright (c) 2019 - 2022, Qualcomm Innovation Center, Inc. All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without
 //  modification, are permitted provided that the following conditions are met:
@@ -36,50 +36,39 @@
 //
 //==============================================================================
 
-#ifndef DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
-#define DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
-
-#include <cstdint>
-#include <memory>
+#ifndef DL_QUANTIZATION_MIN_MAX_ENCODING_ANALYZER_H
+#define DL_QUANTIZATION_MIN_MAX_ENCODING_ANALYZER_H
 
 #include "ContiguousEncodingAnalyzer.h"
+
 
 namespace DlQuantization
 {
 
-/**
- * @class EncodingAnalyzerWrapper
- * @brief Wrapper over legacy encoding analyzers enabling blockwise behavior
- */
 template <typename DTYPE>
-class EncodingAnalyzerWrapper : public ContiguousEncodingAnalyzerBase<DTYPE>
+class MinMaxEncodingAnalyzer : public ContiguousEncodingAnalyzerBase<DTYPE>
 {
 public:
-    EncodingAnalyzerWrapper(TensorDims shape, QuantizationMode mode);
+    MinMaxEncodingAnalyzer(TensorDims shape);
 
     void resetStats() override;
 
-    std::vector<TfEncoding> computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
-                                            bool useUnsignedSymmetric) const override;
+    Encodings computeEncoding(uint8_t bw, bool useSymmetricEncodings, bool useStrictSymmetric,
+                              bool useUnsignedSymmetric) const override;
+
+    static constexpr DTYPE MIN_RANGE = 0.01;
 
     std::vector<std::vector<std::tuple<double, double>>> getStatsHistogram() const override;
 
-    void setPercentileValue(float percentile) override;
-
-    float getPercentileValue() override;
-
-
 protected:
     void updateStatsContiguous(const DTYPE* tensor, const TensorDims& shape, size_t blockSize,
-                               ComputationMode tensorCpuGpuMode, IAllocator* allocator = nullptr,
-                               void* stream = nullptr) override;
+                               ComputationMode tensorCpuGpuMode, IAllocator* allocator, void* stream) override;
 
 private:
-    std::vector<std::unique_ptr<IQuantizationEncodingAnalyzer<DTYPE>>> _encodingAnalyzers;
+    std::vector<DTYPE> _minStats;
+    std::vector<DTYPE> _maxStats;
 };
-
 
 }   // namespace DlQuantization
 
-
-#endif   // DL_QUANTIZATION_WRAPPED_ENCODING_ANALYZER_H
+#endif   // DL_QUANTIZATION_MIN_MAX_ENCODING_ANALYZER_H
