@@ -1712,6 +1712,40 @@ class TestQuantSim:
                 assert matmul_second_input["bw"] == 8
                 assert matmul_second_input["is_sym"] is True
 
+    def test_matmul_v73_lower_exception_rule_fp16(self):
+        model = models_for_tests.model_with_exceptional_ops()
+        quantsim_config = {
+            "defaults": {
+                "hw_version": "V66",
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True", "is_symmetric": "False"},
+                "per_channel_quantization": "True",
+                "strict_symmetric": "False",
+                "unsigned_symmetric": "False",
+            },
+            "params": {"bias": {"is_quantized": "False"}},
+            "op_type": {},
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {"is_output_quantized": "True"},
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            sim = QuantizationSimModel(
+                model,
+                param_type="int4",
+                activation_type="float16",
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
+
+            for name in sim.activation_names:
+                quantizer = sim.qc_quantize_op_dict[name]
+                assert quantizer.data_type == QuantizationDataType.float
+                assert quantizer.bitwidth == 16
+
     def test_matmul_v73_higher_exception_rule(self):
         model = models_for_tests.model_with_exceptional_ops()
         quantsim_config = {

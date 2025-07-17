@@ -916,7 +916,10 @@ class QuantizationSimModel:
                             "The target quantizer for second input could not be found. MatMul exception rule does not apply for op: %s.",
                             op.name,
                         )
-                    else:
+                    elif (
+                        target_quantizer_for_second_input.data_type
+                        == QuantizationDataType.int
+                    ):
                         target_quantizer_for_second_input.use_symmetric_encodings = True
                         target_quantizer_for_second_input.set_bitwidth(8)
                 else:
