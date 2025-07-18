@@ -62,6 +62,7 @@ def _add_onnx_qdq_node(
     node_name_prefix: str,
     encodings: dict,
     onnx_opset: int,
+    prequantize_constants: bool,
 ):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
@@ -78,7 +79,13 @@ def _add_onnx_qdq_node(
 
     """
     _add_onnx_qdq_nodes(
-        model, [input_name], [output_name], [node_name_prefix], [encodings], onnx_opset
+        model,
+        [input_name],
+        [output_name],
+        [node_name_prefix],
+        [encodings],
+        onnx_opset,
+        prequantize_constants,
     )
 
 
@@ -89,6 +96,7 @@ def _add_onnx_qdq_nodes(
     node_name_prefixes: Iterable[str],
     encodings: Iterable[dict],
     onnx_opset: int,
+    prequantize_constants: bool,
 ):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
@@ -217,12 +225,24 @@ def _add_onnx_qdq_nodes(
                 ]
             )
 
-        if output_dtype in ("int32", "uint32"):
+        input_q = None
+        if prequantize_constants or output_dtype in ("int32", "uint32"):
+            input_q = _quantize_const(
+                model,
+                input_name,
+                y_scale,
+                y_zero_point,
+                axis,
+                block_size,
+                output_dtype,
+            )
+
+        if input_q:
             nodes_to_add.append(
                 opset.DequantizeLinear.make_node(
                     name=f"{node_name_prefix}_dq",
                     inputs=[
-                        f"{input_name}_q",
+                        input_q.name,
                         f"{input_name}_scale",
                         f"{input_name}_zero_point",
                     ],
@@ -232,15 +252,8 @@ def _add_onnx_qdq_nodes(
                     block_size=block_size,
                 )
             )
-
-            _replace_bias_with_quantized_bias(
-                model,
-                input_name,
-                y_scale,
-                output_dtype,
-                tensors_to_add,
-                tensors_to_remove,
-            )
+            tensors_to_remove[input_name] = True
+            tensors_to_add.append(input_q)
 
         else:
             nodes_to_add.extend(
@@ -277,25 +290,50 @@ def _add_onnx_qdq_nodes(
     )
 
 
-def _replace_bias_with_quantized_bias(
+def _quantize_const(
     model: ModelProto,
-    bias_name: str,
+    name: str,
     y_scale: np.ndarray,
+    y_zero_point: np.ndarray,
+    axis: Optional[int],
+    block_size: Optional[int],
     output_dtype: str,
-    tensors_to_add: List[TensorProto],
-    tensors_to_remove: Dict,
-):
-    bias = _ParamUtils.get_param_by_name(model, bias_name)
-    tensors_to_remove[bias_name] = True
+) -> Optional[TensorProto]:
+    const = _ParamUtils.get_param_by_name(model, name)
 
-    bias_int32 = (to_array(bias) / y_scale).round()
-    if output_dtype == "int32":
-        bias_int32 = bias_int32.clip(-(2**31), 2**31 - 1)
+    if not const:
+        return None
+
+    const = to_array(const).astype(np.float32)
+    unsigned, bitwidth = output_dtype.split("int")
+    bitwidth = int(bitwidth)
+
+    if unsigned:
+        clip_min = 0
+        clip_max = 2**bitwidth - 1
     else:
-        bias_int32 = bias_int32.clip(0, 2**32 - 1)
+        clip_min = -(2 ** (bitwidth - 1))
+        clip_max = -clip_min - 1
 
-    tensors_to_add.append(
-        from_array(bias_int32.astype(output_dtype), name=f"{bias_name}_q")
+    if axis is not None:
+        axis = (const.ndim + axis) % const.ndim  # Make positive
+        if block_size is None:
+            channel_axis = axis
+            broadcast_shape = tuple(
+                -1 if axis == channel_axis else 1 for axis in range(const.ndim)
+            )
+            y_scale = y_scale.reshape(broadcast_shape)
+            y_zero_point = y_zero_point.reshape(broadcast_shape)
+        else:
+            block_axis = axis
+            y_scale = y_scale.repeat(block_size, axis=block_axis)
+            y_zero_point = y_zero_point.repeat(block_size, axis=block_axis)
+
+    y_scale = y_scale.astype(np.float32)
+    const_q = (const / y_scale + y_zero_point).round()
+    const_q = const_q.clip(clip_min, clip_max)
+    return opset10.DequantizeLinear.make_int_arr(
+        const_q, dtype=output_dtype, name=f"{name}_q"
     )
 
 

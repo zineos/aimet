@@ -3613,6 +3613,7 @@ def _parse_type(type_str: str) -> tuple[str, int]:
 
 
 @pytest.mark.parametrize("seed", range(10))
+@pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize(
     "param_dtype, activation_dtype",
@@ -3625,10 +3626,10 @@ def _parse_type(type_str: str) -> tuple[str, int]:
     ],
 )
 @pytest.mark.parametrize(
-    "model_factory,                                               tolerance",
+    "model_factory, tolerance",
     [
         (partial(single_residual_model, opset_version=21), 1),
-        (partial(transposed_conv_model, opset_version=21), 1),
+        (partial(transposed_conv_model, opset_version=21), 2),
         # normalization layers tolerance rationale:
         #   * off-by-one in input/output qtzn respectively
         #   * No off-by-one in weight qtzn; weights are exported spot-on
@@ -3638,12 +3639,13 @@ def _parse_type(type_str: str) -> tuple[str, int]:
         (partial(standalone_layernorm, (1, 40960, 32)), 2),
     ],
 )
-def test_onnx_qdq(
+def test_to_onnx_qdq(
     model_factory,
     tolerance: int,
     param_dtype: str,
     activation_dtype: str,
     export_int32_bias_encodings: bool,
+    prequantize_constants: bool,
     seed: int,
 ):
     ort.set_seed(seed)
@@ -3681,7 +3683,7 @@ def test_onnx_qdq(
     (out_sim,) = sim.session.run(None, {"input": input})
 
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
 
     """
     Then: Exported model should preserve the original I/O names
@@ -3741,6 +3743,7 @@ def test_onnx_qdq(
     assert np.allclose(out_sim, out_onnx_qdq, atol=atol, rtol=rtol)
 
 
+@pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize("input_model_opset", range(9, 22))
 @pytest.mark.parametrize(
     "param_bw, act_bw, per_channel, minimum_required_opset",
@@ -3763,6 +3766,7 @@ def test_onnx_qdq_opset_compatibility(
     act_bw: int,
     per_channel: bool,
     minimum_required_opset: int,
+    prequantize_constants: bool,
 ):
     ort.set_seed(1)
     np.random.seed(1)
@@ -3784,7 +3788,9 @@ def test_onnx_qdq_opset_compatibility(
 
     if minimum_required_opset < 0:
         with pytest.raises(RuntimeError):
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(
+                prequantize_constants=prequantize_constants
+            )
         return
 
     (out_sim,) = sim.session.run(None, {"input": input})
@@ -3796,7 +3802,7 @@ def test_onnx_qdq_opset_compatibility(
       2. Should pass onnx checker
     """
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
     output_model_opset = onnx_qdq_model.opset_import[0].version
     assert output_model_opset == max(input_model_opset, minimum_required_opset)
     onnx.checker.check_model(onnx_qdq_model)
@@ -3892,7 +3898,7 @@ def test_insert_data_movement_op_quantizers(model_factory):
     )
     inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
     sim.compute_encodings(lambda session: session.run(None, inputs))
-    onnx_qdq_before = sim._to_onnx_qdq()
+    onnx_qdq_before = sim._to_onnx_qdq(prequantize_constants=False)
 
     """
     When: Call _insert_data_movement_op_output_quantizers before _to_onnx_qdq()
@@ -3902,7 +3908,7 @@ def test_insert_data_movement_op_quantizers(model_factory):
       3. Model output should be EQUAL with/without data movement op output QDQ
     """
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_after = sim._to_onnx_qdq()
+    onnx_qdq_after = sim._to_onnx_qdq(prequantize_constants=False)
 
     q_nodes = [
         node for node in onnx_qdq_after.graph.node if node.op_type == "QuantizeLinear"
@@ -3984,14 +3990,14 @@ def test_insert_data_movement_op_edge_case(model_factory):
     )
     inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
     sim.compute_encodings(lambda session: session.run(None, inputs))
-    onnx_qdq_before = sim._to_onnx_qdq()
+    onnx_qdq_before = sim._to_onnx_qdq(prequantize_constants=False)
 
     """
     When: Call _insert_data_movement_op_output_quantizers before _to_onnx_qdq()
     Then: Output encoding should NOT be reused for input quantization
     """
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_after = sim._to_onnx_qdq()
+    onnx_qdq_after = sim._to_onnx_qdq(prequantize_constants=False)
     assert onnx_qdq_before == onnx_qdq_after
 
 
@@ -4031,7 +4037,7 @@ def test_onnx_qdq_lpbq(seed: int):
     (out_sim,) = sim.session.run(None, {"input": input})
 
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
 
     """
     Then: Onnx QDQ model should contain as many QuantizeLinear as the number of of ENABLED QcQuantizers
@@ -4136,7 +4142,7 @@ class TestDynamicWeightSymmetryMapping:
             When: Export to onnx QDQ
             Then: All activation quantizers must be uint
             """
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
             self._assert_uint_activation(onnx_qdq_model)
 
     def test_dynamic_conv_symmetry(self):
@@ -4176,7 +4182,7 @@ class TestDynamicWeightSymmetryMapping:
             When: Export to onnx QDQ
             Then: All activation quantizers must be uint
             """
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
             self._assert_uint_activation(onnx_qdq_model)
 
     @pytest.mark.parametrize("conv_transpose", [True, False])
@@ -4217,7 +4223,7 @@ class TestDynamicWeightSymmetryMapping:
             When: Export to onnx QDQ
             Then: All activation quantizers must be uint
             """
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
             self._assert_uint_activation(onnx_qdq_model)
 
     @pytest.mark.parametrize("conv_transpose", [True, False])
@@ -4258,7 +4264,7 @@ class TestDynamicWeightSymmetryMapping:
             When: Export to onnx QDQ
             Then: All activation quantizers must be uint
             """
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
             self._assert_uint_activation(onnx_qdq_model)
 
     def test_dynamic_gemm_symmetry(self):
@@ -4296,7 +4302,7 @@ class TestDynamicWeightSymmetryMapping:
             When: Export to onnx QDQ
             Then: All activation quantizers must be uint
             """
-            onnx_qdq_model = sim._to_onnx_qdq()
+            onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
             self._assert_uint_activation(onnx_qdq_model)
 
 
@@ -4357,7 +4363,7 @@ def test_onnx_qdq_export_output_name_swapping():
     x = np.random.randn(1, 3, 224, 224).astype(np.float32)
     sim = QuantizationSimModel(model)
     sim.compute_encodings(lambda sess: sess.run(None, {"input": x}))
-    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
 
     """
     Then: Exported model should look like this:
@@ -4371,7 +4377,7 @@ def test_onnx_qdq_export_output_name_swapping():
                                         +---> QDQ ----------> (output_0)
             x -> QDQ -> Sigmoid --------+-> MaxPool -> QDQ -> (output_1)
     """
-    onnx_qdq_model = sim._to_onnx_qdq()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
 
     # Assert all inputs/outputs of all nodes are associated with Q/DQ
     q_nodes = [

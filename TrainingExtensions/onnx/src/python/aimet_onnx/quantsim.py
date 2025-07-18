@@ -1703,9 +1703,9 @@ class QuantizationSimModel:
             >>> len([dq for dq in onnx_qdq.graph.node if dq.op_type == "DequantizeLinear"])
             10
         """
-        return self._to_onnx_qdq()
+        return self._to_onnx_qdq(prequantize_constants=False)
 
-    def _to_onnx_qdq(self) -> onnx.ModelProto:
+    def _to_onnx_qdq(self, prequantize_constants: bool) -> onnx.ModelProto:
         try:
             invalid_bitwidth = next(
                 qtzr.bitwidth
@@ -1820,7 +1820,10 @@ class QuantizationSimModel:
             model_copy = _convert_version(model_copy, desired_onnx_opset_version)
 
         _add_onnx_qdq_nodes(
-            model_copy, **qdq_node_info, onnx_opset=desired_onnx_opset_version
+            model_copy,
+            **qdq_node_info,
+            onnx_opset=desired_onnx_opset_version,
+            prequantize_constants=prequantize_constants,
         )
 
         # Restore original model's output names

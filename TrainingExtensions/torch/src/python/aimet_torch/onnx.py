@@ -78,6 +78,7 @@ def export(
     f: Union[str, io.BytesIO],
     *,
     export_int32_bias: bool = True,
+    prequantize_constants: bool = False,
     **kwargs,
 ):
     """
@@ -187,7 +188,9 @@ def export(
             )
             raise RuntimeError(msg) from e
 
-    onnx_qdq_model = _to_onnx_qdq(onnx_model, tensor_to_encoding_map)
+    onnx_qdq_model = _to_onnx_qdq(
+        onnx_model, tensor_to_encoding_map, prequantize_constants=prequantize_constants
+    )
     onnx.save(onnx_qdq_model, f)
 
 
@@ -523,6 +526,7 @@ def _remove_fp16_quantizers(model: torch.nn.Module):
 def _to_onnx_qdq(
     onnx_model: onnx.ModelProto,
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
+    prequantize_constants: bool,
 ) -> onnx.ModelProto:
     qnn_encodings = {
         name: encoding.to_qnn_encoding_dict("2.0.0")
@@ -548,6 +552,7 @@ def _to_onnx_qdq(
         node_name_prefixes=qnn_encodings.keys(),
         encodings=qnn_encodings.values(),
         onnx_opset=onnx_opset_version,
+        prequantize_constants=prequantize_constants,
     )
 
     # Restore model output names from "{output}_qdq" to "{output}"
