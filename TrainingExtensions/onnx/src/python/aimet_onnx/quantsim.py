@@ -1869,11 +1869,7 @@ class QuantizationSimModel:
                     elif inp == dq.output[0]:
                         node.input[j] = last_node.output[i]
 
-        # TODO: Unfortunately, this sanity check doesn't pass yet because the
-        #       QcQuantizeOp nodes inserted during QuantizationSimModel.__init__
-        #       aren't topologically sorted, but onnx.checker asserts topological
-        #       order of all nodes. Needs to be fixed asap.
-        # onnx.checker.check_model(model_copy, True)
+        ONNXModel(model_copy).topological_sort()
         return model_copy
 
     def _get_qdq_parameters(self):
