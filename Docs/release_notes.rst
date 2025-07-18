@@ -6,6 +6,57 @@
 Release notes
 #############
 
+2.11.0
+======
+* New Feature
+    * PyTorch 
+        * Enable Adascale and Omniquant for Mistral (`d33e98c`_)
+    * ONNX 
+        * Enable llm_configurator for Llama (Experimental) (`08c17b8`_)
+    
+* Bug fixes and Improvements
+    * Common    
+        * Represent LPBQ as DequantizeLinear in onnx QDQ (`a967b8f`_)
+        * Add additional sanity checks in LPBQ export logic (`45c2a65`_)
+        * Allow negative block axis in LPBQ QDQ export (`6f670a4`_)
+        * Add support for enabling param bw=2 in QuantSim (`2d4e0eb`_)
+        * Fix tanh output encoding range to [-1, 1] (`3c92bb7`_)
+        
+    * ONNX 
+        * Apply matmul exception rule only for integer quantization (`bb93c76`_)
+        * Optimize blockwise min-max encoding analyzer (`4febdd4`_)
+        * Remove explicit FP32 model creation inside AdaRound and optimize building sessions during the optimization process (`b1415bd`_)
+        * Make Concat output quantizer inherit fixed input range (`50f35dd`_)
+        * Enable output quantizers to inherit input encoding when tying encodings (`3750526`_)
+        * Fix bug in CLE with bn_conv groups (`654f4b1`_)
+
+    * PyTorch 
+        * Guarantee positive scale during aimet-torch QAT (`2ed8305`_)
+        * Add secondary progress bars to Adascale and Omniquant (`6c92a97`_)
+    
+* Documentation Updates
+    * Update Quick Start example and PTQ section (`6c9f584`_)
+    * Add missing workflow images (`f961ed4`_)
+
+.. _6c92a97: https://github.com/quic/aimet/commit/6c92a9760fdb0fd1f095acd58935564eab18e69f
+.. _6c9f584: https://github.com/quic/aimet/commit/6c9f5848edbbe8bc1a3d87bed2ed0072abda0e9b
+.. _f961ed4: https://github.com/quic/aimet/commit/f961ed40f3f0f1c05315b901add3275751aa3afe
+.. _2ed8305: https://github.com/quic/aimet/commit/2ed8305190856a81881a590d5f7390e02531d912
+.. _a967b8f: https://github.com/quic/aimet/commit/a967b8f0d71abe5d24c0a381abcdda3622982d15
+.. _3c92bb7: https://github.com/quic/aimet/commit/3c92bb72683fb6a5ed89142dbeacf9bea901bf67
+.. _d33e98c: https://github.com/quic/aimet/commit/d33e98c427f4cdcb19bc6443dec772590d1011a5
+.. _08c17b8: https://github.com/quic/aimet/commit/08c17b875cbe6fce0a5d6f2ba75a7ddea508ad0f
+.. _2d4e0eb: https://github.com/quic/aimet/commit/2d4e0eb7b235b1ff7c420362037f0292b183dfe1
+.. _b1415bd: https://github.com/quic/aimet/commit/b1415bded1d7ba539d7a1f35b04adf7a7ebf17be
+.. _45c2a65: https://github.com/quic/aimet/commit/45c2a65e254ee674bfc4c00f4bb5fbe830aa4922
+.. _6f670a4: https://github.com/quic/aimet/commit/6f670a41d75fbe4664a24c3d899ab37faac7fbfc
+.. _bb93c76: https://github.com/quic/aimet/commit/bb93c765bdcc2f06a4d9fd1a07833bb54e2627a9
+.. _50f35dd: https://github.com/quic/aimet/commit/50f35dd933744a2096de22b679e6e4a08ed29cb4
+.. _3750526: https://github.com/quic/aimet/commit/3750526bb6c6e339c16773cc1bdc752fffcb9802
+.. _654f4b1: https://github.com/quic/aimet/commit/654f4b181bc4825c6122f5191d29cc218996caac
+.. _4febdd4: https://github.com/quic/aimet/commit/4febdd4f72a1414c90b37704db220321b8a43d77
+
+
 2.10.0
 ======
 
