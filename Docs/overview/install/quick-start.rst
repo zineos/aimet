@@ -36,6 +36,8 @@ Install AIMET from PyPI
       .. code-block:: bash
 
         pip install aimet-onnx
+        # Optional: To accelerate quantization with CUDA
+        pip install onnxruntime-gpu
 
     .. tab-item:: PyTorch
       :sync: torch

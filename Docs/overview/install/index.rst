@@ -4,29 +4,51 @@
 Installation
 ############
 
-This page describes instructions for installing the latest version of AIMET across all frameworks
-(PyTorch, TensorFlow, and ONNX) and compute platforms. Please choose **ONE** of the available
-installation options based on your needs and preferences.
+This page provides instructions for installing the latest version of AIMET across supported frameworks: ONNX, PyTorch, and TensorFlow.
 
-- :ref:`PyPI <default-package>`
-- :ref:`Alternative packages <alternative-packages>`
-- :ref:`Building from source <building-from-source>`
+Please select one installation method that best suits your environment:
+
+- :ref:`Install via PyPI <default-package>`
+- :ref:`Alternative packages from Github release <alternative-packages>`
+- :ref:`Build from source <building-from-source>`
 
 .. _default-package:
 
 PyPI
 ====
 
-To install the latest version of AIMET for the PyTorch framework, which supports the new **aimet_torch 2**
-interface, use the :ref:`Quick start <install-quick-start>` instructions.
+Install AIMET from PyPI
+
+.. tab-set::
+    :sync-group: platform
+
+    .. tab-item:: ONNX
+      :sync: onnx
+
+      .. code-block:: bash
+
+        pip install aimet-onnx
+        # Optional: To accelerate quantization with CUDA
+        pip install onnxruntime-gpu
+
+    .. tab-item:: PyTorch
+      :sync: torch
+
+      .. code-block:: Bash
+
+        pip install aimet-torch
+
+
+.. note::
+    aimet_tf is not available on PyPI, please download aimet_tf package from https://github.com/quic/aimet/releases
 
 .. _alternative-packages:
 
 Alternative packages
 ====================
 
-Install the latest version of AIMET for supported framework variants and compute platforms including
-TensorFlow, ONNX and PyTorch from the .whl files hosted at https://github.com/quic/aimet/releases.
+Install the latest version of AIMET for supported framework and compute platforms including
+ONNX, PyTorch and TensorFlow from the .whl files hosted at https://github.com/quic/aimet/releases.
 
 Prerequisites
 -------------
@@ -41,14 +63,6 @@ to all frameworks variants.
     * Nvidia GPU card (Compute capability 5.2 or later)
     * Nvidia driver version 455 or later (using the latest driver is recommended; both CUDA and cuDNN are supported)
 
-.. note::
-    Starting with the AIMET 2 release, there is no longer a dependency on ``liblapacke``. 
-    Install the following Debian package if (and only if) you are still using AIMET 1.x.
-
-.. code-block:: bash
-
-    apt-get install liblapacke
-
 Choose and install a package
 ----------------------------
 
@@ -57,19 +71,29 @@ Use one of the following commands to install AIMET based on your choice of frame
 .. tab-set::
     :sync-group: platform
 
-    .. tab-item:: PyTorch
-        :sync: torch
-
-        .. important::
-            Legacy `aimet_torch.v1` necessitates x86_64 architecture, Python 3.10 and PyTorch version 2.1.
-
-        **PyTorch 2.1**
+    .. tab-item:: ONNX
+        :sync: onnx
 
         With CUDA 12.x:
 
         .. parsed-literal::
 
-           python3 -m pip install |download_url|\ |version|/aimet_torch-|version|\+cu121\ |torch_whl_suffix| -f |torch_pkg_url|
+            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cu121\ |whl_suffix| -f |torch_pkg_url|
+
+        With CPU only:
+
+        .. parsed-literal::
+
+            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cpu\ |whl_suffix| -f |torch_pkg_url|
+
+    .. tab-item:: PyTorch
+        :sync: torch
+
+        With CUDA 12.x:
+
+        .. parsed-literal::
+
+            python3 -m pip install |download_url|\ |version|/aimet_torch-|version|\+cu121\ |torch_whl_suffix| -f |torch_pkg_url|
 
         With CPU only:
 
@@ -94,23 +118,6 @@ Use one of the following commands to install AIMET based on your choice of frame
         .. parsed-literal::
 
             python3 -m pip install |download_url|\ |version|/aimet_tensorflow-|version|\+cpu\ |whl_suffix|
-
-    .. tab-item:: ONNX
-        :sync: onnx
-
-        **onnxruntime 1.19 GPU**
-
-        With CUDA 12.x:
-
-        .. parsed-literal::
-
-            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cu121\ |whl_suffix| -f |torch_pkg_url|
-
-        With CPU only:
-
-        .. parsed-literal::
-
-            python3 -m pip install |download_url|\ |version|/aimet_onnx-|version|\+cpu\ |whl_suffix| -f |torch_pkg_url|
 
 Verifying the installation
 --------------------------
