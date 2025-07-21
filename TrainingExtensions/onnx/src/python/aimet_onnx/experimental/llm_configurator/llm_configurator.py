@@ -60,25 +60,30 @@ def _set_matmul_second_input_to_8b(quantsim_model: QuantSimOnnx):
         if op.type != "MatMul":
             continue
 
+        upper_quantizer = quantsim_model._get_enabled_quantizer(op.inputs[1].name)  # pylint: disable=protected-access
+
         enabled_quantizer = _get_quantizer_no_split_slice(
             quantsim_model, op.inputs[1].name
         )
 
-        if enabled_quantizer and enabled_quantizer.bitwidth > 8:
+        if enabled_quantizer and enabled_quantizer.bitwidth <= 8:
+            continue
+        elif enabled_quantizer:
             enabled_quantizer.set_bitwidth(8)
             enabled_quantizer.use_symmetric_encodings = True
-        elif op.inputs[1].name in quantsim_model.qc_quantize_op_dict:
-            quantizer = quantsim_model.qc_quantize_op_dict[op.inputs[1].name]
-            quantizer.enabled = True
-            quantizer.set_bitwidth(8)
-            quantizer.use_symmetric_encodings = True
-        else:
-            quantsim_model._insert_quantizer(op.inputs[1].name, is_param=False)  # pylint: disable=protected-access
-            quantsim_model._rebuild_session()  # pylint: disable=protected-access
-            quantizer = quantsim_model.qc_quantize_op_dict[op.inputs[1].name]
-            quantizer.enabled = True
-            quantizer.set_bitwidth(8)
-            quantizer.use_symmetric_encodings = True
+        elif upper_quantizer:
+            if op.inputs[1].name in quantsim_model.qc_quantize_op_dict:
+                quantizer = quantsim_model.qc_quantize_op_dict[op.inputs[1].name]
+                quantizer.enabled = True
+                quantizer.set_bitwidth(8)
+                quantizer.use_symmetric_encodings = True
+            else:
+                quantsim_model._insert_quantizer(op.inputs[1].name, is_param=False)  # pylint: disable=protected-access
+                quantsim_model._rebuild_session()  # pylint: disable=protected-access
+                quantizer = quantsim_model.qc_quantize_op_dict[op.inputs[1].name]
+                quantizer.enabled = True
+                quantizer.set_bitwidth(8)
+                quantizer.use_symmetric_encodings = True
 
 
 def _tie_quantizers_for_kv_cache(

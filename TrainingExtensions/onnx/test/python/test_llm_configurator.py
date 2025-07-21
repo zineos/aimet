@@ -12,6 +12,8 @@ from aimet_onnx.quantsim import QuantizationSimModel as QuantSimOnnx
 
 from aimet_onnx.experimental.llm_configurator.llm_configurator import (
     _apply_int8_kv_cache_tying_and_lm_head,
+    _set_matmul_second_input_to_8b,
+    _get_quantizer_no_split_slice,
 )
 
 import onnx
@@ -28,6 +30,10 @@ from transformers.models.phi3.modeling_phi3 import Phi3ForCausalLM, Phi3Config
 from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM, Qwen2Config
 
 from transformers.cache_utils import DynamicCache
+
+from .models import models_for_tests
+
+from aimet_onnx.quantsim import QuantizationSimModel
 
 
 def _get_enabled_quantizer_name(quant_sim, tensor_name: str) -> QcQuantizeOp:
@@ -362,3 +368,15 @@ class TestLLMConfigurator:
         apply_to_model("qwen", tmp_path)
 
         apply_to_model("phi", tmp_path)
+
+    def test_set_matmul_second_input_to_8b(self):
+        model = models_for_tests.model_with_split_matmul()
+        sim = QuantizationSimModel(model)
+
+        quantizer = _get_quantizer_no_split_slice(sim, "reshape_output")
+
+        _set_matmul_second_input_to_8b(sim)
+
+        quantizer = sim.qc_quantize_op_dict["reshape_output"]
+        assert quantizer.enabled == True
+        assert quantizer.bitwidth == 8
