@@ -1,0 +1,36 @@
+name: Notify public Github activity on Slack
+
+on:
+  issues:
+    types: [opened]
+
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  notify_new_issue:
+    if: ${{ github.server_url == 'https://github.com' && github.event_name == 'issues' && github.event.action == 'opened' }}
+    name: Notify new issue created on public github
+    runs-on: ubuntu-latest
+    steps:
+    - uses: slackapi/slack-github-action@v1.25.0
+      with:
+        # channel-id: C0898PQVA31
+        channel-id: C08N1D98RT3
+        slack-message: "New issue created public Github: ${{ github.event.issue.html_url }}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFIER_TOKEN }}
+
+  notify_new_pr:
+    if: ${{ github.server_url == 'https://github.com' && github.event_name == 'pull_request' && github.event.action == 'opened' }}
+    name: Notify new PR created on public github
+    runs-on: ubuntu-latest
+    steps:
+    - uses: slackapi/slack-github-action@v1.25.0
+      with:
+        # channel-id: C0898PQVA31
+        channel-id: C08N1D98RT3
+        slack-message: "New PR created public Github: ${{ github.event.pull_request.html_url }}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFIER_TOKEN }}
