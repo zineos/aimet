@@ -87,6 +87,21 @@ class TestCLS:
         ordered_layer_groups_names = [op.dotted_name for op in ordered_layer_groups]
         assert ordered_layer_groups_names == ["/conv2/Conv", "/conv3/Conv"]
 
+    def test_long_sequential_model(self):
+        model = models_for_tests.long_sequential_model()
+        connected_graph = ConnectedGraph(model)
+        ordered_module_list = get_ordered_list_of_conv_modules(
+            connected_graph.starting_ops
+        )
+        graph_search_utils = GraphSearchUtils(
+            connected_graph,
+            ordered_module_list,
+            cls_supported_layer_types,
+            cls_supported_activation_types,
+        )
+        ordered_layer_groups = graph_search_utils.find_layer_groups_to_scale()[0]
+        assert len(ordered_layer_groups) == 1000
+
     def test_find_cls_sets_depthwise_model(self):
         model = models_for_tests.depthwise_conv_model()
 

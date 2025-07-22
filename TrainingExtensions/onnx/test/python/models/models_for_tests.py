@@ -1029,6 +1029,22 @@ class RoiModel(torch.nn.Module):
         return self.roi(*inputs)
 
 
+class LongSequentialModel(nn.Module):
+    """A model with many back to back Conv -> Relus. Used to test for GraphSearchUtils maximum recursion error.
+    Expected inputs: 3 inputs, all of size (1, 3, 1, 1)"""
+
+    def __init__(self):
+        super(LongSequentialModel, self).__init__()
+        self.seq_list = nn.Sequential()
+        for _ in range(1000):
+            self.seq_list.append(nn.Conv2d(3, 3, (1, 1)))
+            self.seq_list.append(nn.ReLU())
+
+    def forward(self, *inputs):
+        x = self.seq_list(inputs[0])
+        return x
+
+
 def build_dummy_model():
     """BUild dummy ONNX model for testing"""
     op = OperatorSetIdProto()
@@ -1130,6 +1146,37 @@ def build_lstm_gru_dummy_model():
     model = helper.make_model(onnx_graph, opset_imports=[op])
 
     return model
+
+
+def long_sequential_model(
+    training=torch.onnx.TrainingMode.EVAL, opset_version=_DEFAULT_OPSET_VERSION
+):
+    x = torch.randn(1, 3, 1, 1)
+    model = LongSequentialModel()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        save_path = os.path.join(tmp_dir, "model_long_sequential.onnx")
+        # Export the model
+        torch.onnx.export(
+            model,  # model being run
+            x,  # model input (or a tuple for multiple inputs)
+            save_path,  # where to save the model (can be a file or file-like object)
+            training=training,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=min(
+                opset_version, 20
+            ),  # the ONNX version to export the model to
+            do_constant_folding=True,  # whether to execute constant folding for optimization
+            input_names=["input"],  # the model's input names
+            output_names=["output"],
+        )
+
+        model = load_model(save_path)
+        if opset_version > 20:
+            model = onnx.version_converter.convert_version(model, opset_version)
+
+        model_onnx = ONNXModel(model)
+    return model_onnx
 
 
 def single_residual_model(

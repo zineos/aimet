@@ -262,49 +262,53 @@ class GraphSearchUtils:
 
         return cls_sets
 
-    def find_downstream_layer_groups_to_scale(
-        self, op, layer_groups: List, current_group=None, visited_nodes=None
-    ):
+    def find_downstream_layer_groups_to_scale(self, op, layer_groups: List):
         """
-        Recursive function to find cls layer groups downstream from a given op
+        Iterative function to find cls layer groups downstream from a given op
         :param op: Starting op to search from
         :param layer_groups: Running list of layer groups
-        :param current_group: Running current layer group
-        :param visited_nodes: Running list of visited nodes (to short-circuit recursion)
         """
+        visited_nodes = set()
 
-        if not visited_nodes:
-            visited_nodes = []
-        if not current_group:
-            current_group = []
+        ops_and_groups_to_traverse = [(op, [])]
+        while ops_and_groups_to_traverse:
+            curr_op, current_group = ops_and_groups_to_traverse.pop(0)
 
-        if op in visited_nodes:
-            return
-        visited_nodes.append(op)
+            if curr_op in visited_nodes:
+                if (len(current_group) > 1) and (current_group not in layer_groups):
+                    layer_groups.append(current_group)
+                continue
 
-        # If current node is Conv2D, add to the current group
-        if op.get_module() and op.type in self._cls_supported_layer_types:
-            current_group.append(op)
+            visited_nodes.add(curr_op)
 
-        # Terminating condition for current group
-        if (
-            not op.get_module()
-            or not op.type
-            in self._cls_supported_layer_types + self._cls_supported_activation_types
-            or len(op.output_ops) > 1
-        ):
-            if (len(current_group) > 1) and (current_group not in layer_groups):
-                layer_groups.append(current_group)
-            current_group = []
+            # If current node is CLE-able, add to the current group
+            if curr_op.get_module() and curr_op.type in self._cls_supported_layer_types:
+                current_group.append(curr_op)
 
-        for consumer in op.output_ops:
-            self.find_downstream_layer_groups_to_scale(
-                consumer, layer_groups, current_group, visited_nodes
-            )
+            # Terminating condition for current group:
+            # 1. Op does not have a module (not quantizable)
+            # 2. Op type is not a supported type for CLE
+            # 3. Op output is used by multiple consumers (start of a branch)
+            # 4. Op has no output ops (leaf op)
+            if (
+                not curr_op.get_module()
+                or not curr_op.type
+                in self._cls_supported_layer_types
+                + self._cls_supported_activation_types
+                or len(curr_op.output_ops) > 1
+                or len(curr_op.output_ops) == 0
+            ):
+                if (len(current_group) > 1) and (current_group not in layer_groups):
+                    layer_groups.append(current_group)
 
-        # Reached a leaf.. See if the current group has something to grab
-        if (len(current_group) > 1) and (current_group not in layer_groups):
-            layer_groups.append(current_group)
+                for consumer in curr_op.output_ops:
+                    ops_and_groups_to_traverse.insert(0, (consumer, []))
+
+            else:
+                assert len(curr_op.output_ops) == 1
+                ops_and_groups_to_traverse.insert(
+                    0, (curr_op.output_ops[0], current_group)
+                )
 
     def does_module_have_relu_activation(self, module) -> bool:
         """
