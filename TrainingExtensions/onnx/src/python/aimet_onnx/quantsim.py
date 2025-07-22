@@ -80,7 +80,11 @@ from aimet_common.defs import (
     EncodingType,
     _quant_scheme_aliases,
 )
-from aimet_common.onnx._utils import _add_onnx_qdq_nodes, _is_grid_preserving_op
+from aimet_common.onnx._utils import (
+    _add_onnx_qdq_nodes,
+    _remove_onnx_qdq_nodes,
+    _is_grid_preserving_op,
+)
 from aimet_common.quantsim import (
     extract_global_quantizer_args,
     VALID_ENCODING_VERSIONS,
@@ -108,6 +112,7 @@ from aimet_onnx.qc_quantize_op import (
     TensorQuantizerParams,
     GroupedBlockQuantizeDequantize,
     _EncodingMismatchInfo,
+    _2_0_0_json_encoding_to_TfEncoding_list,
 )
 from aimet_onnx.quantsim_config.quantsim_config import QuantSimConfigurator
 from aimet_onnx.utils import (
@@ -448,6 +453,75 @@ class QuantizationSimModel:
             user_onnx_libs=self._user_onnx_libs,
             path=self._path,
         )
+
+    @classmethod
+    def _from_onnx_qdq(cls, model: ModelProto, **kwargs) -> "QuantizationSimModel":
+        """
+        Create sim from onnx QDQ model with following strategy
+
+        1. Remove Q/DQ nodes from model
+        2. Extract encodings from the removed Q/DQ nodes
+        3. Create QuantizationSimModel
+        4. Load extracted encodings to sim
+
+        Args:
+            model: ONNX model that contains QuantizeLinear/DequantizeLinear
+            **kwargs: same as QuantizationSimModel.__init__
+        """
+        # pylint: disable=protected-access
+
+        # Removes Q/DQ node from model and extract them into 2.0.0 json encoding
+        encodings = _remove_onnx_qdq_nodes(model)
+
+        # Create sim
+        sim = QuantizationSimModel(model, **kwargs)
+
+        quantizable_tensor_names = set(
+            name
+            for name, qtzr in sim.qc_quantize_op_dict.items()
+            if qtzr and qtzr.enabled
+        )
+        encoding_names = set(enc["name"] for enc in encodings)
+        excess_encodings = encoding_names - quantizable_tensor_names
+
+        if excess_encodings:
+            raise NotImplementedError(
+                "Unexpected QuantizeLinear/DequantizeLinear nodes were found "
+                f"for the following tensors: {excess_encodings}"
+            )
+
+        # Load encodings to sim
+        for enc in encodings:
+            channel_axis = block_axis = block_size = None
+            if "axis" in enc:
+                if "block_size" in enc:
+                    block_axis = enc["axis"]
+                    channel_axis = ...
+                    raise NotImplementedError(
+                        "Creating QuantizationSimModel from onnx models with "
+                        "blockwise QuantizeLinear/DequantizeLinear is not supported yet."
+                    )
+                else:
+                    channel_axis = enc["axis"]
+
+            qtzr = sim.qc_quantize_op_dict[enc["name"]]
+
+            if channel_axis is not None:
+                if not qtzr.tensor_quantizer_params:
+                    raise RuntimeError(
+                        f"Per-channel quantization for tensor {enc['name']} is not supported"
+                    )
+
+                qtzr.tensor_quantizer_params.channel_axis = channel_axis
+                qtzr.enable_per_channel_quantization()
+
+                if block_axis is not None:
+                    qtzr.tensor_quantizer_params.block_axis = block_axis
+                    qtzr._enable_blockwise_quantization(block_size)
+
+            qtzr.load_encodings(_2_0_0_json_encoding_to_TfEncoding_list(enc))
+
+        return sim
 
     def get_supported_kernels(self) -> Dict:
         """

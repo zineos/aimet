@@ -60,21 +60,20 @@ from aimet_onnx import lpbq_utils
 OpMode = libpymo.TensorQuantizerOpMode
 
 
+@dataclass
 class TensorQuantizerParams:
     """
     Per channel quantization parameters
+
+    Args:
+      tensor_shape Shape of the input tensor
+      channel_axis Axis along which per channel quantization is performed
+      block_axis Axis along which blockwise quantization is performed
     """
 
-    def __init__(self, tensor_shape, channel_axis: int = None, block_axis: int = None):
-        """
-
-        :param tensor_shape: Shape of the input tensor
-        :param channel_axis: Axis along which per channel quantization is performed
-        :param block_axis: Axis along which blockwise quantization is performed
-        """
-        self.tensor_shape = tensor_shape
-        self.channel_axis = channel_axis
-        self.block_axis = block_axis
+    tensor_shape: Tuple[int, ...]
+    channel_axis: Optional[int] = None
+    block_axis: Optional[int] = None
 
 
 # pylint: disable=too-many-public-methods
@@ -1282,3 +1281,50 @@ class _EncodingMismatchInfo:
             or self.is_unsigned_symmetric_mismatch is not None
             or self.enc_type_mismatch is not None
         )
+
+
+def _json_encoding_to_TfEncoding_list(enc: dict) -> List[libpymo.TfEncoding]:
+    if "y_scale" in enc:
+        return _2_0_0_json_encoding_to_TfEncoding_list(enc)
+
+    if "per_channel_float_scale" in enc:
+        raise NotImplementedError("v2.0.0 LPBQ encoding is not implemented")
+
+    if "enc_type" in enc:
+        raise NotImplementedError("v1.0.0 encoding is not implemented")
+
+    if "min" in enc:
+        raise NotImplementedError("v0.6.1 encoding is not implemented")
+
+    raise ValueError("Invalid json encoding format: {enc}")
+
+
+def _2_0_0_json_encoding_to_TfEncoding_list(
+    enc: Dict[str, Union[str, int, np.ndarray]],
+) -> List[libpymo.TfEncoding]:
+    scale = np.array(enc["y_scale"], dtype=np.float32)
+    zero_point = (
+        np.array(enc["y_zero_point"], dtype=np.int64)
+        if "y_zero_point" in enc
+        else np.zeros(scale.shape, dtype=np.int64)
+    )
+    *_, bitwidth = enc["output_dtype"].split("int")
+    bitwidth = int(bitwidth)
+    unsigned = enc["output_dtype"].startswith("uint")
+
+    scale = scale.flatten()
+    zero_point = zero_point.flatten()
+
+    tf_encodings = [libpymo.TfEncoding() for _ in range(scale.size)]
+
+    for tf_encoding, s, z in zip(tf_encodings, scale, zero_point):
+        delta = s
+        offset = -z if unsigned else -(z + 2 ** (bitwidth - 1))
+
+        tf_encoding.delta = delta
+        tf_encoding.offset = offset
+        tf_encoding.min = delta * offset
+        tf_encoding.max = delta * (offset + 2**bitwidth - 1)
+        tf_encoding.bw = bitwidth
+
+    return tf_encodings

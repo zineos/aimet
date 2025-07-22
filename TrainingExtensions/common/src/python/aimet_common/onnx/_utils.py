@@ -36,10 +36,10 @@
 # =============================================================================
 """Collection of onnx-related util functions that can be shared across aimet-onnx and aimet-torch"""
 
-# pylint: disable=no-member
+# pylint: disable=no-member, import-error
 
-from collections import deque
-from typing import Iterable, Optional, Sequence, Dict, List
+from collections import deque, defaultdict
+from typing import Iterable, Optional, Sequence, Dict, List, Union
 
 import os
 import tempfile
@@ -591,3 +591,237 @@ def _convert_version(
 
     logger.info("The opset of the onnx model is updated to %s.", target_opset_version)
     return model
+
+
+def _remove_onnx_qdq_nodes(
+    model: onnx.ModelProto,
+) -> List[Dict[str, Union[str, int, np.ndarray]]]:
+    initializers = {init.name: init for init in model.graph.initializer}
+    q_nodes: Dict[str, NodeProto] = {}
+    dq_nodes: Dict[str, NodeProto] = {}
+    producers: Dict[str, NodeProto] = {}
+    consumers: Dict[str, Dict[str, NodeProto]] = defaultdict(dict)
+    graph_outputs = set(output.name for output in model.graph.output)
+
+    for node in model.graph.node:
+        if node.op_type == "QuantizeLinear":
+            q_nodes[node.name] = node
+        elif node.op_type == "DequantizeLinear":
+            dq_nodes[node.name] = node
+        for inp in node.input:
+            consumers[inp].update({node.name: node})
+        for out in node.output:
+            producers[out] = node
+
+    to_be_removed = {}
+    for q in q_nodes.values():
+        q_output_consumers = consumers[q.output[0]]
+
+        if (
+            q_output_consumers
+            and all(
+                # All Q must be followed by DQ
+                consumer.op_type == "DequantizeLinear"
+                # Q-DQ must share same scale and zp
+                and consumer.input[1:] == q.input[1:]
+                # Scale and zp must be initializers.
+                # This rules out LPBQ which takes runtime-computed scale as input
+                and set(consumer.input[1:]) <= initializers.keys()
+                for consumer in q_output_consumers.values()
+            )
+        ):
+            to_be_removed.update(
+                {
+                    q.name: q,
+                    **q_output_consumers,
+                }
+            )
+
+    # Reconnect nodes
+    for dq in model.graph.node:
+        if dq.op_type != "DequantizeLinear":
+            continue
+
+        producer = producers.get(dq.input[0])
+        if producer and producer.op_type == "QuantizeLinear":
+            q = producer
+            producer = producers.get(q.input[0])
+        else:
+            q = None
+
+        if dq.output[0] in graph_outputs and not producer:
+            # Edge case: This means the model was in form of:
+            #   (model_input) --> Q -> DQ -> (model_output)
+            # or:
+            #   (constant) -----> Q -> DQ -> (model_output)
+            #
+            # We can't preserve the I/O names in this case
+            raise RuntimeError(
+                f"Node {q.name} (op_type: {q.op_type}) can't be removed because "
+                "it's the only connection between the model's input and output."
+            )
+
+        if not q:
+            # Standalone DQs can be removed if it only takes static inputs.
+            #
+            # Before:
+            #   (constant) -----> Q -> DQ ----> (consumers or model_output)
+            #                               ↑
+            #                           dq.output[0]
+            #                           (=new_name)
+            # After:
+            #   (constant) -------------------> (consumers or model_output)
+            #                               ↑
+            #                           dq.output[0]
+            #                           (=new_name)
+
+            # Standalone DequantizeLinear that are not preceded by QuantizeLinear
+            # In practice, this condition mostly indicates one of the following situations:
+            #   * LPBQ
+            #   * INT32 bias DQ (QuantizeLinear doesn't support INT32)
+            raise NotImplementedError(
+                f"Removing standalone DequantizeLinear {dq.name} that isn't "
+                "preceded by QuantizeLinear is not supported yet. "
+            )
+
+        if dq.output[0] in graph_outputs:
+            # DQ output is part of graph outputs.
+            # We should preserve DQ's output name to preserve the graph output name
+            #
+            # Before:
+            #                             +--> consumers
+            #   producer -----> Q -> DQ --+--> (model_output)
+            #                             ↑
+            #                         dq.output[0]
+            #                         (=new_name)
+            # After:
+            #                             +--> consumers
+            #   producer -----------------+--> (model_output)
+            #                             ↑
+            #                         dq.output[0]
+            #                         (=new_name)
+            new_name = dq.output[0]
+        else:
+            # Before:
+            #   producer -----> Q -> DQ -----> consumers
+            #              ↑
+            #           q.input[0]
+            #          (=new_name)
+            # After:
+            #   producer --------------------> consumers
+            #              ↑
+            #           q.input[0]
+            #          (=new_name)
+            new_name = q.input[0]
+
+        for consumer in consumers[dq.output[0]].values():
+            for i, inp in enumerate(consumer.input):
+                if inp == dq.output[0]:
+                    consumer.input[i] = new_name
+        if producer:
+            for i, out in enumerate(producer.output):
+                if out == q.input[0]:
+                    producer.output[i] = new_name
+
+    # Remove nodes
+    node = [
+        producer
+        for producer in producers.values()
+        if producer.name not in to_be_removed
+    ]
+    model.graph.ClearField("node")
+    model.graph.node.extend(node)
+    from onnxruntime.quantization.onnx_quantizer import ONNXModel
+
+    ONNXModel(model).remove_unused_constant()
+
+    # Convert removed Q/DQ nodes to encoding
+    def _to_encoding(dq: NodeProto) -> Dict[str, Union[str, int, np.ndarray]]:
+        q = producers.get(dq.input[0])
+
+        if not q or q.op_type != "QuantizeLinear":
+            raise RuntimeError
+
+        if any(dq.output[0] == graph_out.name for graph_out in model.graph.output):
+            input_name = dq.output[0]
+        else:
+            input_name = q.input[0]
+
+        scale_name = dq.input[1]
+        if initializers[scale_name].data_type not in (
+            TensorProto.FLOAT,
+            TensorProto.FLOAT16,
+        ):
+            raise NotImplementedError(
+                f'Found scale "{scale_name}" with unsupported dtype '
+                f"{onnx.helper.tensor_dtype_to_np_dtype(initializers[scale_name].data_type)}. "
+                "Currently only float32 and float16 are supported."
+            )
+
+        scale = to_array(initializers[dq.input[1]])
+
+        if len(dq.input) > 2:
+            zp_name = dq.input[2]
+            zp_tensor_proto = initializers[zp_name]
+
+            if zp_tensor_proto.data_type not in (
+                TensorProto.INT4,
+                TensorProto.INT8,
+                TensorProto.INT16,
+                TensorProto.INT32,
+                TensorProto.UINT4,
+                TensorProto.UINT8,
+                TensorProto.UINT16,
+            ):
+                raise RuntimeError(
+                    f'Found zero_point "{zp_name}" with unsupported dtype '
+                    f"{onnx.helper.tensor_dtype_to_string(zp_tensor_proto.data_type)}. "
+                    "Only [u]int4, [u]int8, [u]int16, and int32 are supported."
+                )
+
+            zp = to_array(zp_tensor_proto)
+            output_dtype = zp_tensor_proto.data_type
+        else:
+            zp = None
+            try:
+                output_dtype = next(
+                    attr.i for attr in q.attribute if attr.name == "output_dtype"
+                )
+            except StopIteration:
+                # ONNX assumes uint8 if neither zero_point nor output_dtype is specified
+                output_dtype = TensorProto.UINT8
+
+        *_, output_dtype = (
+            onnx.helper.tensor_dtype_to_string(output_dtype).lower().split(".")
+        )
+
+        encoding = {
+            "name": input_name,
+            "y_scale": scale,
+            "output_dtype": output_dtype,
+        }
+
+        if zp is not None:
+            encoding["y_zero_point"] = zp
+
+        for attr in dq.attribute:
+            if attr.name == "axis":
+                encoding["axis"] = attr.i
+            elif attr.name == "block_size":
+                encoding["block_size"] = attr.i
+            elif attr.name == "output_dtype":
+                output_dtype = onnx.helper.tensor_dtype_to_np_dtype(attr.i)
+                if output_dtype != encoding["output_dtype"]:
+                    raise RuntimeError(
+                        f"Attribute output_dtype={output_dtype} of node {dq.name} "
+                        "is inconsistent with "
+                        f"the dtype of zero_point {encoding['output_dtype']} "
+                    )
+
+        return encoding
+
+    return [
+        _to_encoding(dq)
+        for dq in to_be_removed.values()
+        if dq.op_type == "DequantizeLinear"
+    ]

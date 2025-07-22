@@ -4403,3 +4403,190 @@ def test_onnx_qdq_export_output_name_swapping():
     )
     for input in all_inputs:
         assert any(input == dq.output[0] for dq in dq_nodes)
+
+
+@pytest.mark.parametrize(
+    "param_type, activation_type",
+    [
+        (aimet_onnx.int4, aimet_onnx.int4),
+        (aimet_onnx.int8, aimet_onnx.int8),
+        (aimet_onnx.int8, aimet_onnx.int16),
+    ],
+)
+@pytest.mark.parametrize(
+    "model_factory",
+    [
+        partial(single_residual_model, opset_version=21),
+        partial(transposed_conv_model, opset_version=21),
+        partial(standalone_batchnorm, (1, 32, 4096, 10)),
+        partial(standalone_batchnorm_constants, (1, 32, 4096, 10)),
+        partial(standalone_instancenorm, (1, 32, 40960)),
+        partial(standalone_layernorm, (1, 40960, 32)),
+    ],
+)
+def test_from_onnx_qdq(model_factory, param_type, activation_type):
+    """
+    Given: onnx QDQ model exported from aimet QuantizationSimModel
+    """
+    sim = QuantizationSimModel(
+        model_factory(),
+        param_type=param_type,
+        activation_type=activation_type,
+        config_file="htp_v81",
+    )
+    input_name = sim.model.model.graph.input[0].name
+    input_shape = tuple(
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
+    inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
+
+    sim.compute_encodings([inputs])
+    qdq_model = sim.to_onnx_qdq()
+
+    """
+    When: Create sim from onnx QDQ model
+    Then: The new sim should be in same state as the original sim
+    """
+    sim_2 = QuantizationSimModel._from_onnx_qdq(
+        sim.to_onnx_qdq(), config_file="htp_v81"
+    )
+    _assert_sim_equal(sim, sim_2)
+    assert np.allclose(
+        sim.session.run(None, inputs),
+        sim_2.session.run(None, inputs),
+    )
+
+    """
+    When: Call compute_encodings with new sim
+    Then: All states of the new sim should remain unchanged
+    """
+    sim_2.compute_encodings([inputs])
+    _assert_sim_equal(sim, sim_2)
+    assert np.allclose(
+        sim.session.run(None, inputs),
+        sim_2.session.run(None, inputs),
+    )
+
+    """
+    When: Export onnx QDQ from the new sim
+    Then: The new onnx QDQ model should be in same state as the original onnx QDQ
+    """
+    qdq_model_2 = sim_2.to_onnx_qdq()
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess = ort.InferenceSession(
+        qdq_model.SerializeToString(), sess_options=sess_options
+    )
+    sess_2 = ort.InferenceSession(
+        qdq_model_2.SerializeToString(), sess_options=sess_options
+    )
+
+    assert np.allclose(sess.run(None, inputs), sess_2.run(None, inputs))
+
+
+def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
+    assert sim_1.qc_quantize_op_dict.keys() == sim_2.qc_quantize_op_dict.keys()
+    assert sorted(sim_1.activation_names) == sorted(sim_2.activation_names)
+    assert sorted(sim_1.param_names) == sorted(sim_2.param_names)
+
+    for key in sim_1.qc_quantize_op_dict:
+        qtzr_1 = sim_1.qc_quantize_op_dict[key]
+        qtzr_2 = sim_2.qc_quantize_op_dict[key]
+
+        assert qtzr_1.enabled == qtzr_2.enabled
+        assert qtzr_1.tensor_quantizer_params == qtzr_2.tensor_quantizer_params
+
+        if not qtzr_1.enabled:
+            continue
+
+        e1 = qtzr_1.export_encodings("2.0.0")
+        e2 = qtzr_2.export_encodings("2.0.0")
+        assert np.allclose(e1["y_scale"], e2["y_scale"])
+        assert e1.get("y_zero_point") == e2.get("y_zero_point")
+        assert e1.get("output_dtype") == e2.get("output_dtype")
+        assert e1.get("axis") == e2.get("axis")
+        assert e1.get("block_size") == e2.get("block_size")
+
+
+def test_from_onnx_qdq_output_dtype():
+    """
+    Given: onnx QDQ model utilizing "output_dtype" attribute
+    """
+    model = onnx.helper.make_model(
+        opset_imports=[onnx.helper.make_operatorsetid("", 21)],
+        graph=onnx.helper.make_graph(
+            name="model",
+            inputs=[
+                onnx.helper.make_tensor_value_info(
+                    "input", onnx.TensorProto.FLOAT, shape=[10, 10]
+                )
+            ],
+            outputs=[
+                onnx.helper.make_tensor_value_info(
+                    "output", onnx.TensorProto.FLOAT, shape=[10, 10]
+                )
+            ],
+            initializer=[
+                onnx.numpy_helper.from_array(
+                    np.array(0.1, dtype=np.float32), name="input_scale"
+                ),
+                onnx.numpy_helper.from_array(
+                    np.array(5, dtype=np.uint8), name="input_zero_point"
+                ),
+                onnx.numpy_helper.from_array(
+                    np.array(0.1, dtype=np.float32), name="output_scale"
+                ),
+            ],
+            nodes=[
+                onnx.helper.make_node(
+                    "QuantizeLinear",
+                    inputs=["input", "input_scale", "input_zero_point"],
+                    outputs=["input_q"],
+                    output_dtype=onnx.TensorProto.UINT8,
+                    name="input_q",
+                ),
+                onnx.helper.make_node(
+                    "DequantizeLinear",
+                    inputs=["input_q", "input_scale", "input_zero_point"],
+                    outputs=["input_qdq"],
+                    name="input_dq",
+                ),
+                onnx.helper.make_node(
+                    "Relu",
+                    inputs=["input_qdq"],
+                    outputs=["Relu_output_0"],
+                    name="relu",
+                ),
+                onnx.helper.make_node(
+                    "QuantizeLinear",
+                    inputs=["Relu_output_0", "output_scale"],
+                    outputs=["output_q"],
+                    output_dtype=onnx.TensorProto.UINT8,
+                    name="output_q",
+                ),
+                onnx.helper.make_node(
+                    "DequantizeLinear",
+                    inputs=["output_q", "output_scale"],
+                    outputs=["output"],
+                    name="output_dq",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+
+    """
+    When: Create sim from onnx QDQ and re-export to QDQ
+    Then: Re-exported QDQ model should produce same output as the original model
+    """
+    model_2 = QuantizationSimModel._from_onnx_qdq(copy.deepcopy(model)).to_onnx_qdq()
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess = ort.InferenceSession(model.SerializeToString(), sess_options=sess_options)
+    sess_2 = ort.InferenceSession(
+        model_2.SerializeToString(), sess_options=sess_options
+    )
+    input = {"input": np.random.randn(10, 10).astype(np.float32)}
+    assert np.equal(sess.run(None, input), sess_2.run(None, input)).all()
