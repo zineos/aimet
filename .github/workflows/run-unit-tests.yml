@@ -41,40 +41,14 @@ jobs:
           path: "downloads"
       - name: Create python virtual environment
         if: ${{ matrix.id  != 'tf-torch-cpu' }}
-        run: |
-          if [ "${{ matrix.PIP_INDEX }}" = "pypi" ] ; then
-            # PyPI release does NOT have +cpu or +cu suffix
-            export whl_file=$(\
-                find downloads \
-                -regextype posix-extended \
-                -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
-            )
-          else
-            # Github release has +cpu or +cu suffix
-            export whl_file=$(\
-                find downloads \
-                -regextype posix-extended \
-                -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+\+(cpu|cu).+.whl" \
-            )
-          fi
-
-          export PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/$(echo "${{ matrix.VER_CUDA }}" | awk -F'.' '{print ($1!="")? "cu"$1$2 : "cpu"}')"
-
-          curl -o ./conda.sh -L "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname -s)-$(uname -m).sh"
-          bash ./conda.sh -u -b -p ./.conda
-
-          # torch-gpu: create conda environment with CUDA packages (needed for deepspeed related tests)
-          # onnx-gpu: create conda environment with only cudart
-          # tf-gpu: create basic conda environment, since correct combination for CUDA and CuDNN isn't available on CUDA-11.8 channel, we are not testing tf-gpu on CUDA device
-          if [ "${{matrix.VER_TORCH}}" != "" ] && [ "${{matrix.VER_CUDA}}" != "" ]; then
-              ./.conda/bin/conda create --name "${{ matrix.id }}" python="${{ matrix.VER_PYTHON }}" cuda-runtime cuda-libraries-dev cuda-compiler --channel nvidia/label/cuda-${{ matrix.VER_CUDA }}
-          elif [ "${{matrix.VER_ONNXRUNTIME}}" != "" ] && [ "${{matrix.VER_CUDA}}" != "" ]; then
-              ./.conda/bin/conda create --name "${{ matrix.id }}" python="${{ matrix.VER_PYTHON }}" cuda-runtime --channel nvidia/label/cuda-${{ matrix.VER_CUDA }}
-          else
-              ./.conda/bin/conda create --name "${{ matrix.id }}" python="${{ matrix.VER_PYTHON }}"
-          fi
-
-          ./.conda/bin/conda run --live-stream --name "${{ matrix.id }}" python3 -m pip install "${whl_file}[test, v1-deps]"
+        uses: ./.github/actions/setup-conda-env
+        with:
+          ENV_NAME: ${{ matrix.id }}
+          VER_PYTHON: ${{ matrix.VER_PYTHON }}
+          VER_CUDA: ${{ matrix.VER_CUDA }}
+          VER_TORCH: ${{ matrix.VER_TORCH }}
+          VER_ONNXRUNTIME: ${{ matrix.VER_ONNXRUNTIME }}
+          PIP_INDEX: ${{ matrix.PIP_INDEX }}
       - name: Run pylint
         if: matrix.ENABLE_TESTS == 'ON'
         run: |
