@@ -85,6 +85,8 @@ public:
 
 void pyUpdateStats(BlockTensorQuantizer &self, py::array_t<float> tensor);
 
+py::array_t<float> pyQuantizeDequantize(BlockTensorQuantizer &self, py::array_t<float> inputTensor);
+
 }   // namespace DlQuantization
 
 #endif   // AIMET_PY_TENSOR_QUANTIZER_H

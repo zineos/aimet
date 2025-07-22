@@ -863,6 +863,55 @@ class TestQcQuantizeOp:
         with pytest.raises(RuntimeError):
             q1._merge_constraints(q2)
 
+    @pytest.mark.parametrize("contiguous", (True, False))
+    def test_quantize_dequantize(self, contiguous):
+        tensor_quantizer_params = TensorQuantizerParams((10, 15), 0, 1)
+        calibration_tensor = np.random.randn(10, 15).astype(np.float32)
+        input_tensor = (
+            np.random.randn(*calibration_tensor.shape).astype(np.float32) * 10
+        )
+        if not contiguous:
+            input_tensor = input_tensor.T.copy()
+            input_tensor = input_tensor.T
+            assert not input_tensor.flags["C_CONTIGUOUS"]
+
+        quant_info = libquant_info.QcQuantizeInfo()
+        session = create_qc_quantize_model_session(quant_info, input_tensor.shape)
+
+        quantizer = QcQuantizeOp(
+            quant_info,
+            bitwidth=4,
+            op_mode=OpMode.updateStats,
+            tensor_quantizer_params=tensor_quantizer_params,
+        )
+        # per-tensor
+        quantizer.update_encoding_stats(calibration_tensor)
+        quantizer.compute_encodings()
+        quantizer.op_mode = OpMode.quantizeDequantize
+        output = session.run(None, {"input": input_tensor})[0]
+        qdq_output = quantizer.quantize_dequantize(input_tensor)
+        assert np.array_equal(output, qdq_output)
+
+        # per-channel
+        quantizer.reset_encoding_stats()
+        quantizer.enable_per_channel_quantization()
+        quantizer.update_encoding_stats(input_tensor)
+        quantizer.compute_encodings()
+        quantizer.op_mode = OpMode.quantizeDequantize
+        output = session.run(None, {"input": input_tensor})[0]
+        qdq_output = quantizer.quantize_dequantize(input_tensor)
+        assert np.array_equal(output, qdq_output)
+
+        # per-block
+        quantizer.reset_encoding_stats()
+        quantizer._enable_blockwise_quantization(block_size=3)
+        quantizer.update_encoding_stats(input_tensor)
+        quantizer.compute_encodings()
+        quantizer.op_mode = OpMode.quantizeDequantize
+        output = session.run(None, {"input": input_tensor})[0]
+        qdq_output = quantizer.quantize_dequantize(input_tensor)
+        assert np.array_equal(output, qdq_output)
+
 
 blockwise_qdq_test_1 = {
     "input_shape": (2, 3, 4),

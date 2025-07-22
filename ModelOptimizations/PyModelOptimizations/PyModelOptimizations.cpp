@@ -196,6 +196,7 @@ PYBIND11_MODULE(_libpymo, m)
         .def("computeEncodings", &DlQuantization::BlockTensorQuantizer::computeEncodings)
         .def("getShape", &DlQuantization::BlockTensorQuantizer::getShape)
         .def("updateStats", &pyUpdateStats)
+        .def("quantizeDequantize", &pyQuantizeDequantize)
         .def_readwrite("bitwidth", &DlQuantization::BlockTensorQuantizer::bitwidth)
         .def_readwrite("isEncodingValid", &DlQuantization::BlockTensorQuantizer::isEncodingValid);
 

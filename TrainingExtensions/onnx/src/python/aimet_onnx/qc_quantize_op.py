@@ -779,6 +779,20 @@ class QcQuantizeOp:
         """
         self._tensor_quantizer.updateStats(tensor)
 
+    def quantize_dequantize(self, input_tensor: np.ndarray) -> np.ndarray:
+        """
+        Convert an input tensor from float to quantized int using the computed encodings and back to float.
+
+        :param input_tensor: Input tensor
+        :return: quantized-dequantized tensor
+        """
+        input_tensor = np.ascontiguousarray(input_tensor, dtype=input_tensor.dtype)
+        output_tensor = self._tensor_quantizer.quantizeDequantize(input_tensor)
+        if output_tensor.shape != input_tensor.shape:
+            raise ValueError("Output tensor shape mismatch after quantize-dequantize.")
+
+        return output_tensor
+
     def clip_and_recompute_encodings(self, clamp_val: float) -> bool:
         """
         Clips min and max values and recomputes the encodings
