@@ -23,7 +23,7 @@ Prerequisites
 .. code-block:: bash
 
     wget -P ./imagenet_dataset https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz
-    wget -P ./imagetnet_dataset https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar
+    wget -P ./imagenet_dataset https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar
 
 If you already have imagenet dataset locally that you would like to use, simply replace dataset path from `imagenet_dataset` later.
 
