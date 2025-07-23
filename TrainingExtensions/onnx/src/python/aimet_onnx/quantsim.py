@@ -520,6 +520,7 @@ class QuantizationSimModel:
                     qtzr._enable_blockwise_quantization(block_size)
 
             qtzr.load_encodings(_2_0_0_json_encoding_to_TfEncoding_list(enc))
+            qtzr.freeze_encodings()
 
         return sim
 

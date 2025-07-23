@@ -4466,7 +4466,7 @@ def test_from_onnx_qdq(
     When: Call compute_encodings with new sim
     Then: All states of the new sim should remain unchanged
     """
-    sim_2.compute_encodings([inputs])
+    sim_2.compute_encodings([{key: val * 2 for key, val in inputs.items()}])
     _assert_sim_equal(sim, sim_2)
     assert np.allclose(
         sim.session.run(None, inputs),
