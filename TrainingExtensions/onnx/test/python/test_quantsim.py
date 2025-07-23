@@ -4405,6 +4405,8 @@ def test_onnx_qdq_export_output_name_swapping():
         assert any(input == dq.output[0] for dq in dq_nodes)
 
 
+# TODO: @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
+@pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize(
     "param_type, activation_type",
     [
@@ -4424,7 +4426,9 @@ def test_onnx_qdq_export_output_name_swapping():
         partial(standalone_layernorm, (1, 40960, 32)),
     ],
 )
-def test_from_onnx_qdq(model_factory, param_type, activation_type):
+def test_from_onnx_qdq(
+    model_factory, param_type, activation_type, prequantize_constants
+):
     """
     Given: onnx QDQ model exported from aimet QuantizationSimModel
     """
@@ -4442,14 +4446,15 @@ def test_from_onnx_qdq(model_factory, param_type, activation_type):
     inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
 
     sim.compute_encodings([inputs])
-    qdq_model = sim.to_onnx_qdq()
+    qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
 
     """
     When: Create sim from onnx QDQ model
     Then: The new sim should be in same state as the original sim
     """
     sim_2 = QuantizationSimModel._from_onnx_qdq(
-        sim.to_onnx_qdq(), config_file="htp_v81"
+        sim._to_onnx_qdq(prequantize_constants=prequantize_constants),
+        config_file="htp_v81",
     )
     _assert_sim_equal(sim, sim_2)
     assert np.allclose(
@@ -4472,7 +4477,9 @@ def test_from_onnx_qdq(model_factory, param_type, activation_type):
     When: Export onnx QDQ from the new sim
     Then: The new onnx QDQ model should be in same state as the original onnx QDQ
     """
-    qdq_model_2 = sim_2.to_onnx_qdq()
+    qdq_model_2 = sim_2._to_onnx_qdq(prequantize_constants=prequantize_constants)
+    assert qdq_model.graph.input == qdq_model_2.graph.input
+    assert qdq_model.graph.output == qdq_model_2.graph.output
 
     sess_options = ort.SessionOptions()
     sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
@@ -4487,13 +4494,24 @@ def test_from_onnx_qdq(model_factory, param_type, activation_type):
 
 
 def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
-    assert sim_1.qc_quantize_op_dict.keys() == sim_2.qc_quantize_op_dict.keys()
-    assert sorted(sim_1.activation_names) == sorted(sim_2.activation_names)
-    assert sorted(sim_1.param_names) == sorted(sim_2.param_names)
+    assert len(sim_1.activation_names) == len(sim_2.activation_names)
+    for key1, key2 in zip(
+        sorted(sim_1.activation_names), sorted(sim_2.activation_names)
+    ):
+        assert key1 == key2 or key1 == key2 + "_qdq" or key2 == key1 + "_qdq"
 
-    for key in sim_1.qc_quantize_op_dict:
-        qtzr_1 = sim_1.qc_quantize_op_dict[key]
-        qtzr_2 = sim_2.qc_quantize_op_dict[key]
+    assert len(sim_1.param_names) == len(sim_2.param_names)
+    for key1, key2 in zip(sorted(sim_1.param_names), sorted(sim_2.param_names)):
+        assert key1 == key2 or key1 == key2 + "_qdq" or key2 == key1 + "_qdq"
+
+    assert len(sim_1.qc_quantize_op_dict) == len(sim_2.qc_quantize_op_dict)
+    for key1, key2 in zip(
+        sorted(sim_1.qc_quantize_op_dict), sorted(sim_2.qc_quantize_op_dict)
+    ):
+        assert key1 == key2 or key1 == key2 + "_qdq" or key2 == key1 + "_qdq"
+
+        qtzr_1 = sim_1.qc_quantize_op_dict[key1]
+        qtzr_2 = sim_2.qc_quantize_op_dict[key2]
 
         assert qtzr_1.enabled == qtzr_2.enabled
         assert qtzr_1.tensor_quantizer_params == qtzr_2.tensor_quantizer_params

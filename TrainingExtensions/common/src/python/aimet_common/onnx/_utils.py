@@ -39,7 +39,8 @@
 # pylint: disable=no-member, import-error
 
 from collections import deque, defaultdict
-from typing import Iterable, Optional, Sequence, Dict, List, Union
+import functools
+from typing import Iterable, Optional, Sequence, Dict, List, Union, Mapping
 
 import os
 import tempfile
@@ -125,6 +126,7 @@ def _add_onnx_qdq_nodes(
     else:
         opset = opset21
 
+    constants = _get_all_constants(model)
     nodes_to_add = []
     tensors_to_add = []
     tensors_to_remove = {}
@@ -227,15 +229,17 @@ def _add_onnx_qdq_nodes(
 
         input_q = None
         if prequantize_constants or output_dtype in ("int32", "uint32"):
-            input_q = _quantize_const(
-                model,
-                input_name,
-                y_scale,
-                y_zero_point,
-                axis,
-                block_size,
-                output_dtype,
-            )
+            const = constants.get(input_name)
+            if const:
+                input_q = _quantize_const(
+                    const,
+                    f"{input_name}_q",
+                    y_scale,
+                    y_zero_point,
+                    axis,
+                    block_size,
+                    output_dtype,
+                )
 
         if input_q:
             nodes_to_add.append(
@@ -291,19 +295,14 @@ def _add_onnx_qdq_nodes(
 
 
 def _quantize_const(
-    model: ModelProto,
+    const: TensorProto,
     name: str,
     y_scale: np.ndarray,
     y_zero_point: np.ndarray,
     axis: Optional[int],
     block_size: Optional[int],
     output_dtype: str,
-) -> Optional[TensorProto]:
-    const = _ParamUtils.get_param_by_name(model, name)
-
-    if not const:
-        return None
-
+) -> TensorProto:
     const = to_array(const).astype(np.float32)
     unsigned, bitwidth = output_dtype.split("int")
     bitwidth = int(bitwidth)
@@ -315,26 +314,61 @@ def _quantize_const(
         clip_min = -(2 ** (bitwidth - 1))
         clip_max = -clip_min - 1
 
-    if axis is not None:
-        axis = (const.ndim + axis) % const.ndim  # Make positive
-        if block_size is None:
-            channel_axis = axis
-            broadcast_shape = tuple(
-                -1 if axis == channel_axis else 1 for axis in range(const.ndim)
-            )
-            y_scale = y_scale.reshape(broadcast_shape)
-            y_zero_point = y_zero_point.reshape(broadcast_shape)
-        else:
-            block_axis = axis
-            y_scale = y_scale.repeat(block_size, axis=block_axis)
-            y_zero_point = y_zero_point.repeat(block_size, axis=block_axis)
+    y_scale = _broadcast(y_scale, const.ndim, axis=axis, block_size=block_size)
+    y_zero_point = _broadcast(
+        y_zero_point, const.ndim, axis=axis, block_size=block_size
+    )
 
     y_scale = y_scale.astype(np.float32)
     const_q = (const / y_scale + y_zero_point).round()
     const_q = const_q.clip(clip_min, clip_max)
-    return opset10.DequantizeLinear.make_int_arr(
-        const_q, dtype=output_dtype, name=f"{name}_q"
+    return opset10.DequantizeLinear.make_int_arr(const_q, dtype=output_dtype, name=name)
+
+
+def _dequantize_const(
+    const_q: TensorProto,
+    name: str,
+    y_scale: np.ndarray,
+    y_zero_point: np.ndarray,
+    axis: Optional[int],
+    block_size: Optional[int],
+    output_dtype: str,
+) -> TensorProto:
+    if output_dtype == "bfloat16":
+        raise RuntimeError("Unsupported data type: {}")
+
+    const_q = to_array(const_q)
+    y_scale = _broadcast(y_scale, const_q.ndim, axis=axis, block_size=block_size)
+    y_zero_point = _broadcast(
+        y_zero_point, const_q.ndim, axis=axis, block_size=block_size
     )
+
+    const_q = const_q.astype(np.int64)
+    y_scale = y_scale.astype(np.float32)
+    y_zero_point = y_zero_point.astype(np.int64)
+
+    const_dq = (const_q - y_zero_point) * y_scale
+    return from_array(const_dq.astype(output_dtype), name=name)
+
+
+def _broadcast(
+    x: np.ndarray, ndim: int, axis: Optional[int], block_size: Optional[int]
+) -> np.ndarray:
+    if axis is None:
+        return x
+
+    axis = (ndim + axis) % ndim  # Make positive
+    if block_size is None:
+        channel_axis = axis
+        broadcast_shape = tuple(
+            -1 if axis == channel_axis else 1 for axis in range(ndim)
+        )
+        x = x.reshape(broadcast_shape)
+    else:
+        block_axis = axis
+        x = x.repeat(block_size, axis=block_axis)
+
+    return x
 
 
 def _finalize_graph_changes(
@@ -596,46 +630,66 @@ def _convert_version(
 def _remove_onnx_qdq_nodes(
     model: onnx.ModelProto,
 ) -> List[Dict[str, Union[str, int, np.ndarray]]]:
-    initializers = {init.name: init for init in model.graph.initializer}
+    initializers: Dict[str, TensorProto] = {
+        init.name: init for init in model.graph.initializer
+    }
+    constants: Dict[str, TensorProto] = _get_all_constants(model)
     q_nodes: Dict[str, NodeProto] = {}
     dq_nodes: Dict[str, NodeProto] = {}
     producers: Dict[str, NodeProto] = {}
     consumers: Dict[str, Dict[str, NodeProto]] = defaultdict(dict)
     graph_outputs = set(output.name for output in model.graph.output)
+    to_encoding = functools.partial(
+        _to_encoding, model=model, initializers=constants, producers=producers
+    )
 
     for node in model.graph.node:
         if node.op_type == "QuantizeLinear":
             q_nodes[node.name] = node
         elif node.op_type == "DequantizeLinear":
             dq_nodes[node.name] = node
+
         for inp in node.input:
             consumers[inp].update({node.name: node})
         for out in node.output:
             producers[out] = node
 
     to_be_removed = {}
-    for q in q_nodes.values():
-        q_output_consumers = consumers[q.output[0]]
+    for dq in dq_nodes.values():
+        for consumer in consumers[dq.output[0]].values():
+            if consumer.op_type == "DequantizeLinear":
+                # Back-to-back DequantizeLinear.
+                # In practice, this condition mostly indicates LPBQ
+                raise NotImplementedError(
+                    f"Back-to-back DequantizeLinear ({dq.name} -> {consumer.name}) "
+                    "is not supported yet."
+                )
 
-        if (
-            q_output_consumers
-            and all(
-                # All Q must be followed by DQ
-                consumer.op_type == "DequantizeLinear"
-                # Q-DQ must share same scale and zp
-                and consumer.input[1:] == q.input[1:]
-                # Scale and zp must be initializers.
-                # This rules out LPBQ which takes runtime-computed scale as input
-                and set(consumer.input[1:]) <= initializers.keys()
-                for consumer in q_output_consumers.values()
-            )
+        q = producers.get(dq.input[0])
+
+        if not q:
+            if set(dq.input) <= constants.keys():
+                to_be_removed[dq.name] = dq
+            continue
+
+        if all(
+            # All Q must be followed by DQ
+            consumer.op_type == "DequantizeLinear"
+            # Q-DQ must share same scale and zp
+            and consumer.input[1:] == q.input[1:]
+            # Scale and zp must be constants.
+            # This rules out LPBQ which takes runtime-computed scale as input
+            and set(consumer.input[1:]) <= constants.keys()
+            for consumer in consumers[q.output[0]].values()
         ):
-            to_be_removed.update(
-                {
-                    q.name: q,
-                    **q_output_consumers,
-                }
-            )
+            to_be_removed[q.name] = q
+            to_be_removed.update(consumers[q.output[0]])
+
+    encodings = {
+        dq.name: to_encoding(dq)
+        for dq in to_be_removed.values()
+        if dq.op_type == "DequantizeLinear"
+    }
 
     # Reconnect nodes
     for dq in model.graph.node:
@@ -674,15 +728,26 @@ def _remove_onnx_qdq_nodes(
             #                               ↑
             #                           dq.output[0]
             #                           (=new_name)
+            const = constants.get(dq.input[0])
 
-            # Standalone DequantizeLinear that are not preceded by QuantizeLinear
-            # In practice, this condition mostly indicates one of the following situations:
-            #   * LPBQ
-            #   * INT32 bias DQ (QuantizeLinear doesn't support INT32)
-            raise NotImplementedError(
-                f"Removing standalone DequantizeLinear {dq.name} that isn't "
-                "preceded by QuantizeLinear is not supported yet. "
-            )
+            if const and const.name not in initializers:
+                const_node = producers[const.name]
+                to_be_removed[const_node.name] = const_node
+
+            if const:
+                new_name = dq.output[0]
+                e = encodings[dq.name]
+                initializers[dq.output[0]] = _dequantize_const(
+                    const,
+                    name=new_name,
+                    y_scale=e["y_scale"],
+                    y_zero_point=e.get("y_zero_point"),
+                    axis=e.get("axis"),
+                    block_size=e.get("block_size"),
+                    output_dtype="float32",
+                )
+
+            continue
 
         if dq.output[0] in graph_outputs:
             # DQ output is part of graph outputs.
@@ -731,97 +796,137 @@ def _remove_onnx_qdq_nodes(
     ]
     model.graph.ClearField("node")
     model.graph.node.extend(node)
+
+    model.graph.ClearField("initializer")
+    model.graph.initializer.extend(list(initializers.values()))
     from onnxruntime.quantization.onnx_quantizer import ONNXModel
 
     ONNXModel(model).remove_unused_constant()
 
     # Convert removed Q/DQ nodes to encoding
-    def _to_encoding(dq: NodeProto) -> Dict[str, Union[str, int, np.ndarray]]:
-        q = producers.get(dq.input[0])
+    return list(encodings.values())
 
-        if not q or q.op_type != "QuantizeLinear":
-            raise RuntimeError
 
-        if any(dq.output[0] == graph_out.name for graph_out in model.graph.output):
-            input_name = dq.output[0]
-        else:
-            input_name = q.input[0]
+def _to_encoding(
+    dq: NodeProto,
+    model: ModelProto,
+    initializers: Mapping[str, TensorProto],
+    producers: Mapping[str, NodeProto],
+) -> Dict[str, Union[str, int, np.ndarray]]:
+    q = producers.get(dq.input[0])
 
-        scale_name = dq.input[1]
-        if initializers[scale_name].data_type not in (
-            TensorProto.FLOAT,
-            TensorProto.FLOAT16,
-        ):
-            raise NotImplementedError(
-                f'Found scale "{scale_name}" with unsupported dtype '
-                f"{onnx.helper.tensor_dtype_to_np_dtype(initializers[scale_name].data_type)}. "
-                "Currently only float32 and float16 are supported."
-            )
+    if q and q.op_type != "QuantizeLinear":
+        raise RuntimeError
 
-        scale = to_array(initializers[dq.input[1]])
+    if any(dq.output[0] == graph_out.name for graph_out in model.graph.output):
+        input_name = dq.output[0]
+    else:
+        input_name = q.input[0] if q else dq.output[0]
 
-        if len(dq.input) > 2:
-            zp_name = dq.input[2]
-            zp_tensor_proto = initializers[zp_name]
-
-            if zp_tensor_proto.data_type not in (
-                TensorProto.INT4,
-                TensorProto.INT8,
-                TensorProto.INT16,
-                TensorProto.INT32,
-                TensorProto.UINT4,
-                TensorProto.UINT8,
-                TensorProto.UINT16,
-            ):
-                raise RuntimeError(
-                    f'Found zero_point "{zp_name}" with unsupported dtype '
-                    f"{onnx.helper.tensor_dtype_to_string(zp_tensor_proto.data_type)}. "
-                    "Only [u]int4, [u]int8, [u]int16, and int32 are supported."
-                )
-
-            zp = to_array(zp_tensor_proto)
-            output_dtype = zp_tensor_proto.data_type
-        else:
-            zp = None
-            try:
-                output_dtype = next(
-                    attr.i for attr in q.attribute if attr.name == "output_dtype"
-                )
-            except StopIteration:
-                # ONNX assumes uint8 if neither zero_point nor output_dtype is specified
-                output_dtype = TensorProto.UINT8
-
-        *_, output_dtype = (
-            onnx.helper.tensor_dtype_to_string(output_dtype).lower().split(".")
+    scale_name = dq.input[1]
+    if initializers[scale_name].data_type not in (
+        TensorProto.FLOAT,
+        TensorProto.FLOAT16,
+    ):
+        raise NotImplementedError(
+            f'Found scale "{scale_name}" with unsupported dtype '
+            f"{onnx.helper.tensor_dtype_to_np_dtype(initializers[scale_name].data_type)}. "
+            "Currently only float32 and float16 are supported."
         )
 
-        encoding = {
-            "name": input_name,
-            "y_scale": scale,
-            "output_dtype": output_dtype,
-        }
+    scale = to_array(initializers[dq.input[1]])
 
-        if zp is not None:
-            encoding["y_zero_point"] = zp
+    if len(dq.input) > 2:
+        zp_name = dq.input[2]
+        zp_tensor_proto = initializers[zp_name]
 
-        for attr in dq.attribute:
-            if attr.name == "axis":
-                encoding["axis"] = attr.i
-            elif attr.name == "block_size":
-                encoding["block_size"] = attr.i
-            elif attr.name == "output_dtype":
-                output_dtype = onnx.helper.tensor_dtype_to_np_dtype(attr.i)
-                if output_dtype != encoding["output_dtype"]:
-                    raise RuntimeError(
-                        f"Attribute output_dtype={output_dtype} of node {dq.name} "
-                        "is inconsistent with "
-                        f"the dtype of zero_point {encoding['output_dtype']} "
-                    )
+        if zp_tensor_proto.data_type not in (
+            TensorProto.INT4,
+            TensorProto.INT8,
+            TensorProto.INT16,
+            TensorProto.INT32,
+            TensorProto.UINT4,
+            TensorProto.UINT8,
+            TensorProto.UINT16,
+        ):
+            raise RuntimeError(
+                f'Found zero_point "{zp_name}" with unsupported dtype '
+                f"{onnx.helper.tensor_dtype_to_string(zp_tensor_proto.data_type)}. "
+                "Only [u]int4, [u]int8, [u]int16, and int32 are supported."
+            )
 
-        return encoding
+        zp = to_array(zp_tensor_proto)
+        output_dtype = zp_tensor_proto.data_type
+    else:
+        zp = None
+        try:
+            output_dtype = (
+                next(attr.i for attr in q.attribute if attr.name == "output_dtype")
+                if q
+                else TensorProto.UINT8
+            )
+        except StopIteration:
+            # ONNX assumes uint8 if neither zero_point nor output_dtype is specified
+            output_dtype = TensorProto.UINT8
 
-    return [
-        _to_encoding(dq)
-        for dq in to_be_removed.values()
-        if dq.op_type == "DequantizeLinear"
+    *_, output_dtype = (
+        onnx.helper.tensor_dtype_to_string(output_dtype).lower().split(".")
+    )
+
+    encoding = {
+        "name": input_name,
+        "y_scale": scale,
+        "output_dtype": output_dtype,
+    }
+
+    if zp is not None:
+        encoding["y_zero_point"] = zp
+
+    for attr in dq.attribute:
+        if attr.name == "axis":
+            encoding["axis"] = attr.i
+        elif attr.name == "block_size":
+            encoding["block_size"] = attr.i
+        elif attr.name == "output_dtype":
+            output_dtype = onnx.helper.tensor_dtype_to_np_dtype(attr.i)
+            if output_dtype != encoding["output_dtype"]:
+                raise RuntimeError(
+                    f"Attribute output_dtype={output_dtype} of node {dq.name} "
+                    "is inconsistent with "
+                    f"the dtype of zero_point {encoding['output_dtype']} "
+                )
+
+    return encoding
+
+
+def _get_all_constants(model: ModelProto) -> Dict[str, TensorProto]:
+    constants = {
+        **{init.name: init for init in model.graph.initializer},
+        **{
+            const.output[0]: attr.t
+            for const in model.graph.node
+            for attr in const.attribute
+            if const.op_type == "Constant" and attr.name == "value"
+        },
+    }
+    identities = [
+        identity for identity in model.graph.node if identity.op_type == "Identity"
     ]
+
+    while True:
+        aliases = {
+            identity.output[0]: constants[identity.input[0]]
+            for identity in identities
+            if identity.input[0] in constants
+        }
+        if aliases:
+            constants.update(aliases)
+            identities = [
+                identity
+                for identity in identities
+                if identity.output[0] not in constants
+            ]
+        else:
+            break
+
+    return constants
