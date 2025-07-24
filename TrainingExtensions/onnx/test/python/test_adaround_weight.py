@@ -55,6 +55,7 @@ from aimet_onnx.adaround.adaround_weight import Adaround, AdaroundParameters
 from aimet_onnx.adaround.utils import AdaroundSupportedModules
 from aimet_onnx.utils import make_dummy_input, ParamUtils, build_session
 from .models import models_for_tests
+from .models.models_for_tests import conv_prelu_model
 
 
 class TestAdaround:
@@ -501,6 +502,19 @@ class TestAdaround:
 
             print([name for name in ops_processed])
             assert ops_processed.sort() == expected.sort()
+
+    def test_activation_with_param(self):
+        if not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
+
+        model = conv_prelu_model().model
+        inputs = [make_dummy_input(model) for _ in range(2)]
+        sim = QuantizationSimModel(
+            copy.deepcopy(model), providers=["CUDAExecutionProvider"]
+        )
+        apply_adaround(sim, inputs, 10)
+        # check adaround went through fine
+        assert sim.qc_quantize_op_dict["conv1.weight"]._is_encoding_frozen == True
 
 
 def dataloader(input_shape: tuple, batch_size=2):

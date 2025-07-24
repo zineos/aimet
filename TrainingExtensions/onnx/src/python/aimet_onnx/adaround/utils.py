@@ -39,6 +39,7 @@
 from typing import Dict, List
 from collections import defaultdict
 import onnx
+import torch
 from packaging import version
 
 from aimet_onnx import QuantizationSimModel
@@ -51,6 +52,14 @@ else:
 
 # The following modules with weights are supported by Adaround
 AdaroundSupportedModules = ["Conv", "ConvTranspose", "MatMul", "Gemm"]
+ACTIVATION_MAP = {
+    "Relu": torch.nn.ReLU(),
+    "PRelu": torch.nn.PReLU(),
+    "Tanh": torch.nn.Tanh(),
+    "Clip": torch.nn.ReLU6(),
+    "Sigmoid": torch.nn.Sigmoid(),
+    "Softmax": torch.nn.Softmax(),
+}
 
 
 class ModuleInfo:
@@ -119,3 +128,21 @@ def read_attributes_for_op(module_info: ModuleInfo) -> Dict:
             elif attribute.name == "group":
                 attributes["group"] = attribute.i
     return attributes
+
+
+def apply_activation_fn(
+    activation_fn: str, activation_tensor: torch.Tensor
+) -> torch.Tensor:
+    """
+    Given the input tensor, apply the activation function
+
+    :param activation_fn: activation function to be applied. If None, no activation function is applied
+    :param activation_tensor: input tensor to be passed through the activation function
+    :return: output tensor
+    """
+    module = ACTIVATION_MAP.get(activation_fn)
+    if module:
+        module = module.to(activation_tensor.device)
+        return module(activation_tensor)
+    else:
+        return activation_tensor

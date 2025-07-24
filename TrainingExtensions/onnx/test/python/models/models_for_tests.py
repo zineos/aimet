@@ -4263,3 +4263,45 @@ def diverse_ops():
     )
     onnx.checker.check_model(model, True)
     return model
+
+
+def conv_prelu_model(
+    training=torch.onnx.TrainingMode.EVAL, opset_version=_DEFAULT_OPSET_VERSION
+):
+    class ConvPrelu(nn.Module):
+        """Simple Conv Prelu Model"""
+
+        def __init__(self):
+            super(ConvPrelu, self).__init__()
+            self.conv1 = nn.Conv2d(3, 8, kernel_size=(1, 1), bias=False)
+            self.prelu1 = nn.PReLU()
+
+        def forward(self, *inputs):
+            return self.prelu1(self.conv1(inputs[0]))
+
+    x = torch.randn(1, 3, 32, 32)
+    model = ConvPrelu()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        save_path = os.path.join(tmp_dir, "conv_prelu.onnx")
+        # Export the model
+        torch.onnx.export(
+            model,  # model being run
+            x,  # model input (or a tuple for multiple inputs)
+            save_path,  # where to save the model (can be a file or file-like object)
+            training=training,
+            export_params=True,  # store the trained parameter weights inside the model file
+            opset_version=min(
+                opset_version, 20
+            ),  # the ONNX version to export the model to
+            do_constant_folding=True,  # whether to execute constant folding for optimization
+            input_names=["input"],  # the model's input names
+            output_names=["output"],
+        )
+
+        model = load_model(save_path)
+        if opset_version > 20:
+            model = onnx.version_converter.convert_version(model, opset_version)
+
+        model_onnx = ONNXModel(model)
+    return model_onnx

@@ -52,7 +52,11 @@ from packaging import version
 from aimet_common.utils import AimetLogger
 from aimet_onnx.adaround.activation_sampler import ActivationSampler
 from aimet_onnx.quantsim import QuantizationSimModel
-from aimet_onnx.adaround.utils import ModuleInfo, read_attributes_for_op
+from aimet_onnx.adaround.utils import (
+    ModuleInfo,
+    read_attributes_for_op,
+    apply_activation_fn,
+)
 from aimet_onnx.utils import create_input_dict
 from aimet_onnx.adaround.adaround_loss import AdaroundLoss
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
@@ -67,14 +71,6 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 BATCH_SIZE = 32
 EMPIRICAL_THRESHOLD = 3 / 4
 DATA_SIZE_IN_BITS = 32
-ACTIVATION_MAP = {
-    "Relu": torch.nn.ReLU(),
-    "PRelu": torch.nn.PReLU(),
-    "Tanh": torch.nn.Tanh(),
-    "Clip": torch.nn.ReLU6(),
-    "Sigmoid": torch.nn.Sigmoid(),
-    "Softmax": torch.nn.Softmax(),
-}
 
 
 class AdaroundOptimizer:
@@ -209,10 +205,8 @@ class AdaroundOptimizer:
                 weights, module, inp_data, adaround_quantizer, True
             )
 
-            # If followed by an activation function
-            if act_func is not None:
-                orig_out_data = ACTIVATION_MAP[act_func](orig_out_data)
-                quant_out_data = ACTIVATION_MAP[act_func](quant_out_data)
+            orig_out_data = apply_activation_fn(act_func, orig_out_data)
+            quant_out_data = apply_activation_fn(act_func, quant_out_data)
 
             # Calculate total loss
             recon_loss = AdaroundLoss.compute_recon_loss(quant_out_data, orig_out_data)
@@ -285,10 +279,9 @@ class AdaroundOptimizer:
         )
 
         # If followed by an activation function
-        if act_func is not None:
-            out_data = ACTIVATION_MAP[act_func](out_data)
-            out_data_soft = ACTIVATION_MAP[act_func](out_data_soft)
-            out_data_hard = ACTIVATION_MAP[act_func](out_data_hard)
+        out_data = apply_activation_fn(act_func, out_data)
+        out_data_soft = apply_activation_fn(act_func, out_data_soft)
+        out_data_hard = apply_activation_fn(act_func, out_data_hard)
 
         recons_err_soft = functional.mse_loss(out_data_soft, out_data)
         recons_err_hard = functional.mse_loss(out_data_hard, out_data)
