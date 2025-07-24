@@ -1051,7 +1051,7 @@ class TestSqnrEncodingAnalyzer:
         q_error_exp = (input - input_qdq).square().sum(dim=-1)
         # Estimate the MSE from the observer histogram
         q_error_est = encoding_analyzer._estimate_clip_and_quant_noise(
-            histograms, deltas, offsets, 255, gamma=1.0
+            histograms, deltas, offsets, 255, p=2.0, gamma=1.0
         )
         # Estimated and measured errors should be very close
         assert torch.allclose(q_error_exp, q_error_est, rtol=0.01)

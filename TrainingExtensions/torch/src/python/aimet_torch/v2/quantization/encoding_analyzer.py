@@ -602,49 +602,24 @@ class PercentileEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
         return encoding_min, encoding_max
 
 
-class SqnrEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
-    r"""
-    EncodingAnalyzer subclass which uses SQNR calibration. This involves recording values in a histogram and computing the min-max range based on values that produce the lowest expected SQNR.
-
-    Args:
-        shape (tuple): Shape of calculated encoding
-        num_bins (int): Number of bins used to create the histogram
-        asymmetric_delta_candidates (int): Number of delta values to search over in asymmetric mode
-        symmetric_delta_candidates (int): Number of delta values to search over in symmetric mode
-        offset_candidates (int): Number of offset values to search over in asymmetric mode
-        max_parallelism (int): Maximum number of encodings to process in parallel (higher number results in higher memory usage but faster computation)
-        gamma (float): Weighting factor on clipping noise (higher value results in less clipping noise)
-        percentile (float): Percentile value which is used to clip values
-
-    Example:
-
-        >>> from aimet_torch.v2.quantization.encoding_analyzer import SqnrEncodingAnalyzer
-        >>> encoding_analyzer = SqnrEncodingAnalyzer(shape=(1,), num_bins = 10, gamma = 1)
-        >>> encoding_analyzer.update_stats(torch.randn(100))
-        >>> encoding_analyzer.compute_encodings(num_steps = math.pow(2, 8), is_symmetric = False)
-        (tensor([-2.3612]), tensor([2.8497]))
-        >>> encoding_analyzer.reset_stats()
-        >>> encoding_analyzer.update_stats(torch.randn(100))
-        [_Histogram(histogram=tensor([ 2.,  0.,  8.,  8., 16., 22., 23., 12.,  6.,  3.]), bin_edges=tensor([-2.8907, -2.3625, -1.8343, -1.3061, -0.7779, -0.2497,  0.2784,  0.8066, 1.3348,  1.8630,  2.3912]), min=tensor(-2.8907), max=tensor(2.3912))]
-        >>> encoding_analyzer.compute_encodings(num_steps = math.pow(2, 8), is_symmetric = False)
-        (tensor([-2.7080]), tensor([2.2438]))
-    """
-
+class _LpNormEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
     def __init__(
         self,
         shape: tuple,
-        num_bins: int = 2048,
+        num_bins: int,
         *,
-        asymmetric_delta_candidates=17,
-        symmetric_delta_candidates=101,
-        offset_candidates=21,
-        max_parallelism=64,
-        gamma=3.0,
+        p: float,
+        asymmetric_delta_candidates: int,
+        symmetric_delta_candidates: int,
+        offset_candidates: int,
+        max_parallelism: int,
+        gamma: float,
     ):
         if num_bins <= 0:
             raise ValueError("Number of bins cannot be less than or equal to 0.")
         observer = _HistogramObserver(shape=shape, num_bins=num_bins)
         super().__init__(observer)
+        self.p = p
         self.asym_delta_candidates = asymmetric_delta_candidates
         self.sym_delta_candidates = symmetric_delta_candidates
         self.num_offset_candidates = offset_candidates
@@ -794,7 +769,7 @@ class SqnrEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
         Searches all pairs of (delta, offset) in test_deltas, test_offsets to find the set with the lowest expected SQNR
         """
         noise = self._estimate_clip_and_quant_noise(
-            stats, test_deltas, test_offsets, num_steps, self.gamma
+            stats, test_deltas, test_offsets, num_steps, self.p, self.gamma
         )
         _, min_idx = torch.min(noise.flatten(start_dim=1), dim=1)
         best_delta = torch.gather(
@@ -815,6 +790,7 @@ class SqnrEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
         test_deltas: torch.Tensor,
         test_offsets: torch.Tensor,
         num_steps: int,
+        p: float,
         gamma: float = 1.0,
     ):
         """
@@ -857,15 +833,65 @@ class SqnrEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
             .add_(test_offsets_bcast)
             .mul_(test_deltas_bcast)
         )
-        square_error = (
-            hist_midpoints_qdq.sub_(hist_midpoints[:, None, None, :])
-            .pow_(2)
+        error = (
+            torch.abs(hist_midpoints_qdq.sub_(hist_midpoints[:, None, None, :]))
+            .pow_(p)
             .mul_(hists[:, None, None, :])
         )
         if gamma != 1.0:
             # Apply the gamma "fudge factor" to the clipped errors
-            square_error = torch.where(clipped, square_error * gamma, square_error)
-        return torch.sum(square_error, dim=-1)
+            error = torch.where(clipped, error * gamma, error)
+        return torch.sum(error, dim=-1)
+
+
+class SqnrEncodingAnalyzer(_LpNormEncodingAnalyzer):
+    r"""
+    EncodingAnalyzer subclass which uses SQNR calibration. This involves recording values in a histogram and computing the min-max range based on values that produce the lowest expected SQNR.
+
+    Args:
+        shape (tuple): Shape of calculated encoding
+        num_bins (int): Number of bins used to create the histogram
+        asymmetric_delta_candidates (int): Number of delta values to search over in asymmetric mode
+        symmetric_delta_candidates (int): Number of delta values to search over in symmetric mode
+        offset_candidates (int): Number of offset values to search over in asymmetric mode
+        max_parallelism (int): Maximum number of encodings to process in parallel (higher number results in higher memory usage but faster computation)
+        gamma (float): Weighting factor on clipping noise (higher value results in less clipping noise)
+
+    Example:
+
+        >>> from aimet_torch.v2.quantization.encoding_analyzer import SqnrEncodingAnalyzer
+        >>> encoding_analyzer = SqnrEncodingAnalyzer(shape=(1,), num_bins = 10, gamma = 1)
+        >>> encoding_analyzer.update_stats(torch.randn(100))
+        >>> encoding_analyzer.compute_encodings(num_steps = math.pow(2, 8), is_symmetric = False)
+        (tensor([-2.3612]), tensor([2.8497]))
+        >>> encoding_analyzer.reset_stats()
+        >>> encoding_analyzer.update_stats(torch.randn(100))
+        [_Histogram(histogram=tensor([ 2.,  0.,  8.,  8., 16., 22., 23., 12.,  6.,  3.]), bin_edges=tensor([-2.8907, -2.3625, -1.8343, -1.3061, -0.7779, -0.2497,  0.2784,  0.8066, 1.3348,  1.8630,  2.3912]), min=tensor(-2.8907), max=tensor(2.3912))]
+        >>> encoding_analyzer.compute_encodings(num_steps = math.pow(2, 8), is_symmetric = False)
+        (tensor([-2.7080]), tensor([2.2438]))
+    """
+
+    def __init__(
+        self,
+        shape: tuple,
+        num_bins: int = 2048,
+        *,
+        asymmetric_delta_candidates=17,
+        symmetric_delta_candidates=101,
+        offset_candidates=21,
+        max_parallelism=64,
+        gamma=3.0,
+    ):
+        super().__init__(
+            shape=shape,
+            num_bins=num_bins,
+            p=2.0,
+            asymmetric_delta_candidates=asymmetric_delta_candidates,
+            symmetric_delta_candidates=symmetric_delta_candidates,
+            offset_candidates=offset_candidates,
+            max_parallelism=max_parallelism,
+            gamma=gamma,
+        )
 
 
 class TfEnhancedEncodingAnalyzer(SqnrEncodingAnalyzer):
