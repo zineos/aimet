@@ -4001,8 +4001,9 @@ def test_insert_data_movement_op_edge_case(model_factory):
     assert onnx_qdq_before == onnx_qdq_after
 
 
+@pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize("seed", range(10))
-def test_onnx_qdq_lpbq(seed: int):
+def test_onnx_qdq_lpbq(seed: int, prequantize_constants: bool):
     ort.set_seed(seed)
     np.random.seed(seed)
 
@@ -4037,21 +4038,26 @@ def test_onnx_qdq_lpbq(seed: int):
     (out_sim,) = sim.session.run(None, {"input": input})
 
     sim._insert_data_movement_op_output_quantizers()
-    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
 
     """
-    Then: Onnx QDQ model should contain as many QuantizeLinear as the number of of ENABLED QcQuantizers
+    Then: Onnx QDQ model should contain as many DequantizeLinear as the number of of enabled QcQuantizers
     """
-    assert len(
-        [node for node in onnx_qdq_model.graph.node if node.op_type == "QuantizeLinear"]
-    ) == len(
+    num_dq = len(
         [
-            qtzr
-            for qtzr in sim.qc_quantize_op_dict.values()
-            if qtzr.enabled
-            and (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
+            node
+            for node in onnx_qdq_model.graph.node
+            if node.op_type == "DequantizeLinear"
         ]
     )
+    expected_num_dq = sum(
+        # GroupedBlockQuantizeDequantize is mapped to two DequantizeLinears when exported
+        2 if isinstance(qtzr, GroupedBlockQuantizeDequantize) else 1
+        for qtzr in sim.qc_quantize_op_dict.values()
+        if qtzr.enabled
+        and (qtzr.data_type == QuantizationDataType.int or qtzr.bitwidth < 16)
+    )
+    assert num_dq == expected_num_dq
 
     """
     Then: Output of the pure onnx model should be equal to that of sim.session

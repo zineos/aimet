@@ -239,6 +239,7 @@ def _add_onnx_qdq_nodes(
                     axis,
                     block_size,
                     output_dtype,
+                    per_block_int_scale=per_block_int_scale,
                 )
 
         if input_q:
@@ -302,6 +303,7 @@ def _quantize_const(
     axis: Optional[int],
     block_size: Optional[int],
     output_dtype: str,
+    per_block_int_scale: Optional[np.ndarray],
 ) -> TensorProto:
     const = to_array(const).astype(np.float32)
     unsigned, bitwidth = output_dtype.split("int")
@@ -313,6 +315,14 @@ def _quantize_const(
     else:
         clip_min = -(2 ** (bitwidth - 1))
         clip_max = -clip_min - 1
+
+    if per_block_int_scale is not None:
+        block_axis = axis
+        channel_axis = 0 if block_axis in (1, -1) else 1
+        y_scale = y_scale.reshape(
+            *(-1 if axis == channel_axis else 1 for axis in range(const.ndim))
+        )
+        y_scale = (y_scale * per_block_int_scale).astype(np.float32)
 
     y_scale = _broadcast(y_scale, const.ndim, axis=axis, block_size=block_size)
     y_zero_point = _broadcast(
