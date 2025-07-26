@@ -72,6 +72,7 @@ _TORCH_MAX_OPSET = _constants.ONNX_MAX_OPSET
 _AIMET_MAX_OPSET = max(_TORCH_MAX_OPSET, 21)
 
 
+@torch.no_grad()
 def export(
     model: Union[torch.nn.Module, QuantizationSimModel],
     args: Union[Tuple[Any, ...], torch.Tensor],

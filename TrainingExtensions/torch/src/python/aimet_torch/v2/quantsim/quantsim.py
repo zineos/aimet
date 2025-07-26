@@ -765,6 +765,7 @@ class _QuantizationSimOnnxExport:
     def __init__(self, sim):
         self.sim = sim
 
+    @torch.no_grad()
     def export(
         self,
         args: Union[Tuple[Any, ...], torch.Tensor],
