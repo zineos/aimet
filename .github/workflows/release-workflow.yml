@@ -191,3 +191,15 @@ jobs:
 
           # Create PR on quic/aimet-pages
           gh pr create --repo ${{ env.DOCS_REPO }} --base master --head ${{ github.ref_name }} --title "Release ${tag}" --body "Release docs for ${tag}"
+
+  notify_release_on_slack:
+    name: Announce release on internal channels
+    needs: [ release_aimet_torch_to_pypi, release_aimet_onnx_to_pypi, release_to_github ]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: slackapi/slack-github-action@v1.25.0
+      with:
+        channel-id: C0898PQVA31 #aimet
+        slack-message: ":tada: AIMET ${{ inputs.version }} released :tada: \n PyPI: https://pypi.org/project/aimet-onnx/ https://pypi.org/project/aimet-torch/ \n Github: https://github.com/quic/aimet/releases"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFIER_TOKEN }}
