@@ -1352,17 +1352,6 @@ class QuantizationSimModel:
             both terms share the same quantization scale
             """
             weight_qtzr = self.qc_quantize_op_dict.get(weight.name)
-
-            if not (
-                weight_qtzr
-                and weight_qtzr.enabled
-                and weight_qtzr.data_type == QuantizationDataType.int
-                and weight_qtzr.is_initialized()
-            ):
-                # Weight quantizer wasn't created, enabled, or initialized.
-                # Since weight_scale isn't avaiable, fall back to statictical bias scale
-                return get_statistical_bias_scale(input, weight, bias)
-
             input_qtzr = self._get_enabled_quantizer(input.name)
 
             if not (input_qtzr and input_qtzr.enabled and input_qtzr.is_initialized()):
@@ -1459,6 +1448,16 @@ class QuantizationSimModel:
             if bias_qtzr and bias_qtzr.enabled and bias_qtzr.is_initialized():
                 # Edge case: bias encoding already exists.
                 # Always honor the existing bias encoding
+                continue
+
+            if not (
+                weight_qtzr
+                and weight_qtzr.enabled
+                and weight_qtzr.data_type == QuantizationDataType.int
+                and weight_qtzr.is_initialized()
+            ):
+                # Weight quantizer wasn't created, enabled, or initialized.
+                # Since weight_scale isn't available, exclude bias from quantization.
                 continue
 
             if encoding_type == EncodingType.PER_TENSOR.name:

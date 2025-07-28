@@ -3448,22 +3448,23 @@ class TestEncodingPropagation:
 
 
 @pytest.mark.parametrize(
-    "model_factory,             input_shape,     block_size, lpbq",
+    "model_factory,             input_shape,     block_size, lpbq, enable_mp",
     [
-        (single_residual_model, (1, 3, 32, 32), None, False),
-        (single_residual_model, (1, 3, 32, 32), 4, False),
-        (single_residual_model, (1, 3, 32, 32), 4, True),
-        (transposed_conv_model, (10, 10, 4, 4), None, False),
-        (transposed_conv_model, (10, 10, 4, 4), 5, False),
-        (transposed_conv_model, (10, 10, 4, 4), 5, True),
-        (batchnorm_model, (10, 10, 8, 8), None, False),
-        (batchnorm_model_constants, (10, 10, 8, 8), None, False),
-        (instance_norm_model, (2, 10, 24, 24), None, False),
-        (layernorm_model, (1, 4, 64, 64), None, False),
+        (single_residual_model, (1, 3, 32, 32), None, False, True),
+        (single_residual_model, (1, 3, 32, 32), None, False, False),
+        (single_residual_model, (1, 3, 32, 32), 4, False, False),
+        (single_residual_model, (1, 3, 32, 32), 4, True, False),
+        (transposed_conv_model, (10, 10, 4, 4), None, False, False),
+        (transposed_conv_model, (10, 10, 4, 4), 5, False, False),
+        (transposed_conv_model, (10, 10, 4, 4), 5, True, False),
+        (batchnorm_model, (10, 10, 8, 8), None, False, False),
+        (batchnorm_model_constants, (10, 10, 8, 8), None, False, False),
+        (instance_norm_model, (2, 10, 24, 24), None, False, False),
+        (layernorm_model, (1, 4, 64, 64), None, False, False),
         # TODO: Add tests with GroupNormalization
     ],
 )
-def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
+def test_bias_export(model_factory, input_shape, block_size, lpbq, enable_mp, tmp_path):
     model = model_factory()
     input = np.random.randn(*input_shape).astype(np.float32)
 
@@ -3493,6 +3494,20 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
                 strict=False,
             )
 
+    if enable_mp:
+        ops_with_disabled_weight_quant = [
+            (wb[0].name, wb[1].name)
+            for op in sim.connected_graph.get_all_ops().values()
+            if (wb := sim._get_weight_and_bias(op))[1]
+        ]
+        # Disable weight quantizers except the last layer in the list.
+        if len(ops_with_disabled_weight_quant) > 1:
+            ops_with_disabled_weight_quant = ops_with_disabled_weight_quant[:-1]
+
+        for weight, _ in ops_with_disabled_weight_quant:
+            weight_qtzr = sim.qc_quantize_op_dict[weight]
+            weight_qtzr.enabled = False
+
     sim.compute_encodings(lambda sess: sess.run(None, {"input": input}))
     sim._concretize_int32_bias_quantizers()
     sim.export(tmp_path, "model")
@@ -3513,15 +3528,15 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
         assert any(enc["enc_type"] == enc_type for enc in exported_encodings.values())
 
     """
-    Then: All bias encodings should be exported
+    Then: If the Bias is in exported encodings, then the weight also must be in exported encodings and vice-versa
+          If both are not present in the list, assertion passes.
     """
-    all_biases = {
-        param_name
-        for op in sim.connected_graph.get_all_ops().values()
-        for param_name, (_, param_type) in op.parameters.items()
-        if param_type == "bias"
-    }
-    assert exported_encodings.keys() > all_biases
+    for op in sim.connected_graph.get_all_ops().values():
+        weight, bias = sim._get_weight_and_bias(op)
+        if bias:
+            assert (bias.name in exported_encodings) == (
+                weight.name in exported_encodings
+            )
 
     """
     Then: For linear ops such as Conv, ConvTranspose, and Gemm,
@@ -3536,7 +3551,9 @@ def test_bias_export(model_factory, input_shape, block_size, lpbq, tmp_path):
 
     for op in linear_ops_with_bias:
         input, weight, bias = op.inputs
-        assert bias.name in exported_encodings
+        if bias.name not in exported_encodings:
+            continue
+
         assert all(
             offset == -(2**31) for offset in exported_encodings[bias.name]["offset"]
         )
