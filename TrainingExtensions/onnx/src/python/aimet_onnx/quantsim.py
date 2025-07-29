@@ -481,8 +481,14 @@ class QuantizationSimModel:
             for name, qtzr in sim.qc_quantize_op_dict.items()
             if qtzr and qtzr.enabled
         )
+        bias_names = set(
+            bias.name
+            for op in sim.connected_graph.get_all_ops().values()
+            for _, bias in [sim._get_weight_and_bias(op)]
+            if bias is not None
+        )
         encoding_names = set(enc["name"] for enc in encodings)
-        excess_encodings = encoding_names - quantizable_tensor_names
+        excess_encodings = encoding_names - (quantizable_tensor_names | bias_names)
 
         if excess_encodings:
             raise NotImplementedError(
@@ -492,6 +498,12 @@ class QuantizationSimModel:
 
         # Load encodings to sim
         for enc in encodings:
+            qtzr = sim.qc_quantize_op_dict[enc["name"]]
+
+            if enc["name"] in bias_names and enc["output_dtype"] == "int32":
+                qtzr.enabled = False
+                continue
+
             channel_axis = block_axis = block_size = None
             if "axis" in enc:
                 if "block_size" in enc:
@@ -503,8 +515,6 @@ class QuantizationSimModel:
                     )
                 else:
                     channel_axis = enc["axis"]
-
-            qtzr = sim.qc_quantize_op_dict[enc["name"]]
 
             if channel_axis is not None:
                 if not qtzr.tensor_quantizer_params:

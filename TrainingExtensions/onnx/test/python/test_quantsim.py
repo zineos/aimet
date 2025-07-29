@@ -4428,7 +4428,7 @@ def test_onnx_qdq_export_output_name_swapping():
         assert any(input == dq.output[0] for dq in dq_nodes)
 
 
-# TODO: @pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
+@pytest.mark.parametrize("export_int32_bias_encodings", [False, True])
 @pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize(
     "param_type, activation_type",
@@ -4450,7 +4450,11 @@ def test_onnx_qdq_export_output_name_swapping():
     ],
 )
 def test_from_onnx_qdq(
-    model_factory, param_type, activation_type, prequantize_constants
+    model_factory,
+    param_type,
+    activation_type,
+    prequantize_constants: bool,
+    export_int32_bias_encodings: bool,
 ):
     """
     Given: onnx QDQ model exported from aimet QuantizationSimModel
@@ -4469,6 +4473,8 @@ def test_from_onnx_qdq(
     inputs = {input_name: np.random.randn(*input_shape).astype(np.float32)}
 
     sim.compute_encodings([inputs])
+    if export_int32_bias_encodings:
+        sim._concretize_int32_bias_quantizers()
     qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
 
     """
@@ -4479,6 +4485,8 @@ def test_from_onnx_qdq(
         sim._to_onnx_qdq(prequantize_constants=prequantize_constants),
         config_file="htp_v81",
     )
+    if export_int32_bias_encodings:
+        sim_2._concretize_int32_bias_quantizers()
     _assert_sim_equal(sim, sim_2)
     assert np.allclose(
         sim.session.run(None, inputs),
@@ -4489,7 +4497,13 @@ def test_from_onnx_qdq(
     When: Call compute_encodings with new sim
     Then: All states of the new sim should remain unchanged
     """
+    sim_2 = QuantizationSimModel._from_onnx_qdq(
+        sim._to_onnx_qdq(prequantize_constants=prequantize_constants),
+        config_file="htp_v81",
+    )
     sim_2.compute_encodings([{key: val * 2 for key, val in inputs.items()}])
+    if export_int32_bias_encodings:
+        sim_2._concretize_int32_bias_quantizers()
     _assert_sim_equal(sim, sim_2)
     assert np.allclose(
         sim.session.run(None, inputs),
@@ -4544,7 +4558,7 @@ def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
 
         e1 = qtzr_1.export_encodings("2.0.0")
         e2 = qtzr_2.export_encodings("2.0.0")
-        assert np.allclose(e1["y_scale"], e2["y_scale"])
+        assert np.allclose(e1["y_scale"], e2["y_scale"]), (key1, key2)
         assert e1.get("y_zero_point") == e2.get("y_zero_point")
         assert e1.get("output_dtype") == e2.get("output_dtype")
         assert e1.get("axis") == e2.get("axis")
