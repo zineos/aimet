@@ -42,48 +42,11 @@
     {
       "is_output_quantized": "False"
     },
-    "DepthToSpace":
-    {
-      "is_output_quantized": "False"
-    },
-    "Dropout":
-    {
-      "is_output_quantized": "False"
-    },
-    "Expand":
-    {
-      "is_output_quantized": "False"
-    },
-    "Reshape":
-    {
-      "is_output_quantized": "False"
-    },
     "Upsample":
     {
       "is_output_quantized": "False"
     },
-    "SpaceToDepth":
-    {
-      "is_output_quantized": "False"
-    },
-    "BatchToSpace":
-    {
-      "is_output_quantized": "False"
-    },
-    "SpaceToBatch":
-    {
-      "is_output_quantized": "False"
-    },
     "NonMaxSuppression":
-    {
-      "is_output_quantized": "False"
-    },
-    "Gather":
-    {
-      "is_output_quantized": "False",
-      "per_channel_quantization": "False"
-    },
-    "GatherND":
     {
       "is_output_quantized": "False"
     },
@@ -130,31 +93,7 @@
     {
       "per_channel_quantization": "False"
     },
-    "MaxPool":
-    {
-      "is_output_quantized": "False"
-    },
-    "MaxRoiPool":
-    {
-      "is_output_quantized": "False"
-    },
     "Mean":
-    {
-      "is_output_quantized": "False"
-    },
-    "NonZero":
-    {
-      "is_output_quantized": "False"
-    },
-    "Pad":
-    {
-      "is_output_quantized": "False"
-    },
-    "ReduceMax":
-    {
-      "is_output_quantized": "False"
-    },
-    "ReduceMin":
     {
       "is_output_quantized": "False"
     },
@@ -187,18 +126,6 @@
         "max": 1.0
       }
     },
-    "Slice":
-    {
-      "is_output_quantized": "False"
-    },
-    "Split":
-    {
-      "is_output_quantized": "False"
-    },
-    "Squeeze":
-    {
-      "is_output_quantized": "False"
-    },
     "Tanh":
     {
       "encoding_constraints":
@@ -206,18 +133,6 @@
         "min": -1.0,
         "max": 1.0
       }
-    },
-    "Tile":
-    {
-      "is_output_quantized": "False"
-    },
-    "TopK":
-    {
-      "is_output_quantized": "False"
-    },
-    "Transpose":
-    {
-      "is_output_quantized": "False"
     },
     "Shape":
     {

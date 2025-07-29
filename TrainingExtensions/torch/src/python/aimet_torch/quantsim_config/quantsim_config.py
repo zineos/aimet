@@ -69,6 +69,8 @@ from aimet_common.quantsim_config.quantsim_config import (
 from aimet_common.quantsim_config.quantsim_config import (
     SupergroupConfigCallback as AimetCommonSupergroupConfigCallback,
 )
+from aimet_common.onnx._utils import _is_grid_preserving_op
+
 from aimet_torch.meta.connectedgraph import ConnectedGraph
 from aimet_torch.onnx_utils import (
     map_torch_types_to_onnx,
@@ -580,6 +582,11 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
                 if not onnx_types:
                     continue
                 for onnx_type in onnx_types:
+                    if (
+                        _is_grid_preserving_op(onnx_type)
+                        and onnx_type not in op_configs
+                    ):
+                        op_configs[onnx_type] = {"is_output_quantized": False}
                     if onnx_type in op_configs:
                         op_config = op_configs[onnx_type]
                         self._set_config_for_module(

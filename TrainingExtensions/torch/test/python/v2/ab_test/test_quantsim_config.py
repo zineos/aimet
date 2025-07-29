@@ -140,7 +140,7 @@ class TestQuantsimConfig:
                     assert module.input_quantizers[0] is not None
                 else:
                     assert module.input_quantizers[0] is None
-                if name in ["conv1", "conv2"]:
+                if name in ["conv1", "conv2", "maxpool"]:
                     # Output quantizers of conv1 and conv2 are
                     # disabled due to the subsequent batchnorm
                     assert module.output_quantizers[0] is None
@@ -260,7 +260,6 @@ class TestQuantsimConfig:
             "params": {},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
                         "bias": {"is_quantized": "True", "is_symmetric": "False"}
@@ -283,11 +282,11 @@ class TestQuantsimConfig:
             for name, module in sim.model.named_children():
                 assert isinstance(module, BaseQuantizationMixin)
                 if isinstance(module, torch.nn.Conv2d):
-                    assert module.input_quantizers[0] is not None
+                    assert module.input_quantizers[0] is None
                     if name in ["conv1", "conv2"]:
                         assert module.output_quantizers[0] is None
-                    else:
-                        assert module.output_quantizers[0] is not None
+                elif isinstance(module, torch.nn.MaxPool2d):
+                    assert module.output_quantizers[0] is None
                 else:
                     # Output of add op is input quantized
                     if name == "relu3":
@@ -727,11 +726,10 @@ class TestQuantsimConfig:
                 "params": {"is_quantized": "False", "is_symmetric": "False"},
             },
             "params": {},
-            "op_type": {},
+            "op_type": {"MaxPool": {"is_output_quantized": "False"}},
             "supergroups": [
                 {"op_list": ["Conv", "Relu"]},
-                {"op_list": ["Relu", "MaxPool"]},
-                {"op_list": ["Conv", "Relu", "AveragePool"]},
+                {"op_list": ["Relu", "AveragePool"]},
                 {"op_list": ["Conv", "Clip"]},
             ],
             "model_input": {},
@@ -750,7 +748,7 @@ class TestQuantsimConfig:
             )
 
             # Expected supergroups: (square bracket indicates a supergroup)
-            # in -> [conv1->bn1->relu1->maxpool] -> [conv2->bn2->relu2] -> [conv3->relu3->avgpool] -> [conv4] -> [fc] -> out
+            # in -> [conv2->bn2->relu2] -> [conv3->relu3->avgpool] -> [conv4] -> [fc] -> out
 
             for _, module in sim.model.named_children():
                 assert isinstance(module, BaseQuantizationMixin)
@@ -760,8 +758,8 @@ class TestQuantsimConfig:
             # First supergroup
             assert sim.model.conv1.output_quantizers[0] is None
             assert sim.model.bn1.output_quantizers[0] is None
-            assert sim.model.relu1.output_quantizers[0] is None
-            assert sim.model.maxpool.output_quantizers[0] is not None
+            assert sim.model.relu1.output_quantizers[0] is not None
+            assert sim.model.maxpool.output_quantizers[0] is None
 
             # Second supergroup
             assert sim.model.conv2.output_quantizers[0] is None
@@ -963,7 +961,7 @@ class TestQuantsimConfig:
             for _, module in sim.model.named_children():
                 assert isinstance(module, BaseQuantizationMixin)
                 # Check configs for starts of supergroups
-                if module in [model.add, model.conv1, model.conv2]:
+                if module in [model.add, model.conv1, model.conv2, model.maxpool]:
                     # If add were not part of the supergroup, relu's input quantizer would be enabled
                     assert module.output_quantizers[0] is None
                 else:
@@ -1068,6 +1066,8 @@ class TestQuantsimConfig:
                 if name in ["conv1", "conv2"]:
                     # Output quantizers of conv1 and conv2 are
                     # disabled due to the subsequent batchnorm
+                    assert module.output_quantizers[0] is None
+                elif name == "maxpool":
                     assert module.output_quantizers[0] is None
                 else:
                     assert module.output_quantizers[0] is not None
@@ -1201,7 +1201,6 @@ class TestQuantsimConfig:
             "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},
@@ -1311,7 +1310,6 @@ class TestQuantsimConfig:
                             "param": {"bitwidth": 16, "dtype": "int"},
                         },
                     ],
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},

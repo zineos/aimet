@@ -22,10 +22,6 @@
 	},
 	"op_type":
 	{
-		"Dropout":
-		{
-		  "is_output_quantized": "False"
-		},
 		"LayerNormalization":
 		{
 			"is_output_quantized": "True",

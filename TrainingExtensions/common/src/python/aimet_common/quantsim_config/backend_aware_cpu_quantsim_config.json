@@ -59,9 +59,6 @@
                 }
             ]
         },
-        "Dropout": {
-            "is_output_quantized": "False"
-        },
         "Squeeze": {
             "is_output_quantized": "False",
             "supported_kernels": [

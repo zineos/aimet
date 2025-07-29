@@ -931,7 +931,7 @@ class TestPerChannelQcQuantizeOpLearnedGrid:
                 encodings = json.load(encodings_file)
 
             assert len(encodings["param_encodings"]) == 5
-            assert len(encodings["activation_encodings"]) == 15
+            assert len(encodings["activation_encodings"]) == 11
 
             for encoding in (
                 encodings["activation_encodings"] + encodings["param_encodings"]

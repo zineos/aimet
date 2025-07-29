@@ -131,9 +131,6 @@
                 }
             ]
         },
-        "Dropout": {
-            "is_output_quantized": "False"
-        },
         "Reshape": {
             "is_output_quantized": "False",
             "supported_kernels": [

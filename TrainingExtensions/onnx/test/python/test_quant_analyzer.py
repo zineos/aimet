@@ -114,8 +114,8 @@ class TestQuantAnalyzer:
         )
         enabled_quantizers = quant_analyzer._get_enabled_activation_quantizers(sim)
 
-        # total 8 activation quantizers (conv + relu is a supergroup) are enabled as per default config file.
-        assert len(enabled_quantizers) == 8
+        # total 8 activation quantizers (conv + relu is a supergroup) are enabled as per default config file and Maxpool output is disabled
+        assert len(enabled_quantizers) == 7
 
     def test_get_enabled_param_quantizers(self):
         """test get_enabled_param_quantizers()"""
@@ -217,7 +217,7 @@ class TestQuantAnalyzer:
                 )
             )
             assert type(layer_wise_eval_score_dict) == dict
-            assert len(layer_wise_eval_score_dict) == 10
+            assert len(layer_wise_eval_score_dict) == 9  # Removing maxpool
 
             # Test whether layer_wise_eval_score_dict consists of correct keys (op names).
             for op_name in layer_wise_eval_score_dict.keys():
@@ -254,7 +254,7 @@ class TestQuantAnalyzer:
                 )
             )
             assert type(layer_wise_eval_score_dict) == dict
-            assert len(layer_wise_eval_score_dict) == 10
+            assert len(layer_wise_eval_score_dict) == 9
 
             # Test whether layer_wise_eval_score_dict consists of correct keys (op names).
             for op_name in layer_wise_eval_score_dict.keys():

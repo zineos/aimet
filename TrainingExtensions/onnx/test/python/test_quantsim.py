@@ -484,7 +484,7 @@ class TestQuantSim:
                 enc["name"] for enc in encoding_data["activation_encodings"]
             }
             param_keys = {enc["name"] for enc in encoding_data["param_encodings"]}
-            assert activation_keys == {"4", "5", "input", "output"}
+            assert activation_keys == {"4", "input", "output"}
             assert param_keys == {"conv_w", "fc_w"}
 
             for enc in itertools.chain(
@@ -2624,11 +2624,6 @@ class TestQuantSim:
         sim = QuantizationSimModel(model)
 
         quantizer = sim._get_enabled_quantizer("output")
-        assert quantizer == sim.qc_quantize_op_dict["output"]
-
-        sim.qc_quantize_op_dict["output"].enabled = False
-
-        quantizer = sim._get_enabled_quantizer("output")
         assert quantizer == sim.qc_quantize_op_dict["relu_output"]
 
         sim.qc_quantize_op_dict["relu_output"].enabled = False
@@ -2949,7 +2944,7 @@ class TestEncodingPropagation:
 
     @pytest.mark.parametrize(
         "op_type_under_test",
-        [torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.Upsample],
+        [torch.nn.AvgPool2d, torch.nn.Upsample],
     )
     def test_output_parametrized(self, op_type_under_test):
         """
@@ -2988,10 +2983,11 @@ class TestEncodingPropagation:
             for cg_op in sim.connected_graph.ordered_ops:
                 if cg_op.type in ["Conv"]:
                     _, out_qtzr, __ = sim.get_op_quantizers(cg_op)
-                    assert _compare_encodings(
-                        out_qtzr[0].encodings[0],
-                        sim.qc_quantize_op_dict["output"].encodings[0],
-                    )
+                    if out_qtzr:
+                        assert _compare_encodings(
+                            out_qtzr[0].encodings[0],
+                            sim.qc_quantize_op_dict["output"].encodings[0],
+                        )
 
     def test_integer_concat(self):
         """
@@ -4347,8 +4343,8 @@ def test_onnx_qdq_export_output_name_swapping():
                     outputs=["output_0"],
                 ),
                 onnx.helper.make_node(
-                    "MaxPool",
-                    name="MaxPool",
+                    "AveragePool",
+                    name="AveragePool",
                     inputs=["output_0"],
                     outputs=["output_1"],
                     kernel_shape=(3, 3),
@@ -4392,13 +4388,13 @@ def test_onnx_qdq_export_output_name_swapping():
     Then: Exported model should look like this:
 
                                         +-------------------> (output_0)
-            x -> QDQ -> Sigmoid -> QDQ -+-> MaxPool -> QDQ -> (output_1)
+            x -> QDQ -> Sigmoid -> QDQ -+-> AveragePool -> QDQ -> (output_1)
 
 
     NOT like this:
 
                                         +---> QDQ ----------> (output_0)
-            x -> QDQ -> Sigmoid --------+-> MaxPool -> QDQ -> (output_1)
+            x -> QDQ -> Sigmoid --------+-> AveragePool -> QDQ -> (output_1)
     """
     onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=False)
 

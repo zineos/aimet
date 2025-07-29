@@ -1837,8 +1837,8 @@ class TestFX:
         sim = QuantizationSimModel(model_transformed, dummy_input=dummy_input)
         sim.compute_encodings(evaluate, forward_pass_callback_args=dummy_input)
 
-        # Quantizer enabled for output and disabled for indices (integer values)
-        assert sim.model.module_max_pool2d_with_indices.output_quantizers[0].enabled
+        # All quantizers for maxpool will be disabled
+        assert not sim.model.module_max_pool2d_with_indices.output_quantizers[0].enabled
         assert not sim.model.module_max_pool2d_with_indices.output_quantizers[1].enabled
 
     def test_find_functional_name_for_node(self):

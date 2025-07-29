@@ -130,7 +130,7 @@ class TestQuantsimConfig:
                         assert module.input_quantizers[0].enabled
                     else:
                         assert not module.input_quantizers[0].enabled
-                    if name in ["conv1", "conv2"]:
+                    if name in ["conv1", "conv2", "maxpool"]:
                         # Output quantizers of conv1 and conv2 are
                         # disabled due to the subsequent batchnorm
                         assert not module.output_quantizers[0].enabled
@@ -255,7 +255,6 @@ class TestQuantsimConfig:
             "params": {},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_symmetric": "False",
                     "params": {
                         "bias": {"is_quantized": "True", "is_symmetric": "False"}
@@ -278,7 +277,7 @@ class TestQuantsimConfig:
             for name, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     if isinstance(module._module_to_wrap, torch.nn.Conv2d):
-                        assert module.input_quantizers[0].enabled
+                        assert not module.input_quantizers[0].enabled
                         if name in ["conv1", "conv2"]:
                             assert not module.output_quantizers[0].enabled
                         else:
@@ -289,7 +288,8 @@ class TestQuantsimConfig:
                             assert module.input_quantizers[0].enabled
                         else:
                             assert not module.input_quantizers[0].enabled
-                        assert module.output_quantizers[0].enabled
+                        if name != "maxpool":
+                            assert module.output_quantizers[0].enabled
 
                     assert not module.input_quantizers[0].use_symmetric_encodings
                     assert not module.output_quantizers[0].use_symmetric_encodings
@@ -770,7 +770,6 @@ class TestQuantsimConfig:
             "op_type": {},
             "supergroups": [
                 {"op_list": ["Conv", "Relu"]},
-                {"op_list": ["Relu", "MaxPool"]},
                 {"op_list": ["Conv", "Relu", "AveragePool"]},
                 {"op_list": ["Conv", "Clip"]},
             ],
@@ -800,8 +799,8 @@ class TestQuantsimConfig:
             # First supergroup
             assert not sim.model.conv1.output_quantizers[0].enabled
             assert not sim.model.bn1.output_quantizers[0].enabled
-            assert not sim.model.relu1.output_quantizers[0].enabled
-            assert sim.model.maxpool.output_quantizers[0].enabled
+            assert sim.model.relu1.output_quantizers[0].enabled
+            assert not sim.model.maxpool.output_quantizers[0].enabled
 
             # Second supergroup
             assert not sim.model.conv2.output_quantizers[0].enabled
@@ -999,7 +998,7 @@ class TestQuantsimConfig:
             for _, module in sim.model.named_modules():
                 if isinstance(module, QcQuantizeWrapper):
                     # Check configs for starts of supergroups
-                    if module in [model.add, model.conv1, model.conv2]:
+                    if module in [model.add, model.conv1, model.conv2, model.maxpool]:
                         # If add were not part of the supergroup, relu's input quantizer would be enabled
                         assert not module.output_quantizers[0].enabled
                     else:
@@ -1101,7 +1100,7 @@ class TestQuantsimConfig:
                         assert module.input_quantizers[0].enabled
                     else:
                         assert not module.input_quantizers[0].enabled
-                    if name in ["conv1", "conv2"]:
+                    if name in ["conv1", "conv2", "maxpool"]:
                         # Output quantizers of conv1 and conv2 are
                         # disabled due to the subsequent batchnorm
                         assert not module.output_quantizers[0].enabled
@@ -1255,7 +1254,6 @@ class TestQuantsimConfig:
             "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},
@@ -1372,7 +1370,6 @@ class TestQuantsimConfig:
                             "param": {"bitwidth": 16, "dtype": "int"},
                         },
                     ],
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},
@@ -1480,7 +1477,6 @@ class TestQuantsimConfig:
             "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},
@@ -1679,7 +1675,6 @@ class TestQuantsimConfig:
             "params": {"bias": {"is_quantized": "False"}},
             "op_type": {
                 "Conv": {
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},

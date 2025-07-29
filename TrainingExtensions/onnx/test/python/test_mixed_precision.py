@@ -353,7 +353,7 @@ class TestAMPv1:
                 quantizer_group
             ] == quantizer_group.get_active_quantizers(algo._module_name_dict)
 
-        assert len(accuracy_list) == 20
+        assert len(accuracy_list) == 22
         # Check if accuracy list is in descending order
         assert accuracy_list[0][2] >= accuracy_list[1][2]
         assert accuracy_list[1][2] >= accuracy_list[2][2]
@@ -544,7 +544,7 @@ class TestAMPv1:
             use_all_amp_candidates=False,
         )
 
-        assert len(algo._supported_candidates_per_quantizer_group.keys()) == 13
+        assert len(algo._supported_candidates_per_quantizer_group.keys()) == 14
 
         default_supported_kernels = [
             ((16, QuantizationDataType.int), (16, QuantizationDataType.int)),
@@ -607,7 +607,6 @@ class TestAMPv1:
                             "param": {"bitwidth": 16, "dtype": "int"},
                         },
                     ],
-                    "is_input_quantized": "True",
                     "is_output_quantized": "True",
                     "params": {
                         "weight": {"is_quantized": "True"},
@@ -639,7 +638,7 @@ class TestAMPv1:
             use_all_amp_candidates=False,
         )
 
-        assert len(algo._supported_candidates_per_quantizer_group.keys()) == 13
+        assert len(algo._supported_candidates_per_quantizer_group.keys()) == 14
 
         # default_supported_kernels and conv_supported_kernels are the configurations added in the json file above.
         default_supported_kernels = [

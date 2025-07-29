@@ -911,7 +911,7 @@ class TestManualMixedPrecisionConfigurator:
             for module in sim.model.modules():
                 if isinstance(module, QuantizerBase):
                     if module in [
-                        sim.model.maxpool.output_quantizers[0],
+                        sim.model.relu1.output_quantizers[0],
                         sim.model.conv2.param_quantizers["weight"],
                     ]:
                         assert module.bitwidth == 16

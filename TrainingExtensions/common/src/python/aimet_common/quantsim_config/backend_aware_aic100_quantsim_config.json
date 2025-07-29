@@ -31,9 +31,6 @@
                 }
             ]
         },
-        "Dropout": {
-            "is_output_quantized": "False"
-        },
         "LayerNorm": {
             "is_output_quantized": "True",
             "supported_kernels": [

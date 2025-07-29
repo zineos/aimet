@@ -39,61 +39,9 @@
     {
       "is_output_quantized": "False"
     },
-    "Dropout":
-    {
-      "is_output_quantized": "False"
-    },
-    "Expand":
-    {
-      "is_output_quantized": "False"
-    },
-    "Squeeze":
-    {
-      "is_output_quantized": "False"
-    },
-    "Pad":
-    {
-      "is_output_quantized": "False"
-    },
     "Mean":
     {
       "is_output_quantized": "False"
-    },
-    "Gather":
-    {
-      "is_output_quantized": "False"
-    },
-    "Transpose":
-    {
-      "is_output_quantized": "False"
-    },
-    "Flatten":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Unsqueeze":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Compress":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Identity":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Tile":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Reshape":
-    {
-      "is_output_quantized" : "False"
-    },
-    "Split":
-    {
-      "is_output_quantized" : "False"
     },
     "Shape":
     {

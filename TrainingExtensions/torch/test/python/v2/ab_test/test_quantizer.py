@@ -915,7 +915,7 @@ class TestQuantizationSimStaticGrad:
             with open(f"{tmp_dir}/resnet18.encodings") as json_file:
                 encoding_data = json.load(json_file)
 
-        assert len(encoding_data["activation_encodings"]) == 24
+        assert len(encoding_data["activation_encodings"]) == 23
         assert all(
             len(enc["scale"]) == 1 for enc in encoding_data["activation_encodings"]
         )
@@ -1028,7 +1028,9 @@ class TestQuantizationSimStaticGrad:
                     encoding["name"]: encoding
                     for encoding in encodings["param_encodings"]
                 }
-                assert 15 == len(encodings["activation_encodings"])
+                assert 12 == len(
+                    encodings["activation_encodings"]
+                )  # Removed 2 maxpool and 1 flatten
                 assert np.isclose(
                     param_encodings["conv1_a.weight"]["scale"][0], 20 / 255
                 )
@@ -1954,7 +1956,7 @@ class TestQuantizationSimStaticGrad:
                     for key, val in encodings["activation_encodings"].items()
                     if "scale" in val[0]
                 ]
-                assert len(activation_encodings) == 2
+                assert len(activation_encodings) == 1
 
             # Save encodings again - now with propagate encodings flag enabled
             sim.export(
@@ -1970,7 +1972,7 @@ class TestQuantizationSimStaticGrad:
                     for key, val in encodings["activation_encodings"].items()
                     if "scale" in val[0]
                 ]
-                assert len(activation_encodings) == 2
+                assert len(activation_encodings) == 1
 
         # verifying the encodings propagation is disabled if output quantizers are disabled.
         sim = QuantizationSimModel(
@@ -2604,7 +2606,9 @@ class TestQuantizationSimStaticGrad:
             qsim.save_encodings_to_json(tmp_dir, "saved_encodings")
             with open(f"{tmp_dir}/saved_encodings.json") as encodings_file:
                 encodings = json.load(encodings_file)
-                assert len(encodings["activation_encodings"]) == 13
+                assert (
+                    len(encodings["activation_encodings"]) == 10
+                )  # Earlier criteria 13, changing it to 10, removing 3 maxpool
                 assert len(encodings["param_encodings"]) == 5
 
     def test_compute_encodings_for_multiple_sims(self):

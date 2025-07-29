@@ -46,9 +46,6 @@
         "ConvTranspose": {
             "is_input_quantized": "True"
         },
-        "Dropout": {
-            "is_output_quantized": "False"
-        },
         "Gemm": {
             "is_input_quantized": "True"
         },

@@ -19,18 +19,6 @@
 	},
 	"op_type":
 	{
-		"Dropout":
-		{
-		  "is_output_quantized": "False"
-		},
-		"Squeeze":
-		{
-			"is_output_quantized": "False"
-		},
-		"Pad":
-		{
-			"is_output_quantized": "False"
-		},
 		"Mean":
 		{
 			"is_output_quantized": "False"

@@ -180,7 +180,7 @@ class TestQuantAnalyzer:
         enabled_quantizers = quant_analyzer._get_enabled_activation_quantizers(sim)
 
         # total 12 activation quantizers (conv3 + relu3 is a supergroup) are enabled as per default config file.
-        assert len(enabled_quantizers) == 8
+        assert len(enabled_quantizers) == 7
 
     def test_get_enabled_param_quantizers(self):
         """test get_enabled_param_quantizers()"""
@@ -220,7 +220,7 @@ class TestQuantAnalyzer:
             )
             print(layer_wise_eval_score_dict)
             assert type(layer_wise_eval_score_dict) == dict
-            assert len(layer_wise_eval_score_dict) == 10
+            assert len(layer_wise_eval_score_dict) == 9
 
             # test whether layer_wise_eval_score_dict consists of correct keys (module names).
             for quant_wrapper_name in layer_wise_eval_score_dict.keys():
@@ -255,7 +255,7 @@ class TestQuantAnalyzer:
             )
             print(layer_wise_eval_score_dict)
             assert type(layer_wise_eval_score_dict) == dict
-            assert len(layer_wise_eval_score_dict) == 10
+            assert len(layer_wise_eval_score_dict) == 9
 
             # test whether layer_wise_eval_score_dict consists of correct keys (module names).
             for quant_wrapper_name in layer_wise_eval_score_dict.keys():

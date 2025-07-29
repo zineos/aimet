@@ -58,7 +58,7 @@ class TestQuantSimConfig:
         assert sim.qc_quantize_op_dict["input"].enabled == True
         assert sim.qc_quantize_op_dict["3"].enabled == False
         assert sim.qc_quantize_op_dict["4"].enabled == True
-        assert sim.qc_quantize_op_dict["5"].enabled == True
+        assert sim.qc_quantize_op_dict["5"].enabled == False  # Maxpool disabled
         assert sim.qc_quantize_op_dict["output"].enabled == True
 
     def test_default_config(self):
@@ -84,7 +84,7 @@ class TestQuantSimConfig:
             config_file="./data/quantsim_config.json",
             providers=["CPUExecutionProvider"],
         )
-        for name in ["3", "4", "5", "output"]:
+        for name in ["3", "4", "output"]:
             assert sim.qc_quantize_op_dict[name].enabled == True
             assert sim.qc_quantize_op_dict[name].use_symmetric_encodings == False
 
@@ -160,6 +160,7 @@ class TestQuantSimConfig:
         assert sim.qc_quantize_op_dict["input"].enabled == True
         assert sim.qc_quantize_op_dict["input"].use_symmetric_encodings == False
         assert sim.qc_quantize_op_dict["output"].enabled == True
+        assert sim.qc_quantize_op_dict["5"].enabled == False  # Disable for Maxpool
 
     def test_config_for_model_input(self):
         model = models_for_tests.build_dummy_model()
@@ -221,7 +222,7 @@ class TestQuantSimConfig:
         ]:
             assert sim.qc_quantize_op_dict[name].enabled == False
 
-        assert sim.qc_quantize_op_dict["5"].enabled == True
+        assert sim.qc_quantize_op_dict["5"].enabled == False
 
         if os.path.exists("./data/quantsim_config.json"):
             os.remove("./data/quantsim_config.json")

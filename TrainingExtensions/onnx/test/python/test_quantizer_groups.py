@@ -61,7 +61,7 @@ class TestQuantizerGroups:
         model = single_residual_model()
         sim = QuantizationSimModel(model.model)
         _, quantizer_groups = find_quantizer_group(sim)
-        assert len(quantizer_groups) == 10
+        assert len(quantizer_groups) == 11
         conv3_group = avg_pool_group = None
         for group in quantizer_groups:
             if "conv3.weight" in group.parameter_quantizers:
@@ -87,7 +87,7 @@ class TestQuantizerGroups:
             if "/avgpool/AveragePool_output_0" in group.activation_quantizers:
                 avg_pool_group = group
 
-        assert len(quantizer_groups) == 10
+        assert len(quantizer_groups) == 11
         assert len(input_group.parameter_quantizers) == 0
         assert conv3_group.activation_quantizers[0] == "/relu2/Relu_output_0"
         assert avg_pool_group.parameter_quantizers[0] == "fc.weight"

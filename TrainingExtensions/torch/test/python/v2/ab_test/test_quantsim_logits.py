@@ -85,7 +85,6 @@ CONFIG_OP_SPECIFIC_QUANT = {
     "params": {},
     "op_type": {
         "Conv": {
-            "is_input_quantized": "True",
             "is_symmetric": "False",
             "params": {"bias": {"is_quantized": "True", "is_symmetric": "False"}},
         }

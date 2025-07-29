@@ -64,6 +64,7 @@ from aimet_common.quantsim_config.quantsim_config import (
     reformat_supported_kernels,
 )
 from aimet_common.utils import AimetLogger
+from aimet_common.onnx._utils import _is_grid_preserving_op
 from aimet_onnx.meta.connectedgraph import ConnectedGraph, CONSTANT_TYPE
 from aimet_onnx.utils import get_product_name_from_quantized_name
 from aimet_onnx.qc_quantize_op import OpMode, QcQuantizeOp
@@ -319,6 +320,8 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         modified_quantize_ops = {}
         for op_name, op_to_quantizer in self._op_to_quantizers.items():
             op = self._conn_graph.get_all_ops()[op_name]
+            if _is_grid_preserving_op(op.type) and op.type not in op_configs:
+                op_configs[op.type] = {"is_output_quantized": False}
             if op.type in op_configs:
                 op_config = op_configs[op.type]
                 self._set_config_for_op(

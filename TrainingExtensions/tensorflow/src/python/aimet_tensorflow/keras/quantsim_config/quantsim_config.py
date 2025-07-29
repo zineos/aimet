@@ -73,6 +73,7 @@ from aimet_common.quantsim_config.quantsim_config import (
     get_all_ops_in_neighborhood,
 )
 from aimet_common.utils import AimetLogger
+
 import aimet_tensorflow.keras.utils.common as keras_common_utils
 from aimet_tensorflow.keras.connectedgraph import ConnectedGraph
 from aimet_tensorflow.keras.quant_sim.qc_quantize_wrapper import QuantizerSettings
@@ -549,7 +550,6 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
         """
         for op in self._connected_graph.ordered_ops:
             layer = op.get_module()
-
             if op.type in op_configs:
                 for config_key, config_val in op_configs[op.type].items():
                     if config_key == ConfigDictKeys.PARAMS:

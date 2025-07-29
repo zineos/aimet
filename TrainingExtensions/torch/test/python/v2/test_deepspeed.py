@@ -315,7 +315,7 @@ def test_deepspeed_zero3_offload(
     assert isinstance(
         sim_deepspeed.model.conv1.output_quantizers[0], QuantizeDequantize
     )
-    assert isinstance(
+    assert not isinstance(
         sim_deepspeed.model.maxpool1.output_quantizers[0], QuantizeDequantize
     )
     assert isinstance(
@@ -327,7 +327,7 @@ def test_deepspeed_zero3_offload(
     assert isinstance(
         sim_deepspeed.model.conv2.output_quantizers[0], QuantizeDequantize
     )
-    assert isinstance(
+    assert not isinstance(
         sim_deepspeed.model.maxpool2.output_quantizers[0], QuantizeDequantize
     )
     assert isinstance(
@@ -358,10 +358,8 @@ def test_deepspeed_zero3_offload(
     assert (
         sim_deepspeed.model.conv1.input_quantizers[0].shape
         == sim_deepspeed.model.conv1.output_quantizers[0].shape
-        == sim_deepspeed.model.maxpool1.output_quantizers[0].shape
         == sim_deepspeed.model.relu1.output_quantizers[0].shape
         == sim_deepspeed.model.conv2.output_quantizers[0].shape
-        == sim_deepspeed.model.maxpool2.output_quantizers[0].shape
         == sim_deepspeed.model.relu2.output_quantizers[0].shape
         == sim_deepspeed.model.relu3.output_quantizers[0].shape
         == sim_deepspeed.model.fc2.output_quantizers[0].shape
@@ -621,7 +619,7 @@ def test_deepspeed_zero3_offload_fallback(
     assert isinstance(
         sim_deepspeed.model.conv1.output_quantizers[0], QuantizeDequantize
     )
-    assert isinstance(
+    assert not isinstance(
         sim_deepspeed.model.maxpool1.output_quantizers[0], QuantizeDequantize
     )
     assert isinstance(
@@ -633,7 +631,7 @@ def test_deepspeed_zero3_offload_fallback(
     assert isinstance(
         sim_deepspeed.model.conv2.output_quantizers[0], QuantizeDequantize
     )
-    assert isinstance(
+    assert not isinstance(
         sim_deepspeed.model.maxpool2.output_quantizers[0], QuantizeDequantize
     )
     assert isinstance(
@@ -664,10 +662,8 @@ def test_deepspeed_zero3_offload_fallback(
     assert (
         sim_deepspeed.model.conv1.input_quantizers[0].shape
         == sim_deepspeed.model.conv1.output_quantizers[0].shape
-        == sim_deepspeed.model.maxpool1.output_quantizers[0].shape
         == sim_deepspeed.model.relu1.output_quantizers[0].shape
         == sim_deepspeed.model.conv2.output_quantizers[0].shape
-        == sim_deepspeed.model.maxpool2.output_quantizers[0].shape
         == sim_deepspeed.model.relu2.output_quantizers[0].shape
         == sim_deepspeed.model.relu3.output_quantizers[0].shape
         == sim_deepspeed.model.fc2.output_quantizers[0].shape
