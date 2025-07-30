@@ -140,10 +140,21 @@ class _HistogramObserver(_Observer[_Histogram]):
     Observer for Histogram based calibration techniques (percentile, MSE)
     """
 
-    def __init__(self, shape: tuple, num_bins: int):
+    def __init__(
+        self, shape: tuple, num_bins: int, growth_limit: Optional[float] = None
+    ):
         super().__init__(shape)
         self.num_bins = num_bins
         self.stats = [_Histogram() for _ in range(np.prod(self.shape, dtype=np.int32))]
+
+        if growth_limit is None:
+            growth_limit = float("inf")
+
+        if growth_limit < 1.0:
+            raise RuntimeError
+
+        self.growth_limit = growth_limit
+        self._histogram_range_limit = None
 
     # pylint: disable=too-many-locals
     @torch.no_grad()
@@ -225,15 +236,30 @@ class _HistogramObserver(_Observer[_Histogram]):
     def merge_stats(self, new_stats_list: List[_Histogram], input_tensor: torch.Tensor):
         if self.stats[0].histogram is None:
             self.stats = new_stats_list
+
+            # Compute histogram range limit based on the first input and the growth limit factor
+            input0_min = reduce(
+                input_tensor, shape=self.shape, reduce_op=torch.min
+            ).values
+            input0_max = reduce(
+                input_tensor, shape=self.shape, reduce_op=torch.max
+            ).values
+
+            input0_range = input0_max - input0_min
+
+            left_limit = (input0_min - input0_range * self.growth_limit / 2).flatten()
+            right_limit = (input0_max + input0_range * self.growth_limit / 2).flatten()
+            self._histogram_range_limit = torch.stack((left_limit, right_limit), dim=1)
             return
 
         hist_inputs = torch.reshape(input_tensor, (len(new_stats_list), -1))
         for index, new_stats in enumerate(new_stats_list):
             curr_stats = self.stats[index]
             curr_input = hist_inputs[index]
+            left_limit, right_limit = self._histogram_range_limit[index]
 
-            updated_min = min(new_stats.min, curr_stats.min)
-            updated_max = max(new_stats.max, curr_stats.max)
+            updated_min = new_stats.min.clamp(left_limit, curr_stats.min)
+            updated_max = new_stats.max.clamp(curr_stats.max, right_limit)
 
             # if the current histogram can capture new_stats within in its range
             if updated_min == curr_stats.min and updated_max == curr_stats.max:
@@ -614,10 +640,13 @@ class _LpNormEncodingAnalyzer(EncodingAnalyzer[_Histogram]):
         offset_candidates: int,
         max_parallelism: int,
         gamma: float,
+        histogram_growth_limit: Optional[float] = None,
     ):
         if num_bins <= 0:
             raise ValueError("Number of bins cannot be less than or equal to 0.")
-        observer = _HistogramObserver(shape=shape, num_bins=num_bins)
+        observer = _HistogramObserver(
+            shape=shape, num_bins=num_bins, growth_limit=histogram_growth_limit
+        )
         super().__init__(observer)
         self.p = p
         self.asym_delta_candidates = asymmetric_delta_candidates
@@ -881,6 +910,7 @@ class SqnrEncodingAnalyzer(_LpNormEncodingAnalyzer):
         offset_candidates=21,
         max_parallelism=64,
         gamma=3.0,
+        histogram_growth_limit: Optional[float] = None,
     ):
         super().__init__(
             shape=shape,
@@ -891,6 +921,7 @@ class SqnrEncodingAnalyzer(_LpNormEncodingAnalyzer):
             offset_candidates=offset_candidates,
             max_parallelism=max_parallelism,
             gamma=gamma,
+            histogram_growth_limit=histogram_growth_limit,
         )
 
 
@@ -910,6 +941,12 @@ class TfEnhancedEncodingAnalyzer(SqnrEncodingAnalyzer):
     _V1_OFFSET_CANDIDATES = 21
     _V1_GAMMA = 3.0  # a.k.a "fudge factor"
 
+    # NOTE: The range of v1 histogram is fixed with 3x range of the first input.
+    #       Unfortunately, many existing user models in v1 are heavily reliant
+    #       to this static nature of v1 histogram. To mimic this behavior in v2,
+    #       we clip the all inputs with 3x range of the first input
+    _V1_HISTOGRAM_MAX_GROWTH_RATE = 3.0
+
     def __init__(self, shape: tuple):
         super().__init__(
             shape=shape,
@@ -918,28 +955,5 @@ class TfEnhancedEncodingAnalyzer(SqnrEncodingAnalyzer):
             symmetric_delta_candidates=self._V1_SYMMETRIC_DELTA_CANDIDATES,
             offset_candidates=self._V1_OFFSET_CANDIDATES,
             gamma=self._V1_GAMMA,
+            histogram_growth_limit=self._V1_HISTOGRAM_MAX_GROWTH_RATE,
         )
-        self._range_of_first_input: Tuple[torch.Tensor, torch.Tensor] = None
-
-    @torch.no_grad()
-    def update_stats(self, input_tensor: torch.Tensor) -> _Histogram:
-        if self._range_of_first_input is None:
-            input0_min = reduce(
-                input_tensor, shape=self.observer.shape, reduce_op=torch.min
-            ).values
-            input0_max = reduce(
-                input_tensor, shape=self.observer.shape, reduce_op=torch.max
-            ).values
-            self._range_of_first_input = (input0_min, input0_max)
-
-        input0_min, input0_max = self._range_of_first_input
-        input0_centroid = (input0_min + input0_max) / 2
-        # NOTE: The range of v1 histogram is fixed with 3x range of the first input.
-        #       Unfortunately, many existing user models in v1 are heavily reliant
-        #       to this static nature of v1 histogram. To mimic this behavior in v2,
-        #       we clip the all inputs with 3x range of the first input
-        input_tensor = input_tensor.clamp(
-            min=input0_centroid - (input0_centroid - input0_min) * 3,
-            max=input0_centroid + (input0_max - input0_centroid) * 3,
-        )
-        return super().update_stats(input_tensor)
