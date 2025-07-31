@@ -4016,7 +4016,7 @@ def test_insert_data_movement_op_edge_case(model_factory):
 
 @pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize("seed", range(10))
-def test_onnx_qdq_lpbq(seed: int, prequantize_constants: bool):
+def test_to_onnx_qdq_lpbq(seed: int, prequantize_constants: bool):
     ort.set_seed(seed)
     np.random.seed(seed)
 
@@ -4526,6 +4526,92 @@ def test_from_onnx_qdq(
     assert np.allclose(sess.run(None, inputs), sess_2.run(None, inputs))
 
 
+@pytest.mark.parametrize("prequantize_constants", [False, True])
+@pytest.mark.parametrize("seed", range(10))
+def test_from_onnx_qdq_lpbq(seed: int, prequantize_constants: bool):
+    ort.set_seed(seed)
+    np.random.seed(seed)
+
+    model = standalone_gemm(in_channels=16, out_channels=16)
+    sim = QuantizationSimModel(
+        model,
+        param_type="int4",
+        activation_type="int16",
+        config_file="htp_v81",
+    )
+
+    set_grouped_blockwise_quantization_for_weights(
+        sim,
+        op_types=("MatMul", "Conv", "Gemm"),
+        bitwidth=4,
+        decompressed_bw=8,
+        block_size=4,
+        strict=False,
+    )
+
+    input_shape = tuple(
+        dim.dim_value
+        for dim in sim.model.model.graph.input[0].type.tensor_type.shape.dim
+    )
+    input = np.random.randn(*input_shape).astype(np.float32)
+
+    """
+    When: Create a pure onnx model with sim._to_onnx_qdq()
+    """
+    sim.compute_encodings([{"input": input}])
+
+    sim._insert_data_movement_op_output_quantizers()
+    onnx_qdq_model = sim._to_onnx_qdq(prequantize_constants=prequantize_constants)
+
+    """
+    When: Create sim from onnx QDQ model
+    Then: The new sim should be in same state as the original sim
+    """
+    sim_2 = QuantizationSimModel._from_onnx_qdq(
+        sim._to_onnx_qdq(prequantize_constants=prequantize_constants),
+        config_file="htp_v81",
+    )
+    _assert_sim_equal(sim, sim_2)
+    assert np.allclose(
+        sim.session.run(None, {"input": input}),
+        sim_2.session.run(None, {"input": input}),
+    )
+
+    """
+    When: Call compute_encodings with new sim
+    Then: All states of the new sim should remain unchanged
+    """
+    sim_2.compute_encodings([{"input": input * 2}])
+    _assert_sim_equal(sim, sim_2)
+    assert np.allclose(
+        sim.session.run(None, {"input": input}),
+        sim_2.session.run(None, {"input": input}),
+    )
+
+    """
+    When: Export onnx QDQ from the new sim
+    Then: The new onnx QDQ model should be in same state as the original onnx QDQ
+    """
+    onnx_qdq_model_2 = sim_2._to_onnx_qdq(prequantize_constants=prequantize_constants)
+
+    assert onnx_qdq_model.graph.input == onnx_qdq_model_2.graph.input
+    assert onnx_qdq_model.graph.output == onnx_qdq_model_2.graph.output
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess = ort.InferenceSession(
+        onnx_qdq_model.SerializeToString(), sess_options=sess_options
+    )
+    sess_2 = ort.InferenceSession(
+        onnx_qdq_model_2.SerializeToString(), sess_options=sess_options
+    )
+
+    assert np.allclose(
+        sess.run(None, {"input": input}),
+        sess_2.run(None, {"input": input}),
+    )
+
+
 def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
     assert len(sim_1.activation_names) == len(sim_2.activation_names)
     for key1, key2 in zip(
@@ -4546,6 +4632,7 @@ def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
         qtzr_1 = sim_1.qc_quantize_op_dict[key1]
         qtzr_2 = sim_2.qc_quantize_op_dict[key2]
 
+        assert type(qtzr_1) == type(qtzr_2)
         assert qtzr_1.enabled == qtzr_2.enabled
         assert qtzr_1.tensor_quantizer_params == qtzr_2.tensor_quantizer_params
 
@@ -4554,7 +4641,11 @@ def _assert_sim_equal(sim_1: QuantizationSimModel, sim_2: QuantizationSimModel):
 
         e1 = qtzr_1.export_encodings("2.0.0")
         e2 = qtzr_2.export_encodings("2.0.0")
-        assert np.allclose(e1["y_scale"], e2["y_scale"]), (key1, key2)
+        assert np.allclose(e1.get("y_scale", 0), e2.get("y_scale", 0))
+        assert np.allclose(
+            e1.get("per_channel_float_scale", 0), e2.get("per_channel_float_scale", 0)
+        )
+        assert e1.get("per_block_int_scale") == e2.get("per_block_int_scale")
         assert e1.get("y_zero_point") == e2.get("y_zero_point")
         assert e1.get("output_dtype") == e2.get("output_dtype")
         assert e1.get("axis") == e2.get("axis")

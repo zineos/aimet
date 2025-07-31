@@ -496,6 +496,28 @@ class QuantizationSimModel:
                 f"for the following tensors: {excess_encodings}"
             )
 
+        lpbq_weights = {
+            enc["name"]: enc for enc in encodings if "per_channel_float_scale" in enc
+        }
+
+        def get_lpbq_params(op: Op):
+            for inp in op.inputs:
+                if inp.name in lpbq_weights:
+                    enc = lpbq_weights[inp.name]
+                    *_, bitwidth = enc["output_dtype"].split("int")
+                    bitwidth = int(bitwidth)
+                    decompressed_bw = bitwidth * 2
+                    block_size = enc["block_size"]
+                    return bitwidth, decompressed_bw, block_size
+            return None, None, None
+
+        if lpbq_weights:
+            _set_grouped_blockwise_quantization_for_weights(
+                sim,
+                get_lpbq_params,
+                strict=True,
+            )
+
         # Load encodings to sim
         for enc in encodings:
             qtzr = sim.qc_quantize_op_dict[enc["name"]]
@@ -504,17 +526,27 @@ class QuantizationSimModel:
                 qtzr.enabled = False
                 continue
 
-            channel_axis = block_axis = block_size = None
+            channel_axis = block_axis = None
+            block_size = enc.get("block_size")
             if "axis" in enc:
-                if "block_size" in enc:
-                    block_axis = enc["axis"]
-                    channel_axis = ...
-                    raise NotImplementedError(
-                        "Creating QuantizationSimModel from onnx models with "
-                        "blockwise QuantizeLinear/DequantizeLinear is not supported yet."
-                    )
-                else:
+                if block_size is None:
                     channel_axis = enc["axis"]
+                else:
+                    param = utils.ParamUtils.get_param_by_name(model, enc["name"])
+                    if not param:
+                        raise RuntimeError(
+                            "Creating QuantizationSimModel from onnx models with "
+                            "blockwise QuantizeLinear/DequantizeLinear is supported "
+                            f"with static 2D weights. Got dynamic input {enc['name']}"
+                        )
+                    if len(param.dims) != 2:
+                        raise RuntimeError(
+                            "Creating QuantizationSimModel from onnx models with "
+                            "blockwise QuantizeLinear/DequantizeLinear is supported "
+                            f"with 2D weights. Got {len(param.dims)}D weight {param.name}"
+                        )
+                    block_axis = enc["axis"]
+                    channel_axis = 0 if block_axis in (1, -1) else 1
 
             if channel_axis is not None:
                 if not qtzr.tensor_quantizer_params:
@@ -2660,18 +2692,29 @@ def set_grouped_blockwise_quantization_for_weights(
         ...                                                block_size=64,
         ...                                                excluded_nodes = ['conv1'])
     """
-
     if isinstance(op_types, str):
         op_types = (op_types,)
 
     if not excluded_nodes:
         excluded_nodes = []
 
-    for op in sim.connected_graph.ordered_ops:
-        if op.type not in op_types:
-            continue
+    def get_lpbq_params(op: Op):
+        if op.type in op_types and op.name not in excluded_nodes:
+            return bitwidth, decompressed_bw, block_size
+        return None, None, None
 
-        if op.name in excluded_nodes:
+    return _set_grouped_blockwise_quantization_for_weights(sim, get_lpbq_params, strict)
+
+
+def _set_grouped_blockwise_quantization_for_weights(
+    sim: QuantizationSimModel,
+    get_lpbq_params: Callable[[Op], Tuple[Optional[int], Optional[int], Optional[int]]],
+    strict: bool = False,
+):
+    for op in sim.connected_graph.ordered_ops:
+        bitwidth, decompressed_bw, block_size = get_lpbq_params(op)
+
+        if None in (bitwidth, decompressed_bw, block_size):
             continue
 
         _, _, param_quantizers = sim.get_op_quantizers(op)

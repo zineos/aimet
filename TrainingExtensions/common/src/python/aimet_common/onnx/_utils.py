@@ -40,7 +40,7 @@
 
 from collections import deque, defaultdict
 import functools
-from typing import Iterable, Optional, Sequence, Dict, List, Union, Mapping
+from typing import Iterable, Optional, Sequence, Dict, List, Union
 
 import os
 import tempfile
@@ -325,8 +325,10 @@ def _quantize_const(
         y_scale = (y_scale * per_block_int_scale).astype(np.float32)
 
     y_scale = _broadcast(y_scale, const.ndim, axis=axis, block_size=block_size)
-    y_zero_point = _broadcast(
-        y_zero_point, const.ndim, axis=axis, block_size=block_size
+    y_zero_point = (
+        _broadcast(y_zero_point, const.ndim, axis=axis, block_size=block_size)
+        if y_zero_point is not None
+        else np.zeros(y_scale.shape, dtype=np.int32)
     )
 
     y_scale = y_scale.astype(np.float32)
@@ -343,14 +345,26 @@ def _dequantize_const(
     axis: Optional[int],
     block_size: Optional[int],
     output_dtype: str,
+    per_block_int_scale: Optional[np.ndarray],
 ) -> TensorProto:
     if output_dtype == "bfloat16":
         raise RuntimeError("Unsupported data type: {}")
 
     const_q = to_array(const_q)
+
+    if per_block_int_scale is not None:
+        block_axis = axis
+        channel_axis = 0 if block_axis in (1, -1) else 1
+        y_scale = y_scale.reshape(
+            *(-1 if axis == channel_axis else 1 for axis in range(const_q.ndim))
+        )
+        y_scale = (y_scale * per_block_int_scale).astype(np.float32)
+
     y_scale = _broadcast(y_scale, const_q.ndim, axis=axis, block_size=block_size)
-    y_zero_point = _broadcast(
-        y_zero_point, const_q.ndim, axis=axis, block_size=block_size
+    y_zero_point = (
+        _broadcast(y_zero_point, const_q.ndim, axis=axis, block_size=block_size)
+        if y_zero_point is not None
+        else np.zeros(y_scale.shape, dtype=np.int32)
     )
 
     const_q = const_q.astype(np.int64)
@@ -649,8 +663,21 @@ def _remove_onnx_qdq_nodes(
     producers: Dict[str, NodeProto] = {}
     consumers: Dict[str, Dict[str, NodeProto]] = defaultdict(dict)
     graph_outputs = set(output.name for output in model.graph.output)
+
+    _validate_model(model, constants, consumers, producers)
+
     to_encoding = functools.partial(
-        _to_encoding, model=model, initializers=constants, producers=producers
+        _to_encoding,
+        model=model,
+        constants=constants,
+        consumers=consumers,
+        producers=producers,
+    )
+    get_lpbq_nodes = functools.partial(
+        _get_lpbq_nodes, producers=producers, consumers=consumers, constants=constants
+    )
+    get_qdq_nodes = functools.partial(
+        _get_qdq_nodes, producers=producers, consumers=consumers, constants=constants
     )
 
     for node in model.graph.node:
@@ -666,39 +693,24 @@ def _remove_onnx_qdq_nodes(
 
     to_be_removed = {}
     for dq in dq_nodes.values():
-        for consumer in consumers[dq.output[0]].values():
-            if consumer.op_type == "DequantizeLinear":
-                # Back-to-back DequantizeLinear.
-                # In practice, this condition mostly indicates LPBQ
-                raise NotImplementedError(
-                    f"Back-to-back DequantizeLinear ({dq.name} -> {consumer.name}) "
-                    "is not supported yet."
-                )
-
-        q = producers.get(dq.input[0])
-
-        if not q:
-            if set(dq.input) <= constants.keys():
-                to_be_removed[dq.name] = dq
+        lpbq_nodes = get_lpbq_nodes(dq)
+        if lpbq_nodes:
+            to_be_removed.update({node.name: node for node in lpbq_nodes})
             continue
 
-        if all(
-            # All Q must be followed by DQ
-            consumer.op_type == "DequantizeLinear"
-            # Q-DQ must share same scale and zp
-            and consumer.input[1:] == q.input[1:]
-            # Scale and zp must be constants.
-            # This rules out LPBQ which takes runtime-computed scale as input
-            and set(consumer.input[1:]) <= constants.keys()
-            for consumer in consumers[q.output[0]].values()
-        ):
-            to_be_removed[q.name] = q
-            to_be_removed.update(consumers[q.output[0]])
+        qdq_nodes = get_qdq_nodes(dq)
+        if qdq_nodes:
+            to_be_removed.update({node.name: node for node in qdq_nodes})
 
     encodings = {
         dq.name: to_encoding(dq)
         for dq in to_be_removed.values()
         if dq.op_type == "DequantizeLinear"
+    }
+    encodings = {
+        node_name: encoding
+        for node_name, encoding in encodings.items()
+        if encoding is not None
     }
 
     # Reconnect nodes
@@ -744,17 +756,18 @@ def _remove_onnx_qdq_nodes(
                 const_node = producers[const.name]
                 to_be_removed[const_node.name] = const_node
 
-            if const:
+            if const and dq.name in encodings:
                 new_name = dq.output[0]
                 e = encodings[dq.name]
                 initializers[dq.output[0]] = _dequantize_const(
                     const,
                     name=new_name,
-                    y_scale=e["y_scale"],
+                    y_scale=e.get("y_scale", e.get("per_channel_float_scale")),
                     y_zero_point=e.get("y_zero_point"),
                     axis=e.get("axis"),
                     block_size=e.get("block_size"),
                     output_dtype="float32",
+                    per_block_int_scale=e.get("per_block_int_scale"),
                 )
 
             continue
@@ -817,38 +830,82 @@ def _remove_onnx_qdq_nodes(
     return list(encodings.values())
 
 
+def _validate_model(
+    model: ModelProto,
+    constants: Dict[str, TensorProto],
+    consumers: Dict[str, Dict[str, NodeProto]],
+    producers: Dict[str, NodeProto],
+) -> None:
+    invalid_nodes = []
+
+    for node in model.graph.node:
+        if node.op_type == "QuantizeLinear":
+            is_qdq = _is_q_dq_sequence(node, consumers)
+        elif node.op_type == "DequantizeLinear":
+            is_qdq = _get_qdq_nodes(
+                node, producers, consumers, constants
+            ) or _is_lpbq_subgraph(node, producers, consumers, constants)
+        else:
+            continue
+
+        if not is_qdq:
+            invalid_nodes.append(node)
+
+    if not invalid_nodes:
+        return
+
+    invalid_node_names = ", ".join([node.name for node in invalid_nodes])
+    raise RuntimeError(
+        f"Invalid QuantizeLinear/DequantizeLinear detected: {invalid_node_names}.\n\n"
+        "To import onnx QDQ model, please ensure the following requirements:"
+        "  - All QuantizeLinear (if any) must be followed by DequantizeLinear.\n"
+        "  - All DequantizeLinaer must be 1) preceded by QuantizeLinear or 2) take static constant as input"
+    )
+
+
 def _to_encoding(
     dq: NodeProto,
     model: ModelProto,
-    initializers: Mapping[str, TensorProto],
-    producers: Mapping[str, NodeProto],
-) -> Dict[str, Union[str, int, np.ndarray]]:
+    constants: Dict[str, TensorProto],
+    consumers: Dict[str, Dict[str, NodeProto]],
+    producers: Dict[str, NodeProto],
+) -> Optional[Dict[str, Union[str, int, np.ndarray]]]:
     q = producers.get(dq.input[0])
 
     if q and q.op_type != "QuantizeLinear":
-        raise RuntimeError
+        raise RuntimeError(
+            f"DequantizeLinear can be only preceded by QuantizeLinear. "
+            f"Got {q.op_type} (name: {q.name})"
+        )
+
+    for consumer in consumers[dq.output[0]].values():
+        if consumer.op_type == "DequantizeLinear":
+            lpbq = _get_lpbq_nodes(consumer, producers, consumers, constants)
+            if not lpbq:
+                raise RuntimeError(
+                    f"Back-to-back DequantizeLinear detected at {dq.name}. "
+                    "Back-to-back DequantizeLinear is only supported in LPBQ"
+                )
+            return None
 
     if any(dq.output[0] == graph_out.name for graph_out in model.graph.output):
         input_name = dq.output[0]
     else:
         input_name = q.input[0] if q else dq.output[0]
 
-    scale_name = dq.input[1]
-    if initializers[scale_name].data_type not in (
-        TensorProto.FLOAT,
-        TensorProto.FLOAT16,
-    ):
-        raise NotImplementedError(
-            f'Found scale "{scale_name}" with unsupported dtype '
-            f"{onnx.helper.tensor_dtype_to_np_dtype(initializers[scale_name].data_type)}. "
-            "Currently only float32 and float16 are supported."
-        )
-
-    scale = to_array(initializers[dq.input[1]])
+    lpbq = _get_lpbq_nodes(dq, producers, consumers, constants)
+    if lpbq:
+        *_, scale_dq = lpbq
+        scale = {
+            "per_block_int_scale": to_array(constants[scale_dq.input[0]]),
+            "per_channel_float_scale": to_array(constants[scale_dq.input[1]]),
+        }
+    else:
+        scale = {"y_scale": to_array(constants[dq.input[1]])}
 
     if len(dq.input) > 2:
         zp_name = dq.input[2]
-        zp_tensor_proto = initializers[zp_name]
+        zp_tensor_proto = constants[zp_name]
 
         if zp_tensor_proto.data_type not in (
             TensorProto.INT4,
@@ -885,8 +942,8 @@ def _to_encoding(
 
     encoding = {
         "name": input_name,
-        "y_scale": scale,
         "output_dtype": output_dtype,
+        **scale,
     }
 
     if zp is not None:
@@ -940,3 +997,109 @@ def _get_all_constants(model: ModelProto) -> Dict[str, TensorProto]:
             break
 
     return constants
+
+
+def _get_qdq_nodes(
+    dq: NodeProto,
+    producers: Dict[str, NodeProto],
+    consumers: Dict[str, Dict[str, NodeProto]],
+    constants: Dict[str, TensorProto],
+) -> List[NodeProto]:
+    if dq.op_type != "DequantizeLinear":
+        raise ValueError(
+            f"_get_qdq_nodes can only take DequantizeLinear node as input; got {dq.op_type}"
+        )
+
+    qdq_nodes = []
+    q = producers.get(dq.input[0])
+
+    if not q:
+        if set(dq.input) <= constants.keys():
+            # Standalone DQ with static inputs
+            qdq_nodes.append(dq)
+    elif (
+        _is_q_dq_sequence(q, consumers)
+        # Scale and zp must be constants.
+        and set(q.input[1:]) <= constants.keys()
+    ):
+        qdq_nodes.extend([q, *consumers[q.output[0]].values()])
+
+    return qdq_nodes
+
+
+def _get_lpbq_nodes(
+    dq: NodeProto,
+    producers: Dict[str, NodeProto],
+    consumers: Dict[str, Dict[str, NodeProto]],
+    constants: Dict[str, TensorProto],
+) -> List[NodeProto]:
+    if dq.op_type != "DequantizeLinear":
+        raise ValueError(
+            f"_get_lpbq_nodes can only take DequantizeLinear node as input; got {dq.op_type}"
+        )
+
+    scale_dq = producers.get(dq.input[1])
+
+    if not scale_dq:
+        return []
+
+    is_lpbq = (
+        set(scale_dq.input) <= constants.keys()
+        and set(dq.input[2:]) <= constants.keys()
+    )
+
+    q = producers.get(dq.input[0])
+    if q:
+        is_lpbq &= (
+            _is_q_dq_sequence(q, consumers)
+            # Input of Q must be constant
+            and q.input[0] in constants
+        )
+
+    if is_lpbq:
+        return [q, dq, scale_dq] if q else [dq, scale_dq]
+
+    return []
+
+
+def _is_q_dq_sequence(q: NodeProto, consumers: Dict[str, Dict[str, NodeProto]]):
+    return (
+        q.op_type == "QuantizeLinear"
+        and all(
+            # All Q must be followed by DQ
+            consumer.op_type == "DequantizeLinear"
+            # Q-DQ must share same scale and zp
+            and consumer.input[1:] == q.input[1:]
+            # This rules out LPBQ which takes runtime-computed scale as input
+            for consumer in consumers[q.output[0]].values()
+        )
+    )
+
+
+def _is_lpbq_subgraph(
+    dq: NodeProto,
+    producers: Dict[str, NodeProto],
+    consumers: Dict[str, Dict[str, NodeProto]],
+    constants: Dict[str, TensorProto],
+) -> bool:
+    """
+    per_channel_float_scale -----+
+                                 +--> DequantizeLinear -----+ (blockwise scale)
+       per_block_uint_scale -----+        (1st DQ)          |
+                                                    +-------+---------+
+                                                    V                 V
+                                 weight ---> QuantizeLinear -> DequantizeLinear -> ...
+                                                                   (2nd DQ)
+    """
+    if dq.op_type != "DequantizeLinear":
+        raise ValueError(
+            f"_is_lpbq_subgraph can only take DequantizeLinear node as input; got {dq.op_type}"
+        )
+
+    is_2nd_dq = bool(_get_lpbq_nodes(dq, producers, consumers, constants))
+    is_1st_dq = all(
+        consumer.op_type == "DequantizeLinear"
+        and _get_lpbq_nodes(consumer, producers, consumers, constants)
+        for consumer in consumers[dq.output[0]].values()
+    )
+    return is_1st_dq or is_2nd_dq

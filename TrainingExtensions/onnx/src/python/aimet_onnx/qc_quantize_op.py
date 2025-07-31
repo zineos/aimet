@@ -1284,11 +1284,8 @@ class _EncodingMismatchInfo:
 
 
 def _json_encoding_to_TfEncoding_list(enc: dict) -> List[libpymo.TfEncoding]:
-    if "y_scale" in enc:
+    if "y_scale" in enc or "per_channel_float_scale" in enc:
         return _2_0_0_json_encoding_to_TfEncoding_list(enc)
-
-    if "per_channel_float_scale" in enc:
-        raise NotImplementedError("v2.0.0 LPBQ encoding is not implemented")
 
     if "enc_type" in enc:
         raise NotImplementedError("v1.0.0 encoding is not implemented")
@@ -1302,7 +1299,25 @@ def _json_encoding_to_TfEncoding_list(enc: dict) -> List[libpymo.TfEncoding]:
 def _2_0_0_json_encoding_to_TfEncoding_list(
     enc: Dict[str, Union[str, int, np.ndarray]],
 ) -> List[libpymo.TfEncoding]:
-    scale = np.array(enc["y_scale"], dtype=np.float32)
+    if "per_channel_float_scale" in enc:
+        block_axis = enc["axis"]
+        channel_axis = 0 if block_axis in (1, -1) else 1
+        block_size = enc["block_size"]
+        per_block_int_scale = enc["per_block_int_scale"]
+        per_channel_float_scale = enc["per_channel_float_scale"]
+        per_channel_float_scale = per_channel_float_scale.reshape(
+            *(
+                -1 if axis == channel_axis else 1
+                for axis in range(per_block_int_scale.ndim)
+            )
+        )
+        per_channel_float_scale = per_channel_float_scale.repeat(
+            block_size, axis=block_axis
+        )
+        scale = (per_channel_float_scale * per_block_int_scale).astype(np.float32)
+    else:
+        scale = np.array(enc["y_scale"], dtype=np.float32)
+
     zero_point = (
         np.array(enc["y_zero_point"], dtype=np.int64)
         if "y_zero_point" in enc
