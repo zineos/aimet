@@ -89,6 +89,7 @@ from aimet_torch.v2.quantization.encoding_analyzer import PercentileEncodingAnal
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch import utils
 from aimet_torch.v2.deepspeed_utils import _register_zero3_forward_hooks
+from aimet_torch.experimental.transforms.transform_ops import is_mergeable_transform
 
 
 __all__ = [
@@ -126,7 +127,7 @@ def _convert_to_qmodel(model: torch.nn.Module):
     def _convert_to_qmodule(module: torch.nn.Module):
         if not isinstance(
             module, (*quantized_modules, *unquantizable_modules, *containers)
-        ):
+        ) and not is_mergeable_transform(module):
             qmodule = None
             try:
                 qmodule = QuantizationMixin.from_module(module)
