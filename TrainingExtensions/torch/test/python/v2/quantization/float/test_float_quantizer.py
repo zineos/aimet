@@ -350,3 +350,16 @@ def test_default_args():
 
     bfloat16_qdq = FloatQuantizeDequantize(exponent_bits=8, mantissa_bits=7)
     assert bfloat16_qdq.is_bfloat16()
+
+
+@pytest.mark.parametrize("dtype", [torch.bool, torch.int32])
+def test_qdq_ignore_boolean_and_integers(dtype):
+    """
+    When: Pass boolean or integer tensor as input to FloatQuantizeDequantize
+    Then: Output should be same as input, with dtype preserved.
+    """
+    x = (torch.arange(10) % 2).to(dtype)
+    float_qdq = FloatQuantizeDequantize(dtype=torch.float8_e5m2)
+    out = float_qdq(x)
+    assert torch.equal(out, x)
+    assert out.dtype == x.dtype

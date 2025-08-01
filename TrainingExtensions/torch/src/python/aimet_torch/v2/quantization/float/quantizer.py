@@ -378,6 +378,9 @@ class FloatQuantizeDequantize(QuantizerBase):  # pylint: disable=abstract-method
         :param input: Input to quantize and dequantize
         :return: Quantize-dequantized output
         """
+        if not input.is_floating_point():
+            return input
+
         self._assert_supported_dtype()
 
         if not self.is_initialized():
