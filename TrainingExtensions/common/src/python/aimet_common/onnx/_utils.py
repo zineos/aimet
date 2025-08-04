@@ -811,12 +811,14 @@ def _remove_onnx_qdq_nodes(
                 if out == q.input[0]:
                     producer.output[i] = new_name
 
-    # Remove nodes
-    node = [
-        producer
-        for producer in producers.values()
-        if producer.name not in to_be_removed
-    ]
+    included_nodes = set()
+    node = []
+    # Nodes may appear in producer.values() multiple times, only use the first appearance
+    for producer in producers.values():
+        if producer.name not in to_be_removed and producer.name not in included_nodes:
+            included_nodes.add(producer.name)
+            node.append(producer)
+
     model.graph.ClearField("node")
     model.graph.node.extend(node)
 

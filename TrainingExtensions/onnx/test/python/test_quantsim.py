@@ -4732,3 +4732,24 @@ def test_from_onnx_qdq_output_dtype():
     )
     input = {"input": np.random.randn(10, 10).astype(np.float32)}
     assert np.equal(sess.run(None, input), sess_2.run(None, input)).all()
+
+
+def test_from_onnx_qdq_split_op():
+    model = model_with_split_matmul()
+    sim = QuantizationSimModel(
+        model,
+        param_type="int8",
+        activation_type="int8",
+        config_file="htp_v81",
+    )
+    sim.compute_encodings([make_dummy_input(model)])
+
+    """
+    When: Create sim from onnx QDQ model
+    Then: The new sim should be in same state as the original sim
+    """
+    sim_2 = QuantizationSimModel._from_onnx_qdq(
+        sim.to_onnx_qdq(),
+        config_file="htp_v81",
+    )
+    _assert_sim_equal(sim, sim_2)
