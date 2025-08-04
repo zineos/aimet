@@ -33,7 +33,7 @@ Release notes
 ======
 * New Feature
     * PyTorch
-        * SpinQuant (experimental) - implement SpinQuant PTQ technique (https://arxiv.org/pdf/2308.13137) for Llama, Qwen2, and Mistral families (R1 rotation w/o optimization) (`7364b37`_)
+        * SpinQuant (experimental) - implement SpinQuant PTQ technique (https://arxiv.org/pdf/2405.16406) for Llama, Qwen2, and Mistral families (R1 rotation w/o optimization) (`7364b37`_)
         * Enable Adascale and Omniquant for Mistral (`d33e98c`_)
 
     * ONNX 
