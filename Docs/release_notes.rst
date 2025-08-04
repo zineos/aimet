@@ -6,6 +6,29 @@
 Release notes
 #############
 
+2.12.0
+======
+* Bug fixes and Improvements
+    * Common
+        * Remove data movement ops from config (`ae02aa8`_)
+
+    * ONNX
+        * Exclude bias from quantization when weights are not quantized (`62f5879`_)
+        * AdaRound: Fix prelu failing in CUDA model (`b2350b2`_)
+
+    * PyTorch
+        * Wrap aimet_torch.onnx.export with torch.no_grad (`b73bb71`_)
+
+* Known Issues
+    * Keras
+        * Accuracy drop observed with AIMET Keras for certain models. Fix is planned for the next release.
+
+.. _62f5879: https://github.com/quic/aimet/commit/62f587909a91d50fe60ae8d453d8e557b6ab67d5
+.. _b73bb71: https://github.com/quic/aimet/commit/b73bb7168532469cf0b93e886508fd00bb071fc6
+.. _ae02aa8: https://github.com/quic/aimet/commit/ae02aa852aff4f8c9dec651dd13cc7d177904642
+.. _b2350b2: https://github.com/quic/aimet/commit/b2350b2f87247a4d879fc83496c7e2d042569917
+
+
 2.11.0
 ======
 * New Feature
