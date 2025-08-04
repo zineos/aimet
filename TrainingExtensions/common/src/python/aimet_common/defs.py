@@ -566,7 +566,8 @@ class qtype(abc.ABC):
         """
         if name not in QTYPE_ALIASES:
             raise ValueError(
-                f"{name} is not a defined qtype alias. Use {qtype.int.__qualname__} or {qtype.float.__qualname__} to construct a custom qtype."
+                f"{name} is not a defined qtype alias. Supported aliases are {list(QTYPE_ALIASES.keys())}. "
+                f"Use {qtype.int.__qualname__} or {qtype.float.__qualname__} to construct a custom qtype."
             )
         return QTYPE_ALIASES[name]
 
