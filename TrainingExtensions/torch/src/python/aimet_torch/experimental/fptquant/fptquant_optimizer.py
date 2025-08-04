@@ -13,7 +13,11 @@ from transformers import PretrainedConfig
 from aimet_torch.experimental.transforms.transformed_layers import TransformationMixin
 
 from .fptquant_config import fptquant_model_config_dict, FPTQuantConfig, BlockInterface
-from .fptquant_transforms import ScaledRotateTransformOp, ScalingTransformOp
+from .fptquant_transforms import (
+    ScaledRotateTransformOp,
+    ScalingTransformOp,
+    GroupedHadamardTransformOp,
+)
 from .fptquant_local_transform_optimizer import LocalTransformOptimizer
 
 
@@ -49,7 +53,7 @@ class FPTQuant:
             FPTQuant._apply_value_transform(block_interface)
             FPTQuant._apply_up_down_scaling_transform(block_interface, config)
             FPTQuant._apply_residual_transform(block_interface)
-            FPTQuant._apply_down_projection_transform(block_interface)
+            FPTQuant._apply_down_projection_transform(block_interface, config)
 
     @staticmethod
     def merge_fpt_quant_transforms(model: torch.nn.Module):
@@ -159,5 +163,9 @@ class FPTQuant:
         pass
 
     @staticmethod
-    def _apply_down_projection_transform(block: BlockInterface):
-        pass
+    def _apply_down_projection_transform(
+        block: BlockInterface, config: PretrainedConfig
+    ):
+        transform = GroupedHadamardTransformOp(config.intermediate_size)
+        block.down_proj.add_left_hand_transform(transform.get_inverted_op())
+        block.down_proj.add_left_hand_transform(transform)

@@ -3,7 +3,10 @@
 
 # pylint: disable=missing-docstring
 
+import math
 import torch
+import torch.nn.functional as F
+import scipy
 
 from aimet_torch.experimental.transforms.transform_ops import (
     InvertibleTransformOp,
@@ -79,4 +82,44 @@ class ScalingTransformOp(InvertibleTransformOp):
         return self.forward(weight.T).T
 
     def left_hand_merge(self, weight: torch.Tensor) -> torch.Tensor:
+        return self.forward(weight)
+
+
+class GroupedHadamardTransformOp(InvertibleTransformOp):
+    def __init__(self, intermediate_size):
+        super().__init__(True)
+        num_two_factors = 0
+        remaining_factor = intermediate_size
+        while remaining_factor & 1 == 0:
+            remaining_factor = remaining_factor >> 1
+            num_two_factors += 1
+        self.register_buffer(
+            "hadamard",
+            torch.tensor(
+                scipy.linalg.hadamard(2**num_two_factors), dtype=torch.float32
+            ),
+        )
+        self.group_size = 2**num_two_factors
+        self.n_groups = remaining_factor
+        self.scale = 1 / math.sqrt(2**num_two_factors)
+        self.mergeable = False
+
+    def forward(self, x):
+        x_reshape = x.reshape(*x.shape[:-1], self.n_groups, self.group_size)
+        return (F.linear(x_reshape, self.hadamard.to(x.device)) * self.scale).reshape(
+            x.shape
+        )
+
+    def inverse(self, x):
+        x_reshape = x.reshape(*x.shape[:-1], self.n_groups, self.group_size)
+        return (F.linear(x_reshape, self.hadamard.to(x.device)) * self.scale).reshape(
+            x.shape
+        )
+
+    def get_inverted_op(self):
+        inverted_op = super().get_inverted_op()
+        inverted_op.mergeable = True
+        return inverted_op
+
+    def left_hand_merge(self, weight):
         return self.forward(weight)
