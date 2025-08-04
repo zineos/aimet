@@ -87,17 +87,17 @@ class QuantAnalyzer(QuantAnalyzerBase):
         :param results_dir: Directory to save the results.
         :param title: Title of the plot.
         """
-        os.makedirs(results_dir, exist_ok=True)
+        if isinstance(quantizer.encoding_analyzer.observer, _HistogramObserver):
+            os.makedirs(results_dir, exist_ok=True)
 
-        assert isinstance(quantizer.encoding_analyzer.observer, _HistogramObserver)
-        v2_histograms = quantizer.encoding_analyzer.observer.get_stats()
-        histograms = self._convert_to_v1_histograms(v2_histograms)
-        encodings = self._get_quantizer_encodings(quantizer)
+            v2_histograms = quantizer.encoding_analyzer.observer.get_stats()
+            histograms = self._convert_to_v1_histograms(v2_histograms)
+            encodings = self._get_quantizer_encodings(quantizer)
 
-        for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
-            export_stats_histogram_plot(
-                histogram, encoding, results_dir, title=f"{title}_{index}"
-            )
+            for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
+                export_stats_histogram_plot(
+                    histogram, encoding, results_dir, title=f"{title}_{index}"
+                )
 
     @staticmethod
     def _enable_disable_quantizers(quantizers: List[QuantizerBase], enabled: bool):

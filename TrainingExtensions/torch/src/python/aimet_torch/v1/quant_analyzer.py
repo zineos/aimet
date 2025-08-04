@@ -43,6 +43,7 @@ from typing import Tuple, List, Type, Generator
 
 from aimet_common.quant_analyzer import export_stats_histogram_plot
 from aimet_common.utils import AimetLogger
+from aimet_common.defs import QuantScheme
 from aimet_torch import utils
 from aimet_torch._base.quant_analyzer import QuantAnalyzerBase
 from aimet_torch.v1.tensor_quantizer import TensorQuantizer, StaticGridTensorQuantizer
@@ -91,17 +92,18 @@ class QuantAnalyzer(QuantAnalyzerBase):
         :param results_dir: Directory to save the results.
         :param title: Title of the plot.
         """
-        os.makedirs(results_dir, exist_ok=True)
+        if quantizer.quant_scheme == QuantScheme.post_training_tf_enhanced:
+            os.makedirs(results_dir, exist_ok=True)
 
-        histograms = quantizer.get_stats_histogram()
-        encodings = quantizer.encoding
-        if not isinstance(encodings, List):
-            encodings = [encodings]
+            histograms = quantizer.get_stats_histogram()
+            encodings = quantizer.encoding
+            if not isinstance(encodings, List):
+                encodings = [encodings]
 
-        for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
-            export_stats_histogram_plot(
-                histogram, encoding, results_dir, title=f"{title}_{index}"
-            )
+            for index, (histogram, encoding) in enumerate(zip(histograms, encodings)):
+                export_stats_histogram_plot(
+                    histogram, encoding, results_dir, title=f"{title}_{index}"
+                )
 
     @staticmethod
     def patch_quantsim_to_store_histogram(_):

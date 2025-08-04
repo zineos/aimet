@@ -41,18 +41,19 @@ import json
 import os.path
 import torch
 from torch.utils.data import Dataset, DataLoader
+from typing import Union, Tuple
 
 from aimet_common.defs import QuantScheme
 from aimet_common.utils import CallbackFunc
 from aimet_torch.v2.batch_norm_fold import fold_all_batch_norms
-from ..models.test_models import TinyModel
+from ..models.test_models import TinyModel, ModelWithMatMul2
 from aimet_torch.v2.nn.base import BaseQuantizationMixin
 from aimet_torch.v2.quantization.base import QuantizerBase
 from aimet_torch.v2.quantsim import QuantizationSimModel
 from aimet_torch.v2.quant_analyzer import QuantAnalyzer
 
 
-def calibrate(model: torch.nn.Module, dummy_input: torch.Tensor):
+def calibrate(model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]):
     """
     Helper function to calibrate model given dummy input
     :param model: PyTorch model.
@@ -60,10 +61,13 @@ def calibrate(model: torch.nn.Module, dummy_input: torch.Tensor):
     """
     model.eval()
     with torch.no_grad():
-        model(dummy_input)
+        if isinstance(dummy_input, Tuple):
+            model(*dummy_input)
+        else:
+            model(dummy_input)
 
 
-def evaluate(model: torch.nn.Module, dummy_input: torch.Tensor):
+def evaluate(model: torch.nn.Module, dummy_input: Union[torch.Tensor, Tuple]):
     """
     Helper function to evaluate model performance given dummy input
     :param model: PyTorch model
@@ -72,7 +76,10 @@ def evaluate(model: torch.nn.Module, dummy_input: torch.Tensor):
     model.eval()
     for i in range(2):
         with torch.no_grad():
-            model(dummy_input)
+            if isinstance(dummy_input, Tuple):
+                model(*dummy_input)
+            else:
+                model(dummy_input)
     return 0.8
 
 
@@ -293,6 +300,55 @@ class TestQuantAnalyzer:
             assert os.path.isfile(
                 os.path.join(tmp_dir, "weights_pdf/conv1/conv1_weight_0.html")
             )
+
+    def test_export_per_layer_stats_histogram_2(self):
+        """
+        This test verifies the functionality for models having a mix of tf & tf-enhanced quantizers. Such case is possible
+        due to encoding constraints on certain ops eg. softmax, sigmoid, etc.
+        """
+        quantsim_config = {
+            "defaults": {
+                "ops": {"is_output_quantized": "True"},
+                "params": {"is_quantized": "True"},
+                "per_channel_quantization": "True",
+            },
+            "params": {},
+            "op_type": {
+                "Softmax": {"encoding_constraints": {"min": 0.0, "max": 1.0}},
+            },
+            "supergroups": [],
+            "model_input": {"is_input_quantized": "True"},
+            "model_output": {},
+        }
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(os.path.join(tempdir, "quantsim_config.json"), "w") as f:
+                json.dump(quantsim_config, f)
+
+            dummy_input = (
+                torch.randn(10, 3, 4),
+                torch.randn(10, 5, 4),
+            )
+            model = ModelWithMatMul2().eval()
+            sim = QuantizationSimModel(
+                model,
+                dummy_input,
+                config_file=os.path.join(tempdir, "quantsim_config.json"),
+            )
+            sim.compute_encodings(evaluate, dummy_input)
+            forward_pass_callback = CallbackFunc(calibrate, dummy_input)
+            eval_callback = CallbackFunc(evaluate, dummy_input)
+            quant_analyzer = QuantAnalyzer(
+                model, dummy_input, forward_pass_callback, eval_callback
+            )
+
+            try:
+                quant_analyzer.export_per_layer_stats_histogram(
+                    sim, results_dir=tempdir
+                )
+            except:
+                raise RuntimeError(
+                    "Failed for model having mixture of tf & tf-enhanced quantizers"
+                )
 
     def test_export_per_layer_stats_histogram_per_channel(self):
         """test export_per_layer_stats_histogram() for per channel quantization"""
