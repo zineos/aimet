@@ -253,3 +253,15 @@ class TestUtils:
         with pytest.raises(RuntimeError):
             with disable_quantizers(sim, {"nonexistant_quantizer"}):
                 pass
+
+    @pytest.mark.skip("Upgrade to ONNX==1.19.0 required to enable this test")
+    def test_custom_opset_version_upgrade(self):
+        model = models_for_tests.build_dummy_model()
+
+        from aimet_common.onnx._utils import _convert_version_with_external_weights
+
+        upgraded_model = _convert_version_with_external_weights(model, 21)
+
+        assert model.opset_import[0].version == 13
+        assert upgraded_model.opset_import[0].version == 21
+        onnx.checker.check_model(upgraded_model)

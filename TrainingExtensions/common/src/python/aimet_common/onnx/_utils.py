@@ -622,6 +622,26 @@ def _is_htp_interpolation_op(op_type: str) -> bool:
     )
 
 
+def _convert_version_with_external_weights(model, target_opset_version):
+    """
+    Upgrade opset version without loading weights into memory
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        onnx_file = os.path.join(tmp_dir, "model.onnx")
+        onnx.save_model(
+            model,
+            onnx_file,
+            save_as_external_data=True,
+            location="model.data",
+        )
+
+        model = onnx.load_model(onnx_file, load_external_data=False)
+        model = onnx.version_converter.convert_version(model, target_opset_version)
+        onnx.external_data_helper.load_external_data_for_model(model, tmp_dir)
+
+    return model
+
+
 def _convert_version(
     model: onnx.ModelProto, target_opset_version: int
 ) -> onnx.ModelProto:
@@ -630,22 +650,12 @@ def _convert_version(
     except Exception as e:  # pylint: disable=broad-exception-caught
         # convert_version throws an exception on model > 2GB the observed exception was a
         # RuntimeError exception about ir_version, but possible other exceptions could be
-        # triggerd. leaving this very generic for now.
+        # triggered. leaving this very generic for now.
         logger.warning(
             "onnx.version_converter.convert_version failed with exception: %s. Retrying with external data",
             str(e),
         )
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            onnx_file = os.path.join(tmp_dir, "model.onnx")
-            onnx.save_model(
-                model,
-                onnx_file,
-                save_as_external_data=True,
-                location="model.data",
-            )
-            model = onnx.load_model(onnx_file, load_external_data=False)
-            model = onnx.version_converter.convert_version(model, target_opset_version)
-            onnx.external_data_helper.load_external_data_for_model(model, tmp_dir)
+        _convert_version_with_external_weights(model, target_opset_version)
 
     logger.info("The opset of the onnx model is updated to %s.", target_opset_version)
     return model
