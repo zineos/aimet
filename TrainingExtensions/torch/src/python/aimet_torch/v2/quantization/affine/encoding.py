@@ -405,9 +405,9 @@ class AffineEncoding(EncodingBase, _GridMixin):
             if self.zero_point_shift != 0.0:
                 assert self.zero_point_shift == 0.5
                 assert self.symmetry
-                encoding_dict["offset"] = [
-                    encoding_dict["offset"][0] + self.zero_point_shift
-                ] * len(encoding_dict["offset"])
+                encoding_dict["zero_point_shift"] = [self.zero_point_shift] * len(
+                    encoding_dict["offset"]
+                )
 
             assert self.granularity != "unknown"
             if self.granularity == "pertensor":

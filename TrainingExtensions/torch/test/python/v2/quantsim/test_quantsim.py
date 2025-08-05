@@ -2121,7 +2121,8 @@ class TestEncodingPropagation:
                 os.path.join(tmpdir, "zero_point_shift_0.5_export.encodings"), "r"
             ) as f:
                 encodings = json.load(f)
-                assert encodings["param_encodings"][0]["offset"][0] == -1.5
+                assert encodings["param_encodings"][0]["offset"][0] == -2
+                assert encodings["param_encodings"][0]["zero_point_shift"][0] == 0.5
 
             with open(
                 os.path.join(tmpdir, "zero_point_shift_0.5_encodings.json"), "r"
