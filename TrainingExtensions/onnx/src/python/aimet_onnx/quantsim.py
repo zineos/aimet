@@ -2535,7 +2535,7 @@ def _parse_compute_encodings_args(*args, **kwargs):
 
     if kwargs:
         raise TypeError(msg)
-    if args and (inputs or forward_pass_callback):
+    if args and (inputs is not None or forward_pass_callback):
         raise TypeError(msg)
     if len(args) > 2:
         raise TypeError(msg)
@@ -2553,11 +2553,11 @@ def _parse_compute_encodings_args(*args, **kwargs):
                 f"First positional argument to compute_encodings() must be callable or iterable, received {type(args[0])}"
             )
 
-    if inputs and (
+    if inputs is not None and (
         forward_pass_callback or forward_pass_callback_args is not _NOT_SPECIFIED
     ):
         raise TypeError(msg)
-    if not (inputs or forward_pass_callback):
+    if inputs is None and forward_pass_callback is None:
         raise TypeError(msg)
 
     return inputs, forward_pass_callback, forward_pass_callback_args

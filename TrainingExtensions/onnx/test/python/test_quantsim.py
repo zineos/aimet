@@ -282,6 +282,31 @@ class TestQuantSim:
                 assert qc_op.is_initialized()
                 assert qc_op.op_mode == OpMode.quantizeDequantize
 
+    def test_compute_encodings_with_non_lennable_iterator(self):
+        model = build_dummy_model()
+
+        class DataIterator:
+            def __init__(self):
+                self.iter = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self.iter < 5:
+                    self.iter += 1
+                    return make_dummy_input(model)
+                raise StopIteration()
+
+            def __len__(self):
+                raise NotImplementedError()
+
+        sim = QuantizationSimModel(model)
+        sim.compute_encodings(DataIterator())
+        for quantizer in sim.qc_quantize_op_dict.values():
+            if quantizer.enabled:
+                assert quantizer.is_initialized()
+
     @pytest.mark.parametrize(
         "args, kwargs",
         (
