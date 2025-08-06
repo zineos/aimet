@@ -1,61 +1,79 @@
 
 ![Qualcomm Innovation Center, Inc.](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/logo-quic-on@h68.png)
 
-[![AIMET on GitHub Pages](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/button-overview.png)](https://quic.github.io/aimet-pages/index.html)
-[![Documentation](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/button-docs.png)](https://quic.github.io/aimet-pages/releases/latest/index.html)
-[![Install instructions](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/button-install.png)](#quick-installation)
-[![Discussion Forums](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/button-forums.png)](https://github.com/quic/aimet/discussions)
-[![What's New](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/button-whats-new.png)](#whats-new)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-overview.png" width="90" height="40">](https://quic.github.io/aimet-pages/releases/latest/index.html)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-docs.png" width="90" height="40">](https://quic.github.io/aimet-pages/releases/latest/index.html)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-install.png" width="90" height="40">](https://quic.github.io/aimet-pages/releases/latest/overview/install/quick-start.html)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-forum.png" width="90" height="40">](https://github.com/quic/aimet/discussions)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-slack.png" width="90" height="40">](https://qualcomm-ai-hub.slack.com/archives/C08JKBE0UHY)
+[<img src="https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/readme/button-new.png" width="90" height="40">](https://quic.github.io/aimet-pages/releases/latest/release_notes.html)
 
 # AI Model Efficiency Toolkit (AIMET)
 
-<a href="https://quic.github.io/aimet-pages/index.html">AIMET</a> is a library that provides advanced model quantization and compression techniques for trained neural network models. It provides features that have been proven to improve run-time performance of deep learning neural network models with lower compute and memory requirements and minimal impact to task accuracy.
+<a href="https://quic.github.io/aimet-pages/index.html">AIMET</a> is a software toolkit for quantizing trained ML models.
+
+AIMET improves the runtime performance of deep learning models by reducing compute load and memory footprint.
+Models quantized with AIMET facilitate its deployment on edge devices like mobile phones or laptops by reducing memory footprint.
+
+AIMET employs post-training and fine-tuning techniques to minimize accuracy loss during quantization and compression.
+AIMET supports models from the ONNX, PyTorch and TensorFlow/Keras frameworks.
 
 ![How AIMET works](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/how-it-works.png)
 
 AIMET is designed to work with [PyTorch](https://pytorch.org), [TensorFlow](https://tensorflow.org) and [ONNX](https://onnx.ai) models.
 
-We also host the [AIMET Model Zoo](https://github.com/quic/aimet-model-zoo) - a collection of popular neural network models optimized for 8-bit inference. We also provide recipes for users to quantize floating point models using AIMET.
-
-## Table of Contents
-- [Installation](#quick-installation)
-- [Why AIMET?](#why-aimet)
-- [Supported features](#supported-features)
-- [What's New](#whats-new)
-- [Results](#results)
-- [Resources](#resources)
-- [Contributions](#contributions)
-- [Team](#team)
-- [License](#license)
-
-## Installation
-
-To install the latest version of AIMET for supported frameworks and compute platforms, see [Install and run AIMET](https://quic.github.io/aimet-pages/releases/latest/install)
-
-### Building from source
-
-To build the latest AIMET code from the source, see [Build, install and run AIMET from source in *Docker* environment](./packaging/docker_install.md)
-
+You can find models quantized with AIMET on [Qualcomm AI Hub Models](https://github.com/quic/ai-hub-models) - a collection of optimized and quantized models.
 
 ## Why AIMET?
 
 ![Benefits of AIMET](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/AImodelEfficency.png)
 
-* **Supports advanced quantization techniques**: Inference using integer runtimes is significantly faster than using floating-point runtimes. For example, models run 5x-15x faster on the Qualcomm Hexagon DSP than on the Qualcomm Kyro CPU. In addition, 8-bit precision models have a 4x smaller footprint than 32-bit precision models. However, maintaining model accuracy when quantizing ML models is often challenging. AIMET solves this using novel techniques like Data-Free Quantization that provide state-of-the-art INT8 results on several popular models.
+* **Advanced quantization techniques**: Inference using integer runtimes is significantly faster than using floating-point runtimes. For example, models run 5x-15x faster on the Qualcomm Hexagon DSP than on the Qualcomm Kyro CPU. In addition, 8-bit precision models have a 4x smaller footprint than 32-bit precision models. However, maintaining model accuracy when quantizing ML models is often challenging. AIMET solves this using novel techniques like Data-Free Quantization that provide state-of-the-art INT8 results on several popular models.
 * **Supports advanced model compression techniques** that enable models to run faster at inference-time and require less memory
 * **AIMET is designed to automate optimization** of neural networks avoiding time-consuming and tedious manual tweaking. AIMET also provides user-friendly APIs that allow users to make calls directly from their [TensorFlow](https://tensorflow.org) or [PyTorch](https://pytorch.org) pipelines.
 
 Please visit the [AIMET on Github Pages](https://quic.github.io/aimet-pages/index.html) for more details.
 
+## Quick Start
+
+[aimet-onnx](https://pypi.org/project/aimet-onnx/) and [aimet-torch](https://pypi.org/project/aimet-torch/) is available on PyPI.
+
+Check our [Quick Start](https://quic.github.io/aimet-pages/releases/latest/overview/install/quick-start.html) to get started with latest AIMET package.
+
+### Build from source
+
+To build the latest AIMET code from the source, see [Build, install and run AIMET from source in *Docker* environment](https://quic.github.io/aimet-pages/releases/latest/overview/install/build_from_source.html#build-from-source)
+
+
 ## Supported Features
 
-### Quantization
+### Post-Training Quantization(PTQ)
 
-* *Cross-Layer Equalization*: Equalize weight tensors to reduce amplitude variation across channels
-* *Bias Correction*: Corrects shift in layer outputs introduced due to quantization
-* *Adaptive Rounding*: Learn the optimal rounding given unlabelled data
-* *Quantization Simulation*: Simulate on-target quantized inference accuracy
-* *Quantization-aware Training*: Use quantization simulation to train the model further to improve accuracy
+[Check out guide](https://quic.github.io/aimet-pages/releases/latest/techniques/ptq.html) to get started on PTQ technique.
+
+Following table summarizes basic technique such as `Calibration` to advanced techniques such as `SeqMSE` and `Adaptive Rounding(AdaRound)` that you can use with AIMET.
+
+| Technique | ONNX | PyTorch | What does it do? |
+| -- | -- | -- | -- |
+| [Calibration](https://quic.github.io/aimet-pages/releases/latest/techniques/ptq.html) | ✅ | ✅ | Computes Quantization parameters |
+| [AdaRound](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/adaround.html) | ✅ | ✅ | Rounds quantized weights |
+| [SeqMSE](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/seq_mse.html) | ✅ | ✅ | Optimizes encodings for each layer |
+| [BatchNorm Folding](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/bnf.html) | ✅ | ✅ | Folds batchnorm to bridge the gap between simulation and on-target |
+| [Cross Layer Equalization](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/cle.html) | ✅ | ✅ | Rescales the weight to reduce range imbalance |
+| [BatchNorm re-estimation](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/bn.html) | ✅ | ✅ | Re-estimates batchnorm statistics |
+| [AdaScale](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/adascale.html) | ❌ | ✅ | Optimizes quantized weights |
+| [OmniQuant](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/omniquant.html) | ❌ | ✅ | Optimizes quantized weights |
+| [SpinQuant](https://quic.github.io/aimet-pages/releases/latest/ptq_techniques/spinquant.html) | ❌ | ✅ | Optimizes quantized weights |
+
+### Quantization Aware Training(QAT)
+
+AIMET supports Quantization Aware Training(QAT) via [aimet-torch](https://pypi.org/project/aimet-torch/).
+
+If you want to use both QAT and some of the advanced [PTQ techniques from AIMET](#post-training-quantizationptq), we recommend the following workflow:
+
+![QAT workflow](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/workflow/qat.png)
+
+Check detailed [QAT guide here](https://quic.github.io/aimet-pages/releases/latest/techniques/qat.html)
 
 ### Model Compression
 
@@ -68,14 +86,8 @@ Please visit the [AIMET on Github Pages](https://quic.github.io/aimet-pages/inde
 * *Weight ranges*: Inspect visually if a model is a candidate for applying the Cross Layer Equalization technique. And the effect after applying the technique
 * *Per-layer compression sensitivity*: Visually get feedback about the sensitivity of any given layer in the model to compression
 
-## What's New
-Some recently added features include
-* Adaptive Rounding (AdaRound): Learn the optimal rounding given unlabelled data
-* Quantization-aware Training (QAT) for recurrent models (including with RNNs, LSTMs and GRUs)
-
 ## Results
 AIMET can quantize an existing 32-bit floating-point model to an 8-bit fixed-point model without sacrificing much accuracy and without model fine-tuning.
-
 
 <h4>DFQ</h4>
 
@@ -196,6 +208,7 @@ The DFQ method applied to several popular networks, such as MobileNet-v2 and Res
 * [Documentation Main Page](https://quic.github.io/aimet-pages/releases/latest/index.html)
 * [API Reference](https://quic.github.io/aimet-pages/releases/latest/apiref/index.html)
 * [Discussion Forums](https://github.com/quic/aimet/discussions)
+* [Slack](https://qualcomm-ai-hub.slack.com/archives/C08JKBE0UHY)
 * [Tutorial Videos](https://quic.github.io/aimet-pages/index.html#video)
 * [Example Code](Examples/README.md)
 
