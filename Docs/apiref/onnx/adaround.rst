@@ -13,3 +13,4 @@ aimet_onnx.apply_adaround
 **Top-level API**
 
 .. autofunction:: aimet_onnx.apply_adaround
+    :no-index:

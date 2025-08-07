@@ -10,11 +10,13 @@ aimet_torch.adaround
 **Top level APIs**
 
 .. autofunction:: aimet_torch.adaround.adaround_weight.Adaround.apply_adaround
+    :no-index:
 
 **Adaround parameters**
 
 .. autoclass:: aimet_torch.adaround.adaround_weight.AdaroundParameters
     :members:
+    :no-index:
 
 ..
   # end-before

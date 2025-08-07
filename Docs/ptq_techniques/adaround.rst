@@ -8,46 +8,12 @@ Context
 =======
 `Adaptive rounding <https://arxiv.org/pdf/2004.10568>`_ (AdaRound) is a rounding mechanism for model weights designed to adapt to the data to improve the accuracy of the quantized model.
 
-By default, AIMET uses nearest rounding for quantization, in which weight values are quantized to the nearest integer value. AdaRound instead uses training data to choose how to round quantized weights. This rounding technique improves the quantized model's accuracy in many cases.
+By default, AIMET uses nearest rounding for quantization, in which weight values are quantized to the nearest integer value. AdaRound, however, uses training data to determine how to round quantized weights. This technique often improves the accuracy of the quantized model.
 
-The following figure illustrates how AdaRound might change the rounding of a quantized value.
+The following figure illustrates how AdaRound may alter the rounding of a quantized value.
 
 .. image:: ../images/adaround.png
     :width: 600px
-
-See the :doc:`Optimization User Guide <../opt-guide/index>` for a discussion of the recommended sequence of all quantization techniques.
-
-
-Complementary techniques
-------------------------
-
-As a standalone technique, AdaRound can yield a significant improvement in performance. To layer other techniques with AdaRound, we recommend applying AdaRound:
-
-After batch norm folding (BNF) and cross layer equalization (CLE).
-    Applying these techniques first can improve the accuracy gained using AdaRound.
-Before quantization aware training (QAT).
-    AdaRound serves as a well-disciplined weights initialization method for QAT.
-
-
-Hyper parameters
-----------------
-
-A number of hyper parameters used during AdaRound optimization are exposed in the API. The default values of some of these parameters tend to lead to stable results and we recommend that you not change them.
-
-Use the following guideline for adjusting hyper parameters with AdaRound.
-
-Hyper Parameters to be changed at will:
-    - Number of batches. AdaRound should see 500-1000 images. Loader batch size times number of batches gives the number of images. For example if the data loader batch size is 64, use 16 batches for a yield of 64 * 16 = 1024 images.
-    - Number of iterations. Default is 10,000.
-
-Hyper Parameters to be changed with caution:
-    Regularization parameter. Default is 0.01.
-
-Hyper Parameters to avoid changing:
-    - Beta range. Leave the value at the default of (20, 2).
-    - Warm start period. Leave at the default value, 20%.
-
-You can learn more about the AdaRound parameters :ref:`here <apiref-torch-adaround>`.
 
 Workflow
 ========
@@ -74,6 +40,9 @@ Setup
 
         .. container:: tab-heading
 
+            .. image:: ../images/adaround-workflow.png
+                :width: 900px
+
             Load the model for AdaRound. The following code example converts PyTorch MobileNetV2 to ONNX and uses it in the subsequent code.
 
         .. literalinclude:: ../snippets/onnx/apply_adaround.py
@@ -93,6 +62,9 @@ Setup
 
     .. tab-item:: PyTorch
         :sync: torch
+
+        .. image:: ../images/adaround-workflow-torch.png
+            :width: 900px
 
         .. literalinclude:: ../snippets/torch/apply_adaround.py
             :language: python
@@ -188,7 +160,7 @@ Use AIMET's QuantSim to simulate quantization.
     .. tab-item:: ONNX
         :sync: onnx
 
-        Compute activation encodings after applying qadaround.
+        Compute activation encodings after applying adaround.
 
         .. literalinclude:: ../snippets/onnx/apply_adaround.py
             :language: python
@@ -273,8 +245,6 @@ If AdaRound resulted in satisfactory accuracy, export the model.
             :language: python
             :start-after: # Step 4
             :end-before: # End of step 4
-
-If the model is still not accurate enough, the next step is typically to try :ref:`quantization-aware training <featureguide-qat>`.
 
 
 API
