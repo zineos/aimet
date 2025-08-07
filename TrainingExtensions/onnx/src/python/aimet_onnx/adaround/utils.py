@@ -66,6 +66,7 @@ class ModuleInfo:
     """Class object containing information about a module"""
 
     def __init__(self):
+        self.name = None
         self.params = {}
         self.inputs = []
         self.outputs = []
@@ -92,6 +93,7 @@ class ModelData:
             self.module_to_info[op.name] = ModuleInfo()
             if op.type in AdaroundSupportedModules:
                 self.module_to_info[op.name].type = op.type
+                self.module_to_info[op.name].name = op.name
                 self.module_to_info[op.name].transposed_params = op.transposed_params
                 if hasattr(op.get_module(), "attribute"):
                     self.module_to_info[op.name].attributes = op.get_module().attribute

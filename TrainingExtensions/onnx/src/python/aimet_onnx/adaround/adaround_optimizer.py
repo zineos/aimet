@@ -142,6 +142,14 @@ class AdaroundOptimizer:
         inp_data, out_data = act_sampler.sample_acts(
             create_input_dict(quant_model.model.model, model_inputs)
         )
+
+        if len(inp_data) == 0:
+            act_sampler.restore_graph()
+            logger.warning(
+                f"Unable to retrieve data for the tensor {quantized_input_name}. Skipping AdaRound optimization for the layer {module.name}"
+            )
+            return
+
         inp_data_torch, out_data_torch = (
             torch.from_numpy(inp_data[0]),
             torch.from_numpy(out_data[0]),
