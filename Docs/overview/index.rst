@@ -4,13 +4,13 @@
 What is AIMET?
 #####################
 
-AIMET(AI Model Efficiency Toolkit) is a quantization tools that works on deep learning models such as PyTorch and ONNX.
+AIMET (AI Model Efficiency Toolkit) is a quantization tool that works on deep learning models such as PyTorch and ONNX.
 
 AIMET enables developer to:
 
 #. Simulate Quantization
-#. Quantize models with Post-Training Quantization(PTQ) techniques
-#. Quantization Aware Training(QAT) on PyTorch models with aimet-torch
+#. Quantize models with Post-Training Quantization (PTQ) techniques
+#. Quantization Aware Training (QAT) on PyTorch models with aimet-torch
 #. Visualize and experiment with model accuracy with various precision on activations and weights
 #. Create mixed-precision models
 #. Export Quantized model to deployable ONNX model format

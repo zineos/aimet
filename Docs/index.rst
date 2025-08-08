@@ -34,7 +34,7 @@ AIMET supports models from the ONNX, PyTorch and TensorFlow/Keras frameworks.
 Overview
 ========
 
-Summary of what is AI Model Efficiency Toolkit(AIMET) and how you can use it, see the :doc:`Overview <../overview/index>`.
+Summary of what is AI Model Efficiency Toolkit (AIMET) and how you can use it, see the :doc:`Overview <../overview/index>`.
 
 To quickly install and begin using AIMET, see the :doc:`Quick Start Guide <../overview/install/quick-start>`.
 
