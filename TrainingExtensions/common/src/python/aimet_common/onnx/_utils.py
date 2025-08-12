@@ -64,6 +64,7 @@ def _add_onnx_qdq_node(
     encodings: dict,
     onnx_opset: int,
     prequantize_constants: bool,
+    base_dir: Optional[str] = None,
 ):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
@@ -87,6 +88,7 @@ def _add_onnx_qdq_node(
         [encodings],
         onnx_opset,
         prequantize_constants,
+        base_dir=base_dir,
     )
 
 
@@ -98,6 +100,7 @@ def _add_onnx_qdq_nodes(
     encodings: Iterable[dict],
     onnx_opset: int,
     prequantize_constants: bool,
+    base_dir: Optional[str] = None,
 ):
     """
     Add onnx::QuantizeLinear and/or onnx::DequantizeLinear as below
@@ -240,6 +243,7 @@ def _add_onnx_qdq_nodes(
                     block_size,
                     output_dtype,
                     per_block_int_scale=per_block_int_scale,
+                    base_dir=base_dir,
                 )
 
         if input_q:
@@ -304,8 +308,9 @@ def _quantize_const(
     block_size: Optional[int],
     output_dtype: str,
     per_block_int_scale: Optional[np.ndarray],
+    base_dir: Optional[str] = None,
 ) -> TensorProto:
-    const = to_array(const).astype(np.float32)
+    const = to_array(const, base_dir=base_dir).astype(np.float32)
     unsigned, bitwidth = output_dtype.split("int")
     bitwidth = int(bitwidth)
 

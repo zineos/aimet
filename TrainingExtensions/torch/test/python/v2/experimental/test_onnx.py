@@ -36,6 +36,7 @@
 # =============================================================================
 import os
 import json
+import pathlib
 import onnxruntime as ort
 import pytest
 import contextlib
@@ -1120,3 +1121,93 @@ def test_back_to_back_qdq():
     # onnx_model = onnx.load_model("qdq_model.onnx")
     # num_dq = len([dq for dq in onnx_model.graph.node if dq.op_type == "DequantizeLinear"])
     # assert num_dq == 6, f"Expected 6 DequantizeLinear nodes, but got {num_dq}"
+
+
+@pytest.fixture(scope="module")
+def large_model():
+    return torch.nn.Sequential(
+        torch.nn.Linear(2**15, 2**14, bias=False)  # 0.5B parameters = 2GB
+    )
+
+
+@torch.no_grad()
+@pytest.mark.parametrize(
+    "opset_version",
+    [
+        19,
+        # NOTE: Currently fails because onnx version converter
+        # has a bug with large models. This bug is expected to be fixed in onnx 1.19.
+        # TODO (kyunggeu): Uncomment this when onnx 1.19 is released
+        # 21, TODO: Not supported yet
+    ],
+)
+@pytest.mark.parametrize("prequantize_constants", [False, True])
+def test_export_large_model(
+    large_model: torch.nn.Module,
+    opset_version: int,
+    prequantize_constants: bool,
+    tmp_path: pathlib.Path,
+):
+    """
+    Given: model that exceeds 2GB
+    """
+    x = torch.randn(1, 2**15)
+    sim = QuantizationSimModel(large_model, x)
+    sim.compute_encodings(lambda model: model(x))
+
+    onnx_path = os.path.join(tmp_path, "qdq_model.onnx")
+
+    """
+    When: Export encoding with sim.onnx.export
+    Then: All encoding should be exported correctly
+    """
+    with set_encoding_version("2.0.0"):
+        sim.onnx.export(
+            x,
+            onnx_path,
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=opset_version,
+            dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        )
+
+    with open(os.path.join(tmp_path, "qdq_model.encodings")) as f:
+        encodings = json.load(f)["encodings"]
+
+    quantizers = [
+        q for q in sim.model.modules() if isinstance(q, Q.affine.AffineQuantizerBase)
+    ]
+
+    for e in encodings:
+        y_scale = e["y_scale"]
+        assert any(np.allclose(y_scale, q.get_scale().item()) for q in quantizers)
+
+    """
+    When: Export to onnx QDQ
+    Then: ONNX model should produce same output as sim
+    """
+    aimet_torch.onnx.export(
+        sim,
+        x,
+        onnx_path,
+        input_names=["input"],
+        output_names=["output"],
+        opset_version=opset_version,
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
+        prequantize_constants=prequantize_constants,
+    )
+
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    sess = ort.InferenceSession(
+        onnx_path,
+        providers=["CPUExecutionProvider"],
+        sess_options=sess_options,
+    )
+    (out,) = sess.run(None, {"input": x.detach().numpy()})
+
+    with torch.no_grad():
+        expected_out = sim.model(x)
+
+    atol = sim.model[-1].output_quantizers[0].get_scale().item()
+    assert torch.allclose(torch.from_numpy(out), expected_out, atol=atol)

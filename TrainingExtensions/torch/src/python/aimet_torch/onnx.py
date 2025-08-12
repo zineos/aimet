@@ -40,10 +40,9 @@ from collections import defaultdict
 import copy
 import contextlib
 import io
-import os
-import tempfile
 import traceback
 from typing import Any, List, Mapping, Tuple, Union
+from pathlib import Path
 
 import onnx
 import torch
@@ -133,6 +132,8 @@ def export(
             f"aimet_torch.export only supports torch.nn.Module or QuantizationSimModel; got {type(model)}"
         )
 
+    base_dir = str(Path(f if isinstance(f, str) else f.name).absolute().parent)
+
     _check_opset_version(kwargs)
     _check_unsupported_args(kwargs)
     _check_non_standard_quantizer(model)
@@ -160,7 +161,7 @@ def export(
         # Remove [b]float16 quantizers
         stack.enter_context(_remove_fp16_quantizers(model))
 
-        onnx_model, tensor_to_encoding_map = _to_onnx(model, args, **kwargs)
+        onnx_model, tensor_to_encoding_map = _to_onnx(model, args, f, **kwargs)
 
     if _TORCH_MAX_OPSET < target_version:
         try:
@@ -190,7 +191,10 @@ def export(
             raise RuntimeError(msg) from e
 
     onnx_qdq_model = _to_onnx_qdq(
-        onnx_model, tensor_to_encoding_map, prequantize_constants=prequantize_constants
+        onnx_model,
+        tensor_to_encoding_map,
+        prequantize_constants=prequantize_constants,
+        base_dir=base_dir,
     )
     onnx.save(onnx_qdq_model, f)
 
@@ -332,22 +336,23 @@ def _check_non_standard_quantizer(model: torch.nn.Module):
 
 
 def _to_onnx(
-    model: torch.nn.Module, args: Union[Tuple[Any, ...], torch.Tensor], **kwargs
-):
+    model: torch.nn.Module,
+    args: Union[Tuple[Any, ...], torch.Tensor],
+    f: Union[str, io.BytesIO],
+    **kwargs,
+) -> Tuple[onnx.ModelProto, dict]:
     _check_float16_quantizers(model)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_onnx_path = os.path.join(tmp_dir, "quantized_model.onnx")
-        _onnx.export(model, args, tmp_onnx_path, **kwargs)
-        onnx_model = onnx.load(tmp_onnx_path)
+    _onnx.export(model, args, f, **kwargs)
+    onnx_model = onnx.load(f, load_external_data=False)
 
-        param_names = {
-            f"{layer_name}.{param_name}"
-            for layer_name, layer in model.named_modules()
-            if isinstance(layer, QuantizationMixin)
-            for param_name, quantizer in layer.param_quantizers.items()
-            if quantizer
-        }
+    param_names = {
+        f"{layer_name}.{param_name}"
+        for layer_name, layer in model.named_modules()
+        if isinstance(layer, QuantizationMixin)
+        for param_name, quantizer in layer.param_quantizers.items()
+        if quantizer
+    }
 
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]]
     tensor_to_encoding_map = {
@@ -528,6 +533,7 @@ def _to_onnx_qdq(
     onnx_model: onnx.ModelProto,
     tensor_to_encoding_map: Mapping[str, Tuple[EncodingBase, bool]],
     prequantize_constants: bool,
+    base_dir: str,
 ) -> onnx.ModelProto:
     qnn_encodings = {
         name: encoding.to_qnn_encoding_dict("2.0.0")
@@ -554,6 +560,7 @@ def _to_onnx_qdq(
         encodings=qnn_encodings.values(),
         onnx_opset=onnx_opset_version,
         prequantize_constants=prequantize_constants,
+        base_dir=base_dir,
     )
 
     # Restore model output names from "{output}_qdq" to "{output}"
