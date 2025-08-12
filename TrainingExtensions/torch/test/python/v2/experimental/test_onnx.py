@@ -1056,3 +1056,67 @@ def test_data_movement_op_encoding_generation_edge_case():
     )
 
     assert not new_encodings
+
+
+def test_back_to_back_qdq():
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(10, 10)
+            self.softmax = torch.nn.Softmax()
+
+        def forward(self, x):
+            x = self.linear(x)
+            return self.softmax(x)
+
+    """
+    Given: Sim that contains back-to-back qdq
+    """
+    input = torch.randn(100, 10)
+    model = Model()
+    sim = aimet_torch.QuantizationSimModel(
+        model,
+        input,
+        default_param_bw=8,
+        default_output_bw=8,
+        config_file="htp_v81",
+    )
+    sim.model.softmax.input_quantizers[0] = Q.affine.QuantizeDequantize(
+        shape=(), bitwidth=16, symmetric=False
+    )
+
+    sim.compute_encodings(lambda model: model(input))
+
+    """
+    When: Export to onnx QDQ
+    Then: Raises NotImplementedError
+    """
+    with pytest.raises(NotImplementedError):
+        aimet_torch.onnx.export(
+            sim.model,
+            input,
+            "qdq_model.onnx",
+            input_names=["input"],
+            output_names=["output"],
+            opset_version=21,
+        )
+
+    with pytest.raises(NotImplementedError):
+        sim.onnx.export(
+            input,
+            "qdq_model.onnx",
+            input_names=["input"],
+            output_names=["output"],
+        )
+
+    # TODO: Uncomment this when AIMET begins to support exporting back-to-back QDQ
+    # """
+    # Then: onnx graph should look like this:
+
+    #     weight -> QDQ ---V
+    #     input --> QDQ -> Gemm -> QDQ ----> QDQ -> Softmax -> QDQ -> output
+    #     bias_q -> DQ ----^     (8-bit)   (16-bit)
+    # """
+    # onnx_model = onnx.load_model("qdq_model.onnx")
+    # num_dq = len([dq for dq in onnx_model.graph.node if dq.op_type == "DequantizeLinear"])
+    # assert num_dq == 6, f"Expected 6 DequantizeLinear nodes, but got {num_dq}"

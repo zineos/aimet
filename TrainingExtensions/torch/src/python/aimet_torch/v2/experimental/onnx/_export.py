@@ -402,6 +402,23 @@ def remove_quantization_nodes_from_onnx_graph(model: onnx.ModelProto):  # pylint
         node for node in model.graph.node if node.op_type in ONNX_QUANTIZER_OP_TYPES
     )
 
+    back_to_back_qdq_tensors = set(qdq.input[0] for qdq in qtzr_nodes) & set(
+        qdq.output[0] for qdq in qtzr_nodes
+    )
+    if back_to_back_qdq_tensors:
+        msg = (
+            "Exporting back-to-back QDQ is not supported. "
+            "Detected back-to-back QDQ in the following node sequences:\n"
+        )
+        for tensor in back_to_back_qdq_tensors:
+            producer = name_to_producer[tensor].name
+            for consumer in name_to_consumer[tensor]:
+                if consumer.op_type not in ONNX_QUANTIZER_OP_TYPES:
+                    continue
+                msg += f"  * {producer} -> {consumer.name}\n"
+
+        raise NotImplementedError(msg)
+
     for node in qtzr_nodes:
         # Get quantizer name in torch model
         encoding = _get_encoding_from_onnx_node(model, node)
