@@ -199,6 +199,10 @@ onnx_subgraph_op_to_pytorch_module_param_name_index_based = {
 }
 
 
+def _onnx_model_size_larger_than_max_protobuf(onnx_model):
+    return onnx_model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF
+
+
 def get_pytorch_name_from_onnx_name(onnx_name: str) -> str:
     """
     Extract the PyTorch name from ONNX name, for ONNX names obtained from torch 1.13 ONNX export.
@@ -472,11 +476,12 @@ class OnnxSaver:
             cls._fix_initializer_names_for_export_to_onnx_direct(
                 onnx_model, pytorch_model
             )
-            save_as_external_data = (
-                onnx_model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF
-            )
             onnx.save(
-                onnx_model, onnx_model_path, save_as_external_data=save_as_external_data
+                onnx_model,
+                onnx_model_path,
+                save_as_external_data=_onnx_model_size_larger_than_max_protobuf(
+                    onnx_model
+                ),
             )
         else:
             # Obtaining equivalent onnx model
@@ -526,10 +531,10 @@ class OnnxSaver:
 
         cls.check_onnx_node_names(onnx_model, pytorch_model)
 
-        save_as_external_data = onnx_model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF
-
         onnx.save(
-            onnx_model, onnx_model_path, save_as_external_data=save_as_external_data
+            onnx_model,
+            onnx_model_path,
+            save_as_external_data=_onnx_model_size_larger_than_max_protobuf(onnx_model),
         )
 
     @classmethod

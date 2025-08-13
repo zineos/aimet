@@ -75,6 +75,7 @@ from aimet_torch._base.quantsim import (
     load_checkpoint,
     check_accumulator_overflow,
 )
+from aimet_torch.onnx_utils import _onnx_model_size_larger_than_max_protobuf
 from aimet_torch.v2 import nn as aimet_nn
 from aimet_torch.v2.nn import (
     BaseQuantizationMixin,
@@ -821,7 +822,11 @@ class _QuantizationSimOnnxExport:
                 self.sim.model, args, f, **kwargs
             )
 
-        onnx.save(onnx_model, f)
+        onnx.save(
+            onnx_model,
+            f,
+            save_as_external_data=_onnx_model_size_larger_than_max_protobuf(onnx_model),
+        )
         encodings_dict = self._to_json(tensor_to_encoding_map)
 
         # export weight encodings to output json file

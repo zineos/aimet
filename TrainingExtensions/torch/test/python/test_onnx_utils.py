@@ -35,7 +35,6 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-import contextlib
 import copy
 import logging
 import os
@@ -54,6 +53,7 @@ from aimet_torch.onnx_utils import (
     get_pytorch_name_from_onnx_name,
     restore_onnx_graph_initializers,
     save_initializer_restored_onnx_graph,
+    _onnx_model_size_larger_than_max_protobuf,
 )
 from torchvision import models
 
@@ -1231,3 +1231,26 @@ class TestOnnxUtils:
 
             # model should be consistent.
             onnx.checker.check_model(model)
+
+    @pytest.mark.parametrize(
+        "linear_size, expected_return", [(24000, True), (4, False)]
+    )
+    def test_onnx_model_size_larger_than_max_protobuf(
+        self, linear_size, expected_return
+    ):
+        class LinearModel(torch.nn.Module):
+            def __init__(self, size):
+                super(LinearModel, self).__init__()
+                self.linear = torch.nn.Linear(size, size)
+
+            def forward(self, x):
+                return self.linear(x)
+
+        model = LinearModel(linear_size)
+        dummy_input = torch.randn(1, linear_size)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            torch.onnx.export(model, dummy_input, os.path.join(tmp_dir, "model.onnx"))
+            onnx_model = onnx.load_model(os.path.join(tmp_dir, "model.onnx"))
+
+        assert _onnx_model_size_larger_than_max_protobuf(onnx_model) is expected_return
