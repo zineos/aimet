@@ -36,17 +36,18 @@
 # =============================================================================
 """Utilities for Adaround ONNX"""
 
-from typing import Dict, List
+from typing import Dict
 from collections import defaultdict
 import onnx
 import torch
+from onnxruntime import InferenceSession
 from packaging import version
 
 from aimet_onnx import QuantizationSimModel
 
 # pylint: disable=no-name-in-module, ungrouped-imports
 if version.parse(onnx.__version__) >= version.parse("1.14.0"):
-    from onnx import ModelProto
+    from onnx import ModelProto, numpy_helper
 else:
     from onnx.onnx_pb import ModelProto
 
@@ -66,7 +67,6 @@ class ModuleInfo:
     """Class object containing information about a module"""
 
     def __init__(self):
-        self.name = None
         self.params = {}
         self.inputs = []
         self.outputs = []
@@ -93,7 +93,6 @@ class ModelData:
             self.module_to_info[op.name] = ModuleInfo()
             if op.type in AdaroundSupportedModules:
                 self.module_to_info[op.name].type = op.type
-                self.module_to_info[op.name].name = op.name
                 self.module_to_info[op.name].transposed_params = op.transposed_params
                 if hasattr(op.get_module(), "attribute"):
                     self.module_to_info[op.name].attributes = op.get_module().attribute
@@ -148,3 +147,20 @@ def apply_activation_fn(
         return module(activation_tensor)
     else:
         return activation_tensor
+
+
+def get_torch_device(session: InferenceSession) -> torch.device:
+    """
+    Given the onnx session object, return corresponding torch device to use for adaround optimization
+
+    :param session: Onnx inference session
+    :return: torch device
+    """
+    if "CUDAExecutionProvider" in session.get_providers():
+        device_id = int(
+            session.get_provider_options()
+            .get("CUDAExecutionProvider", {})
+            .get("device_id", "0")
+        )
+        return torch.device("cuda:" + str(device_id))
+    return torch.device("cpu")

@@ -41,7 +41,6 @@ import tempfile
 import torch
 import numpy as np
 from onnx import numpy_helper
-from onnxruntime.quantization.onnx_model import ONNXModel
 
 from aimet_common import libpymo
 from aimet_onnx.adaround.adaround_tensor_quantizer import AdaroundTensorQuantizer
@@ -90,8 +89,6 @@ class TestAdaroundOptimizer:
                 cached_dataset,
                 num_iterations,
                 param_to_tq_dict,
-                True,
-                0,
             )
 
             new_weights = torch.from_numpy(
@@ -105,23 +102,6 @@ class TestAdaroundOptimizer:
             assert not torch.all(quantized_weight.eq(new_weights))
             assert torch.all(old_weights.eq(new_weights))
             assert torch.all(param_to_tq_dict[quant_module.params["weight"].name].alpha)
-
-    def test_compute_recons_metrics(self):
-        np.random.seed(0)
-        torch.manual_seed(0)
-        model = test_models.single_residual_model()
-        sim = QuantizationSimModel(model)
-        model_data = ModelData(sim)
-        param_to_tq_dict = create_param_to_tensor_quantizer_dict(sim)
-
-        quant_module = model_data.module_to_info["/conv1/Conv"]
-
-        inp_data = torch.randn(1, 3, 32, 32)
-        out_data = torch.randn(1, 32, 18, 18)
-        recon_error_soft, recon_error_hard = AdaroundOptimizer._compute_recons_metrics(
-            quant_module, None, inp_data, out_data, param_to_tq_dict, False
-        )
-        assert recon_error_hard > recon_error_soft > 1.4
 
     def test_compute_output_with_adarounded_weights(self):
         model = test_models.single_residual_model()

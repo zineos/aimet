@@ -83,41 +83,41 @@ class ActivationSampler:
         quant_act_name: str,
         quant_sim: QuantizationSimModel,
         fp32_model: ModelProto,
-        use_cuda: bool,
-        device: int = 0,
     ):
         """
         :param fp_act_name: FP output tensor name of the module to retrieve
         :param quant_act_name: Quant input tensor name of the module to retrieve
         :param quant_sim: QuantizationSimModel object
         :param fp32_model: Unquantized FP32 model
-        :param use_cuda: If we should use cuda
-        :param device: CUDA device ID
         :return: Input data to quant op, Output data from original op
         """
         self._quant_sim = quant_sim
         self._fp32_model = fp32_model
         self._fp_act_name = fp_act_name
         self._quant_act_name = quant_act_name
+        self.providers = []
 
-        if "CUDAExecutionProvider" not in ort.get_available_providers():
-            logger.warning(
-                "CUDAExecutionProvider not in ort available providers. use_cuda is set to False"
-            )
-            use_cuda = False
-        if use_cuda:
-            self.providers = [
-                (
-                    "CUDAExecutionProvider",
-                    {
-                        "device_id": device,
-                        "cudnn_conv_algo_search": _cudnn_conv_algo_search,
-                    },
-                ),
-                "CPUExecutionProvider",
-            ]
-        else:
-            self.providers = ["CPUExecutionProvider"]
+        for provider in quant_sim.session.get_providers():
+            if (
+                provider == "CUDAExecutionProvider"
+                or "CUDAExecutionProvider" in provider
+            ):
+                device_id = (
+                    quant_sim.session.get_provider_options()
+                    .get("CUDAExecutionProvider", {})
+                    .get("device_id", "0")
+                )
+                self.providers.append(
+                    (
+                        "CUDAExecutionProvider",
+                        {
+                            "device_id": device_id,
+                            "cudnn_conv_algo_search": _cudnn_conv_algo_search,
+                        },
+                    )
+                )
+            else:
+                self.providers.append("CPUExecutionProvider")
 
         self.fp32_sess, self.fp32_handle = self.create_session(
             self._fp32_model, self._fp_act_name

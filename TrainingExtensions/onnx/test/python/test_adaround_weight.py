@@ -38,21 +38,18 @@
 """Unit tests for Adaround Weights"""
 
 import copy
-import os
-import json
-import tempfile
 from unittest.mock import patch
 
 import numpy as np
 import torch
 import pytest
+from onnx import numpy_helper
 from onnxsim import simplify
 import onnx
 
-from aimet_common.quantsim_config.utils import get_path_for_per_channel_config
+import aimet_onnx
 from aimet_onnx import apply_adaround, QuantizationSimModel
-from aimet_onnx.adaround.adaround_weight import Adaround, AdaroundParameters
-from aimet_onnx.adaround.utils import AdaroundSupportedModules
+from aimet_onnx.adaround.utils import AdaroundSupportedModules, ModelData
 from aimet_onnx.utils import make_dummy_input, ParamUtils, build_session
 from .models import models_for_tests
 from .models.models_for_tests import conv_prelu_model
@@ -73,44 +70,24 @@ class TestAdaround:
         np.random.seed(0)
         torch.manual_seed(0)
         model = models_for_tests.single_residual_model()
-        data_loader = dataloader(input_shape=(1, 3, 32, 32))
         dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-        sess = build_session(model.model, providers)
-        out_before_ada = sess.run(None, dummy_input)
 
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=providers,
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
         )
-        with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(
-                model,
-                params,
-                tempdir,
-                "dummy",
-                use_cuda="CUDAExecutionProvider" in providers,
-            )
-            sess = build_session(ada_rounded_model.model, providers)
-            out_after_ada = sess.run(None, dummy_input)
-            assert not np.array_equal(out_before_ada[0], out_after_ada[0])
+        sim.compute_encodings([dummy_input])
+        out_before_ada = sim.session.run(None, dummy_input)
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
+        out_after_ada = sim.session.run(None, dummy_input)
+        assert not np.array_equal(out_before_ada[0], out_after_ada[0])
 
-            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
-                encoding_data = json.load(json_file)
-
-            param_names = {encoding["name"] for encoding in encoding_data}
-            params = {
-                node.input[1]
-                for node in model.nodes()
-                if node.op_type in AdaroundSupportedModules
-            }
-            assert params.issubset(param_names)
+        sim.remove_quantizers(sim.model.model)
+        for node in sim.model.nodes():
+            if node.op_type in AdaroundSupportedModules:
+                assert sim.qc_quantize_op_dict[node.input[1]]._is_encoding_frozen
 
     @pytest.mark.parametrize("pre_calibrate", [True, False])
     @pytest.mark.parametrize(
@@ -124,7 +101,7 @@ class TestAdaround:
     )
     @pytest.mark.parametrize(
         "providers",
-        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
+        (["CUDAExecutionProvider", "CPUExecutionProvider"], ["CPUExecutionProvider"]),
     )
     def test_apply_adaround_2(self, providers, model, pre_calibrate):
         if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
@@ -180,51 +157,36 @@ class TestAdaround:
             pytest.skip("Cuda not available")
         from onnxruntime_extensions import get_library_path
 
-        onnx_library = get_library_path()
-
-        np.random.seed(0)
-        torch.manual_seed(0)
         model = models_for_tests.custom_add_model()
-        data_loader = dataloader(input_shape=(1, 3, 64, 64))
+        onnx_library = get_library_path()
+        np.random.seed(0)
         dummy_input = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
-        sess = build_session(model.model, providers, [onnx_library])
-        out_before_ada = sess.run(None, dummy_input)
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(1, 3, 64, 64).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=providers,
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
+            user_onnx_libs=[onnx_library],
         )
-
-        with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(
-                model,
-                params,
-                tempdir,
-                "dummy",
-                user_onnx_libs=[onnx_library],
-                use_cuda="CUDAExecutionProvider" in providers,
+        model_data = ModelData(sim)
+        orig_weight = torch.from_numpy(
+            numpy_helper.to_array(
+                model_data.module_to_info["conv"].params["weight"].tensor
             )
-            sess = build_session(ada_rounded_model.model, providers, [onnx_library])
-            out_after_ada = sess.run(None, dummy_input)
-            assert not np.array_equal(out_before_ada[0], out_after_ada[0])
-
-            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
-                encoding_data = json.load(json_file)
-
-            param_keys = {enc["name"] for enc in encoding_data}
-            params = {
-                node.input[1]
-                for node in model.nodes()
-                if node.op_type in AdaroundSupportedModules
-            }
-            assert params.issubset(param_keys)
+        )
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
+        model_data = ModelData(sim)
+        updated_weight = torch.from_numpy(
+            numpy_helper.to_array(
+                model_data.module_to_info["conv"].params["weight"].tensor
+            )
+        )
+        assert not torch.equal(orig_weight, updated_weight)
+        sim.compute_encodings([dummy_input])
+        sim.remove_quantizers(sim.model.model)
+        for node in sim.model.nodes():
+            if node.op_type in AdaroundSupportedModules:
+                assert sim.qc_quantize_op_dict[node.input[1]]._is_encoding_frozen
 
     @pytest.mark.parametrize(
         "model, input_shape",
@@ -234,77 +196,27 @@ class TestAdaround:
             (models_for_tests.weight_matmul_model(10, 20), (1, 10, 10)),
         ],
     )
-    def test_adaround_matmul_gemm(self, model, input_shape, tmpdir):
-        data_loader = dataloader(input_shape, input_shape[0])
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
-        )
-
-        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
-
-        with open(os.path.join(tmpdir, "dummy.encodings")) as json_file:
-            encoding_data = json.load(json_file)
-
-        param_names = {encoding["name"] for encoding in encoding_data}
-        assert "weight" in param_names
-
     @pytest.mark.parametrize(
-        "model, input_shape",
-        [
-            (models_for_tests.weight_gemm_model(10, 20, True), (1, 10)),
-        ],
+        "providers",
+        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
     )
-    def test_adaround_with_dict_input(self, model, input_shape, tmpdir):
-        class DictDataLoader:
-            """
-            Example of a Dataloader which can be used for running AMPv2
-            """
+    def test_adaround_matmul_gemm(self, model, input_shape, tmpdir, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
 
-            def __init__(self, input_shape: tuple, input_name):
-                """
-                :param batch_size: batch size for data loader
-                """
-                self.input_shape = input_shape
-                self.input_name = input_name
-
-            def __iter__(self):
-                """Iterates over dataset"""
-                dummy_input = np.random.rand(*self.input_shape).astype(np.float32)
-                yield {self.input_name: dummy_input}
-
-            def __len__(self):
-                return 4
-
-        data_loader = DictDataLoader((1, 10), "input")
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=providers,
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
         )
 
-        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
-
-        with open(os.path.join(tmpdir, "dummy.encodings")) as json_file:
-            encoding_data = json.load(json_file)
-
-        param_names = {encoding["name"] for encoding in encoding_data}
-        assert "weight" in param_names
+        dummy_input = {"input": np.random.rand(*input_shape).astype(np.float32)}
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
+        sim.remove_quantizers(sim.model.model)
+        for node in sim.model.nodes():
+            if node.op_type in AdaroundSupportedModules:
+                assert sim.qc_quantize_op_dict[node.input[1]]._is_encoding_frozen
 
     @pytest.mark.parametrize(
         "model, input_shape", [(models_for_tests.dynamic_matmul_model(1), (1, 10))]
@@ -313,21 +225,14 @@ class TestAdaround:
         """
         AdaRound should not error-out if there is a dynamic matmul
         """
-        data_loader = dataloader(input_shape, input_shape[0])
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=["CPUExecutionProvider"],
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
         )
-
-        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
+        dummy_input = {"input": np.random.rand(*input_shape).astype(np.float32)}
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
 
     @pytest.mark.parametrize(
         "model, input_shape", [(models_for_tests.simplifiable_model(1), (1, 10))]
@@ -336,22 +241,15 @@ class TestAdaround:
         """
         AdaRound should not error-out for models which need simplification
         """
-        data_loader = dataloader(input_shape, input_shape[0])
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
-        )
-
         model, _ = simplify(model)
-        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
+        dummy_input = {"input": np.random.rand(*input_shape).astype(np.float32)}
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=["CPUExecutionProvider"],
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
+        )
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
 
     @pytest.mark.parametrize(
         "model_factory, input_shape",
@@ -368,74 +266,15 @@ class TestAdaround:
         AdaRound should not error-out for non-2d Conv/ConvTranspose layers
         """
         model = model_factory(input_shape)
-        data_loader = dataloader(input_shape, input_shape[0])
 
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(*input_shape).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
+        dummy_input = {"input": np.random.rand(*input_shape).astype(np.float32)}
+        sim = QuantizationSimModel(
+            copy.deepcopy(model),
+            providers=["CPUExecutionProvider"],
+            param_type=aimet_onnx.int4,
+            activation_type=aimet_onnx.int16,
         )
-
-        Adaround.apply_adaround(model, params, tmpdir, "dummy", use_cuda=False)
-
-    @pytest.mark.parametrize(
-        "providers",
-        (["CPUExecutionProvider"], ["CUDAExecutionProvider", "CPUExecutionProvider"]),
-    )
-    def test_apply_adaround_per_channel(self, providers):
-        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
-            pytest.skip("Cuda not available")
-
-        np.random.seed(0)
-        torch.manual_seed(0)
-        model = models_for_tests.single_residual_model()
-        data_loader = dataloader(input_shape=(1, 3, 32, 32))
-        dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-        sess = build_session(model.model, providers)
-        out_before_ada = sess.run(None, dummy_input)
-
-        def callback(session, args):
-            in_tensor = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
-            session.run(None, in_tensor)
-
-        params = AdaroundParameters(
-            data_loader=data_loader,
-            num_batches=1,
-            default_num_iterations=5,
-            forward_fn=callback,
-            forward_pass_callback_args=None,
-        )
-        with tempfile.TemporaryDirectory() as tempdir:
-            ada_rounded_model = Adaround.apply_adaround(
-                model,
-                params,
-                tempdir,
-                "dummy",
-                use_cuda="CUDAExecutionProvider" in providers,
-                default_config_file=get_path_for_per_channel_config(),
-            )
-            sess = build_session(ada_rounded_model.model, providers)
-            out_after_ada = sess.run(None, dummy_input)
-            assert not np.array_equal(out_before_ada[0], out_after_ada[0])
-
-            with open(os.path.join(tempdir, "dummy.encodings")) as json_file:
-                encoding_data = json.load(json_file)
-
-                param_encodings = {
-                    encoding["name"]: encoding for encoding in encoding_data
-                }
-                assert (
-                    len(param_encodings["conv3.weight"]["scale"]) == 8
-                )  # out_channels
-                assert (
-                    len(param_encodings["conv4.weight"]["scale"]) == 8
-                )  # out_channels
+        apply_adaround(sim, [dummy_input for _ in range(2)], 5)
 
     @pytest.mark.parametrize(
         "config",

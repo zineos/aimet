@@ -56,6 +56,7 @@ from aimet_onnx.adaround.utils import (
     ModuleInfo,
     read_attributes_for_op,
     apply_activation_fn,
+    get_torch_device,
 )
 from aimet_onnx.utils import create_input_dict
 from aimet_onnx.adaround.adaround_loss import AdaroundLoss
@@ -71,6 +72,9 @@ logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Quant)
 BATCH_SIZE = 32
 EMPIRICAL_THRESHOLD = 3 / 4
 DATA_SIZE_IN_BITS = 32
+
+# enable/disable caching intermediate activation data
+ENABLE_CACHING_ACTIVATIONS = True
 
 
 class AdaroundOptimizer:
@@ -89,8 +93,6 @@ class AdaroundOptimizer:
         cached_dataset: Dataset,
         num_iterations: int,
         param_to_adaround_tensor_quantizer: Dict,
-        use_cuda: bool,
-        device: int = 0,
     ):
         """
         Adaround module
@@ -104,16 +106,12 @@ class AdaroundOptimizer:
          yielded from the data loader
         :param num_iterations: Num of iterations to adaround a layer
         :param param_to_adaround_tensor_quantizer: Param name to adaround tensor quantizer dictionary
-        :param use_cuda: If we should use cuda
-        :param device: CUDA device ID
         """
         # pylint: disable=too-many-locals, too-many-arguments, too-many-statements
         adaround_quantizer = param_to_adaround_tensor_quantizer[
             module.params["weight"].name
         ]
-        torch_device = torch.device("cpu")
-        if use_cuda:
-            torch_device = torch.device("cuda:" + str(device))
+        torch_device = get_torch_device(quant_model.session)
         weights = torch.from_numpy(
             numpy_helper.to_array(module.params["weight"].tensor)
         ).to(torch_device)
@@ -136,8 +134,6 @@ class AdaroundOptimizer:
             quantized_input_name,
             quant_model,
             fp32_model,
-            use_cuda,
-            device,
         )
         inp_data, out_data = act_sampler.sample_acts(
             create_input_dict(quant_model.model.model, model_inputs)
@@ -161,7 +157,7 @@ class AdaroundOptimizer:
             inp_data_torch.dtype,
         )
 
-        if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
+        if use_cache_acts_data and ENABLE_CACHING_ACTIVATIONS:
             logger.debug("Caching intermediate activations data for optimization.")
             all_inp_data_np, all_orig_out_data_np = (
                 act_sampler.sample_and_place_all_acts_on_cpu(cached_dataset)
@@ -175,13 +171,13 @@ class AdaroundOptimizer:
             ]
 
             # Try to put all cached activations data on GPU for faster optimization if possible.
-            if use_cuda:
+            if torch_device != torch.device("cpu"):
                 all_inp_data, all_orig_out_data = cls._place_cached_acts_data(
                     all_inp_data, all_orig_out_data, torch_device
                 )
 
         for iteration in range(num_iterations):
-            if use_cache_acts_data and AdaroundOptimizer.enable_caching_acts_data():
+            if use_cache_acts_data and ENABLE_CACHING_ACTIVATIONS:
                 # batch idx is chosen using iteration % len(all_inp_data_np). Of all the samples in a given batch,
                 # min(batch size, BATCH_SIZE) is operated on in a single iteration
                 indices = torch.randperm(
@@ -244,60 +240,6 @@ class AdaroundOptimizer:
         weight_name = module.params["weight"].name
         update_sim_weight(quant_model.model, weights, weight_name)
         act_sampler.restore_graph()
-
-    @classmethod
-    def _compute_recons_metrics(
-        cls,
-        quant_module: ModuleInfo,
-        act_func: Union[None, str],
-        inp_data: torch.Tensor,
-        out_data: torch.Tensor,
-        param_to_adaround_tensor_quantizer: Dict,
-        use_cuda: bool,
-        device: int = 0,
-    ) -> Tuple[float, float]:
-        """
-        Compute Mean square error of output activations using soft rounding which maps alpha parameter
-        between zero and one and hard rounding which maps to exact zero and one
-
-        :param quant_module: Quantized wrapper module
-        :param act_func: Activation function
-        :param inp_data: Input data to quantized wrapper module
-        :param out_data: Output data from module
-        :param param_to_adaround_tensor_quantizer: Dict
-        :param use_cuda: Bool, true if we use GPU
-        :param device: Cuda device
-        :return: Reconstruction error using hard rounding and soft rounding
-        """
-        adaround_quantizer = param_to_adaround_tensor_quantizer[
-            quant_module.params["weight"].name
-        ]
-        torch_device = "cpu"
-        if use_cuda:
-            torch_device = "cuda:" + str(device)
-        weights = torch.from_numpy(
-            numpy_helper.to_array(quant_module.params["weight"].tensor)
-        ).to(torch_device)
-        inp_data = inp_data.to(torch_device)
-        # Enable hard rounding and get quantized wrapper module's output
-        out_data_hard = cls._compute_output_with_adarounded_weights(
-            weights, quant_module, inp_data, adaround_quantizer, False
-        )
-
-        # Enable soft rounding and get quantized wrapper module's output
-        out_data_soft = cls._compute_output_with_adarounded_weights(
-            weights, quant_module, inp_data, adaround_quantizer, True
-        )
-
-        # If followed by an activation function
-        out_data = apply_activation_fn(act_func, out_data)
-        out_data_soft = apply_activation_fn(act_func, out_data_soft)
-        out_data_hard = apply_activation_fn(act_func, out_data_hard)
-
-        recons_err_soft = functional.mse_loss(out_data_soft, out_data)
-        recons_err_hard = functional.mse_loss(out_data_hard, out_data)
-
-        return float(recons_err_hard), float(recons_err_soft)
 
     @staticmethod
     def _compute_output_with_adarounded_weights(
@@ -401,13 +343,6 @@ class AdaroundOptimizer:
             )
 
         return out_data
-
-    @staticmethod
-    def enable_caching_acts_data() -> bool:
-        """
-        Function to enable/disable caching intermediate activation data. By default, it returns True.
-        """
-        return True
 
     @staticmethod
     def _can_cache_acts_data(
