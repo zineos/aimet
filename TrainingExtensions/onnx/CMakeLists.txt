@@ -56,6 +56,7 @@ target_include_directories(OnnxCppOps PRIVATE
         ${EIGEN3_INCLUDE_DIR}
         ${ONNXRUNTIME_INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../ModelOptimizations/DlQuantization/src
         )
 
 target_link_libraries(OnnxCppOps PUBLIC

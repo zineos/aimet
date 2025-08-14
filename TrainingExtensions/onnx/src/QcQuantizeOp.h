@@ -52,12 +52,12 @@
 
 #include "onnxruntime_lite_custom_op.h"
 
-
+template<typename T>
 struct QcQuantizeOp
 {
     QcQuantizeOp(const OrtApi* api, const OrtKernelInfo* info);
 
-    void computeImpl(const Ort::Custom::Tensor<float>& input, Ort::Custom::Tensor<float>& output, void* stream,
+    void computeImpl(const Ort::Custom::Tensor<T>& input, Ort::Custom::Tensor<T>& output, void* stream,
                      bool useCuda, DlQuantization::IAllocator* allocator);
 
 protected:

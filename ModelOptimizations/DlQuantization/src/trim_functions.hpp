@@ -45,6 +45,11 @@
 
 #include "DlQuantization/Quantization.hpp"
 
+#ifdef GPU_QUANTIZATION_ENABLED
+#include <cuda_fp16.h>
+#endif
+
+
 namespace DlQuantization
 {
 inline double randUniformCpu();
@@ -56,6 +61,11 @@ void quantizeDequantize(const DTYPE* in, uint64_t cnt, const TfEncoding& encodin
 
 void quantizeDequantizeFp16ForGPU(const float* in, uint64_t cnt, float* out, void* stream);
 
+#ifdef ONNX_CUDA
+void convertFloatToFp16KernelForGPU(const float* in, uint64_t cnt, __half* out, void* stream);
+
+void convertFp16ToFloatKernelForGPU(const __half* in, uint64_t cnt, float* out, void* stream);
+#endif
 
 template <typename DTYPE>
 void quantizeToFxp(const DTYPE* in, uint64_t cnt, const TfEncoding& encoding, DTYPE* out, ComputationMode mode_cpu_gpu,
