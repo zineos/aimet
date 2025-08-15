@@ -229,14 +229,14 @@ class QuantAnalyzer:
 
         weight_quantized_eval_score = self._eval_weight_quantized_model(sim)
         _logger.info(
-            "Weight-quantized eval score (W: %d, A: float32): %f",
+            "Weight-quantized eval score (W: %s, A: float32): %f",
             sim._param_type,
             weight_quantized_eval_score,
         )
 
         act_quantized_eval_score = self._eval_activation_quantized_model(sim)
         _logger.info(
-            "Activation-quantized eval score (W: float32, A: %d): %f",
+            "Activation-quantized eval score (W: float32, A: %s): %f",
             sim._activation_type,
             act_quantized_eval_score,
         )

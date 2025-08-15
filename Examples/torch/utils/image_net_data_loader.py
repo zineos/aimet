@@ -45,7 +45,7 @@ from torchvision import transforms
 from torchvision.datasets.folder import default_loader, has_file_allowed_extension
 from torch.utils.data import Dataset
 import torch.utils.data as torch_data
-
+from typing import Any
 
 from Examples.common import image_net_config
 
@@ -196,6 +196,7 @@ class ImageNetDataLoader:
         is_training: bool = False,
         num_workers: int = 8,
         num_samples_per_class: int = None,
+        collate_fn: Any = None,
     ):
         """
         :param images_dir: The path to the data directory
@@ -204,6 +205,7 @@ class ImageNetDataLoader:
         :param is_training: Indicates whether to load the training or validation data
         :param num_workers: Indiicates to the data loader how many sub-processes to use for data loading.
         :param num_samples_per_class: Number of samples to use per class.
+        :param collate_fn: Custom function to collate input data
         """
 
         # For normalization, mean and std dev values are calculated per channel
@@ -250,6 +252,7 @@ class ImageNetDataLoader:
             shuffle=is_training,
             num_workers=num_workers,
             pin_memory=True,
+            collate_fn=collate_fn,
         )
 
     @property

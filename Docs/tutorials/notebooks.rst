@@ -59,7 +59,7 @@ Following the tables, you’ll find step-by-step instructions on how to run thes
      - `Link <notebooks/torch/quantization/bn_reestimation.ipynb>`_
      - `Link <notebooks/tensorflow/quantization/keras/bn_reestimation.ipynb>`_
    * - Quant analyzer
-     - Not implemented.
+     - `Link <notebooks/onnx/quantization/quant_analyzer.ipynb>`_
      - `Link <notebooks/torch/quantization/quant_analyzer.ipynb>`_
      - `Link <notebooks/tensorflow/quantization/keras/quant_analyzer.ipynb>`_
 
