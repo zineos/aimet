@@ -6,6 +6,31 @@
 Release notes
 #############
 
+2.13.0
+======
+* Bug fixes and Improvements
+    * ONNX
+        * Adjust weight scale for int32 bias overflow in W16A16 quantization (`f39c0bf`_)
+        * AutoQuant: Remove deprecated feature (`414cdde`_)
+        * Support exporting large models in aimet-onnx (`0fe6701`_)
+        * AdaRound: Delete deprecated top-level API. (`bfba557`_)
+        * AdaRound: Skip optimization if no input to layer (`18dfedc`_)
+    
+    * PyTorch
+        * Enable save_model_as_external_data for sim.onnx.export (`107b339`_)
+
+* Known Issues
+    * Keras
+        * Accuracy drop observed with AIMET Keras for certain models. Fix is planned for the next release.
+
+.. _f39c0bf: https://github.com/quic/aimet/commit/f39c0bf3e3fc1e21527f9a99c8b8d42e1ebdd277
+.. _414cdde: https://github.com/quic/aimet/commit/414cddec3d7317cf7251c0134e6f4b3a15bbcb1e
+.. _0fe6701: https://github.com/quic/aimet/commit/0fe67010fd06641c2ef9696f7e36ce87e58456fb
+.. _bfba557: https://github.com/quic/aimet/commit/bfba5573007b41935b217e79ada931598b44da19
+.. _18dfedc: https://github.com/quic/aimet/commit/18dfedcc3fa0eecfec57b7352c1b467b8c826650
+.. _107b339: https://github.com/quic/aimet/commit/107b339fe9cb9ee105e7aa97257751d44d878f34
+
+
 2.12.0
 ======
 * Bug fixes and Improvements
