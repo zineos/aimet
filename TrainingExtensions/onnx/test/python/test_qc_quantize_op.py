@@ -340,6 +340,42 @@ class TestQcQuantizeOp:
         assert np.min(output) >= -7.1
         assert not np.allclose(output, input_arr2)
 
+    @pytest.mark.parametrize(
+        "bitwidth, symmetric, expected_min, expected_max",
+        [
+            (2, True, -10.5, 5.25),
+            (2, False, -14.0, 7.0),
+            (3, True, -14.0, 10.5),
+            (3, False, -12.0, 9.0),
+        ],
+    )
+    def test_update_stats_low_bw(self, bitwidth, symmetric, expected_min, expected_max):
+        input_arr = np.asarray([[[[-10.5, 10.5]]]]).astype(np.float32)
+        quant_info = libquant_info.QcQuantizeInfo()
+        quant_info.isIntDataType = True
+        quant_node = helper.make_node(
+            op_name,
+            inputs=["input"],
+            outputs=["output"],
+            domain=op_domain,
+            quant_info=libpymo.PtrToInt64(quant_info),
+        )
+        model = create_model_from_node(quant_node, input_arr.shape)
+        session = build_session(model, available_providers)
+        qc_op = QcQuantizeOp(
+            quant_info=quant_info,
+            quant_scheme=QuantScheme.post_training_tf,
+            rounding_mode="nearest",
+            op_mode=OpMode.updateStats,
+            bitwidth=bitwidth,
+            use_symmetric_encodings=symmetric,
+        )
+
+        session.run(None, {"input": input_arr})[0]
+        qc_op.compute_encodings()
+        assert qc_op.get_encodings()[0].max == expected_max
+        assert qc_op.get_encodings()[0].min == expected_min
+
     def test_compare_one_shot_with_pymo(self):
         input_arr = np.random.randn(2, 3, 5, 1).astype(np.float32)
         quant_info = libquant_info.QcQuantizeInfo()

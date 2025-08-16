@@ -449,8 +449,17 @@ class MinMaxEncodingAnalyzer(EncodingAnalyzer[_MinMaxRange]):
         if is_symmetric:
             num_pos_steps = math.floor(num_steps / 2)
             num_neg_steps = math.ceil(num_steps / 2)
+
+            # For 2-bit quantization, using math.floor to compute num_pos_steps can result in a wasted bin on the negative side given a symmetrically distributed weight.
+            # Using math.ceil instead trades off having some clipping error in return for being able to use all bins.
+            # Checking for numSteps = 3 to account for strict symmetric grid as well as zero_point_shift = 0.5, in which case num_steps will be 2 and no special logic is required.
+            additional_step_for_calibration = 0
+            if num_steps == 3:
+                additional_step_for_calibration = 1
+
             delta = torch.maximum(
-                updated_max / num_pos_steps, -updated_min / num_neg_steps
+                updated_max / (num_pos_steps + additional_step_for_calibration),
+                -updated_min / num_neg_steps,
             )
             offset = -1 * num_neg_steps
             updated_min = offset * delta

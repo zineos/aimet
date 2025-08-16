@@ -421,6 +421,18 @@ def test_compute_encodings_updates_parameters_upon_exit(
 
 
 @pytest.mark.parametrize(
+    "bw, symmetric, expected_scale",
+    [(2, True, 5.25), (2, False, 7.0), (3, True, 3.5), (3, False, 3.0)],
+)
+def test_compute_encodings_low_bw(bw, symmetric, expected_scale):
+    qdq = QuantizeDequantize(shape=(), bitwidth=bw, symmetric=symmetric)
+    tensor = torch.tensor([-10.5, 10.5])
+    with qdq.compute_encodings():
+        _ = qdq(tensor)
+    assert qdq.get_scale() == expected_scale
+
+
+@pytest.mark.parametrize(
     "quantize",
     [
         quantize(symmetric=True, initialized=True, params="min_max"),

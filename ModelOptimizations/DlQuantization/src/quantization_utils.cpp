@@ -82,7 +82,16 @@ TfEncoding getComputedEncodings(uint8_t bw, double min, double max, bool useSymm
     {
         unsigned int numPositiveSteps = std::floor(numSteps / 2);
         unsigned int numNegativeSteps = numSteps - numPositiveSteps;
-        encoding.delta = std::max(max / numPositiveSteps, - min / numNegativeSteps);
+
+        // For low-bit quantization, using math.floor to compute num_pos_steps can result in a wasted bin on the negative side given a symmetrically distributed weight.
+        // Using math.ceil instead trades off having some clipping error in return for being able to use all bins.
+        // Checking for numSteps = 3 to account for strict symmetric grid.
+        unsigned int additionalStepForCalibration = 0;
+        if (numSteps == 3)
+        {
+            additionalStepForCalibration += 1;
+        }
+        encoding.delta = std::max(max / (numPositiveSteps + additionalStepForCalibration), - min / numNegativeSteps);
         encoding.offset = -static_cast<double>(numNegativeSteps);
     }
     else

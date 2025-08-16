@@ -230,6 +230,27 @@ class TestMinMaxEncodingAnalyzer:
         assert torch.allclose(symmetric_min, expected_min)
         assert torch.allclose(symmetric_max, expected_max)
 
+    @pytest.mark.parametrize(
+        "num_steps, symmetric, expected_min, expected_max",
+        [
+            (3, True, -10.5, 5.25),
+            (3, False, -10.5, 10.5),
+            (7, True, -14.0, 10.5),
+            (7, False, -10.5, 10.5),
+        ],
+    )
+    def test_compute_encodings_for_low_bw(
+        self, num_steps, symmetric, expected_min, expected_max
+    ):
+        encoding_analyzer = MinMaxEncodingAnalyzer(())
+        tensor = torch.tensor([-10.5, 10.5])
+        encoding_analyzer.update_stats(tensor)
+        computed_min, computed_max = encoding_analyzer.compute_encodings(
+            num_steps=num_steps, is_symmetric=symmetric
+        )
+        assert computed_min == expected_min
+        assert computed_max == expected_max
+
     @pytest.mark.parametrize("symmetric", [True, False])
     @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
     def test_overflow(self, symmetric, dtype):
