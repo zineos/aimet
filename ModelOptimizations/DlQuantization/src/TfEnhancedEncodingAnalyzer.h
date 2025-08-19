@@ -118,7 +118,7 @@ private:
      * For GAMMA==1, this function computes the means square error introduced
      * by this specific fixed point encoding.
      */
-    double _quantAndSatCost(const PDF& pdf, int bw, DTYPE delta, int offset) const;
+    double _quantAndSatCost(const PDF& pdf, const std::vector<DTYPE>& binCenters, int bw, DTYPE delta, int offset) const;
 
     /**
      * Pick asymmetric test candidates to use for searching the lowest quantized cost. Each candidates is expressed

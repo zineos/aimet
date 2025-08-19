@@ -133,6 +133,13 @@ TfEnhancedEncodingAnalyzer<DTYPE>::_findBestCandidate(uint8_t bw,
 
     double bestCost = std::numeric_limits<double>::max();
 
+    // Pre-compute the midpoint of each histogram bin
+    double halfBinWidth = (_stats.xLeft[1] - _stats.xLeft[0]) / 2;
+    std::vector<DTYPE> binCenters(PDF_SIZE);
+
+    std::transform(_stats.xLeft.begin(), _stats.xLeft.end(), binCenters.begin(),
+                   [&halfBinWidth](DTYPE val) { return static_cast<DTYPE>(val + halfBinWidth); });
+
     for (auto candidate: testCandidates)
     {
         DTYPE testDelta;
@@ -140,7 +147,7 @@ TfEnhancedEncodingAnalyzer<DTYPE>::_findBestCandidate(uint8_t bw,
 
         std::tie(testDelta, testOffset) = candidate;
 
-        double cost = _quantAndSatCost(_stats, bw, testDelta, testOffset);
+        double cost = _quantAndSatCost(_stats, binCenters, bw, testDelta, testOffset);
 
         // Remember the best encoding.
         if (cost < bestCost)
@@ -299,7 +306,7 @@ std::tuple<DTYPE, DTYPE> TfEnhancedEncodingAnalyzer<DTYPE>::_findRangeOfAggregat
 }
 
 template <typename DTYPE>
-double TfEnhancedEncodingAnalyzer<DTYPE>::_quantAndSatCost(const PDF& pdf, int bw, DTYPE delta, int offset) const
+double TfEnhancedEncodingAnalyzer<DTYPE>::_quantAndSatCost(const PDF& pdf, const std::vector<DTYPE>& binCenters, int bw, DTYPE delta, int offset) const
 {
     // Given the TensorFlow fixed point format (delta and offset), we calculate
     // the smallest and biggest floating point values we can represent.
@@ -318,12 +325,12 @@ double TfEnhancedEncodingAnalyzer<DTYPE>::_quantAndSatCost(const PDF& pdf, int b
     double satCostBottom = 0;
     // Calculate the smallest value we can represent (middle of respective
     // bucket).
-    DTYPE minValMiddleOfBucket = pdfStart + (minInd * pdfStep) + pdfStep / 2;
+    DTYPE minValMiddleOfBucket = binCenters[minInd];
     // Go through all buckets which go into saturation.
     for (int i = 0; i < minInd; ++i)
     {
         // Calculate the midpoint of this bin.
-        double midVal = pdfStart + i * pdfStep + pdfStep / 2;
+        double midVal = binCenters[i];
         // The saturation cost is the MSE.
         satCostBottom += pdf.pdf[i] * pow(midVal - minValMiddleOfBucket, 2);
     }
@@ -332,27 +339,27 @@ double TfEnhancedEncodingAnalyzer<DTYPE>::_quantAndSatCost(const PDF& pdf, int b
     double satCostTop = 0;
     // Calculate the largest value we can represent (middle of respective
     // bucket).
-    DTYPE maxValMiddleOfBucket = pdfStart + (maxInd * pdfStep) + pdfStep / 2;
+    DTYPE maxValMiddleOfBucket = binCenters[maxInd];
     // Go through all buckets which go into saturation.
     for (int i = maxInd; i < PDF_SIZE; ++i)
     {
         // Calculate the midpoint of this bin.
-        double midVal = pdfStart + i * pdfStep + pdfStep / 2;
+        double midVal = binCenters[i];
         // The saturation cost is the MSE.
         satCostTop += pdf.pdf[i] * pow(midVal - maxValMiddleOfBucket, 2);
     }
 
     // Calculate the quantization cost in the middle part of the PDF.
     double quantCost = 0;
+    DTYPE invdelta = 1 / delta;
     // Go through all buckets which lie in the range we can represent.
     for (int i = minInd; i < maxInd; ++i)
     {
         // The floating point value in the middle of this bucket.
-        DTYPE floatVal = pdfStart + i * pdfStep + pdfStep / 2;
-        // The quantized equivalent.
-        int quantized = (int) round(floatVal / delta - offset);
+        DTYPE floatVal = binCenters[i];
         // The de-quantized value: this is 'floatVal' plus the quantization error.
-        DTYPE dequantized = delta * (quantized + offset);
+        // Note: floor executes faster than round, and edge-case rounding direction does not matter here.
+        DTYPE dequantized = floor(floatVal * invdelta + 0.5f) * delta;
         // The quantization cost is the MSE.
         quantCost += pdf.pdf[i] * pow(floatVal - dequantized, 2);
     }
