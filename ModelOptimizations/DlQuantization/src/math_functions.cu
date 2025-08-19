@@ -229,98 +229,50 @@ template std::tuple<float, float> GetMinMax_gpu(const float* data, uint64_t cnt)
 template std::tuple<double, double> GetMinMax_gpu(const double* data, uint64_t cnt);
 
 template <typename DTYPE>
-__global__ static void histogramCountKernel(const DTYPE* data,
-                                            uint32_t* histogram_per_thread,
-                                            const size_t cnt,
-                                            const DTYPE bucket_size,
-                                            const DTYPE histogram_offset,
-                                            const bool is_signed)
-{
-    // This offset is used to help map numbers to histogram buckets.
-    // Go through all data points and add them to the histogram.
-    CUDA_KERNEL_LOOP(i, cnt)
-    {
-        // Map a floating point number to the appropriate bucket.
-        int index = is_signed ?
-                    floor(data[i] / bucket_size - histogram_offset) :
-                    floor(abs(data[i]) / bucket_size - histogram_offset);
-
-        // Add to histogram, if inside the histogram range.
-        if (index >= 0 && index < PDF_SIZE)
-        {
-            int idx = PDF_SIZE * (blockIdx.x * blockDim.x + threadIdx.x) + index;
-            histogram_per_thread[idx] += 1;
-        }
-    }
-}
-
-
-__global__ static void histogramReduceSumKernel(const uint32_t* histogram_per_thread,
-                                                uint32_t* histogram,
-                                                const size_t cnt)
-{
-    if (blockIdx.x == 0 && threadIdx.x < PDF_SIZE)
-    {
-        for (int i = threadIdx.x; i < cnt; i += PDF_SIZE)
-        {
-            histogram[threadIdx.x] += histogram_per_thread[i];
-        }
-    }
-}
-
-
-static const int PDF_MAX_BUFF_BYTES = (1 << 25); // 32MB
-
-#define GET_PDF_BUFF_SIZE(tensor_size, DTYPE)\
-    sizeof(DTYPE) * CUDA_NUM_BLOCKS(tensor_size) * CUDA_NUM_THREADS * PDF_SIZE < PDF_MAX_BUFF_BYTES ?\
-    CUDA_NUM_BLOCKS(tensor_size) :\
-    PDF_MAX_BUFF_BYTES / (sizeof(DTYPE) * PDF_SIZE * CUDA_NUM_THREADS)
-
-
-template <typename DTYPE>
 void GetHistogram_gpu(const DTYPE* data,
                       uint64_t cnt,
                       uint32_t histogram[PDF_SIZE],
-                      const DTYPE bucket_size,
-                      const DTYPE pdf_offset,
+                      const double bucket_size,
+                      const double pdf_offset,
                       const bool is_signed,
                       IAllocator* allocator)
 {
-    // Limit the number of thread blocks for performance based on heuristics
-    const size_t CUDA_NUM_BLOCKS_ = GET_PDF_BUFF_SIZE(cnt, DTYPE);
-    const size_t buff_size = PDF_SIZE * CUDA_NUM_BLOCKS_ * CUDA_NUM_THREADS;
+    int num_levels    = PDF_SIZE + 1;   // Number of bin edges in histogram
+    // Note: double precision needed here to represent: width = (upper_level - lower_level) / (num_levels - 1)
+    double lower_level = pdf_offset * bucket_size;
+    double upper_level = (pdf_offset + PDF_SIZE) * bucket_size;
 
-    uint32_t* histogram_per_thread = (uint32_t*) allocator->allocateRaw(sizeof(uint32_t) * buff_size);
+    constexpr size_t hist_size = sizeof(uint32_t) * PDF_SIZE;
+    auto histogram_gpu =
+        static_cast<uint32_t*>(allocator ? allocator->allocateRaw(hist_size) : MemoryAllocation_gpu(hist_size));
 
-    cudaMemset(histogram_per_thread, 0x00, sizeof(uint32_t) * buff_size);
+    // When d_temp_storage is nullptr, this does not do any device computation, but sets temp_storage_bytes to the size
+    // of temporary storage necessary for computation.
+    void* d_temp_storage      = nullptr;
+    size_t temp_storage_bytes = 0;
+    cub::DeviceHistogram::HistogramEven(d_temp_storage, temp_storage_bytes, data, histogram_gpu, num_levels,
+                                        lower_level, upper_level, cnt);
 
-    // Go through all data points and add them to the histogram.
-    histogramCountKernel<<<CUDA_NUM_BLOCKS_, CUDA_NUM_THREADS>>>(data,
-                                                                 histogram_per_thread,
-                                                                 cnt,
-                                                                 bucket_size,
-                                                                 pdf_offset,
-                                                                 is_signed);
+    // Allocate temporary storage
+    d_temp_storage = allocator ? allocator->allocateRaw(temp_storage_bytes) : MemoryAllocation_gpu(temp_storage_bytes);
 
-    uint32_t* histogram_gpu = (uint32_t*) allocator->allocateRaw(sizeof(uint32_t) * PDF_SIZE);
-    cudaMemset(histogram_gpu, 0x00, sizeof(uint32_t) * PDF_SIZE);
+    // Perform the actual histogram computation
+    cub::DeviceHistogram::HistogramEven(d_temp_storage, temp_storage_bytes, data, histogram_gpu, num_levels,
+                                        lower_level, upper_level, cnt);
 
-    histogramReduceSumKernel<<<1, PDF_SIZE>>>(histogram_per_thread, histogram_gpu, buff_size);
+    // Transfer histogram to CPU
+    cudaMemcpy(histogram, histogram_gpu, sizeof(uint32_t) * PDF_SIZE, cudaMemcpyDeviceToHost);
 
-    cudaMemcpy(histogram,
-               histogram_gpu,
-               sizeof(uint32_t) * PDF_SIZE,
-               cudaMemcpyDefault);
-
-    allocator->deleteRaw(histogram_gpu);
-    allocator->deleteRaw(histogram_per_thread);
+    allocator ? allocator->deleteRaw(d_temp_storage) : (void) MemoryFree_gpu(d_temp_storage);
+    allocator ? allocator->deleteRaw(histogram_gpu) : (void) MemoryFree_gpu(histogram_gpu);
 }
+
 
 template void GetHistogram_gpu(const float* data,
                                uint64_t cnt,
                                uint32_t histogram[PDF_SIZE],
-                               const float bucket_size,
-                               const float pdf_offset,
+                               const double bucket_size,
+                               const double pdf_offset,
                                const bool is_signed,
                                IAllocator* allocator);
 template void GetHistogram_gpu(const double* data,

@@ -290,10 +290,10 @@ void UpdatePdf(const DTYPE* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bo
     }
 
     // The histogram's range is min_val to max_val.
-    DTYPE bucket_size = pdf.xLeft[1] - pdf.xLeft[0];
-    DTYPE min_val     = signed_vals ? pdf.xLeft[0] : 0;
+    double bucket_size = pdf.xLeft[1] - pdf.xLeft[0];
+    double min_val     = signed_vals ? pdf.xLeft[0] : 0;
     // This offset is used to help map numbers to histogram buckets.
-    DTYPE pdf_offset = min_val / bucket_size;
+    double pdf_offset = min_val / bucket_size;
 
     // Create the histogram of this number distribution.
     uint32_t histogram[PDF_SIZE];
@@ -316,8 +316,8 @@ void UpdatePdf(const DTYPE* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bo
 }
 
 template <typename DTYPE>
-void GetHistogram(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const DTYPE bucket_size,
-                  const DTYPE pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
+void GetHistogram(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
+                  const double pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
                   IAllocator* allocator)
 {
     switch (mode_cpu_gpu)
@@ -393,8 +393,8 @@ void MemoryFree_cpu(void* data)
 }
 
 template <typename DTYPE>
-void GetHistogram_cpu(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const DTYPE bucket_size,
-                      const DTYPE pdf_offset, const bool is_signed)
+void GetHistogram_cpu(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
+                      const double pdf_offset, const bool is_signed)
 {
     // Go through all data points and add them to the histogram.
     for (uint64_t i = 0; i < cnt; ++i)
