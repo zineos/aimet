@@ -93,6 +93,9 @@ DROPOUT_TYPES = (torch.nn.Dropout, torch.nn.Dropout2d, torch.nn.Dropout3d)
 # list of modules which need to be treated as a leaf module
 modules_to_treat_as_leaf = []
 
+# list of modules not to treat as leaf
+modules_not_to_treat_as_leaf = [torch.nn.ModuleList, torch.nn.ModuleDict]
+
 
 class StopForwardException(Exception):
     """
@@ -512,7 +515,6 @@ def is_leaf_module(module):
     else:
         has_child = True
 
-    # pylint: disable=unidiomatic-typecheck
     return (
         not has_child
         or type(module) in modules_to_treat_as_leaf
@@ -520,7 +522,7 @@ def is_leaf_module(module):
             CustomSparseConv3DLayer is not None
             and isinstance(module, CustomSparseConv3DLayer)
         )
-    )
+    ) and not isinstance(module, tuple(modules_not_to_treat_as_leaf))
 
 
 def has_hooks(module: torch.nn.Module):

@@ -141,6 +141,12 @@
             "level": "INFO",
             "handlers": ["console"],
             "propagate": false
-         }
+        },
+
+        "FPTQuant": {
+            "level": "INFO",
+            "handlers": ["console"],
+            "propagate": false
+        }
     }
 }

@@ -3,15 +3,12 @@
 
 # pylint: disable=missing-docstring
 
-import copy
 import torch
 from typing import Type
 from types import NoneType
 from tqdm import tqdm
 
 from transformers import PretrainedConfig
-
-from aimet_torch.v2.nn.true_quant import QuantizationMixin
 
 from aimet_torch.experimental.spinquant.hadamard_utils import get_hadamard_matrix
 from aimet_torch.experimental.transforms.transformed_layers import TransformationMixin
@@ -298,11 +295,3 @@ class FPTQuant:
         )
         block.down_proj.add_left_hand_transform(transform.get_inverted_op())
         block.down_proj.add_left_hand_transform(transform)
-
-        # todo: make this more general
-        if isinstance(block.down_proj.left_hand_transforms[0], QuantizationMixin):
-            # if the transform is being inserted into a Quantized model, need to make sure that quantizer settings
-            # are updated appropriately
-            block.down_proj.left_hand_transforms[0].output_quantizers.append(
-                copy.deepcopy(block.down_proj.output_quantizers[0])
-            )

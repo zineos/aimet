@@ -102,22 +102,24 @@ class GroupedHadamardTransformOp(InvertibleTransformOp):
                 scipy.linalg.hadamard(2**num_two_factors), dtype=torch.float32
             ),
         )
-        self.group_size = 2**num_two_factors
-        self.n_groups = remaining_factor
-        self.scale = 1 / math.sqrt(2**num_two_factors)
         self.mergeable = False
+        self.use_custom_hadamard = False
 
     def forward(self, x):
-        x_reshape = x.reshape(*x.shape[:-1], self.n_groups, self.group_size)
-        return (F.linear(x_reshape, self.hadamard.to(x.device)) * self.scale).reshape(
-            x.shape
-        )
+        hadamard_rank = self.hadamard.shape[0]
+        scale = 1 / math.sqrt(hadamard_rank)
+        n_groups = x.shape[-1] // hadamard_rank
+        if self.training or not self.use_custom_hadamard:
+            x_reshape = x.reshape(*x.shape[:-1], n_groups, hadamard_rank)
+            return (F.linear(x_reshape, self.hadamard) * scale).reshape(x.shape)
+        return GroupedHadamardFunc.apply(x, scale, int(hadamard_rank))
 
     def inverse(self, x):
-        x_reshape = x.reshape(*x.shape[:-1], self.n_groups, self.group_size)
-        return (F.linear(x_reshape, self.hadamard.to(x.device)) * self.scale).reshape(
-            x.shape
-        )
+        hadamard_rank = self.hadamard.shape[0]
+        scale = 1 / math.sqrt(hadamard_rank)
+        n_groups = x.shape[-1] // hadamard_rank
+        x_reshape = x.reshape(*x.shape[:-1], n_groups, hadamard_rank)
+        return (F.linear(x_reshape, self.hadamard) * scale).reshape(x.shape)
 
     def get_inverted_op(self):
         inverted_op = super().get_inverted_op()
@@ -126,6 +128,35 @@ class GroupedHadamardTransformOp(InvertibleTransformOp):
 
     def left_hand_merge(self, weight):
         return self.forward(weight)
+
+
+class GroupedHadamardFunc(torch.autograd.Function):
+    @staticmethod
+    def symbolic(g, inp, scale, hadamard_rank):
+        output = g.op(
+            "qti_aisw::HadamardTransform", inp, scale_f=scale, rank_i=hadamard_rank
+        )
+
+        input_type = inp.type()
+        output_type = input_type.with_sizes(input_type.sizes())
+        output.setType(output_type)
+
+        return output
+
+    @staticmethod
+    def forward(ctx, inp, scale, hadamard_rank):  # pylint: disable=arguments-differ, unused-argument
+        hadamard = torch.tensor(
+            scipy.linalg.hadamard(hadamard_rank), dtype=torch.float32
+        )
+        n_groups = inp.shape[-1] // hadamard_rank
+        inp_reshape = inp.reshape(*inp.shape[:-1], n_groups, hadamard_rank)
+        return (F.linear(inp_reshape, hadamard.to(inp.device)) * scale).reshape(
+            inp.shape
+        )
+
+    @staticmethod
+    def backward(ctx, _grad):  # pylint: disable=arguments-differ
+        raise NotImplementedError()
 
 
 @QuantizationMixin.implements(GroupedHadamardTransformOp)
@@ -238,3 +269,15 @@ class RotationTransformOp(InvertibleTransformOp):
     def right_hand_merge(self, weight: torch.Tensor) -> torch.Tensor:
         orig_dtype = weight.dtype
         return self.forward(weight.T.to(dtype=torch.float32)).T.to(dtype=orig_dtype)
+
+
+def set_export_to_custom_hadamard(model: torch.nn.Module, enable: bool):
+    """
+    Enable/disable the behavior of GroupedHadamardTransformOps in model to export to custom qti_aisw HadamardTransform ONNX op.
+
+    :param model: Model to set behavior of
+    :param enable: True to enable exporting to custom ONNX op, False otherwise
+    """
+    for module in model.modules():
+        if isinstance(module, GroupedHadamardTransformOp):
+            module.use_custom_hadamard = enable

@@ -163,6 +163,7 @@ class AimetLogger(metaclass=SingletonType):
         QuantAnalyzer = "QuantAnalyzer"
         SeqMse = "SeqMse"
         AdaScale = "AdaScale"
+        FPTQuant = "FPTQuant"
 
     def __init__(self):
         self._logger = logging.getLogger()

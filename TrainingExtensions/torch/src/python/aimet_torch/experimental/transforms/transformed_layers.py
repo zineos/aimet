@@ -11,9 +11,13 @@ from torch import nn
 
 from .transform_ops import TransformOp
 
+from aimet_common.utils import AimetLogger
 from aimet_torch.v2.utils import patch_attr
 from aimet_torch.v2.nn import compute_param_encodings
 from aimet_torch.v2.nn.true_quant import QuantizationMixin
+from aimet_torch.v2.quantization.affine import QuantizeDequantize
+
+_logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.FPTQuant)
 
 
 # pylint: disable=abstract-method
@@ -47,6 +51,7 @@ class TransformationMixin(torch.nn.Module):
 
         if isinstance(self, QuantizationMixin) and not transform.mergeable:
             transform = QuantizationMixin.from_module(transform)
+            self._fill_output_quantizers_for_transform(transform)
 
         self.right_hand_transforms.append(transform)
 
@@ -65,8 +70,22 @@ class TransformationMixin(torch.nn.Module):
 
         if isinstance(self, QuantizationMixin) and not transform.mergeable:
             transform = QuantizationMixin.from_module(transform)
+            self._fill_output_quantizers_for_transform(transform)
 
         self.left_hand_transforms.insert(0, transform)
+
+    def _fill_output_quantizers_for_transform(self, transform):
+        if self.output_quantizers[0] is None:
+            _logger.warning(
+                "Unable to automatically determine output quantizer settings for non-mergeable transform. Define quantizers manually to correctly simulate quantization."
+            )
+        else:
+            for i in range(len(transform.output_quantizers)):
+                transform.output_quantizers[i] = QuantizeDequantize(
+                    shape=self.output_quantizers[0].shape,
+                    bitwidth=self.output_quantizers[0].bitwidth,
+                    symmetric=self.output_quantizers[0].symmetric,
+                )
 
     def _compute_merged_params(self):
         mergeable_left_hand_transforms = [
