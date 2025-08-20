@@ -62,6 +62,7 @@ class AdaScaleQuantizeDequantize(QuantizeDequantize):
             qdq.symmetric,
             qdq.encoding_analyzer,
             qdq.block_size,
+            qdq.zero_point_shift,
         )
 
         self.register_parameter("beta", torch.nn.Parameter(torch.zeros(self.shape)))
@@ -86,6 +87,7 @@ class AdaScaleQuantizeDequantize(QuantizeDequantize):
             self.symmetric,
             self.encoding_analyzer,
             self.block_size,
+            self.zero_point_shift,
         )
         q.set_range(self.get_min(), self.get_max())
         return q

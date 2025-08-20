@@ -38,6 +38,7 @@
 
 from unittest.mock import patch
 
+import copy
 import pytest
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -139,6 +140,32 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx]
+
+
+class TestAdascaleQuantizer:
+    def test_zero_point_shift(self):
+        qdq = QuantizeDequantize(
+            shape=(), bitwidth=4, symmetric=True, zero_point_shift=0.5
+        )
+        dummy_input = torch.tensor([-12.0, 6.0])
+        with qdq.compute_encodings():
+            _ = qdq(dummy_input)
+        assert torch.equal(-qdq.min, qdq.max)
+
+        dummy_input_2 = torch.tensor([-24.0, 12.0])
+        adascale_qdq = AdaScaleLinearQuantizeDequantize(
+            qdq, weight_shape=dummy_input.shape
+        )
+        assert adascale_qdq.zero_point_shift == 0.5
+        assert torch.equal(-adascale_qdq.min, adascale_qdq.max)
+        out = adascale_qdq(dummy_input_2)
+        assert torch.equal(-out[0], out[1])
+
+        new_qdq = adascale_qdq.get_qdq()
+        assert new_qdq.zero_point_shift == 0.5
+        assert torch.equal(-new_qdq.min, new_qdq.max)
+        out = new_qdq(dummy_input_2)
+        assert torch.equal(-out[0], out[1])
 
 
 class TestAdascale:
@@ -380,3 +407,50 @@ class TestAdascale:
                 assert (
                     len(lwc_params + scale_params) == 8
                 )  # two linear layers X [gamma, beta, s2, s3]
+
+    def test_adascale_zero_point_shift(self):
+        torch.manual_seed(0)
+        dummy_input = torch.rand(200, 3, 32, 64)
+        model = test_models.ModelWithConsecutiveLinearBlocks()
+        sim = QuantizationSimModel(model, dummy_input, default_param_bw=4)
+        for module in sim.qmodules():
+            if isinstance(module, torch.nn.Linear):
+                module.param_quantizers["weight"].zero_point_shift = 0.5
+        sim_copy = copy.deepcopy(sim)
+        sim_copy.compute_encodings(lambda m: m(dummy_input))
+
+        batch_size = 16
+        num_iterations = 130
+
+        data_set = CustomDataset(dummy_input)
+        data_loader = DataLoader(data_set, batch_size=batch_size, shuffle=True)
+
+        fp_output = model(dummy_input)
+        quantized_output = sim_copy.model(dummy_input)
+        loss_before_opt = torch.nn.functional.mse_loss(fp_output, quantized_output)
+        with patch.dict(
+            adascale_model_config_dict,
+            {
+                test_models.ModelWithConsecutiveLinearBlocks: AdaScaleModelConfig(
+                    test_models.ModelWithLinears
+                )
+            },
+        ):
+            apply_adascale(sim, data_loader, None, num_iterations)
+
+        sim.compute_encodings(lambda m, _: m(dummy_input), None)
+        adascale_output = sim.model(dummy_input)
+        loss_after_opt = torch.nn.functional.mse_loss(fp_output, adascale_output)
+        assert (loss_before_opt - loss_after_opt) > 0
+
+        model = sim.get_original_model(sim.model, qdq_weights=True)
+        found_linear = False
+        for module in model.modules():
+            if isinstance(module, torch.nn.Linear):
+                found_linear = True
+                assert torch.allclose(
+                    torch.abs(torch.min(module.weight)),
+                    torch.max(module.weight),
+                    atol=1e-7,
+                )
+        assert found_linear

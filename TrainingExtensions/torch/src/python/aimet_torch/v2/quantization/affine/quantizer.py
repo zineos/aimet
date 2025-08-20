@@ -294,7 +294,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
         """
         if not self.is_initialized():
             return None
-        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmin)
+        return self.get_scale(dtype) * (
+            self.get_offset(dtype) + self.qmin + self.zero_point_shift
+        )
 
     def get_max(self, dtype=None) -> Optional[torch.Tensor]:
         """
@@ -308,7 +310,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
         """
         if not self.is_initialized():
             return None
-        return self.get_scale(dtype) * (self.get_offset(dtype) + self.qmax)
+        return self.get_scale(dtype) * (
+            self.get_offset(dtype) + self.qmax + self.zero_point_shift
+        )
 
     def get_scale(self, dtype=None) -> Optional[torch.Tensor]:
         """
