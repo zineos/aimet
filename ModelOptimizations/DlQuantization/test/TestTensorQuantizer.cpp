@@ -122,15 +122,24 @@ TEST_F(TestTensorQuantizer, SanityTestCpu)
     enhancedTensorQuant->quantizeDequantize(inputTensor.data(), inputTensor.size(), quantizedTensor.data(),
                                             encoding.min, encoding.max, 8, false);
 
-    double MAX = 8.88412;
-    double MIN = -6.52711;
-    size_t PDF_SIZE = 512;
-    double HISTOGRAM_BUCKET_SIZE = 3 * (MAX - MIN) / PDF_SIZE;
-    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE);
-    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE);
+    double minVal = 0;
+    double maxVal = 0;
+    for (auto x : data4)
+    {
+        minVal = std::min(minVal, static_cast<double>(x));
+        maxVal = std::max(maxVal, static_cast<double>(x));
+    }
+
+    size_t PDF_SIZE = 512 * 3;
+    double HISTOGRAM_BUCKET_SIZE = 3 * (maxVal - minVal) / PDF_SIZE;
+    // Allow for worst case 2 x HISTOGRAM_BUCKET_SIZE error on (maxVal - minVal)
+    EXPECT_NEAR(encoding.delta, (maxVal - minVal) / 255, 2 * HISTOGRAM_BUCKET_SIZE / 255);
+    // Allow for worst case 1 x HISTOGRAM_BUCKET_SIZE error on minValue and 0.5 x delta from rounding offset
+    EXPECT_NEAR(encoding.min, minVal, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
+    EXPECT_NEAR(encoding.max, maxVal, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
 
     EXPECT_NE(inputTensor.data()[0], quantizedTensor.data()[0]);
-    EXPECT_NEAR(quantizedTensor.data()[0], 5.0162, HISTOGRAM_BUCKET_SIZE);
+    EXPECT_NEAR(quantizedTensor.data()[0], inputTensor.data()[0], 0.5 * encoding.delta);
 }
 
 TEST_F(TestTensorQuantizer, SanityTestComputeEncodingFromDataAsymmetricTFEnhanced)
@@ -140,12 +149,12 @@ TEST_F(TestTensorQuantizer, SanityTestComputeEncodingFromDataAsymmetricTFEnhance
     TfEncoding encoding {};
     enhancedTensorQuant->computeEncodingFromData(8, paramTensor.data(), tensorCount, encoding,
                                                  ComputationMode::COMP_MODE_CPU, false, false, false);
-    double MAX = 8.88412;
-    double MIN = -6.52711;
+    double MAX = *std::max_element(data4.begin(), data4.end());
+    double MIN = *std::min_element(data4.begin(), data4.end());
     size_t PDF_SIZE = 512;
     double HISTOGRAM_BUCKET_SIZE = 3 * (MAX - MIN) / PDF_SIZE;
-    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE);
-    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE);
+    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
+    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
 }
 
 TEST_F(TestTensorQuantizer, SanityTestComputeEncodingFromDataSymmetricTF)
@@ -690,12 +699,12 @@ TEST_F(TestTensorQuantizer, SanityTestGpu)
     tensorQuantizer.quantizeDequantize(inputTensorBlob.getDataPtrOnDevice(), inputTensor.size(),
                                        quantTensorBlob.getDataPtrOnDevice(), encoding.min, encoding.max, 8, true);
 
-    double MAX = 8.88412;
-    double MIN = -6.52711;
+    double MAX = *std::max_element(statsTensor.begin(), statsTensor.end());
+    double MIN = *std::min_element(statsTensor.begin(), statsTensor.end());
     size_t PDF_SIZE = 512;
     double HISTOGRAM_BUCKET_SIZE = 3 * (MAX - MIN) / PDF_SIZE;
-    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE);
-    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE);
+    EXPECT_NEAR(encoding.min, MIN,  HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
+    EXPECT_NEAR(encoding.max, MAX,  HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
 
     EXPECT_NE(inputTensorBlob.getDataPtrOnCpu()[0], quantTensorBlob.getDataPtrOnCpu()[0]);
     EXPECT_NEAR(quantTensorBlob.getDataPtrOnCpu()[0], 5.0162, HISTOGRAM_BUCKET_SIZE);
@@ -740,10 +749,10 @@ TEST_F(TestTensorQuantizer, SanityTestGpuBlocked)
 
     double MAX = *std::max_element(statsTensor.begin(), statsTensor.end());
     double MIN = *std::min_element(statsTensor.begin(), statsTensor.end());
-    size_t PDF_SIZE = 512;
+    size_t PDF_SIZE = 512 * 3;
     double HISTOGRAM_BUCKET_SIZE = 3 * (MAX - MIN) / PDF_SIZE;
-    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE);
-    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE);
+    EXPECT_NEAR(encoding.min, MIN, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
+    EXPECT_NEAR(encoding.max, MAX, HISTOGRAM_BUCKET_SIZE + 0.5 * encoding.delta);
 
     EXPECT_NE(inputTensorBlob.getDataPtrOnCpu()[0], quantTensorBlob.getDataPtrOnCpu()[0]);
     EXPECT_NEAR(quantTensorBlob.getDataPtrOnCpu()[0], 5.0162, HISTOGRAM_BUCKET_SIZE);

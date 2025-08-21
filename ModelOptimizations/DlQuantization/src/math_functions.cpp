@@ -293,7 +293,7 @@ void UpdatePdf(const DTYPE* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bo
     double bucket_size = pdf.xLeft[1] - pdf.xLeft[0];
     double min_val     = signed_vals ? pdf.xLeft[0] : 0;
     // This offset is used to help map numbers to histogram buckets.
-    double pdf_offset = min_val / bucket_size;
+    auto pdf_offset = static_cast<int>(std::round(min_val / bucket_size));
 
     // Create the histogram of this number distribution.
     uint32_t histogram[PDF_SIZE];
@@ -317,7 +317,7 @@ void UpdatePdf(const DTYPE* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bo
 
 template <typename DTYPE>
 void GetHistogram(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
-                  const double pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
+                  const int pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
                   IAllocator* allocator)
 {
     switch (mode_cpu_gpu)
@@ -394,14 +394,14 @@ void MemoryFree_cpu(void* data)
 
 template <typename DTYPE>
 void GetHistogram_cpu(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
-                      const double pdf_offset, const bool is_signed)
+                      const int pdf_offset, const bool is_signed)
 {
     // Go through all data points and add them to the histogram.
+    DTYPE inv_bucket_size = 1 / bucket_size;
     for (uint64_t i = 0; i < cnt; ++i)
     {
         // Map a floating point number to the appropriate bucket.
-        int index =
-            is_signed ? floor(data[i] / bucket_size - pdf_offset) : floor(std::abs(data[i]) / bucket_size - pdf_offset);
+        int index = floor(data[i] * inv_bucket_size) - pdf_offset;
 
         // Add to histogram, if inside the histogram range.
         if (index >= 0 && index < PDF_SIZE)

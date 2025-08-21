@@ -50,7 +50,7 @@ from aimet_torch.v1.tensor_quantizer import (
     LearnedGridTensorQuantizer,
 )
 
-BUCKET_SIZE = 512
+BUCKET_SIZE = 512 * 3
 
 
 @pytest.fixture(autouse=True)

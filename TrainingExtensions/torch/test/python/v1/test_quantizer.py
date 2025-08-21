@@ -6317,7 +6317,7 @@ def test_histogram(device):
     x = torch.arange(-512, 513, dtype=torch.float, device=device)
 
     # NOTE: libpymo histogram is hard-coded to use 3x of the range of the first input
-    ground_truth = torch.histc(x, bins=512, min=x.min() * 3, max=x.max() * 3)
+    ground_truth = torch.histc(x, bins=512 * 3, min=x.min() * 3, max=x.max() * 3)
 
     q = AimetTensorQuantizer(libpymo.QuantizationMode.QUANTIZATION_TF_ENHANCED)
     q.updateStats(x, x.is_cuda)

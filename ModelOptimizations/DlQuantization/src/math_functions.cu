@@ -233,7 +233,7 @@ void GetHistogram_gpu(const DTYPE* data,
                       uint64_t cnt,
                       uint32_t histogram[PDF_SIZE],
                       const double bucket_size,
-                      const double pdf_offset,
+                      const int pdf_offset,
                       const bool is_signed,
                       IAllocator* allocator)
 {
@@ -272,14 +272,14 @@ template void GetHistogram_gpu(const float* data,
                                uint64_t cnt,
                                uint32_t histogram[PDF_SIZE],
                                const double bucket_size,
-                               const double pdf_offset,
+                               const int pdf_offset,
                                const bool is_signed,
                                IAllocator* allocator);
 template void GetHistogram_gpu(const double* data,
                                uint64_t cnt,
                                uint32_t histogram[PDF_SIZE],
                                const double bucket_size,
-                               const double pdf_offset,
+                               const int pdf_offset,
                                const bool is_signed,
                                IAllocator* allocator);
 

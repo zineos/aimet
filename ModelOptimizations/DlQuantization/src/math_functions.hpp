@@ -77,7 +77,7 @@ struct TensorProfilingParams
 };
 
 // Number of buckets in histogram which we use to capture the dynamic range.
-const int PDF_SIZE = 512;
+constexpr int PDF_SIZE = 512 * 3;
 
 // The probability density functions for all input and output blobs of a network
 // layer.
@@ -135,7 +135,7 @@ void UpdatePdf(const DTYPE* data, uint64_t cnt, ComputationMode mode_cpu_gpu, bo
  */
 template <typename DTYPE>
 void GetHistogram(const DTYPE* data, const uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
-                  const double pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
+                  const int pdf_offset, const ComputationMode mode_cpu_gpu, const bool is_signed,
                   IAllocator* allocator);
 
 /**
@@ -177,7 +177,7 @@ void MemoryFree_cpu(void* data);
 
 template <typename DTYPE>
 void GetHistogram_cpu(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
-                      const double pdf_offset, const bool is_signed);
+                      const int pdf_offset, const bool is_signed);
 
 /**
  * @brief Returns a histogram that represents a PDF of tensor values seen so far.
@@ -235,7 +235,7 @@ bool MemoryFree_gpu(void* data);
 
 template <typename DTYPE>
 void GetHistogram_gpu(const DTYPE* data, uint64_t cnt, uint32_t histogram[PDF_SIZE], const double bucket_size,
-                      const double pdf_offset, const bool is_signed, IAllocator* allocator);
+                      const int pdf_offset, const bool is_signed, IAllocator* allocator);
 
 #endif   // GPU_QUANTIZATION_ENABLED
 

@@ -260,7 +260,7 @@ TYPED_TEST(TestPercentileEncodingAnalyzer, Symmetric_Percentile100)
     absoluteMax = std::max(std::abs(absoluteMax), std::abs(absoluteMin));
     absoluteMin = -absoluteMax;
 
-    size_t PDF_SIZE = 512;
+    size_t PDF_SIZE = 512 * 3;
     double HISTOGRAM_BUCKET_SIZE = 3 * (absoluteMax - absoluteMin) / PDF_SIZE;
     EXPECT_LT(encoding.max, absoluteMax + PDF_SIZE);
 

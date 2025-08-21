@@ -305,7 +305,7 @@ TYPED_TEST(TestTfEnhancedEncodingAnalyzer, SymmetricUnsigned)
     absoluteMax = std::max(std::abs(absoluteMax), std::abs(absoluteMin));
     absoluteMin = -absoluteMax;
 
-    size_t PDF_SIZE = 512;
+    size_t PDF_SIZE = 512 * 3;
     double HISTOGRAM_BUCKET_SIZE = 3 * (absoluteMax - absoluteMin) / PDF_SIZE;
     EXPECT_EQ(encoding.min, 0);
     EXPECT_NEAR(encoding.max, absoluteMax, 0.015 + HISTOGRAM_BUCKET_SIZE);
