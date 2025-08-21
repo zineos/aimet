@@ -37,3 +37,4 @@
 # pylint: disable=missing-module-docstring
 from . import layernorm
 from . import rmsnorm
+from . import decoder_block
