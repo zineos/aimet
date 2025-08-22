@@ -187,7 +187,7 @@ class AdaScale:
         qsim.model.requires_grad_(False)
         beta_gamma_lr, scales_lr = AdaScale._model_specific_lr(qsim)
 
-        with remove_activation_quantizers(adascale_blocks):
+        with remove_activation_quantizers(qsim.model):
             for block, fp_block_inputs, qt_block_inputs in sampler.sample(
                 device=device, desc="AdaScale blocks processed"
             ):
