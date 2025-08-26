@@ -68,17 +68,17 @@ DTYPE GetMin_gpu(const DTYPE* data, uint64_t cnt)
 
 struct _ApplyScale
 {
-    _ApplyScale(int scale) : scale(scale)
+    _ApplyScale(uint64_t scale) : scale(scale)
     {
     }
 
-    __host__ __device__ float operator()(int x) const
+    __host__ __device__ uint64_t operator()(uint64_t x) const
     {
         return x * scale;
     }
 
 private:
-    int scale;
+    uint64_t scale;
 };
 
 
@@ -106,7 +106,7 @@ std::tuple<std::vector<DTYPE>, std::vector<DTYPE>> GetMinMax_gpu(const DTYPE* da
     DTYPE* dMinMaxOut;
     dMinMaxOut = static_cast<DTYPE*>(allocator ? allocator->allocateRaw(memSize) : MemoryAllocation_gpu(memSize));
 
-    auto offsetIterator = thrust::make_transform_iterator(thrust::make_counting_iterator(0), _ApplyScale(blockSize));
+    auto offsetIterator = thrust::make_transform_iterator(thrust::make_counting_iterator<uint64_t>(0), _ApplyScale(blockSize));
 
     // When dTempStorage is nullptr, this does not do any device computation, but sets tempStorageBytes to the size of
     // temporary storage necessary for computation.
