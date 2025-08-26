@@ -170,7 +170,7 @@ op_types_to_tie_qtzrs = [
 ]
 _tie_qtzrs = False
 
-data_types_to_quantize = [np.float32]
+data_types_to_quantize = [np.float32, np.float16]
 
 _DEPRECATED_ARGS = {
     "rounding_mode",

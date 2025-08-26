@@ -1180,10 +1180,12 @@ def long_sequential_model(
 
 
 def single_residual_model(
-    training=torch.onnx.TrainingMode.EVAL, opset_version=_DEFAULT_OPSET_VERSION
+    training=torch.onnx.TrainingMode.EVAL,
+    opset_version=_DEFAULT_OPSET_VERSION,
+    dtype=torch.float32,
 ):
-    x = torch.randn(1, 3, 32, 32)
-    model = SingleResidualWithAvgPool()
+    x = torch.randn(1, 3, 32, 32).to(dtype)
+    model = SingleResidualWithAvgPool().to(dtype)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         save_path = os.path.join(tmp_dir, "model_single_residual.onnx")
@@ -4213,7 +4215,7 @@ def reshape_with_multiple_consumers():
     return model
 
 
-def diverse_ops():
+def diverse_ops(dtype=TensorProto.FLOAT):
     """
     input -> Relu -+-> Reshape ------> MaxPool -> output
     """
@@ -4222,14 +4224,10 @@ def diverse_ops():
         graph=helper.make_graph(
             name="reshape_with_multiple_consumers",
             inputs=[
-                helper.make_tensor_value_info(
-                    "input", TensorProto.FLOAT, shape=[3, 1024]
-                ),
+                helper.make_tensor_value_info("input", dtype, shape=[3, 1024]),
             ],
             outputs=[
-                helper.make_tensor_value_info(
-                    "output", TensorProto.FLOAT, shape=[1, 3, 1022]
-                ),
+                helper.make_tensor_value_info("output", dtype, shape=[1, 3, 1022]),
             ],
             nodes=[
                 helper.make_node(

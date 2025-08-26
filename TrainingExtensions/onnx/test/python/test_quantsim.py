@@ -2655,6 +2655,112 @@ class TestQuantSim:
         quantizer = sim._get_enabled_quantizer("output")
         assert quantizer == None
 
+    @pytest.mark.parametrize("providers", [CPU_PROVIDERS, CUDA_PROVIDERS])
+    def test_fp16_model_encodings(self, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
+
+        fp32_model = models_for_tests.diverse_ops(onnx.TensorProto.FLOAT)
+        fp16_model = models_for_tests.diverse_ops(onnx.TensorProto.FLOAT16)
+
+        fp32_dummy_input = make_dummy_input(fp32_model)
+        fp16_dummy_input = {
+            key: value.astype(np.float16) for key, value in fp32_dummy_input.items()
+        }
+
+        fp32_sim = QuantizationSimModel(fp32_model, providers=[providers])
+        fp32_sim.compute_encodings([fp32_dummy_input])
+
+        fp16_sim = QuantizationSimModel(fp16_model, providers=[providers])
+        fp16_sim.compute_encodings([fp16_dummy_input])
+
+        assert (
+            fp32_sim.qc_quantize_op_dict.keys() == fp16_sim.qc_quantize_op_dict.keys()
+        )
+
+        fp32_quantizers = list(fp32_sim.qc_quantize_op_dict.values())
+        fp16_quantizers = list(fp16_sim.qc_quantize_op_dict.values())
+
+        for i in range(len(fp32_quantizers)):
+            assert fp32_quantizers[i].enabled == fp16_quantizers[i].enabled
+            if fp32_quantizers[i].enabled and fp16_quantizers[i].enabled:
+                fp32_encodings = fp32_quantizers[i].encodings[0]
+                fp16_encodings = fp16_quantizers[i].encodings[0]
+
+                fp32_values = [
+                    fp32_encodings.min,
+                    fp32_encodings.max,
+                    fp32_encodings.delta,
+                ]
+                fp16_values = [
+                    fp16_encodings.min,
+                    fp16_encodings.max,
+                    fp16_encodings.delta,
+                ]
+
+                assert np.allclose(fp32_values, fp16_values, atol=0.01)
+                assert abs(fp32_encodings.offset - fp16_encodings.offset) <= 1
+
+    @pytest.mark.parametrize("providers", [CPU_PROVIDERS, CUDA_PROVIDERS])
+    def test_fp16_model_with_weights_encodings(self, providers):
+        if "CUDAExecutionProvider" in providers and not torch.cuda.is_available():
+            pytest.skip("Cuda not available")
+
+        fp32_model = models_for_tests.single_residual_model(dtype=torch.float32).model
+        fp16_model = models_for_tests.single_residual_model(dtype=torch.float16).model
+
+        fp32_weights_dict = {}
+        for weight in fp16_model.graph.initializer:
+            np_weight = onnx.numpy_helper.to_array(weight)
+            if np_weight.dtype != np.float16:
+                continue
+
+            np_weight_fp32 = np_weight.astype(np.float32)
+            weight_fp32 = onnx.numpy_helper.from_array(np_weight_fp32, weight.name)
+            fp32_weights_dict[weight.name] = weight_fp32
+
+        for i, w in enumerate(fp32_model.graph.initializer):
+            if w.name in fp32_weights_dict:
+                fp32_model.graph.initializer[i].CopyFrom(fp32_weights_dict[w.name])
+
+        fp32_dummy_input = {"input": np.random.rand(1, 3, 32, 32).astype(np.float32)}
+        fp16_dummy_input = {
+            key: value.astype(np.float16) for key, value in fp32_dummy_input.items()
+        }
+
+        fp32_sim = QuantizationSimModel(fp32_model, providers=providers)
+        fp32_sim.compute_encodings([fp32_dummy_input])
+
+        fp16_sim = QuantizationSimModel(fp16_model, providers=providers)
+        fp16_sim.compute_encodings([fp16_dummy_input])
+
+        assert (
+            fp32_sim.qc_quantize_op_dict.keys() == fp16_sim.qc_quantize_op_dict.keys()
+        )
+
+        fp32_quantizers = list(fp32_sim.qc_quantize_op_dict.values())
+        fp16_quantizers = list(fp16_sim.qc_quantize_op_dict.values())
+
+        for i in range(len(fp32_quantizers)):
+            assert fp32_quantizers[i].enabled == fp16_quantizers[i].enabled
+            if fp32_quantizers[i].enabled and fp16_quantizers[i].enabled:
+                fp32_encodings = fp32_quantizers[i].encodings[0]
+                fp16_encodings = fp16_quantizers[i].encodings[0]
+
+                fp32_values = [
+                    fp32_encodings.min,
+                    fp32_encodings.max,
+                    fp32_encodings.delta,
+                ]
+                fp16_values = [
+                    fp16_encodings.min,
+                    fp16_encodings.max,
+                    fp16_encodings.delta,
+                ]
+
+                assert np.allclose(fp32_values, fp16_values, atol=0.01)
+                assert abs(fp32_encodings.offset - fp16_encodings.offset) <= 1
+
 
 class TestEncodingPropagation:
     def test_output(self):
