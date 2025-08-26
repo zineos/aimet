@@ -2632,37 +2632,30 @@ def test_affine_encoding_schema_2_0_0_nonstandard_dtype():
     assert encoding["output_dtype"] == "int3"
 
 
-def test_positive_scale():
+@pytest.mark.parametrize(
+    ("min_val", "max_val"), [(0.0, 0.0), (1.0, -1.0), (-5, -4.9999)]
+)
+def test_positive_scale(min_val, max_val):
     """
-    When: qtzr.min > qtzr.max
-    Then: Scale and offset should be calculated based on
-          minimum(qtzr.min, qtzr.max) as min and maximum(qtzr.min qtzr.max) as max
+    When: qtzr.min >= qtzr.max
+    Then: Scale should be strictly positive, offsets should be within (-qmax, -qmin), and outputs should be finite
     """
     x = torch.randn(100, 10)
     qtzr = QuantizeDequantize(shape=(10,), qmin=0, qmax=255, symmetric=False)
 
     with torch.no_grad():
-        qtzr.min.copy_(-1.0)
-        qtzr.max.copy_(1.0)
+        qtzr.min.copy_(min_val)
+        qtzr.max.copy_(max_val)
 
-    scale1 = qtzr.get_scale()
-    offset1 = qtzr.get_offset()
-    min1 = qtzr.get_min()
-    max1 = qtzr.get_max()
-    out1 = qtzr(x)
-
-    with torch.no_grad():
-        qtzr.min.neg_()
-        qtzr.max.neg_()
-
-    scale2 = qtzr.get_scale()
-    offset2 = qtzr.get_offset()
-    min2 = qtzr.get_min()
-    max2 = qtzr.get_max()
-    out2 = qtzr(x)
-
-    assert torch.equal(scale1, scale2)
-    assert torch.equal(offset1, offset2)
-    assert torch.equal(min1, min2)
-    assert torch.equal(max1, max2)
-    assert torch.equal(out1, out2)
+    scale = qtzr.get_scale()
+    offset = qtzr.get_offset()
+    min = qtzr.get_min()
+    max = qtzr.get_max()
+    out = qtzr(x)
+    assert torch.all(torch.isfinite(out))
+    assert torch.all(torch.isfinite(max))
+    assert torch.all(torch.isfinite(min))
+    assert torch.all(torch.isfinite(scale))
+    assert torch.all(torch.isfinite(offset))
+    assert torch.all(scale > 0)
+    assert torch.all(torch.logical_and(offset <= 0, offset >= -255))

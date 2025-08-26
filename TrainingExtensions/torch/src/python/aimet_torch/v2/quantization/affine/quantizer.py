@@ -68,6 +68,7 @@ from aimet_torch.v2.quantization.affine.backends import (
 )
 from aimet_torch.v2.utils import ste_round
 from aimet_torch.v2.deepspeed_utils import SafeGatheredParameters
+from aimet_common.quantsim import _get_minimum_scale
 from ._utils import _GridMixin, _register_signature
 
 
@@ -336,7 +337,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
             num_steps = self.qmax - self.qmin
             scale = (self.max.to(dtype) - self.min.to(dtype)) / num_steps
 
-        return torch.abs(scale.to(dtype))
+        return torch.clamp_min(
+            scale.to(dtype), _get_minimum_scale(self.qmax - self.qmin)
+        )
 
     def get_offset(self, dtype=None) -> Optional[torch.Tensor]:
         """
@@ -366,8 +369,9 @@ class AffineQuantizerBase(QuantizerBase, _GridMixin):  # pylint: disable=too-man
             offset = ste_round(self.offset)
         else:
             scale = scale if scale is not None else self.get_scale(dtype)
-            min = torch.minimum(self.min, self.max)
-            offset = ste_round(min / scale) - self.qmin
+            offset = torch.clamp(
+                ste_round(self.min / scale) - self.qmin, -self.qmax, -self.qmin
+            )
 
         return offset.to(dtype)
 
