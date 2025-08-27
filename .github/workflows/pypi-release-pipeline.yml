@@ -58,7 +58,7 @@ jobs:
             VALUE=$(echo "${VALUE:-"{}"}" | jq -c '.include += [
               {
                  "id":              "torch-gpu",
-                 "runs-on":         "k8s-gpu",
+                 "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
@@ -73,7 +73,7 @@ jobs:
             VALUE=$(echo "${VALUE:-"{}"}" | jq -c '.include += [
               {
                  "id":              "onnx-gpu",
-                 "runs-on":         "k8s-gpu",
+                 "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
@@ -143,7 +143,7 @@ jobs:
 
   publish:
     name: Publish the wheel packages
-    runs-on: k8s-gpu
+    runs-on: k8s-gpu-release
     needs: [ variants, call-run-unit-tests, call-run-acceptance-tests ]
     # Unit tests must pass before publishing wheels to PyPI
     # Acceptance tests are optional when running via release workflow

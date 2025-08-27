@@ -94,7 +94,7 @@ jobs:
               },
               {
                  "id":              "torch-gpu",
-                 "runs-on":         "k8s-gpu",
+                 "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
@@ -123,7 +123,7 @@ jobs:
               },
               {
                  "id":              "tf-gpu",
-                 "runs-on":         "k8s-gpu",
+                 "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "2.10.1",
                  "VER_TORCH":       "",
@@ -151,7 +151,7 @@ jobs:
               },
               {
                  "id":              "onnx-gpu",
-                 "runs-on":         "k8s-gpu",
+                 "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
                  "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
