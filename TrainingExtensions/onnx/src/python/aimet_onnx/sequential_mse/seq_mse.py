@@ -51,6 +51,7 @@ import onnx
 import onnxruntime
 import torch
 from onnx.utils import Extractor
+from onnxruntime.quantization.onnx_quantizer import ONNXModel
 from aimet_common.libpymo import TensorQuantizerOpMode
 from aimet_common.defs import QuantScheme
 from aimet_common.utils import AimetLogger, deprecated
@@ -131,95 +132,14 @@ class SequentialMse:
         self.sim = sim
         self.params = params
         data_loader = itertools.islice(data_loader, params.num_batches)
+        # As of onnx 1.18, value info must be populated prior to instantiating Extractor
+        with _add_value_info(sim.model.model):
+            # For onnx < 1.18, must disable shape inference or it will fail due to custom ops
+            with _disable_onnx_shape_inference():
+                self._extractor = Extractor(sim.model.model)
 
-        # Hacky way to get around onnx.shape_inference.infer_shapes call as it doesn't work for model >2GB
-        raw_data = {}
-        # Store and clear raw_data from initializers
-        for initializer in self.sim.model.model.graph.initializer:
-            if initializer.HasField("raw_data"):
-                raw_data[initializer.name] = initializer.raw_data
-                initializer.ClearField("raw_data")
-
-        # Copy the model without weight data and remove quantizer to allow shape inference
-        model = copy.deepcopy(sim.model)
-        model = sim.remove_quantizers(model).model
-
-        self._extractor = Extractor(model)
-
-        # Restore raw_data to initializers
-        for initializer in self.sim.model.model.graph.initializer:
-            if initializer.name in raw_data:
-                initializer.raw_data = raw_data[initializer.name]
-        for initializer in self._extractor.wmap.values():
-            if initializer.name in raw_data:
-                initializer.raw_data = raw_data[initializer.name]
-        del raw_data
-
-        self._update_value_info()
-
-        self.dependency_graph = DependencyGraph(self._extractor.model, data_loader)
-        self._extractor.model = self.sim.model.model
-        self._extractor.graph = self.sim.model.model.graph
+        self.dependency_graph = DependencyGraph(sim.connected_graph, data_loader)
         self.data_loader = data_loader
-
-    def _update_value_info_for_output(self, node):
-        """
-        Updates the value info for output of a node in sim model.
-        Value info for QcQuantizeOp is not present in _sim_extractor
-
-        :param node: onnx node
-        """
-
-        input_name = node.input[0]
-        output_name = node.output[0]
-        if (
-            input_name in self._extractor.vimap
-            and output_name not in self._extractor.vimap
-        ):
-            value_info_for_output = copy.deepcopy(self._extractor.vimap[input_name])
-            value_info_for_output.name = node.output[0]
-            self._extractor.vimap[node.output[0]] = value_info_for_output
-
-    def _update_value_info_for_input(self, node):
-        """
-        Updates the value info for input of a node in sim model.
-        Value info for QcQuantizeOp is not present in _sim_extractor
-
-        :param node: onnx node
-        """
-
-        input_name = node.input[0]
-        output_name = node.output[0]
-        if (
-            output_name in self._extractor.vimap
-            and input_name not in self._extractor.vimap
-        ):
-            value_info_for_input = copy.deepcopy(self._extractor.vimap[output_name])
-            value_info_for_input.name = node.input[0]
-            self._extractor.vimap[node.input[0]] = value_info_for_input
-
-    def _update_value_info_for_graph_output(self):
-        """
-        Updates the value info for input of a node in sim model.
-        Value info for QcQuantizeOp is not present in _sim_extractor
-
-        :param node: onnx node
-        """
-        for value_info in self.sim.model.model.graph.output:
-            self._extractor.vimap[value_info.name] = value_info
-
-    def _update_value_info(self):
-        """
-        Updates the value info for sim model.
-        Value info for QcQuantizeOp is not present in _sim_extractor
-        """
-
-        self._update_value_info_for_graph_output()
-
-        for node in self.sim.model.nodes():
-            if node.op_type == "QcQuantizeOp":
-                self._update_value_info_for_output(node)
-                self._update_value_info_for_input(node)
 
     @deprecated("Use aimet_onnx.apply_seq_mse instead")
     @staticmethod
@@ -686,3 +606,69 @@ def _remove_session(sim: QuantizationSimModel):
         yield
     finally:
         sim._rebuild_session()  # pylint:disable = protected-access
+
+
+@contextmanager
+def _disable_onnx_shape_inference():
+    infer_shapes = onnx.shape_inference.infer_shapes
+    try:
+        onnx.shape_inference.infer_shapes = lambda model, *args, **kwargs: model
+        yield
+    finally:
+        onnx.shape_inference.infer_shapes = infer_shapes
+
+
+@contextmanager
+def _remove_initializer_data(model: onnx.ModelProto):
+    # Hacky way to get around onnx.shape_inference.infer_shapes call as it doesn't work for model >2GB
+    raw_data = {}
+
+    try:
+        # Store and clear raw_data from initializers
+        for initializer in model.graph.initializer:
+            if initializer.HasField("raw_data"):
+                raw_data[initializer.name] = initializer.raw_data
+                initializer.ClearField("raw_data")
+
+        yield
+
+    finally:
+        for initializer in model.graph.initializer:
+            if initializer.name in raw_data:
+                initializer.raw_data = raw_data[initializer.name]
+
+
+@contextmanager
+def _add_value_info(model: onnx.ModelProto):
+    initial_value_info = model.graph.value_info
+
+    # Remove weight data to allow shape inference (fails for models > 2GB)
+    with _remove_initializer_data(model):
+        model_copy = onnx.ModelProto()
+        model_copy.CopyFrom(model)
+
+    # Replace quantizers with Identity ops to allow shape inference
+    for node in model_copy.graph.node:
+        if node.op_type != "QcQuantizeOp":
+            continue
+
+        node.op_type = "Identity"
+        node.ClearField("attribute")
+        node.ClearField("domain")
+
+    # Model must be topologically sorted prior to shape inference
+    ONNXModel(model_copy).topological_sort()
+    inferred_model = onnx.shape_inference.infer_shapes(model_copy)
+
+    value_info = inferred_model.graph.value_info
+    del model_copy, inferred_model
+
+    try:
+        # Update model's value info
+        model.graph.ClearField("value_info")
+        model.graph.value_info.extend(value_info)
+        yield
+    finally:
+        # Restore original value info
+        model.graph.ClearField("value_info")
+        model.graph.value_info.extend(initial_value_info)

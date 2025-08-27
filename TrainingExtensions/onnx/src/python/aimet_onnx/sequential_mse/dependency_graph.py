@@ -91,7 +91,7 @@ class DependencyGraph:
 
     def __init__(
         self,
-        model: Union[onnx.ModelProto, ONNXModel],
+        connected_graph: ConnectedGraph,
         data_loader: Iterable,
     ):
         """
@@ -100,10 +100,7 @@ class DependencyGraph:
         :param model: FP32 model
         :param data_loader: DataLoader object
         """
-        self.model = model
-        if not isinstance(model, ONNXModel):
-            self.model = ONNXModel(model)
-        self.conn_graph = ConnectedGraph(self.model)
+        self.conn_graph = connected_graph
 
         self.starting_ops = []  # Tracks nodes with zero in-degree (starting ops)
         self._name_to_node = {}  # Tracks a node name to the dependency node itself
@@ -212,7 +209,7 @@ class DependencyGraph:
             for inward_node in dep_node.inward_nodes:
                 input_names.update(inward_node.op_input_names)
 
-        model_inputs = [node.name for node in self.model.model.graph.input]
+        model_inputs = {tensor.name for tensor in self.conn_graph.model.graph.input}
 
         for dep_node in dep_nodes:
             for name in dep_node.op_input_names:
@@ -296,11 +293,9 @@ class DependencyGraph:
         :return: parameter numpy array
         """
         assert dep_node.cg_op.type in SUPPORTED_MODULES
-        tensor_proto = ParamUtils.get_param(
-            self.model.model, dep_node.cg_op.get_module(), WEIGHT_INDEX
-        )
-        assert tensor_proto is not None
-        tensor = onnx.numpy_helper.to_array(tensor_proto)
+        product = dep_node.cg_op.inputs[WEIGHT_INDEX]
+        assert isinstance(product.tensor, onnx.TensorProto)
+        tensor = onnx.numpy_helper.to_array(product.tensor)
         return tensor
 
     def _populate_data_for_starting_ops(self, inputs: Iterable[Dict[str, np.ndarray]]):
@@ -342,9 +337,7 @@ class DependencyGraph:
         op_output_names = [out.name for out in cg_op.outputs]
         op_input_names = [inp.name for inp in cg_op.inputs]
         op_input_names = [
-            name
-            for name in op_input_names
-            if not ParamUtils.get_param_by_name(self.model.model, name)
+            inp.name for inp in cg_op.inputs if not (inp.is_const or inp.is_parm)
         ]
         dep_node = DependencyNode(cg_op, op_output_names, op_input_names)
         dep_node.in_degree = len(dependent_node_names)
@@ -372,9 +365,9 @@ class DependencyGraph:
         ]
 
         op_names_with_model_input = [
-            node.name
-            for node in self.model.nodes()
-            if any(input_name in graph_inputs for input_name in node.input)
+            op.name
+            for op in self.conn_graph.ordered_ops
+            if any(inp.name in graph_inputs for inp in op.inputs)
         ]
 
         return op_names_with_model_input
@@ -444,10 +437,8 @@ class DependencyGraph:
             return False
         if len(cg_op.inputs) < 1:
             return False
-        tensor_proto = ParamUtils.get_param(
-            self.model.model, cg_op.get_module(), WEIGHT_INDEX
-        )
-        return tensor_proto is not None
+        tensor = cg_op.inputs[WEIGHT_INDEX].tensor
+        return isinstance(tensor, onnx.TensorProto)
 
     def _update_input_ref_count(self, dependency_node: DependencyNode):
         """

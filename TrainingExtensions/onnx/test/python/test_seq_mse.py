@@ -42,6 +42,7 @@ import copy
 import json
 import numpy as np
 import os
+import itertools
 from onnx.utils import Extractor
 import logging
 from aimet_common.utils import AimetLogger
@@ -50,7 +51,8 @@ from aimet_onnx.sequential_mse.dependency_graph import (
     DependencyGraph,
     SUPPORTED_MODULES,
 )
-from aimet_onnx.sequential_mse.seq_mse import SeqMseParams
+from aimet_onnx.meta.connectedgraph import ConnectedGraph
+from aimet_onnx.sequential_mse.seq_mse import SeqMseParams, _add_value_info
 from aimet_onnx.sequential_mse.seq_mse import SequentialMse
 from aimet_common.defs import QuantScheme
 from aimet_onnx.quantsim import QuantizationSimModel
@@ -570,6 +572,37 @@ def test_disable_subgraph_quantizers():
         assert not sim.qc_quantize_op_dict["4"].enabled
 
 
+def test_add_value_info():
+    model = models_for_tests.single_residual_model().model
+    sim = QuantizationSimModel(
+        model=model,
+        providers=["CPUExecutionProvider"],
+        default_param_bw=4,
+    )
+    orig_value_info = sim.model.model.graph.value_info
+    with _add_value_info(sim.model.model):
+        updated_value_info = copy.deepcopy(sim.model.model.graph.value_info)
+
+    # Check that the original value info is restored
+    assert sim.model.model.graph.value_info == orig_value_info
+
+    tensors_with_info = {info.name for info in updated_value_info}
+
+    io_tensors = {
+        tensor.name
+        for tensor in itertools.chain(sim.model.graph().input, sim.model.graph().output)
+    }
+    initializers = {tensor.name for tensor in sim.model.initializer()}
+    all_tensors = {
+        name
+        for node in sim.model.nodes()
+        for name in itertools.chain(node.input, node.output)
+    }
+
+    # Note: Value info does not include shapes for initializers or i/o tensors
+    assert tensors_with_info == (all_tensors - (io_tensors | initializers))
+
+
 class TestDependencyGraph:
     @pytest.mark.parametrize(
         "model, cached_data",
@@ -606,7 +639,7 @@ class TestDependencyGraph:
     def test_dependency_graph(self, model, cached_data):
         """Compare the one-shot and iterative outputs"""
         dl = [cached_data]
-        dep_graph = DependencyGraph(model, dl)
+        dep_graph = DependencyGraph(ConnectedGraph(model), dl)
 
         sorted_nodes = dep_graph.get_topologically_sorted_nodes()
         model_outputs = [node.name for node in model.model.graph.output]
