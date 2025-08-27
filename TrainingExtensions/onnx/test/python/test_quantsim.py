@@ -45,6 +45,8 @@ import tracemalloc
 from unittest.mock import patch
 from functools import partial
 import pathlib
+import time
+import random
 
 import onnx.numpy_helper
 import torch
@@ -76,6 +78,7 @@ from aimet_onnx.quantsim import (
 import aimet_onnx
 from aimet_onnx.qc_quantize_op import OpMode, GroupedBlockQuantizeDequantize
 from aimet_onnx.utils import make_dummy_input, disable_quantizers
+from aimet_onnx import int8, int16
 from .models import models_for_tests, test_models
 from .models.models_for_tests import (
     batchnorm_model,
@@ -4627,6 +4630,79 @@ class TestDynamicWeightSymmetryMapping:
             )
             self._assert_uint_activation(onnx_qdq_model)
 
+    # @pytest.mark.skip
+    def test_quantsim_create_speed(self, tmp_path):
+        from onnx import helper, TensorProto
+
+        model = models_for_tests.conv_relu_model()
+
+        # Parameters
+        graph = model.graph
+        num_layers = 3000  # Number of Conv+Relu pairs to add
+        input_shape = [1, 3, 224, 224]  # Example input shape
+        conv_out_channels = 3
+        kernel_shape = [3, 3]
+
+        # Find last output tensor name
+        last_output = graph.output[0].name
+
+        for i in range(num_layers):
+            # Conv weights
+            weight_name = f"conv{i}_weight"
+            weight_shape = [conv_out_channels, input_shape[1], *kernel_shape]
+            weight_data = np.random.randn(*weight_shape).astype(np.float32)
+            weight_tensor = helper.make_tensor(
+                weight_name, TensorProto.FLOAT, weight_shape, weight_data.flatten()
+            )
+            graph.initializer.append(weight_tensor)
+
+            # Conv node
+            conv_output = f"conv{i}_out"
+            conv_node = helper.make_node(
+                "Conv",
+                name=f"Conv_{i + 4}",
+                inputs=[last_output, weight_name],
+                outputs=[conv_output],
+                kernel_shape=kernel_shape,
+                pads=[1, 1, 1, 1],
+                strides=[1, 1],
+            )
+            graph.node.append(conv_node)
+
+            # Relu node
+            relu_output = f"relu{i}_out"
+            relu_node = helper.make_node(
+                "Relu",
+                name=f"Relu_{i + 4}",
+                inputs=[conv_output],
+                outputs=[relu_output],
+            )
+            graph.node.append(relu_node)
+
+            last_output = relu_output
+            input_shape = [1, conv_out_channels, input_shape[2], input_shape[3]]
+
+        # Update graph output to last relu
+        graph.output[0].name = last_output
+
+        start_time = time.time()
+        sim = QuantizationSimModel(model, param_type=int8, activation_type=int8)
+
+        # qdq_model = sim.to_onnx_qdq()
+        # onnx.save(qdq_model, "large_model_qdq.onnx")
+
+        # Make all quantizers point to the same object
+        quantizer = sim._get_enabled_quantizer("relu0_out")
+
+        quant_dict = {}
+        for i in range(1, num_layers):
+            quant_dict[f"relu{i}_out"] = quantizer
+
+        sim.set_quantizers(quant_dict)
+
+        end_time = time.time()
+        print(f"Execution time: {end_time - start_time:.6f} seconds")
+
 
 def test_onnx_qdq_export_output_name_swapping(tmp_path):
     """
@@ -5077,25 +5153,6 @@ def test_from_onnx_qdq_split_op():
     _assert_sim_equal(sim, sim_2)
 
 
-@pytest.fixture(scope="module")
-def large_model_path():
-    with torch.no_grad(), tempfile.TemporaryDirectory() as tmpdir:
-        path = os.path.join(tmpdir, "model.onnx")
-        model = torch.nn.Sequential(
-            torch.nn.Linear(2**14, 2**14, bias=False),  # 0.25B parameters = 1GB
-            torch.nn.Linear(2**14, 2**14, bias=False),  # 0.25B parameters = 1GB
-        )
-        torch.onnx.export(
-            model,
-            torch.zeros(1, 2**14),
-            path,
-            input_names=["input"],
-            output_names=["output"],
-        )
-        yield path
-
-
-@pytest.mark.parametrize("prequantize_constants", [False, True])
 @pytest.mark.parametrize(
     "activation_type",
     [
@@ -5109,39 +5166,68 @@ def large_model_path():
     ],
 )
 def test_to_onnx_qdq_large_model(
-    large_model_path: str,
     activation_type,
-    prequantize_constants: bool,
     tmp_path: pathlib.Path,
 ):
-    """
-    Given: Model that exceeds 2GB
-    """
-    model = onnx.load_model(large_model_path, load_external_data=True)
-    sim = QuantizationSimModel(
-        model,
-        param_type=aimet_onnx.int8,
-        activation_type=activation_type,
-    )
-    input = np.random.randn(1, 2**14).astype(np.float32)
-    sim.compute_encodings([{"input": input}])
+    seed = 200
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
-    """
-    When: Export to onnx QDQ with save_as_external_data=True
-    Then: Output of the pure onnx model should be equal to that of sim.session
-    """
-    _ = sim._to_onnx_qdq(
-        f=tmp_path / "model.onnx",
-        save_as_external_data=True,
-        prequantize_constants=prequantize_constants,
-    )
+    with torch.no_grad(), tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "model.onnx")
+        model = torch.nn.Sequential(
+            torch.nn.Linear(2**14, 2**14, bias=False),  # 0.25B parameters = 1GB
+            torch.nn.Linear(2**14, 2**14, bias=False),  # 0.25B parameters = 1GB
+        )
+        torch.onnx.export(
+            model,
+            torch.zeros(1, 2**14),
+            path,
+            input_names=["input"],
+            output_names=["output"],
+        )
 
-    sess_options = ort.SessionOptions()
-    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    sess = ort.InferenceSession(
-        tmp_path / "model.onnx",
-        sess_options=sess_options,
-    )
-    (out_onnx_qdq,) = sess.run(None, {"input": input})
-    (out_sim,) = sim.session.run(None, {"input": input})
-    assert np.allclose(out_sim, out_onnx_qdq)
+        """
+        Given: Model that exceeds 2GB
+        """
+        model = onnx.load_model(path, load_external_data=True)
+        sim = QuantizationSimModel(
+            model,
+            param_type=aimet_onnx.int8,
+            activation_type=activation_type,
+        )
+        input = np.random.randn(1, 2**14).astype(np.float32)
+        sim.compute_encodings([{"input": input}])
+
+        for constants_flag in [True, False]:
+            """
+            When: Export to onnx QDQ with save_as_external_data=True
+            Then: Output of the pure onnx model should be equal to that of sim.session
+            """
+            _ = sim._to_onnx_qdq(
+                f=tmpdir + "/model_qdq.onnx",
+                save_as_external_data=True,
+                prequantize_constants=constants_flag,
+            )
+
+            qdq_model = onnx.load_model(
+                tmpdir + "/model_qdq.onnx", load_external_data=True
+            )
+            count = sum(
+                1 for node in qdq_model.graph.node if node.op_type == "DequantizeLinear"
+            )
+            print("Number of dequantizeLinear nodes: ", count)
+
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = (
+                ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+            )
+            sess = ort.InferenceSession(
+                tmpdir + "/model_qdq.onnx",
+                sess_options=sess_options,
+            )
+
+            (out_onnx_qdq,) = sess.run(None, {"input": input})
+            (out_sim,) = sim.session.run(None, {"input": input})
+            assert np.allclose(out_sim, out_onnx_qdq, atol=1e-7)

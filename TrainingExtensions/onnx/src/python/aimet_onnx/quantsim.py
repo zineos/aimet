@@ -666,19 +666,12 @@ class QuantizationSimModel:
                 node.name += "_updated"
 
     def _is_quantizable_dtype(self, name: str) -> bool:
-        # Check if the tensor data-type can be quantized
-        if name in self.model.get_initializer_name_set():
-            np_dtype = onnx.helper.tensor_dtype_to_np_dtype(
-                self.model.get_initializer(name).data_type
-            )
+        if name in self.activation_dtypes:
+            np_dtype = self.activation_dtypes[name]
             if np_dtype not in data_types_to_quantize:
                 return False
-        else:  # dynamic activation
-            if (
-                name not in self.activation_dtypes
-                or self.activation_dtypes[name] not in data_types_to_quantize
-            ):
-                return False
+        else:
+            return False
 
         return True
 
@@ -732,6 +725,11 @@ class QuantizationSimModel:
             dtype = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
                 val_info.type.tensor_type.elem_type
             ]
+            activation_dtypes[act_name] = dtype
+
+        for val_info in inferred_model.graph.initializer:
+            act_name = val_info.name
+            dtype = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[val_info.data_type]
             activation_dtypes[act_name] = dtype
         return activation_dtypes
 
