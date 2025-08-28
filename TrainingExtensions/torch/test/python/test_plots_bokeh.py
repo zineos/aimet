@@ -89,6 +89,7 @@ class VisualizeNetwork(unittest.TestCase):
         # ensure the number of weights is the same before and after
         self.assertEqual(total_weights_expected, total_weights_actual)
 
+    @unittest.skip("Disabled due to Bokeh server failure")
     def test_progress_bar(self):
         process = None
         try:
@@ -122,6 +123,7 @@ class VisualizeNetwork(unittest.TestCase):
         # layout.add_row(p)
         layout.complete_layout()
 
+    @unittest.skip("Disabled due to Bokeh server failure")
     def test_invoke_progress_bar(self):
         process = None
         try:

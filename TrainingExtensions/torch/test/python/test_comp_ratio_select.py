@@ -79,6 +79,7 @@ class MnistModel(nn.Module):
 
 
 class TestTrainingExtensionsCompRatioSelect(unittest.TestCase):
+    @unittest.skip("Disabled due to Bokeh server failure")
     def test_per_layer_eval_scores(self):
         url, process = start_bokeh_server_session(8006)
         bokeh_session = BokehServerSession(url=url, session_id="compression")
