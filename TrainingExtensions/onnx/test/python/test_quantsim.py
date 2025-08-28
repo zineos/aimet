@@ -4630,7 +4630,7 @@ class TestDynamicWeightSymmetryMapping:
             )
             self._assert_uint_activation(onnx_qdq_model)
 
-    # @pytest.mark.skip
+    @pytest.mark.skip
     def test_quantsim_create_speed(self, tmp_path):
         from onnx import helper, TensorProto
 

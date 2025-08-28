@@ -1746,12 +1746,23 @@ class QuantizationSimModel:
 
         :param quantizer_dict: Dictionary mapping tensor names to QcQuantizeOp objects
         """
+
+        # Walk the graph and create a node input to op map, only for QcQuantizeOp nodes
+        node_input_map = {}
+        for node in self.model.graph().node:
+            if node.op_type != "QcQuantizeOp":
+                continue
+            for input_name in node.input:
+                node_input_map[input_name] = node
+
         for tensor, quantizer in quantizer_dict.items():
-            self._set_quantizer(tensor, quantizer)
+            self._set_quantizer(tensor, node_input_map, quantizer)
 
         self._rebuild_session()
 
-    def _set_quantizer(self, tensor_name: str, quantizer: QcQuantizeOp):
+    def _set_quantizer(
+        self, tensor_name: str, node_input_map: Dict, quantizer: QcQuantizeOp
+    ):
         """
         Places `quantizer` at `tensor_name` and updates the onnx graph.
 
@@ -1762,29 +1773,31 @@ class QuantizationSimModel:
             raise TypeError(
                 f"Quantizer object {quantizer} is not of type {QcQuantizeOp.__qualname__}"
             )
-        if tensor_name not in self.qc_quantize_op_dict:
+        if (
+            tensor_name not in self.qc_quantize_op_dict
+            or tensor_name not in node_input_map
+        ):
             raise ValueError(f"Tensor {tensor_name} is not an input to a quantize node")
 
-        self._set_quant_info(tensor_name, quantizer)
+        dst_onnx_node = node_input_map[tensor_name]
+
+        self._set_quant_info(dst_onnx_node, quantizer)
         self.qc_quantize_op_dict[tensor_name] = quantizer
 
-    def _set_quant_info(self, dst_qtzr_tensor_name: str, src_qtzr: QcQuantizeOp):
+    def _set_quant_info(self, dst_onnx_node: onnx.NodeProto, src_qtzr: QcQuantizeOp):
         """
         Set quant_info attribute (pointer to the libquant_info object)
 
         :param dst_qtzr_tensor_name: destination quantizer node name in graph.
         :param src_qtzr: source quantizer.
         """
-        for node in self.model.graph().node:
-            if node.op_type == "QcQuantizeOp" and node.input[0] == dst_qtzr_tensor_name:
-                for atr in node.attribute:
-                    if atr.name == "quant_info":
-                        atr.i = libpymo.PtrToInt64(src_qtzr.quant_info)
-                        # Session is now invalid and must be rebuilt
-                        self.session = None
-                        return
 
-        raise RuntimeError(f"Did not find quantizer for tensor {dst_qtzr_tensor_name}")
+        for atr in dst_onnx_node.attribute:
+            if atr.name == "quant_info":
+                atr.i = libpymo.PtrToInt64(src_qtzr.quant_info)
+                # Session is now invalid and must be rebuilt
+                self.session = None
+                return
 
     def _tie_quantizers_for_op_types(self, op_types_to_tie: List[str]):
         """
@@ -1792,12 +1805,24 @@ class QuantizationSimModel:
 
         :param op_types_to_tie: List of onnx ops for which to tie quantizers
         """
-        self._propagate_input_encodings({x for x in op_types_to_tie if x != "Concat"})
+        # Walk the graph and create a node input to op map, only for QcQuantizeOp nodes
+        node_input_map = {}
+        for node in self.model.graph().node:
+            if node.op_type != "QcQuantizeOp":
+                continue
+            for input_name in node.input:
+                node_input_map[input_name] = node
+
+        self._propagate_input_encodings(
+            {x for x in op_types_to_tie if x != "Concat"}, node_input_map
+        )
 
         if "Concat" in op_types_to_tie:
-            self._propagate_output_encodings({"Concat"})
+            self._propagate_output_encodings({"Concat"}, node_input_map)
 
-    def _propagate_output_encodings(self, op_types_to_tie: Set[str]):
+    def _propagate_output_encodings(
+        self, op_types_to_tie: Set[str], node_input_map: Dict
+    ):
         """
         Let input quantizers inherit output encodings
 
@@ -1855,9 +1880,11 @@ class QuantizationSimModel:
 
             for src_name, src_qtzr in src_qtzrs.items():
                 if src_qtzr:
-                    self._set_quantizer(src_name, output_qtzr)
+                    self._set_quantizer(src_name, node_input_map, output_qtzr)
 
-    def _propagate_input_encodings(self, op_types_to_tie: Set[str]):
+    def _propagate_input_encodings(
+        self, op_types_to_tie: Set[str], node_input_map: Dict
+    ):
         """
         Let output quantizers inherit input encodings
 
@@ -1903,7 +1930,7 @@ class QuantizationSimModel:
                     #                    symmetric
                     input_qtzr._merge_constraints(output_qtzr)  # pylint: disable=protected-access
 
-                self._set_quantizer(out.name, input_qtzr)
+                self._set_quantizer(out.name, node_input_map, input_qtzr)
 
     def to_onnx_qdq(self) -> onnx.ModelProto:
         """
