@@ -44,7 +44,10 @@ import onnx
 from packaging import version
 
 from aimet_common.defs import QuantizationDataType, qtype
-from aimet_common.graph_searcher import GraphSearcher
+from aimet_common.graph_searcher import (
+    GraphSearcher,
+    _check_if_conv3d_or_depthwise_conv,
+)
 from aimet_common.connected_graph.connectedgraph_utils import (
     get_all_input_ops,
     get_all_output_ops,
@@ -345,7 +348,9 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
 
         if patterns_with_callbacks:
             graph_searcher = GraphSearcher(self._conn_graph, patterns_with_callbacks)
-            graph_searcher.find_all_patterns_in_graph_apply_actions()
+            graph_searcher.find_all_patterns_in_graph_apply_actions(
+                op_pattern_to_reject=_check_if_conv3d_or_depthwise_conv
+            )
 
     def _set_model_input_configs(self, model_input_configs: ConfigType):
         """

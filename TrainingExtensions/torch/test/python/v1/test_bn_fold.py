@@ -348,6 +348,10 @@ class TestTrainingExtensionBnFoldToScale:
         assert conv1.weight.device == conv1.bias.device
         assert conv1.weight.dtype == conv1.bias.dtype
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#5597: Enable test case when depthwise conv is treated as a supergroup.",
+    )
     def test_fold_bn_after_conv_depthwise(self):
         class MyModel(torch.nn.Module):
             def __init__(self):

@@ -36,11 +36,72 @@
 # =============================================================================
 """Main class for pattern match based graph searcher"""
 
-from typing import Optional
+from typing import Callable, Optional
 from aimet_common.utils import AimetLogger
 from aimet_common.connected_graph.operation import Op
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
+
+
+# TODO: #5597: Remove Conv3d and Depthwise Conv supergroup once HTP support is added
+def _check_if_conv3d(op: Op) -> bool:
+    if op.type != "Conv" and op.type != "ConvTranspose":
+        return False
+
+    if op.inputs[0].shape is None or len(op.inputs[0].shape) != 5:
+        return False
+
+    # Additional check on weights shape if available.
+    if op.inputs[1].shape is not None and len(op.inputs[1].shape) != 5:
+        return False
+
+    # Conv3D
+    return True
+
+
+# TODO: #5597: Remove Conv3d and Depthwise Conv supergroup once HTP support is added
+def _check_if_depthwise_conv(op: Op) -> bool:
+    if op.type != "Conv" and op.type != "ConvTranspose":
+        return False
+
+    if not hasattr(op, "groups") or op.groups == 1:
+        return False
+
+    if len(op.inputs) < 2:
+        raise RuntimeError("Expecting at least two inputs to Conv op.")
+
+    input_shape = op.inputs[0].shape
+    weight_shape = op.inputs[1].shape
+
+    groups = op.groups
+
+    # depthwise_conv: each channel in it's own group
+    if input_shape is None or groups != input_shape[1]:
+        return False
+
+    # additional validation
+    if weight_shape is not None and op.type == "Conv" and weight_shape[1] != 1:
+        return False
+    elif (
+        weight_shape is not None
+        and len(op.outputs) > 1
+        and op.outputs[0].shape is not None
+        and op.type == "ConvTranspose"
+        and weight_shape[1] != op.outputs[0].shape[1] / groups
+    ):
+        return False
+
+    # Indeed depthwise Conv/Deconv
+    return True
+
+
+# TODO: #5597: Remove Conv3d and Depthwise Conv supergroup once HTP support is added
+def _check_if_conv3d_or_depthwise_conv(op: Op) -> bool:
+    if _check_if_conv3d(op):
+        return True
+    if _check_if_depthwise_conv(op):
+        return True
+    return False
 
 
 class GraphSearcher:
@@ -64,10 +125,17 @@ class GraphSearcher:
                 self.type_to_op_dict[op.type] = [op]
 
     # pylint: disable=too-many-nested-blocks
-    def find_all_patterns_in_graph_apply_actions(self, ignore: Optional[Op] = None):
+    def find_all_patterns_in_graph_apply_actions(
+        self,
+        ignore: Optional[Op] = None,
+        op_pattern_to_reject: Callable[[Op], bool] = None,
+    ):
         """
         Find corresponding op sequences and apply actions.
         :param ignore: List of operations to ignore during searching
+        :param op_pattern_to_reject: Callable to perform additional checks on Op to reject pattern match.
+            This is useful to express intent on patterns that should not be matched.
+            Since GraphSearcher performs high level pattern match, this enables to provide override for aggressive rejection for a given op config.
         """
 
         if ignore is None:
@@ -80,14 +148,22 @@ class GraphSearcher:
             if pattern_type.pattern[0] in self.type_to_op_dict:
                 # One or more ops in the graph correspond to the current pattern's starting op type
                 for op in self.type_to_op_dict[pattern_type.pattern[0]]:
-                    matched_ops = self._match_pattern(op, pattern_type.pattern, ignore)
+                    matched_ops = self._match_pattern(
+                        op, pattern_type.pattern, ignore, op_pattern_to_reject
+                    )
                     if matched_ops:
                         for matched_ops_list in matched_ops:
                             pattern_type.action(pattern_type, matched_ops_list)
                             logger.debug("found match: %s", matched_ops_list)
 
     # pylint: disable=too-many-branches, too-many-return-statements
-    def _match_pattern(self, op, pattern, ignored_ops):
+    def _match_pattern(
+        self,
+        op,
+        pattern,
+        ignored_ops,
+        op_pattern_to_reject: Callable[[Op], bool] = None,
+    ):
         if not pattern:
             return []
 
@@ -105,6 +181,12 @@ class GraphSearcher:
 
         if op.type != pattern[0]:
             return None
+
+        # If additional op pattern checks are provided and matches for rejection, early exit.
+        # This is useful to provide more aggresive checks e.g. depthwise conv or 3d conv, ...
+
+        if op_pattern_to_reject is not None and op_pattern_to_reject(op):
+            return False
 
         if len(pattern) > 1:
             # Still more to match

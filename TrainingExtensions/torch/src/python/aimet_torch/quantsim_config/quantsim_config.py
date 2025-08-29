@@ -43,7 +43,10 @@ import torch
 from torch.nn.modules import ConvTranspose2d
 
 from aimet_common.utils import AimetLogger, log_with_error_and_assert_if_false
-from aimet_common.graph_searcher import GraphSearcher
+from aimet_common.graph_searcher import (
+    GraphSearcher,
+    _check_if_conv3d_or_depthwise_conv,
+)
 from aimet_common.graph_pattern_matcher import PatternType
 from aimet_common.connected_graph.operation import Op
 from aimet_common.defs import QuantizationDataType, QuantDtypeBwInfo, qtype
@@ -734,7 +737,10 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
 
         if patterns_with_callbacks:
             graph_searcher = GraphSearcher(self._conn_graph, patterns_with_callbacks)
-            graph_searcher.find_all_patterns_in_graph_apply_actions(ignore=foldable_bns)
+            graph_searcher.find_all_patterns_in_graph_apply_actions(
+                ignore=foldable_bns,
+                op_pattern_to_reject=_check_if_conv3d_or_depthwise_conv,
+            )
 
         def fuse_config(conv: Op, bn: Op):
             """

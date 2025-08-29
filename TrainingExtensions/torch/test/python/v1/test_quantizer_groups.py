@@ -41,7 +41,7 @@ import torch
 from aimet_common.defs import QuantizationDataType
 from aimet_common.amp.quantizer_groups import reformat_supported_kernels
 from aimet_torch.batch_norm_fold import fold_all_batch_norms
-from aimet_torch.v1.quantsim import QuantizationSimModel
+from aimet_torch.v1.quantsim import QuantizationSimModel, QuantScheme
 from aimet_torch.amp.quantizer_groups import (
     find_quantizer_group,
     find_op_groups,
@@ -224,13 +224,15 @@ class TestQuantizerGroups:
 
         sim = QuantizationSimModel(model, dummy_input=dummy_input)
         _, quantizer_groups = find_quantizer_group(sim)
-        assert quantizer_groups[4].to_list() == [("output", "features.1.block.1.0")]
-        assert quantizer_groups[15].to_list() == [
+
+        # TODO: #5597: Update require in quantizer groups index
+        assert quantizer_groups[5].to_list() == [("output", "features.1.block.1.0")]
+        assert quantizer_groups[19].to_list() == [
             ("output", "features.4.block.2.avgpool"),
             ("weight", "features.4.block.2.fc1"),
         ]
         assert len(quantizer_groups[-1].output_quantizers) == 1
-        assert len(quantizer_groups) == 122
+        assert len(quantizer_groups) == 128
 
     def test_reformat_supported_kernels_1(self):
         supported_kernels = {

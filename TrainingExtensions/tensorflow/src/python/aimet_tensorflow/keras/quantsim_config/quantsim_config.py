@@ -56,7 +56,10 @@ from aimet_common.connected_graph.connectedgraph_utils import (
 from aimet_common.connected_graph.operation import Op
 from aimet_common.defs import QuantScheme, QuantizationDataType, qtype
 from aimet_common.graph_pattern_matcher import PatternType
-from aimet_common.graph_searcher import GraphSearcher
+from aimet_common.graph_searcher import (
+    GraphSearcher,
+    _check_if_conv3d_or_depthwise_conv,
+)
 from aimet_common.quantsim_config.quantsim_config import (
     SupergroupConfigCallback as AimetCommonSupergroupConfigCallback,
 )
@@ -629,7 +632,10 @@ class QuantSimConfigurator(AimetCommonQuantSimConfigurator):
             graph_searcher = GraphSearcher(
                 self._connected_graph, patterns_with_callbacks
             )
-            graph_searcher.find_all_patterns_in_graph_apply_actions(ignore=foldable_bns)
+            graph_searcher.find_all_patterns_in_graph_apply_actions(
+                ignore=foldable_bns,
+                op_pattern_to_reject=_check_if_conv3d_or_depthwise_conv,
+            )
 
         def fuse_config(conv: Op, bn: Op):
             """
