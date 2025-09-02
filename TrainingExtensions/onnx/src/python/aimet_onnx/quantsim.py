@@ -722,14 +722,14 @@ class QuantizationSimModel:
             inferred_model.graph.output,
         ):
             act_name = val_info.name
-            dtype = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[
+            dtype = onnx.helper.tensor_dtype_to_np_dtype(
                 val_info.type.tensor_type.elem_type
-            ]
+            )
             activation_dtypes[act_name] = dtype
 
         for val_info in inferred_model.graph.initializer:
             act_name = val_info.name
-            dtype = onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[val_info.data_type]
+            dtype = onnx.helper.tensor_dtype_to_np_dtype(val_info.data_type)
             activation_dtypes[act_name] = dtype
         return activation_dtypes
 

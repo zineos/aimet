@@ -48,7 +48,7 @@ import pickle
 import numpy as np
 import torch
 import onnx
-from onnx import helper, numpy_helper, mapping
+from onnx import helper, numpy_helper
 from onnxruntime import SessionOptions, InferenceSession
 
 from aimet_common import libquant_info
@@ -291,11 +291,11 @@ def make_dummy_input(model: ModelProto, dynamic_size: int = 1) -> Dict[str, np.n
                 shape.append(dim.dim_value)
         if shape:
             input_dict[name] = np.random.randn(*shape).astype(
-                mapping.TENSOR_TYPE_TO_NP_TYPE[dtype]
+                helper.tensor_dtype_to_np_dtype(dtype)
             )
         else:
             input_dict[name] = np.array(np.random.randn(*shape)).astype(
-                mapping.TENSOR_TYPE_TO_NP_TYPE[dtype]
+                helper.tensor_dtype_to_np_dtype(dtype)
             )
     return input_dict
 
