@@ -52,7 +52,14 @@ jobs:
         run: |
           . /etc/profile.d/conda.sh
           CUDART_DIR=$(python3 -c 'import sysconfig ; from pathlib import Path; print(Path(sysconfig.get_config_var("prefix"), "lib"))')
-          MANYLINUX_EXCLUDE_LIBS="$MANYLINUX_EXCLUDE_LIBS $(find $CUDART_DIR -name '*cudart.so*' | xargs -r patchelf --print-soname | xargs -r printf -- '--exclude %s ')"
+          MANYLINUX_EXCLUDE_LIBS="$MANYLINUX_EXCLUDE_LIBS $(find $CUDART_DIR -name 'libcu*.so*' -o -name 'libnv*.so*' -o -name 'libnp*.so*' | xargs -r patchelf --print-soname | xargs -r printf -- '--exclude %s ')"
+          set -x
+          echo "MANYLINUX_EXCLUDE_LIBS=$MANYLINUX_EXCLUDE_LIBS" >> $GITHUB_ENV
+      - name: "Exclude libpython libraries from dependencies for manylinux"
+        run: |
+          . /etc/profile.d/conda.sh
+          LIBS_DIR=$(python3 -c 'import sysconfig ; from pathlib import Path; print(Path(sysconfig.get_config_var("prefix"), "lib"))')
+          MANYLINUX_EXCLUDE_LIBS="$MANYLINUX_EXCLUDE_LIBS $(find $LIBS_DIR -name 'libpython*.so*' | xargs -r patchelf --print-soname | xargs -r printf -- '--exclude %s ')"
           set -x
           echo "MANYLINUX_EXCLUDE_LIBS=$MANYLINUX_EXCLUDE_LIBS" >> $GITHUB_ENV
       - name: "Exclude Tensorflow libraries from dependencies for manylinux"
