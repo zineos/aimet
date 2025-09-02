@@ -232,10 +232,11 @@ def is_valid_bn_fold(
     else:
         # AIMET does not support backwards folding to grouped ConvTranspose
         if conv_linear.op_type == "ConvTranspose":
-            valid &= get_node_attribute(conv_linear, "group") in (
-                1,
-                get_input_output_channels(conv_linear, model)[0],
-            )
+            if get_node_attribute(conv_linear, "group") is not None:
+                valid &= get_node_attribute(conv_linear, "group") in (
+                    1,
+                    get_input_output_channels(conv_linear, model)[0],
+                )
     return valid
 
 
@@ -286,6 +287,8 @@ def _fold_to_weight(
     weight = ParamUtils.get_param(model, conv_linear, WEIGHT_INDEX)
     bias = ParamUtils.get_param(model, conv_linear, BIAS_INDEX)
     groups = get_node_attribute(conv_linear, "group")
+    if not groups:
+        groups = 1
     _, num_out_channels = get_input_output_channels(conv_linear, model)
 
     # If layer doesn't have bias, create a bias initializer and add it to the model, then retrieve it
