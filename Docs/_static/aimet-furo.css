@@ -56,7 +56,8 @@ body[data-theme="dark"] .script-output::before {
 }
 
 /* Change the code backgorund in light and default mode */ 
-:not(body[data-theme="dark"]) *.highlight pre, :not(body[data-theme="dark"]) pre.literal-block { 
+body[data-theme="light"] *.highlight pre,
+body[data-theme="light"] pre.literal-block {
     background-color: var(--aimet-code-grey);
 }
 
