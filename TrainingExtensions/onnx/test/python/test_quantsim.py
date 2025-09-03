@@ -105,6 +105,7 @@ from .models.models_for_tests import (
     standalone_layernorm,
     transposed_conv_model,
     _convert_to_onnx,
+    make_model,
 )
 
 CPU_PROVIDERS = ["CPUExecutionProvider"]
@@ -1463,7 +1464,7 @@ class TestQuantSim:
             inputs=[input_tensor],
             outputs=[output_tensor],
         )
-        model = onnx.helper.make_model(graph)
+        model = make_model(graph)
 
         with tempfile.TemporaryDirectory() as tempdir:
             tracemalloc.start()
@@ -1602,7 +1603,7 @@ class TestQuantSim:
             inputs=[input_tensor],
             outputs=[output_tensor],
         )
-        model = onnx.helper.make_model(graph)
+        model = make_model(graph)
 
         assert model.ByteSize() > onnx.checker.MAXIMUM_PROTOBUF
         with tempfile.TemporaryDirectory() as tempdir:
@@ -4711,7 +4712,7 @@ def test_onnx_qdq_export_output_name_swapping(tmp_path):
                       +------------------> (output_0)
     x ---> Sigmoid ---+----> MaxPool ----> (output_1)
     """
-    model = onnx.helper.make_model(
+    model = make_model(
         graph=onnx.helper.make_graph(
             name="model",
             nodes=[
@@ -5054,7 +5055,7 @@ def test_from_onnx_qdq_output_dtype():
     """
     Given: onnx QDQ model utilizing "output_dtype" attribute
     """
-    model = onnx.helper.make_model(
+    model = make_model(
         opset_imports=[onnx.helper.make_operatorsetid("", 21)],
         graph=onnx.helper.make_graph(
             name="model",

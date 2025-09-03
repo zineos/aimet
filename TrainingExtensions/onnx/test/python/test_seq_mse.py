@@ -511,11 +511,9 @@ def test_model_with_multiple_outputs_value_info():
             pcq=True,
         ),
     )
-    seq_params = SeqMseParams(num_batches=1)
-    inputs = [make_dummy_input(model) for _ in range(10)]
-    seq_mse = SequentialMse(model, sim, seq_params, inputs)
-
-    assert "Conv1_Y" in seq_mse._extractor.vimap
+    apply_seq_mse(sim, [make_dummy_input(model) for _ in range(1)])
+    assert sim.qc_quantize_op_dict["Conv1_W"].is_encoding_frozen()
+    assert sim.qc_quantize_op_dict["Conv2_W"].is_encoding_frozen()
 
 
 def test_concat_model():
@@ -649,7 +647,8 @@ class TestDependencyGraph:
 
         # Iterate over the topologically sorted nodes to gather intermediate outputs and
         # provide them as inputs to the subsequent subgraph.
-        extractor = Extractor(model.model)
+        with _add_value_info(model.model):
+            extractor = Extractor(model.model)
         for i in range(1, len(sorted_nodes)):
             subgraph_inp_names, subgraph_out_names = (
                 dep_graph.get_subgraph_inp_out_names(sorted_nodes[i])

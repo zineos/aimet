@@ -188,7 +188,12 @@ class ModelWithMultipleInputs:
             ],
         )
         # Create the model (ModelProto)
-        return onnx.helper.make_model(graph_def, producer_name="onnx-example")
+        return onnx.helper.make_model(
+            graph_def,
+            producer_name="onnx-example",
+            opset_imports=[onnx.helper.make_operatorsetid("", 20)],
+            ir_version=10,
+        )
 
 
 def model_with_multiple_inputs():
@@ -332,7 +337,12 @@ class ModelWithMultipleOutputs:
             ],
         )
         # Create the model (ModelProto)
-        return onnx.helper.make_model(graph_def, producer_name="onnx-example")
+        return onnx.helper.make_model(
+            graph_def,
+            producer_name="onnx-example",
+            opset_imports=[onnx.helper.make_operatorsetid("", 20)],
+            ir_version=10,
+        )
 
 
 def model_with_multiple_outputs():

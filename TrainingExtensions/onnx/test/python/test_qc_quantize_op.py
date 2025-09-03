@@ -66,6 +66,8 @@ from aimet_onnx import lpbq_utils
 FLOAT32_MIN = np.finfo(np.float32).min
 FLOAT32_MAX = np.finfo(np.float32).max
 
+_DEFAULT_IR_VERSION = 10
+
 shared_library = os.path.join(
     os.path.dirname(libquant_info.__file__),
     "libaimet_onnxrt_ops.dll"
@@ -130,7 +132,11 @@ def create_model_from_node(quant_node, shape):
         [quant_node], "dummy_graph", [input_info], [output_info], []
     )
 
-    model = helper.make_model(onnx_graph)
+    model = helper.make_model(
+        onnx_graph,
+        opset_imports=[helper.make_operatorsetid("", 20)],
+        ir_version=_DEFAULT_IR_VERSION,
+    )
     return model
 
 
@@ -146,7 +152,11 @@ def create_model_from_node_fp16(quant_node, shape):
         [quant_node], "dummy_graph", [input_info], [output_info], []
     )
 
-    model = helper.make_model(onnx_graph)
+    model = helper.make_model(
+        onnx_graph,
+        opset_imports=[helper.make_operatorsetid("", 20)],
+        ir_version=_DEFAULT_IR_VERSION,
+    )
     return model
 
 
@@ -2069,7 +2079,9 @@ def _onnx_QuantizeDequantizeLinear(
         initializer=[y_scale, y_zero_point] if y_zero_point is not None else [y_scale],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = helper.make_model(
+        onnx_graph, opset_imports=[op], ir_version=_DEFAULT_IR_VERSION
+    )
     onnx.checker.check_model(model, True)
 
     return model
@@ -2323,7 +2335,9 @@ def _onnx_LPBQ(
         initializer=[per_block_int_scale, per_channel_float_scale],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = helper.make_model(
+        onnx_graph, opset_imports=[op], ir_version=_DEFAULT_IR_VERSION
+    )
     onnx.checker.check_model(model, True)
 
     return model

@@ -62,6 +62,21 @@ from .mobilenet import MockMobileNetV1, MockMobileNetV11
 _DEFAULT_OPSET_VERSION = 13
 
 
+def make_model(
+    graph: onnx.GraphProto,
+    *,
+    opset_imports=None,
+    ir_version=10,
+    **kwargs,
+):
+    if opset_imports is None:
+        opset_imports = [helper.make_operatorsetid("", 20)]
+
+    return helper.make_model(
+        graph=graph, **kwargs, opset_imports=opset_imports, ir_version=ir_version
+    )
+
+
 class Add(torch.nn.Module):
     """Add module for a functional add"""
 
@@ -1097,7 +1112,7 @@ def build_dummy_model():
         [conv_w_init, conv_b_init, fc_w_init, fc_b_init],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = make_model(onnx_graph, opset_imports=[op])
 
     return model
 
@@ -1143,7 +1158,7 @@ def build_lstm_gru_dummy_model():
         [lstm_w_init, lstm_r_w_init, squeeze_axis_init, gru_w_init, gru_r_w_init],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = make_model(onnx_graph, opset_imports=[op])
 
     return model
 
@@ -2089,7 +2104,7 @@ def build_dummy_model_with_dynamic_input():
         [conv_w_init, conv_b_init, fc_w_init, fc_b_init],
     )
 
-    model = helper.make_model(onnx_graph, opset_imports=[op])
+    model = make_model(onnx_graph, opset_imports=[op])
 
     return model
 
@@ -2167,7 +2182,7 @@ def instance_norm_model(opset_version=_DEFAULT_OPSET_VERSION):
 
 
 def custom_add_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="CustomAddModel",
             inputs=[
@@ -2255,7 +2270,7 @@ def conv_relu_model(opset_version=_DEFAULT_OPSET_VERSION):
 def const_param_model():
     """ONNX model having constant tensors as op parameters"""
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="ConstantParamModel",
             inputs=[
@@ -2400,7 +2415,7 @@ def weight_matmul_model(in_features=10, out_features=20):
         inputs=[input_tensor],
         outputs=[output_tensor],
     )
-    model = onnx.helper.make_model(graph)
+    model = make_model(graph)
     onnx.checker.check_model(model)
     return model
 
@@ -2434,7 +2449,7 @@ def weight_gemm_model(in_features, out_features, transposed_weight=False):
         inputs=[input_tensor],
         outputs=[output_tensor],
     )
-    model = onnx.helper.make_model(graph)
+    model = make_model(graph)
     onnx.checker.check_model(model)
     return model
 
@@ -2464,7 +2479,7 @@ def conv_model(weight_shape, input_shape, output_shape, transpose=False, **kwarg
         inputs=[input_tensor],
         outputs=[output_tensor],
     )
-    model = onnx.helper.make_model(graph)
+    model = make_model(graph)
     onnx.checker.check_model(model)
     return model
 
@@ -2581,7 +2596,7 @@ def simplifiable_model(batch_size=1):
 
 
 def layernorm_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="LayerNormModel",
             inputs=[
@@ -2679,8 +2694,8 @@ def layernorm_model():
 
 def model_with_exceptional_ops():
     opset = OperatorSetIdProto()
-    opset.version = 18
-    model = helper.make_model(
+    opset.version = 21
+    model = make_model(
         graph=helper.make_graph(
             name="MatMul_GroupNorm_Model",
             inputs=[
@@ -2705,10 +2720,10 @@ def model_with_exceptional_ops():
                     np.random.randn(12).astype("float32"), name="conv_0.bias"
                 ),
                 numpy_helper.from_array(
-                    np.random.randn(2).astype("float32"), name="groupnorm_0.scale"
+                    np.random.randn(12).astype("float32"), name="groupnorm_0.scale"
                 ),
                 numpy_helper.from_array(
-                    np.random.randn(2).astype("float32"), name="groupnorm_0.bias"
+                    np.random.randn(12).astype("float32"), name="groupnorm_0.bias"
                 ),
             ],
             value_info=[
@@ -2762,7 +2777,7 @@ def model_with_exceptional_ops():
 
 
 def resize_op_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="ResizeModel",
             inputs=[
@@ -2881,12 +2896,12 @@ def add_matmul_model():
     )
 
     # Create the model
-    model_def = helper.make_model(graph_def, producer_name="add_matmul")
+    model_def = make_model(graph_def, producer_name="add_matmul")
     return model_def
 
 
 def model_with_initializers_as_activations():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="IntializersAsActivationsModel",
             inputs=[
@@ -2939,7 +2954,7 @@ def model_with_initializers_as_activations():
 
 
 def gather_op_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="GatherModel",
             inputs=[
@@ -2972,7 +2987,7 @@ def gather_op_model():
 
 
 def gather_op_with_int_data_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="GatherModel",
             inputs=[
@@ -3005,7 +3020,7 @@ def gather_op_with_int_data_model():
 
 
 def matmul_add_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="MatMulAddModel",
             inputs=[
@@ -3065,7 +3080,7 @@ def matmul_add_model():
 def matmul_bias_add_model():
     opset = OperatorSetIdProto()
     opset.version = 18
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="MatmulAdd",
             inputs=[
@@ -3108,7 +3123,7 @@ def matmul_bias_add_model():
 
 
 def softmax_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="SoftmaxModel",
             inputs=[
@@ -3162,7 +3177,7 @@ def softmax_model():
 def standalone_batchnorm(input_shape: tuple[int, int, int, int]):
     _, num_channels, *_ = input_shape
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="BatchnormModel",
             inputs=[
@@ -3227,7 +3242,7 @@ batchnorm_model = functools.partial(standalone_batchnorm, (10, 10, 8, 8))
 def standalone_batchnorm_constants(input_shape):
     _, num_channels, *_ = input_shape
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="BatchnormModel",
             inputs=[
@@ -3311,7 +3326,7 @@ batchnorm_model_constants = functools.partial(
 
 
 def integer_concat_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="IntConcatModel",
             inputs=[
@@ -3359,7 +3374,7 @@ def integer_concat_model():
 
 
 def shared_stat_batchnorm_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="BatchnormModel",
             inputs=[
@@ -3467,7 +3482,7 @@ def shared_stat_batchnorm_model():
 
 
 def matmul_with_constant_first_input():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="MatMulModel",
             inputs=[
@@ -3506,7 +3521,7 @@ def matmul_with_constant_first_input():
 
 
 def conv_with_weight_identity_input():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="IdentityConvModel",
             inputs=[
@@ -3545,7 +3560,7 @@ def conv_with_weight_identity_input():
 
 
 def dynamic_conv_model(conv_transpose: bool = False):
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="DynamicConvModel",
             inputs=[
@@ -3612,7 +3627,7 @@ def add_op(x, y):
 
 
 def custom_op_model():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="CustomAddModel",
             inputs=[
@@ -3653,7 +3668,7 @@ def custom_op_model():
 
 
 def model_with_split_matmul():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="SplitMatMulModel",
             inputs=[
@@ -3730,7 +3745,7 @@ def model_with_split_matmul():
 
 
 def model_with_4d_matmul_weight():
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="SplitMatMulModel",
             inputs=[
@@ -3768,7 +3783,7 @@ def gather_concat_model():
     #                        |
     # y -- Mul -- Cast --- Gather -- Concat
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="GatherConcatModel",
             inputs=[
@@ -3848,7 +3863,7 @@ def model_with_initializers_in_graph_input():
     """
     Models with IR<4 have initializers in graph input compulsorily
     """
-    model = helper.make_model(
+    model = make_model(
         opset_imports=[helper.make_operatorsetid("", 11)],
         ir_version=3,
         graph=helper.make_graph(
@@ -3927,7 +3942,7 @@ def model_with_initializers_in_graph_input():
 def standalone_layernorm(input_shape: tuple[int, int, int]):
     *_, num_channels = input_shape
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="LayerNormalization",
             inputs=[
@@ -3971,7 +3986,7 @@ def standalone_layernorm(input_shape: tuple[int, int, int]):
 def standalone_instancenorm(input_shape: tuple[int, int, int]):
     _, num_channels, _ = input_shape
 
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="InstanceNormalization",
             inputs=[
@@ -4043,7 +4058,7 @@ def model_with_ignore_ops(tmpdir):
 
 
 def standalone_gemm(in_channels: int, out_channels: int):
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="Gemm",
             inputs=[
@@ -4081,7 +4096,7 @@ def standalone_gemm(in_channels: int, out_channels: int):
 
 
 def dynamic_gemm(in_channels: int, out_channels: int):
-    model = helper.make_model(
+    model = make_model(
         graph=helper.make_graph(
             name="Gemm",
             inputs=[
@@ -4118,7 +4133,7 @@ def dynamic_gemm(in_channels: int, out_channels: int):
 
 
 def conv_relu():
-    model = helper.make_model(
+    model = make_model(
         opset_imports=[helper.make_operatorsetid("", 21)],
         graph=helper.make_graph(
             name="ConvRelu",
@@ -4162,7 +4177,7 @@ def reshape_with_multiple_consumers():
     input -> Relu -+-> Reshape ------> Add ->
                    +-> Sigmoid ---------^
     """
-    model = helper.make_model(
+    model = make_model(
         opset_imports=[helper.make_operatorsetid("", 21)],
         graph=helper.make_graph(
             name="reshape_with_multiple_consumers",
@@ -4219,7 +4234,7 @@ def diverse_ops(dtype=TensorProto.FLOAT):
     """
     input -> Relu -+-> Reshape ------> MaxPool -> output
     """
-    model = helper.make_model(
+    model = make_model(
         opset_imports=[helper.make_operatorsetid("", 21)],
         graph=helper.make_graph(
             name="reshape_with_multiple_consumers",
