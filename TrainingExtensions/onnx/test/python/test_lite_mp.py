@@ -9,6 +9,7 @@ from functools import partial
 import numpy as np
 import onnxruntime
 
+from aimet_common.utils import compute_psnr
 from aimet_common.defs import QuantizationDataType
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx import analyze_per_layer_sensitivity
@@ -17,18 +18,6 @@ from aimet_onnx.utils import make_dummy_input
 from aimet_onnx.lite_mp import flip_layers_to_higher_precision
 
 from .models import models_for_tests
-
-
-def _compute_snr(expected: np.array, actual: np.array):
-    """
-    Computes the SNR for two signals where the noise is defined as expected - actual
-    """
-    data_range = np.abs(expected).max()
-    noise_pw = np.sum(np.power(expected - actual, 2))
-    noise_pw /= actual.size
-    noise = np.sqrt(noise_pw)
-    noise = max(noise, 1e-10)
-    return 20 * np.log10(data_range / noise)
 
 
 def _collect_inputs_and_fp_outputs(model):
@@ -46,7 +35,7 @@ def _collect_inputs_and_fp_outputs(model):
 def _eval_accuracy(session, args):
     fp_inputs, fp_outputs = args
     quantized_outputs = session.run(None, {"input": fp_inputs})
-    snr = _compute_snr(fp_outputs[0], quantized_outputs[0])
+    snr = compute_psnr(fp_outputs[0], quantized_outputs[0])
 
     return snr if not math.isnan(snr) else 0.0
 

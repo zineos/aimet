@@ -51,6 +51,7 @@ import subprocess
 import threading
 import time
 import warnings
+import numpy as np
 from enum import Enum
 from typing import Callable, Dict, List, Optional, TextIO, Union, Any
 import multiprocessing
@@ -548,3 +549,60 @@ def profile(
     finally:
         if should_close:
             file.close()
+
+
+def compute_psnr(
+    expected: np.ndarray,
+    actual: np.ndarray,
+    max_psnr: float = 100.0,
+) -> float:
+    """
+    Computes the Peak Signal-to-Noise Ratio (PSNR) for two values
+    PSNR = 20 * log10(data_range / noise) where noise is Root Mean Square error between expected and actual
+
+    Where the data_range is the dynamic range of expected value, computed as maximum of:
+
+    1. expected.max() - expected.min() (standard dynamic range)
+    2. np.abs(expected).max() (absolute max value)
+
+    NOTE: Ensure PSNR between (-100, 100) dB to ensure numerical stability in downstream tasks like sorting during per-layer analysis.
+          Uses separate thresholds for data_range and noise to ensure smooth behaviour near zero.
+
+    :param expected: The reference values or ground truth (FP32 outputs)
+    :param actual: The noisy values to compare against (quantized outputs)
+    :param max_psnr: The maximum PSNR value to clip to (default is 100 dB)
+    :return: The computed PSNR value in dB
+    """
+    logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
+
+    expected = np.asarray(expected)
+    actual = np.asarray(actual)
+
+    if expected.shape != actual.shape:
+        raise ValueError("Input arrays must have the same shape.")
+
+    if expected.size == 0 or actual.size == 0:
+        raise ValueError("Input arrays must not be empty.")
+
+    # Allow only finite expected values (Exclude NaN, +inf and -inf)
+    if not np.all(np.isfinite(expected)):
+        raise ValueError("Input arrays must have finite values.")
+
+    # If the actual values contain NaN or +inf or -inf, treat as worst-case quality by returning -max_psnr
+    if not np.all(np.isfinite(actual)):
+        logger.warning("The actual values contain NaNs or infinite values.")
+        return -max_psnr
+
+    # Compute maximum custom data range
+    epsilon = 1e-10  # The minimum value for data range to avoid instability
+    data_range = max(expected.max() - expected.min(), np.abs(expected).max())
+    data_range = max(data_range, epsilon)  # Avoid log10(very small / noise)
+
+    # Compute noise power and RMS error
+    noise_epsilon = epsilon * 10 ** (-max_psnr / 20)
+    noise_pw = np.mean(np.square(expected - actual))
+    noise = max(np.sqrt(noise_pw), noise_epsilon)  # Avoid log10(data_range / 0)
+
+    # Compute PSNR and clip to ensure numerical stability
+    psnr = 20 * np.log10(data_range / noise)
+    return float(np.clip(psnr, -max_psnr, max_psnr))

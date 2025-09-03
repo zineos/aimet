@@ -38,7 +38,9 @@
 
 import os
 import tempfile
-from aimet_common.utils import profile, AimetLogger
+import numpy as np
+import pytest
+from aimet_common.utils import profile, AimetLogger, compute_psnr
 from aimet_common import utils
 
 logger = AimetLogger.get_area_logger(AimetLogger.LogAreas.Utils)
@@ -73,3 +75,60 @@ def test_profile():
 
         with profile("profile 4"):
             _ = 1 + 1
+
+
+def test_compute_psnr():
+    # Identical arrays
+    expected = np.array([[1, 2], [3, 4]])
+    actual = np.array([[1, 2], [3, 4]])
+    psnr = compute_psnr(expected, actual)
+    assert psnr == 100
+
+    # Valid PSNR
+    expected = np.array([[1.62434536, -0.61175641], [-0.52817175, -1.07296862]])
+    actual = np.array([[0.86540763, -2.3015387], [1.74481176, -0.7612069]])
+    psnr = compute_psnr(expected, actual)
+    assert np.isfinite(psnr)
+    assert psnr > 0
+
+    # Empty arrays
+    expected = np.array([])
+    actual = np.array([])
+    with pytest.raises(ValueError):
+        compute_psnr(expected, actual)
+
+    # Shape mismatch
+    expected = np.array([1, 2, 3, 4])
+    actual = np.array([[1, 2], [3, 4]])
+    with pytest.raises(ValueError):
+        compute_psnr(expected, actual)
+
+    # data_range contains all zero
+    expected = np.array([[0, 0], [0, 0]])
+    actual = np.array([[1, 2], [3, 4]])
+    psnr = compute_psnr(expected, actual)
+    assert psnr == -100
+
+    # Expected should contain finite values only
+    expected = np.array([[1, 2], [np.nan, 4]])
+    actual = np.array([[1, 2], [3, 4]])
+    with pytest.raises(ValueError):
+        compute_psnr(expected, actual)
+
+    # Clip the PSNR to -100 dB for non-finite values
+    expected = np.array([[1, 2], [3, 4]])
+    actual = np.array([[1, np.inf], [np.nan, 4]])
+    psnr = compute_psnr(expected, actual)
+    assert psnr == -100
+
+    # When data_range = 0 and noise_pw = 0, treat it as perfect match
+    expected = np.array([[0, 0], [0, 0]])
+    actual = np.array([[0, 0], [0, 0]])
+    psnr = compute_psnr(expected, actual)
+    assert psnr <= 100
+
+    # Handle scalars
+    expected = 1.0
+    actual = 1.000001
+    psnr = compute_psnr(expected, actual)
+    assert psnr <= 100
