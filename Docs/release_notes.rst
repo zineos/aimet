@@ -6,6 +6,41 @@
 Release notes
 #############
 
+2.14.0
+======
+* New Feature
+    * ONNX
+        * Add support for FP16 in :class:`QuantizationSimModel` (`2494d90`_)
+
+* Bug fixes and Improvements
+    * ONNX
+        * Add sequential MSE support for ``onnx >= 1.18.0``. (`754d030`_)
+        * Improve histogram granularity during TFE calibration (`91109af`_)
+        * Improve runtime for :class:`QuantizationSimModel` creation for large models like LLMs (`f7e700f`_)
+        * Improve runtime for setting quantizers in a :class:`QuantizationSimModel` for use cases like tying KV Cache input and output quantizers. (`c0bdb46`_)
+        * Add a check for None values in the ``group`` attribute of ``Conv`` layers and fix improper handling of None ``group`` attribute in ``ConvTranspose`` within :func:`fold_all_batch_norms_to_weight` (`374e8db`_)
+
+    * PyTorch
+        * Address QAT convergence issue: Add a fix for cases where ``quantizer.min`` becomes equal to ``quantizer.max`` during training, leading to NaN values (`51f8990`_)
+
+    * Keras
+        * Fix accuracy drop issue for GPU wheel by excluding ``libpython*.so*`` from the aimet wheel packages (`22cac5c`_)
+
+    * Common
+        * Remove ``Conv3d``, ``Conv3dTranspose``, and ``DepthwiseConv`` ops followed by activation from the supergroup until HTP support is available. (`05f6810`_)
+        * Fix color theme issue in documentation causing code snippets to render incorrectly (`2c64eac`_)
+
+.. _2494d90: https://github.com/quic/aimet/commit/2494d9048241b0b84e388f69d3c202b2e45285ee
+.. _754d030: https://github.com/quic/aimet/commit/754d030838cb676b6f6b08f6e8cc91838bcf8be9
+.. _91109af: https://github.com/quic/aimet/commit/91109aff222711a4ce0528e8b2dc2eb2c63cf18d
+.. _f7e700f: https://github.com/quic/aimet/commit/f7e700f98973bdf39907482d3092349ceae2047e
+.. _c0bdb46: https://github.com/quic/aimet/commit/c0bdb466f0e26b5757f473308af0c41c47a50fb1
+.. _374e8db: https://github.com/quic/aimet/commit/374e8dbc344f40cf356d3bae2ede521ad5341622
+.. _51f8990: https://github.com/quic/aimet/commit/51f899080ea7260dc2591023a868b30a88ff5fa4
+.. _05f6810: https://github.com/quic/aimet/commit/05f6810a5a0e1eef2cfaf6525c572fc02b0174bc
+.. _2c64eac: https://github.com/quic/aimet/commit/2c64eac1801724500028e926585c558b936f12ae
+.. _22cac5c: https://github.com/quic/aimet/commit/22cac5c7cb69e8ea66f710ab1b967c6f9b44f0f5
+
 2.13.0
 ======
 * Bug fixes and Improvements
