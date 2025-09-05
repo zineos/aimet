@@ -105,37 +105,6 @@ jobs:
               }
             ]')
           echo "VALUE=$VALUE" >> $GITHUB_ENV
-      - name: Tensorflow variants
-        # For the default branch, we still test all variants every time (yet)
-        if: steps.select.outputs.test_tf == 'true' || github.ref_name == github.event.repository.default_branch
-        run: |
-          VALUE=$(echo "${VALUE:-"{}"}" | jq -c '.include += [
-              {
-                 "id":              "tf-cpu",
-                 "runs-on":         "ubuntu-latest",
-                 "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "2.10.1",
-                 "VER_TORCH":       "",
-                 "VER_ONNXRUNTIME": "",
-                 "VER_CUDA":        "",
-                 "ENABLE_TESTS":    "ON",
-                 "BUILD_TARGETS":   "all",
-                 "PIP_INDEX":       ""
-              },
-              {
-                 "id":              "tf-gpu",
-                 "runs-on":         "k8s-gpu",
-                 "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "2.10.1",
-                 "VER_TORCH":       "",
-                 "VER_ONNXRUNTIME": "",
-                 "VER_CUDA":        "11.8.0",
-                 "ENABLE_TESTS":    "ON",
-                 "BUILD_TARGETS":   "all",
-                 "PIP_INDEX":       ""
-              }
-            ]')
-          echo "VALUE=$VALUE" >> $GITHUB_ENV
       - name: ONNX variants
         # For the default branch, we still test all variants every time (yet)
         if: steps.select.outputs.test_onnx == 'true' || github.ref_name == github.event.repository.default_branch
