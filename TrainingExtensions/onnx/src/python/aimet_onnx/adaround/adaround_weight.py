@@ -69,7 +69,7 @@ class Adaround:
     @classmethod
     def apply_adaround(
         cls,
-        quant_sim: QuantizationSimModel,
+        sim: QuantizationSimModel,
         inputs: Collection[Dict[str, np.ndarray]],
         num_iterations: int = 10000,
         node_names_to_optimize: List[str] = None,
@@ -81,7 +81,7 @@ class Adaround:
         for optimized weights and the sim model will contain updated weight tensors.
 
         Args:
-            quant_sim (QuantizationSimModel): QuantizationSimModel instance to optimize
+            sim (QuantizationSimModel): QuantizationSimModel instance to optimize
             inputs (Collection[Dict[str, np.ndarray]]): The set of input samples to use during optimization.
             num_iterations (int): Number of optimization steps to take for each layer. Recommended value is
                 10K for weight bitwidths >= 8-bits, 15K for weight bitwidths < 8 bits.
@@ -89,29 +89,29 @@ class Adaround:
 
         """
         # pylint: disable=too-many-locals, protected-access
-        quant_sim._compute_param_encodings(overwrite=False)
+        sim._compute_param_encodings(overwrite=False)
 
-        module_act_func_pair = get_module_act_func_pair(quant_sim.connected_graph)
+        module_act_func_pair = get_module_act_func_pair(sim.connected_graph)
 
-        fp32_model = copy.deepcopy(quant_sim.model.model)
+        fp32_model = copy.deepcopy(sim.model.model)
         fp32_model = QuantizationSimModel.remove_quantizers(fp32_model)
 
         with (
-            utils.disable_quantizers(quant_sim, set(quant_sim.activation_names))
+            utils.disable_quantizers(sim, set(sim.activation_names))
             and tempfile.TemporaryDirectory() as tmp_dir
         ):
             # Cache model input data to temporary directory
             cached_dataset = utils.CachedDataset(inputs, len(inputs), tmp_dir)
 
             param_to_tensor_quantizer_dict = (
-                Adaround._create_param_to_tensor_quantizer_dict(quant_sim)
+                Adaround._create_param_to_tensor_quantizer_dict(sim)
             )
-            model_data = ModelData(quant_sim)
+            model_data = ModelData(sim)
             quantized_layer_to_input_tensor_name = (
-                Adaround._get_quantized_layer_input_tensor_name(quant_sim)
+                Adaround._get_quantized_layer_input_tensor_name(sim)
             )
             # AdaRound must be applied to modules in the order of occurrence
-            for module in tqdm(quant_sim.connected_graph.ordered_ops):
+            for module in tqdm(sim.connected_graph.ordered_ops):
                 name = module.name
                 module_info = model_data.module_to_info[name]
 
@@ -133,7 +133,7 @@ class Adaround:
                     AdaroundOptimizer.adaround_module(
                         module_info,
                         quantized_input_name,
-                        quant_sim,
+                        sim,
                         fp32_model,
                         act_func,
                         cached_dataset,
@@ -142,10 +142,10 @@ class Adaround:
                     )
                     # Freeze quantizer's encodings
                     weight_name = module_info.params["weight"].name
-                    quant_sim.qc_quantize_op_dict[weight_name].freeze_encodings()
+                    sim.qc_quantize_op_dict[weight_name].freeze_encodings()
 
         # Re-build session since weights have been updated
-        quant_sim._rebuild_session()
+        sim._rebuild_session()
 
     @classmethod
     def _is_supported_layer_type(cls, module_info: ModuleInfo):
