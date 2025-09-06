@@ -149,23 +149,6 @@ Setting up the model.
             :start-after: # Step 1
             :end-before: # End step 1
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Import packages**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/mixed_precision.py
-            :language: python
-            :start-after: # Step 0. Import statements
-            :end-before: # End step 0
-
-        **Load the model, define forward_pass and evaluation callbacks**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/mixed_precision.py
-            :language: python
-            :start-after: # Step 1
-            :end-before: # End step 1
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -201,16 +184,6 @@ Quantizing the model.
             :start-after: # Step 2
             :end-before: # End step 2
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Quantization with regular mixed precision**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/mixed_precision.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End step 2
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -232,12 +205,6 @@ API
 
         .. include:: ../../apiref/torch/mp.rst
             :start-after: # start-after amp
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../../apiref/tensorflow/amp.rst
-           :start-after: # start-after
 
     .. tab-item:: ONNX
         :sync: onnx

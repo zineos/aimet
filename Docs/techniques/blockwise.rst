@@ -74,12 +74,6 @@ Following are examples of valid and invalid combinations of tensor shape, `Quant
             tensor shape: (2, 4, 10)
             QuantizeDequantize shape: (2, 2)
             block_size: (-1, -1)    # block_size will be inferred to be (2, 5)
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -119,12 +113,6 @@ The following code examples show how to configure convolution and linear layers 
                                                                              bitwidth=4,
                                                                              symmetric=True,
                                                                              block_size=(1, 4))  # (-1, -1) works too
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 

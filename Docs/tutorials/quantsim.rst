@@ -47,8 +47,8 @@ or parameters are quantized and de-quantized.
 A de-quantizated value is not exactly equal to its corresponding original value. The difference between
 the two is known as quantization noise.
 
-To simulate quantization noise, AIMET QuantSim adds quantizer operations to the PyTorch, TensorFlow, or
-ONNX model graph. The resulting model graph can be used as-is in your evaluation or training pipeline.
+To simulate quantization noise, AIMET QuantSim adds quantizer operations to the PyTorch or ONNX
+model graph. The resulting model graph can be used as-is in your evaluation or training pipeline.
 
 Determine quantization parameters (encodings)
 ---------------------------------------------

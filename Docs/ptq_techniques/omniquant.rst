@@ -49,12 +49,6 @@ Setup
             :language: python
             :start-after: # [prepare-dataloader]
             :end-before: # End of [prepare-dataloader]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -75,12 +69,6 @@ Use AIMET's :ref:`quantization simulation<quantsim-index>` to create a QuantSimM
             :language: python
             :start-after: # [create-sim]
             :end-before: # End of [create-sim]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -105,12 +93,6 @@ The usage of the dumped scale is not supported in the current release.
             :language: python
             :start-after: # [apply-omniquant]
             :end-before: # End of [apply-omniquant]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -131,12 +113,6 @@ Compute encodings for remaining parameters of the model.
             :language: python
             :start-after: # [compute_encodings]
             :end-before: # End of [compute_encodings]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -157,12 +133,6 @@ Evaluate the quantized model.
             :language: python
             :start-after: # [evaluation]
             :end-before: # End of [evaluation]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -183,12 +153,6 @@ If the resulting quantized accuracy is satisfactory, export the model.
             :language: python
             :start-after: # [export]
             :end-before: # End of [export]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -205,12 +169,6 @@ API
 
         .. include:: ../apiref/torch/omniquant.rst
             :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 

@@ -4,7 +4,7 @@
 Installation
 ############
 
-This page provides instructions for installing the latest version of AIMET across supported frameworks: ONNX, PyTorch, and TensorFlow.
+This page provides instructions for installing the latest version of AIMET across supported frameworks: ONNX, PyTorch.
 
 Please select one installation method that best suits your environment:
 
@@ -48,7 +48,7 @@ Alternative packages
 ====================
 
 Install the latest version of AIMET for supported framework and compute platforms including
-ONNX, PyTorch and TensorFlow from the .whl files hosted at https://github.com/quic/aimet/releases.
+ONNX and PyTorch from the .whl files hosted at https://github.com/quic/aimet/releases.
 
 Prerequisites
 -------------
@@ -100,24 +100,6 @@ Use one of the following commands to install AIMET based on your choice of frame
         .. parsed-literal::
 
             python3 -m pip install |download_url|\ |version|/aimet_torch-|version|\+cpu\ |torch_whl_suffix| -f |torch_pkg_url|
-
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Tensorflow 2.10 GPU**
-
-        With CUDA 11.x:
-
-        .. parsed-literal::
-
-            python3 -m pip install |download_url|\ |version|/aimet_tensorflow-|version|\+cu118\ |whl_suffix|
-
-        With CPU only:
-
-        .. parsed-literal::
-
-            python3 -m pip install |download_url|\ |version|/aimet_tensorflow-|version|\+cpu\ |whl_suffix|
 
 Verifying the installation
 --------------------------

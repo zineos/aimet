@@ -49,17 +49,6 @@ Setup
            :language: python
            :pyobject: evaluate_model
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/compression_code_examples.py
-           :language: python
-           :lines: 39-49
-
-        .. literalinclude:: ../../legacy/keras_code_examples/compression_code_examples.py
-           :language: python
-           :pyobject: get_eval_func
-
 Compressing using Spatial SVD
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -81,21 +70,6 @@ Compressing using Spatial SVD
            :language: python
            :pyobject: spatial_svd_manual_mode
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Compressing using Spatial SVD in auto mode**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/compression_code_examples.py
-            :language: python
-            :pyobject: aimet_spatial_svd
-
-        **Sample Driver Code for Spatial SVD using Resnet50**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/compression_code_examples.py
-            :language: python
-            :pyobject: compress
-
 API
 ===
 
@@ -112,9 +86,3 @@ API
         .. include:: ../../apiref/torch/compress.rst
            :start-after: # Spatial SVD config starts
            :end-before: # Spatial SVD config ends
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../../apiref/tensorflow/compress.rst
-           :start-after: _apiref-tensorflow-compress:

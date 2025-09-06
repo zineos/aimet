@@ -28,7 +28,7 @@ Models quantized with AIMET facilitate its deployment on edge devices like mobil
 
 AIMET employs post-training and fine-tuning techniques to minimize accuracy loss during quantization and compression.
 
-AIMET supports models from the ONNX, PyTorch and TensorFlow/Keras frameworks.
+AIMET supports models from the ONNX and PyTorch frameworks.
 
 
 Overview

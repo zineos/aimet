@@ -71,52 +71,6 @@ Setup
             :start-after: [setup]
             :end-before: [step_1]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. container:: tab-heading
-
-            Load the model for AdaRound. In the following code example, the model is MobileNetV2. 
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # pylint: disable=missing-docstring
-            :end-before: # End of model
-
-        .. rst-class:: script-output
-
-          .. code-block:: none
-
-            Model: "mobilenetv2_1.00_224"
-            __________________________________________________________________________________________________
-             Layer (type)                   Output Shape         Param #     Connected to
-            ==================================================================================================
-             input_1 (InputLayer)           [(None, 224, 224, 3  0           []
-                                            )]
-
-             Conv1 (Conv2D)                 (None, 112, 112, 32  864         ['input_1[0][0]']
-                                            )
-
-             bn_Conv1 (BatchNormalization)  (None, 112, 112, 32  128         ['Conv1[0][0]']
-                                            )
-
-             Conv1_relu (ReLU)              (None, 112, 112, 32  0           ['bn_Conv1[0][0]']
-                                            )
-
-             expanded_conv_depthwise (Depth  (None, 112, 112, 32  288        ['Conv1_relu[0][0]']
-             wiseConv2D)                    )
-             ...
-
-        .. container:: tab-heading
-
-            AdaRound optimization requires an unlabeled dataset.
-            This example uses the ImageNet validation data.
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # Set up dataset
-            :end-before: # End of dataset
-
 Step 1
 ~~~~~~
 
@@ -140,14 +94,6 @@ Apply AdaRound to the model.
             :language: python
             :start-after: [step_1]
             :end-before: [step_2]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # Step 1
-            :end-before: # End of step 1
 
 Step 2
 ~~~~~~
@@ -175,14 +121,6 @@ Use AIMET's QuantSim to simulate quantization.
             :start-after: [step_2]
             :end-before: [step_3]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
-
 Step 3
 ~~~~~~
 
@@ -207,14 +145,6 @@ Evaluate the model.
             :start-after: [step_3]
             :end-before: [step_4]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # Step 3
-            :end-before: # End of step 3
-
 Step 4
 ~~~~~~
 
@@ -238,15 +168,6 @@ If AdaRound resulted in satisfactory accuracy, export the model.
             :language: python
             :start-after: [step_4]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_adaround.py
-            :language: python
-            :start-after: # Step 4
-            :end-before: # End of step 4
-
-
 API
 ===
 
@@ -265,9 +186,3 @@ API
 
         .. include:: ../apiref/torch/adaround.rst
             :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../apiref/tensorflow/adaround.rst
-           :start-after: # start-after

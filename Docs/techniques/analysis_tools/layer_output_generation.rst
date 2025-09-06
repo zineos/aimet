@@ -12,7 +12,7 @@ Context
 Layer output generation is an API that captures and saves intermediate layer-outputs of your pre-trained model. The model
 can be original (FP32) or a :class:`QuantizationSimModel`.
 
-The layer outputs are named according to the exported model (PyTorch, ONNX, or TensorFlow) by the
+The layer outputs are named according to the exported model (PyTorch or ONNX) by the
 QuantSim export API :func:`QuantizationSimModel.export`.
 
 This enables layer output comparison between quantization simulated (QuantSim) models
@@ -48,14 +48,6 @@ Import the API.
             :start-after: # Step 0. Import statements
             :end-before: # End step 0
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/layer_output_generation_code_example.py
-            :language: python
-            :start-after: # Step 0. Import statements
-            :end-before: # End step 0
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -77,14 +69,6 @@ Export the original or QuantSim model from AIMET.
         :sync: torch
 
         .. literalinclude:: ../../legacy/torch_code_examples/layer_output_generation_code_example.py
-            :language: python
-            :start-after: # Step 1. Obtain original or quantsim model
-            :end-before: # End step 1
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/layer_output_generation_code_example.py
             :language: python
             :start-after: # Step 1. Obtain original or quantsim model
             :end-before: # End step 1
@@ -114,14 +98,6 @@ Obtain inputs from which to generate intermediate layer outputs.
             :start-after: # Step 2. Obtain pre-processed inputs
             :end-before: # End step 2
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/layer_output_generation_code_example.py
-            :language: python
-            :start-after: # Step 2. Obtain pre-processed inputs
-            :end-before: # End step 2
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -147,14 +123,6 @@ Generate the specified layer outputs.
             :start-after: # Step 3. Generate outputs
             :end-before: # End step 3
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/layer_output_generation_code_example.py
-            :language: python
-            :start-after: # Step 3. Generate outputs
-            :end-before: # End step 3
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -175,12 +143,6 @@ API
 
         .. include:: ../../apiref/torch/layer_output_generation.rst
             :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../../apiref/tensorflow/layer_output_generation.rst
-           :start-after: # start-after
 
     .. tab-item:: ONNX
         :sync: onnx

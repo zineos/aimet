@@ -24,9 +24,6 @@ to generate both the items. The exported model type will differ based on the fra
      - .onnx
    * - ONNX
      - .onnx
-   * - TensorFlow
-     - .h5 or .pb
-
 
 Qualcomm\ |reg| AI hub
 ======================
@@ -51,7 +48,7 @@ quantization, compilation and execution.
 Conversion
 ~~~~~~~~~~
 
-|qnn| SDK ``qairt-converter`` tool converts a model from PyTorch/ONNX/TensorFlow framework to a equivalent DLC (``*.dlc``) graph format representation.
+|qnn| SDK ``qairt-converter`` tool converts a model from PyTorch/ONNX framework to a equivalent DLC (``*.dlc``) graph format representation.
 The encoding files generated from the AIMET workflow are provided as an input to this step via the ``–-quantization_overrides`` option.
 
 .. code-block:: shell
@@ -63,7 +60,7 @@ The encoding files generated from the AIMET workflow are provided as an input to
 
      arguments:
      --input_network <AIMET_exported_model_path>
-       Path to the AIMET exported (PyTorch/ONNX/TensorFlow) model
+       Path to the AIMET exported (PyTorch/ONNX) model
 
      --quantization_overrides <AIMET_exported_model.encodings>
        Path to the AIMET exported encodings JSON file containing quantization parameters

@@ -35,13 +35,3 @@ AIMET API
 
         .. include:: ../apiref/torch/index.rst
             :start-after: # start-after-v1
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. container:: tab-heading
-
-            **aimet_tensorflow**
-
-        .. include:: ../apiref/tensorflow/index.rst
-            :start-after: # start-after

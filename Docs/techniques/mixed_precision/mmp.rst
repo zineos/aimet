@@ -39,12 +39,6 @@ Setup
             :language: python
             :start-after: [setup]
             :end-before: [set_precision_leaf]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -75,12 +69,6 @@ Set precision of a leaf layer
             :language: python
             :start-after: [set_precision_leaf]
             :end-before: [set_precision_non_leaf]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -100,12 +88,6 @@ Set precision of a non-leaf layer
             :language: python
             :start-after: [set_precision_non_leaf]
             :end-before: [set_precision_type]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -125,12 +107,6 @@ Set precision based on layer type
             :language: python
             :start-after: [set_precision_type]
             :end-before: [set_precision_model_input]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -150,12 +126,6 @@ Set model input precision
             :language: python
             :start-after: [set_precision_model_input]
             :end-before: [set_precision_model_output]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -176,12 +146,6 @@ Set model output precision
             :language: python
             :start-after: [set_precision_model_output]
             :end-before: [apply]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -204,12 +168,6 @@ All of the `set precision` family of calls from step 1 are processed at once whe
         .. literalinclude:: ../../snippets/torch/apply_mmp.py
             :language: python
             :start-after: [apply]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -230,12 +188,6 @@ API
         .. include:: ../../apiref/torch/mp.rst
             :start-after: # start-after mmp
             :end-before: # end-before mmp
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 

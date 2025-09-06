@@ -131,13 +131,6 @@ Import required libraries.
             :start-after: # Step 0. Import statements
             :end-before: # End step 0
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :lines: 39-47
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -163,23 +156,6 @@ Prepare the callback for calibration.
             :start-after: # Step 1. Prepare forward pass callback
             :end-before: # End step 1
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **2.1 Prepare toy dataset to run example code**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 0. Prepare toy dataset to run example code
-            :end-before: # End step 0
-
-        **2.2 Prepare forward pass callback**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 1. Prepare forward pass callback
-            :end-before: # End step 1
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -200,14 +176,6 @@ Prepare the callback for quantized model evaluation.
         :sync: torch
 
         .. literalinclude:: ../../legacy/torch_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 2. Prepare eval callback
-            :end-before: # End step 2
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
             :language: python
             :start-after: # Step 2. Prepare eval callback
             :end-before: # End step 2
@@ -239,16 +207,6 @@ Prepare the model, callback functions, and dataloader as required per platform.
             :start-after: # Step 3. Prepare model and callback functions
             :end-before: # End step 3
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Prepare the model**
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 3. Prepare model
-            :end-before: # End step 3
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -271,14 +229,6 @@ Create QuantAnalyzer.
         :sync: torch
 
         .. literalinclude:: ../../legacy/torch_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 4. Create QuantAnalyzer object
-            :end-before: # End step 4
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
             :language: python
             :start-after: # Step 4. Create QuantAnalyzer object
             :end-before: # End step 4
@@ -308,14 +258,6 @@ Finally, run QuantAnalyzer to analyze the data.
             :start-after: # Step 5. Run QuantAnalyzer
             :end-before: # End step 5
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../../legacy/keras_code_examples/quant_analyzer_code_example.py
-            :language: python
-            :start-after: # Step 5. Run QuantAnalyzer
-            :end-before: # End step 5
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -335,12 +277,6 @@ API
 
         .. include:: ../../apiref/torch/quant_analyzer.rst
             :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../../apiref/tensorflow/quant_analyzer.rst
-           :start-after: # start-after
 
     .. tab-item:: ONNX
         :sync: onnx

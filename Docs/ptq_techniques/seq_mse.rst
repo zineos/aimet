@@ -24,7 +24,7 @@ Prerequisites
 
 To use SeqMSE, you must have the following:
 
-- A pre-trained PyTorch or ONNX model (TensorFlow is not supported)
+- A pre-trained PyTorch or ONNX model
 - A set of representative input samples for the model
 
 Procedure
@@ -48,12 +48,6 @@ Setup
             :language: python
             :start-after: # Prepare the dataloader
             :end-before: # End of dataloader
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -82,12 +76,6 @@ Create a :ref:`QuantizationSimModel<quantsim-index>` object for the model.
             :language: python
             :start-after: # Create Quantization Simulation Model
             :end-before: # End of QuantizationSimModel
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -112,12 +100,6 @@ Apply SeqMSE to find optimized parameter encodings for supported layer types.
             :language: python
             :start-after: # Apply Seq MSE
             :end-before: # End of Seq MSE
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -141,12 +123,6 @@ Compute encodings for remaining uninitialized quantizers.
             :language: python
             :start-after: # Calibration callback
             :end-before: # End of compute_encodings
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -170,12 +146,6 @@ Evaluate the quantized model.
             :language: python
             :start-after: # Evaluation
             :end-before: # End of evaluation
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -199,12 +169,6 @@ If the resulting quantized accuracy is satisfactory, export the model.
             :language: python
             :start-after: # Export
             :end-before: # End of export
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -224,12 +188,6 @@ API
 
         .. include:: ../apiref/torch/seq_mse.rst
             :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        Not supported.
-
     .. tab-item:: ONNX
         :sync: onnx
 

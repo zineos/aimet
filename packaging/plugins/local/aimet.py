@@ -91,15 +91,16 @@ def get_aimet_variant() -> str:
     enable_tensorflow = is_cmake_option_enabled("ENABLE_TENSORFLOW")
     enable_onnx = is_cmake_option_enabled("ENABLE_ONNX")
 
-    enabled_variants = [enable_torch, enable_tensorflow, enable_onnx]
+    if enable_tensorflow:
+        raise RuntimeError("ENABLE_TENSORFLOW must be OFF.")
+
+    enabled_variants = [enable_torch, enable_onnx]
     enabled_count = sum(enabled_variants)
 
-    if enabled_count == 3:
+    if enabled_count == 2:
         variant = "tf-torch-"
     elif enabled_count == 1:
-        if enable_tensorflow:
-            variant = "tf-"
-        elif enable_torch:
+        if enable_torch:
             variant = "torch-"
         elif enable_onnx:
             variant = "onnx-"
@@ -107,11 +108,10 @@ def get_aimet_variant() -> str:
         raise RuntimeError(
             "\n".join(
                 [
-                    "Only one or all of ENABLE_{TORCH, TENSORFLOW, ONNX} should set to ON."
+                    "Only one or all of ENABLE_{TORCH, ONNX} should set to ON."
                     "Your passed:"
                     f"  * ENABLE_TORCH:      {'ON' if enable_torch else 'OFF'}",
                     f"  * ENABLE_ONNX:       {'ON' if enable_onnx else 'OFF'}",
-                    f"  * ENABLE_TENSORFLOW: {'ON' if enable_tensorflow else 'OFF'}",
                 ]
             )
         )

@@ -44,14 +44,6 @@ Setup
             :start-after: [setup]
             :end-before: [step_1]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_bn.py
-            :language: python
-            :start-after: # pylint: disable=missing-docstring
-            :end-before: # End of set up
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -75,14 +67,6 @@ Create the quantization simulation mdoel (QuantizationSimModel).
             :start-after: [step_1]
             :end-before: [step_2]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_bn.py
-            :language: python
-            :start-after: # Step 1
-            :end-before: # End of step 1
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -105,14 +89,6 @@ QAT involves training your model for a few additional epochs (usually 15-20). Wh
             :language: python
             :start-after: [step_2]
             :end-before: [step_3]
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_bn.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
 
         .. rst-class:: script-output
 
@@ -141,14 +117,6 @@ Re-estimate the BN statistics and fold the BN layers.
             :start-after: [step_3]
             :end-before: [step_4]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_bn.py
-            :language: python
-            :start-after: # Step 3
-            :end-before: # End of step 3
-
         .. rst-class:: script-output
 
           .. code-block:: none
@@ -175,14 +143,6 @@ If BN re-estimation resulted in satisfactory accuracy, export the model.
             :language: python
             :start-after: [step_4]
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_bn.py
-            :language: python
-            :start-after: # Step 4
-            :end-before: # End of step 4
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -197,12 +157,6 @@ API
         :sync: torch
 
         .. include:: ../apiref/torch/bn.rst
-            :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../apiref/tensorflow/bn.rst
             :start-after: # start-after
 
     .. tab-item:: ONNX

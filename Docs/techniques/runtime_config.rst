@@ -154,7 +154,7 @@ Omitting the setting causes the parameter to use the setting specified by the de
    :end-before:  # op_type end
 
 In the op_type section, configure settings affecting particular op types.
-The configuration file supports ONNX op types, and internally maps the type to a PyTorch or TensorFlow op
+The configuration file supports ONNX op types, and internally maps the type to a PyTorch op
 type depending on which framework is used.
 
 For each op type, the following settings are available:
@@ -220,7 +220,7 @@ a ``Conv`` op in the model whose output is used by both a ``Relu`` op and anothe
 not include those ``Conv`` and ``Relu`` ops.
 
 To specify supergroups in the config file, add each entry as a list of op type strings.
-The configuration file supports ONNX op types, and internally maps the type to a PyTorch or TensorFlow op
+The configuration file supports ONNX op types, and internally maps the type to a PyTorch op
 type depending on which framework is used.
 
 4. model_input

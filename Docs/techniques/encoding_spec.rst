@@ -14,7 +14,7 @@ exported using :func:`QuantizationSimModel.export` API, an encoding file is also
 quantization encodings for the model. This encoding file can then be used by a target runtime like |qnn|
 when running the model on-target.
 
-The encoding file uses a JSON syntax. The file format is usable with model exports from ``aimet_torch``, ``aimet_tensorflow``, and ``aimet_onnx``.
+The encoding file uses a JSON syntax. The file format is usable with model exports from ``aimet_torch``, and ``aimet_onnx``.
 
 1. Versioning
 =============
@@ -60,7 +60,7 @@ Where,
 
 
 * ``"version”`` is set to “0.6.1”
-* ``<tensor_name>`` is a string representing the tensor in onnx or tensorflow graph.
+* ``<tensor_name>`` is a string representing the tensor in onnx graph.
 
 ``‘Encoding’`` structure shall include an encoding field ``“dtype”`` to specify the datatype used for simulating the tensor.
 

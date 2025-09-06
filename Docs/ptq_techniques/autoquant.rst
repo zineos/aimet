@@ -71,18 +71,6 @@ Load the model for automatic quantization.
             :start-after: # Step 1
             :end-before: # End of step 1
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. container:: tab-heading
-
-            In the following code example, the model is MobileNetV2.
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
-            :language: python
-            :start-after: # pylint: disable=missing-docstring
-            :end-before: # End of step 1
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -100,14 +88,6 @@ Prepare the dataset.
         :sync: torch
 
         .. literalinclude:: ../snippets/torch/apply_autoquant.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
             :language: python
             :start-after: # Step 2
             :end-before: # End of step 2
@@ -135,14 +115,6 @@ For your model, implement the evaluation callback to serve your own goals, maint
             :start-after: # Step 3
             :end-before: # End of step 3
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
-            :language: python
-            :start-after: # Step 3
-            :end-before: # End of step 3
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -164,14 +136,6 @@ Create the AutoQuant object.
             :start-after: # Step 4
             :end-before: # End of step 4
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
-            :language: python
-            :start-after: # Step 4
-            :end-before: # End of step 4
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -189,14 +153,6 @@ Set AdaRound parameters.
         :sync: torch
 
         .. literalinclude:: ../snippets/torch/apply_autoquant.py
-            :language: python
-            :start-after: # Step 5
-            :end-before: # End of step 5
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
             :language: python
             :start-after: # Step 5
             :end-before: # End of step 5
@@ -225,14 +181,6 @@ Set AMP parameters.
             :start-after: # Step 6
             :end-before: # End of step 6
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
-            :language: python
-            :start-after: # Step 6
-            :end-before: # End of step 6
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -253,14 +201,6 @@ Run AutoQuant.
         :sync: torch
 
         .. literalinclude:: ../snippets/torch/apply_autoquant.py
-            :language: python
-            :start-after: # Step 7
-            :end-before: # End of step 7
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_autoquant.py
             :language: python
             :start-after: # Step 7
             :end-before: # End of step 7
@@ -298,12 +238,6 @@ API
         :sync: torch
 
         .. include:: ../apiref/torch/autoquant.rst
-            :start-after: # start-after
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. include:: ../apiref/tensorflow/autoquant.rst
             :start-after: # start-after
 
     .. tab-item:: ONNX

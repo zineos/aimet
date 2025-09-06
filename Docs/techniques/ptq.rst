@@ -78,30 +78,6 @@ If you already have imagenet dataset locally that you would like to use, simply 
            :start-after: # Dataloaders
            :end-before:  # End of dataloaders
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # pylint: skip-file
-            :end-before: # End of imports
-
-        To perform quantization simulation with :mod:`aimet_torch`, your model definition must conform to
-        the guidelines at :ref:`TensorFlow model guidelines <tensorflow-model-guidelines>`.
-        For example, models defined using subclassing APIs should be converted to functional APIs.
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Load the model
-            :end-before: # End of loading model
-    
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Set up dataset
-            :end-before: # End of dataset
-
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -146,14 +122,6 @@ fake quantization operations in the model graph and configures them.
            :start-after: # Create Quantization Simulation Model
            :end-before:  # End of QuantizationSimModel
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Create QuantSim object
-            :end-before: # End of creating QuantSim object
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -186,14 +154,6 @@ to the model.
            :start-after: # Calibration callback
            :end-before:  # End of calibration callback
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Calibration callback
-            :end-before: # End of calibration callback
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -219,14 +179,6 @@ to initialize their quantization encodings. "Encodings" refers to the scale and 
            :language: python
            :start-after: # Compute the Quantization Encodings
            :end-before:  # End of compute_encodings
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Compute quantization encodings
-            :end-before: # End of computing quantization encodings
 
     .. tab-item:: ONNX
         :sync: onnx
@@ -254,20 +206,6 @@ Next, evaluate the :class:`QuantizationSimModel` to measure the model’s accura
            :language: python
            :start-after: # Evaluation
            :end-before:  # End of evaluation
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Evaluation
-            :end-before: # End of evaluation
-
-        .. rst-class:: script-output
-
-            .. code-block:: none
-
-                Quantized accuracy (W8A16): 0.7013
 
     .. tab-item:: ONNX
         :sync: onnx
@@ -300,14 +238,6 @@ During export, all intermediate quantization operations are removed, and the qua
             :start-after: # Export
             :end-before: # End of export
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_quantsim.py
-            :language: python
-            :start-after: # Export the model
-            :end-before: # End of exporting the model
-
     .. tab-item:: ONNX
         :sync: onnx
 
@@ -331,22 +261,6 @@ API
             :members: compute_encodings, export, load_encodings
             :member-order: bysource
             :no-index:
-
-        **Quant Scheme Enum**
-
-        .. autoclass:: aimet_common.defs.QuantScheme
-            :members:
-            :noindex:
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Top level APIs**
-
-        .. autoclass:: aimet_tensorflow.keras.quantsim.QuantizationSimModel
-            :members: compute_encodings, export, load_encodings_to_sim
-            :member-order: bysource
-            :noindex:
 
         **Quant Scheme Enum**
 

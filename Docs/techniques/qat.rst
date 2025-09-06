@@ -67,14 +67,6 @@ Set up the model, data loader, and callback functions.
             :start-after: # setup
             :end-before: # step_1
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
-            :language: python
-            :start-after: # pylint: disable=missing-docstring
-            :end-before: # End of dataset
-
     .. tab-item:: ONNX
         :sync: ONNX
 
@@ -103,20 +95,6 @@ Compute initial quantization parameters and evaluate accuracy.
             .. code-block:: none
 
                 Quantized accuracy (W8A8): 0.68016
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
-            :language: python
-            :start-after: # Step 1
-            :end-before: # End of step 1
-
-        .. rst-class:: script-output
-
-            .. code-block:: none
-
-                Quantized accuracy (W8A8): 0.6583
 
     .. tab-item:: ONNX
         :sync: ONNX
@@ -148,20 +126,6 @@ Train the model to fine-tune quantization parameters.
 
                 Model accuracy after QAT: 0.70838
 
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        .. literalinclude:: ../snippets/tensorflow/apply_qat.py
-            :language: python
-            :start-after: # Step 2
-            :end-before: # End of step 2
-
-        .. rst-class:: script-output
-
-            .. code-block:: none
-
-                Model accuracy after QAT: 0.6910
-
     .. tab-item:: ONNX
         :sync: ONNX
 
@@ -182,22 +146,6 @@ API
         .. autoclass:: aimet_torch.QuantizationSimModel
             :members: compute_encodings, export
             :member-order: bysource
-            :no-index:
-
-    .. tab-item:: TensorFlow
-        :sync: tf
-
-        **Top level APIs**
-
-        .. autoclass:: aimet_tensorflow.keras.quantsim.QuantizationSimModel
-            :members: compute_encodings, export, load_encodings_to_sim
-            :member-order: bysource
-            :no-index:
-
-        **Quant Scheme Enum**
-
-        .. autoclass:: aimet_common.defs.QuantScheme
-            :members:
             :no-index:
 
     .. tab-item:: ONNX

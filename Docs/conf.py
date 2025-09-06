@@ -51,7 +51,6 @@ import os
 import sys
 sys.path.append(os.path.abspath('../../TrainingExtensions/torch/src/python'))
 sys.path.append(os.path.abspath('../../TrainingExtensions/onnx/src/python'))
-sys.path.append(os.path.abspath('../../TrainingExtensions/tensorflow/src/python'))
 
 # -- Project information -----------------------------------------------------
 
@@ -278,9 +277,6 @@ autodoc_mock_imports.append("aimet_common.libpymo")
 
 # aimet_torch
 autodoc_mock_imports.extend(["aimet_common.aimet_tensor_quantizer", "aimet_common.AimetTensorQuantizer"])
-
-# aimet_tensorflow
-autodoc_mock_imports.append("aimet_common.libaimet_tf_ops")
 
 # aimet_onnx
 autodoc_mock_imports.extend(["aimet_common.libquant_info"])

@@ -29,39 +29,30 @@ Following the tables, you’ll find step-by-step instructions on how to run thes
    * - Features
      - ONNX
      - PyTorch
-     - TensorFlow
    * - Quantization simulation (QuantSim)
      - `Link <notebooks/onnx/quantization/quantsim.ipynb>`_
      - `Link <notebooks/torch/quantization/qat.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/qat.ipynb>`_
    * - Quantization-aware training (QAT)
      - Not implemented.
      - `Link <notebooks/torch/quantization/qat_range_learning.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/qat_range_learning.ipynb>`_
    * - Cross-layer equalization (CLE)
      - `Link <notebooks/onnx/quantization/cle.ipynb>`_
      - `Link <notebooks/torch/quantization/cle_bc.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/quantsim_cle.ipynb>`_
    * - Adaptive rounding (AdaRound)
      - `Link <notebooks/onnx/quantization/adaround.ipynb>`_
      - `Link <notebooks/torch/quantization/adaround.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/adaround.ipynb>`_
    * - Automatic quantization (AutoQuant)
      - Not implemented.
      - `Link <notebooks/torch/quantization/autoquant.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/autoquant.ipynb>`_
    * - Automatic mixed precision (AMP)
      - `Link <notebooks/onnx/quantization/AMP.ipynb>`_
      - `Link <notebooks/torch/quantization/AMP.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/KerasAMP.ipynb>`_
    * - BatchNorm re-estimation
      - Not implemented.
      - `Link <notebooks/torch/quantization/bn_reestimation.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/bn_reestimation.ipynb>`_
    * - Quant analyzer
      - `Link <notebooks/onnx/quantization/quant_analyzer.ipynb>`_
      - `Link <notebooks/torch/quantization/quant_analyzer.ipynb>`_
-     - `Link <notebooks/tensorflow/quantization/keras/quant_analyzer.ipynb>`_
 
 **Model Compression Examples**
 
@@ -151,7 +142,6 @@ Set up your workspace using the following steps:
 
 - Examples/onnx/quantization/
 - Examples/torch/quantization/
-- Examples/tensorflow/quantization/keras/
 
 **Model compression notebooks**
 
