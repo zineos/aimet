@@ -1827,6 +1827,21 @@ class TestQuantSim:
                 assert quantizer.data_type == QuantizationDataType.float
                 assert quantizer.bitwidth == 16
 
+    def test_raise_error_with_bfloat16(self):
+        model = models_for_tests.single_residual_model(dtype=torch.bfloat16)
+        with pytest.raises(RuntimeError):
+            sim = QuantizationSimModel(model)
+
+        model = models_for_tests.model_with_cast(tensor_type=onnx.TensorProto.BFLOAT16)
+        with pytest.raises(RuntimeError):
+            sim = QuantizationSimModel(model)
+
+        model = models_for_tests.model_with_constant(
+            tensor_type=onnx.TensorProto.BFLOAT16
+        )
+        with pytest.raises(RuntimeError):
+            sim = QuantizationSimModel(model)
+
     def test_matmul_v73_higher_exception_rule(self):
         model = models_for_tests.model_with_exceptional_ops()
         quantsim_config = {

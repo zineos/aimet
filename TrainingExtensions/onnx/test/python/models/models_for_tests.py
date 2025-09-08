@@ -4318,3 +4318,101 @@ def conv_prelu_model(
 
         model_onnx = ONNXModel(model)
     return model_onnx
+
+
+def model_with_cast(tensor_type: onnx.TensorProto.DataType):
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="CastModel",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, 3, 32, 32]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 3, 32, 32]
+                ),
+            ],
+            initializer=[],
+            nodes=[
+                helper.make_node(
+                    "Cast",
+                    inputs=[
+                        "input",
+                    ],
+                    outputs=["cast_output"],
+                    name="cast_1",
+                    to=tensor_type,
+                ),
+                helper.make_node(
+                    "Relu", inputs=["cast_output"], outputs=["relu_output"], name="relu"
+                ),
+                helper.make_node(
+                    "Cast",
+                    inputs=[
+                        "relu_output",
+                    ],
+                    outputs=["output"],
+                    name="cast_2",
+                    to=onnx.TensorProto.FLOAT,
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+    return model
+
+
+def model_with_constant(tensor_type: onnx.TensorProto.DataType):
+    model = helper.make_model(
+        opset_imports=[helper.make_operatorsetid("", 21)],
+        graph=helper.make_graph(
+            name="CastModel",
+            inputs=[
+                helper.make_tensor_value_info(
+                    "input", TensorProto.FLOAT, shape=[1, 3, 32, 32]
+                ),
+            ],
+            outputs=[
+                helper.make_tensor_value_info(
+                    "output", TensorProto.FLOAT, shape=[1, 3, 32, 32]
+                ),
+            ],
+            initializer=[],
+            nodes=[
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["const_tensor"],
+                    name="constant_1",
+                    value=helper.make_tensor(
+                        "const_value",
+                        tensor_type,
+                        [3, 3, 1, 1],
+                        np.random.randn(3, 3).astype(
+                            helper.tensor_dtype_to_np_dtype(tensor_type)
+                        ),
+                    ),
+                ),
+                helper.make_node(
+                    "Cast",
+                    inputs=[
+                        "const_tensor",
+                    ],
+                    outputs=["cast_output"],
+                    name="cast_1",
+                    to=onnx.TensorProto.FLOAT,
+                ),
+                helper.make_node(
+                    "Conv",
+                    inputs=["input", "cast_output"],
+                    outputs=["output"],
+                    name="conv_1",
+                ),
+            ],
+        ),
+    )
+    onnx.checker.check_model(model, True)
+    return model

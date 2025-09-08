@@ -406,6 +406,11 @@ class QuantizationSimModel:
             ):
                 op_domain = "aimet.customop.cuda"
 
+        if utils.contains_tensor_type(model.model, onnx.TensorProto.BFLOAT16):
+            raise RuntimeError(
+                "Quantizing models with BFLOAT16 tensors is not supported"
+            )
+
         self.model = model
         self._op_domain = op_domain
         self.providers = providers

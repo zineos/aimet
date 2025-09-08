@@ -664,3 +664,33 @@ class ModuleData:
         remove_activation_hooks(self._model.model, handle)
 
         return outputs
+
+
+def contains_tensor_type(model: ModelProto, tensor_type: onnx.TensorProto.DataType):
+    """
+    Returns True if the model contains the specified tensor type.
+    """
+    if any(
+        tensor.type.tensor_type.elem_type == tensor_type
+        for tensor in itertools.chain(model.graph.input, model.graph.output)
+    ):
+        return True
+
+    if any(tensor.data_type == tensor_type for tensor in model.graph.initializer):
+        return True
+
+    for node in model.graph.node:
+        if node.op_type == "Cast":
+            cast_type = get_node_attribute(node, "to")
+            if cast_type == tensor_type:
+                return True
+
+        if node.op_type in ("Constant", "ConstantOfShape"):
+            value = get_node_attribute(node, "value")
+            if value is None:
+                continue
+
+            if value.data_type == tensor_type:
+                return True
+
+    return False

@@ -265,3 +265,28 @@ class TestUtils:
         assert model.opset_import[0].version == 13
         assert upgraded_model.opset_import[0].version == 21
         onnx.checker.check_model(upgraded_model)
+
+    def test_contains_tensor_type(self):
+        model = models_for_tests.diverse_ops()
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.BFLOAT16)
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.FLOAT16)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.FLOAT)
+
+        model = models_for_tests.diverse_ops(onnx.TensorProto.FLOAT16)
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.FLOAT)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.FLOAT16)
+
+        model = models_for_tests.single_residual_model(dtype=torch.float32).model
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.BFLOAT16)
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.FLOAT16)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.FLOAT)
+
+        model = models_for_tests.single_residual_model(dtype=torch.float16).model
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.BFLOAT16)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.FLOAT16)
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.FLOAT)
+
+        model = models_for_tests.model_with_cast(onnx.TensorProto.BFLOAT16)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.BFLOAT16)
+        assert utils.contains_tensor_type(model, onnx.TensorProto.FLOAT)
+        assert not utils.contains_tensor_type(model, onnx.TensorProto.FLOAT16)
