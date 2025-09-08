@@ -758,6 +758,59 @@ class TestQuantSim:
             if sim.qc_quantize_op_dict[name].enabled
         )
 
+    @pytest.mark.parametrize(
+        "param_type, act_type",
+        [(aimet_onnx.int8, aimet_onnx.int16), (aimet_onnx.int8, aimet_onnx.int8)],
+    )
+    def test_fixed_range_for_model_inputs(self, param_type, act_type):
+        def onnx_callback(session, inputs):
+            in_tensor = {"input": inputs}
+            session.run(None, in_tensor)
+
+        np.random.seed(0)
+        torch.manual_seed(0)
+
+        inputs = np.random.rand(128, 3, 32, 32).astype(np.float32)
+        model = DummyModel()
+        model.eval()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            torch.onnx.export(
+                model,
+                torch.as_tensor(inputs),
+                os.path.join(tempdir, "dummy_model.onnx"),
+                training=torch.onnx.TrainingMode.PRESERVE,
+                input_names=["input"],
+                output_names=["output"],
+            )
+
+            onnx_model_cpu = load_model(os.path.join(tempdir, "dummy_model.onnx"))
+
+            onnx_sim_cpu = QuantizationSimModel(
+                onnx_model_cpu,
+                param_type=param_type,
+                activation_type=act_type,
+                quant_scheme=QuantScheme.post_training_tf_enhanced,
+                path=tempdir,
+            )
+
+            onnx_sim_cpu.qc_quantize_op_dict["input"].set_fixed_encoding_range(
+                (0, 255.0)
+            )
+            onnx_sim_cpu.qc_quantize_op_dict["output"].set_fixed_encoding_range(
+                (0.0, 1.0)
+            )
+
+            onnx_sim_cpu.compute_encodings(onnx_callback, inputs)
+
+            assert onnx_sim_cpu.qc_quantize_op_dict["input"].encodings[0].min == 0.0
+            assert onnx_sim_cpu.qc_quantize_op_dict["input"].encodings[0].max == 255.0
+
+            assert onnx_sim_cpu.qc_quantize_op_dict["output"].encodings[0].min == 0.0
+            assert onnx_sim_cpu.qc_quantize_op_dict["output"].encodings[0].max == 1.0
+
+            out_cpu = onnx_sim_cpu.session.run(None, {"input": inputs})[0]
+
     @pytest.mark.cuda
     def test_compare_encodings_cpu_gpu(self):
         """Test to compare encodings with PT"""
