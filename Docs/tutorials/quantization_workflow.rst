@@ -85,9 +85,9 @@ Step 1.
 
 In this step, we aim to find more performant model configurations than those explored in Step 1
 
-- **AIMET QuantAnalyzer** identifies layers that are most sensitive to quantization and generates a per-layer sensitivity
+- :ref:`AIMET QuantAnalyzer <featureguide-quant-analyzer>` identifies layers that are most sensitive to quantization and generates a per-layer sensitivity
   report.
-- **AIMET LiteMP** uses this report to selectively assign higher precision (e.g., FP16) to a configurable percentage of
+- :ref:`AIMET LiteMP <featureguide-litemp>` uses this report to selectively assign higher precision (e.g., FP16) to a configurable percentage of
   the most sensitive layers.
 - For example, if Step 1 showed poor accuracy at w8a8 but acceptable accuracy at w8a16, QuantAnalyzer + LiteMP can
   be used to keep most layers at w8a8 while elevating only the most sensitive ones to FP16.
@@ -106,7 +106,7 @@ Step 3: Use Automatic Mixed Precision (AMP)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the previous step, we applied the LiteMP feature in AIMET ONNX to perform basic mixed precision optimization. For
-a more advanced approach, AIMET offers the **Automatic Mixed Precision (AMP)** feature, which runs a comprehensive
+a more advanced approach, AIMET offers the :ref:`Automatic Mixed Precision (AMP) <featureguide-amp>` feature, which runs a comprehensive
 search to identify an optimal mixed precision profile. Note that AMP requires significantly more time than LiteMP.
 
 **Key benefits of AMP:**
@@ -127,7 +127,7 @@ Step 4: Use advanced Post-Training Quantization (PTQ) techniques
 If the model exhibits sensitivity to weight quantization—evident when accuracy is high with w16a16 but degrades with
 w8a16—AIMET provides advanced post-training quantization techniques to improve performance.
 
-A recommended next step is to apply **Adaptive Rounding (AdaRound)**. This method performs layer-wise optimization to
+A recommended next step is to apply :ref:`Adaptive Rounding (AdaRound) <ptq-adaround>`. This method performs layer-wise optimization to
 learn a rounding matrix for the weights, which is then folded into the model. The result is a quantized model with
 improved accuracy, as evaluated using AIMET’s QuantSim.
 
@@ -135,11 +135,11 @@ After applying AdaRound, repeat Steps 1 through 3 to reassess model accuracy, ap
 proceed with deployment.
 
 Step 5: Use Quantization-Aware Training (QAT)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 From our experience, most models are able to quantize to integer precisions (w8a8 or w8a16) with the above
 post-training quantization steps. Very rarely, if there is a need to improve latency by keeping most or all of the
-model in w8a8 or w8a16 precision, **Quantization Aware Training (QAT)** might be needed.
+model in w8a8 or w8a16 precision, :ref:`Quantization Aware Training (QAT) <techniques-qat>` might be needed.
 
 Do note that QAT is a relatively heavy workflow that requires the users to tweak training hyperparameters and manually
 guide the training process to get good results. This is very similar to the effort needed for model training. In

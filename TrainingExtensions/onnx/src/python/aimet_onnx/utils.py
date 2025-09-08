@@ -41,7 +41,7 @@ import itertools
 import platform
 import tempfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Union, Tuple
+from typing import Dict, Iterable, List, Union, Tuple, Callable
 from contextlib import contextmanager
 import os
 import pickle
@@ -52,7 +52,7 @@ from onnx import helper, numpy_helper
 from onnxruntime import SessionOptions, InferenceSession
 
 from aimet_common import libquant_info
-from aimet_common.utils import AimetLogger
+from aimet_common.utils import AimetLogger, compute_psnr
 from aimet_common.onnx._utils import _ParamUtils
 from packaging import version
 
@@ -694,3 +694,48 @@ def contains_tensor_type(model: ModelProto, tensor_type: onnx.TensorProto.DataTy
                 return True
 
     return False
+
+
+def make_psnr_eval_fn(
+    fp_session: InferenceSession,
+    inputs: Iterable[Dict[str, np.ndarray]],
+    output_indices: Union[int, List[int]] = 0,
+) -> Callable[[InferenceSession], float]:
+    """
+    NOTE: To run inference through ORT, we need inputs in following format:
+     [{input1: sample1, ...}, {input1: sample2, ...}, ...]
+
+     Based on empirical evidence, PSNR of the primary output (i.e. bounding boxes
+     in object detection models) is the most useful for analyzing per-layer sensitivity,
+     Subsequent outputs (e.g., classification scores, class labels) may be misleading.
+
+    :param fp_session: ORT inference session for floating-point model
+    :param inputs: The model input samples
+    :param output_indices: Index or list of indices of output tensors to compare.
+     Currently only the first index from `output_indices` is used (default is 0)
+    :return: PSNR callback
+    """
+    inputs = list(inputs)
+    fp_outputs = [fp_session.run(None, inp) for inp in inputs]
+
+    if isinstance(output_indices, int):
+        output_indices = [output_indices]
+
+    primary_out_index = output_indices[0]  # Use only the first index for now
+
+    def psnr_eval_fn(session: InferenceSession):
+        """
+        Callback function to compute PSNR between floating-point and quantized outputs.
+
+        :param session: ORT inference session
+        :return: PSNR value
+        """
+        sim_outputs = [session.run(None, inp) for inp in inputs]
+
+        # Compute PSNR for the primary output
+        fp_first_output = np.array([out[primary_out_index] for out in fp_outputs])
+        sim_first_output = np.array([out[primary_out_index] for out in sim_outputs])
+
+        return compute_psnr(fp_first_output, sim_first_output)
+
+    return psnr_eval_fn

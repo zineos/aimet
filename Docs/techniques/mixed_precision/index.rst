@@ -16,10 +16,20 @@ Using mixed precision in AIMET follows these steps:
 .. toctree::
     :hidden:
 
+    Lite mixed precision <litemp>
     Manual mixed precision <mmp>
     Automatic mixed precision <amp>
 
-AIMET offers two methods for creating a mixed-precision model: a manual mixed-precision configurator and automatic mixed precision.
+AIMET offers following methods for creating a mixed-precision model:
+
+* Lite mixed precision
+* Manual mixed precision
+* Automatic mixed precision
+
+Lite mixed precision
+--------------------
+
+:ref:`Lite mixed precision <featureguide-litemp>` (Lite-MP) rapidly determines the most sensitive layers and assign higher precision to a configurable percentage of the most sensitive layers.
 
 Manual mixed precision
 ----------------------

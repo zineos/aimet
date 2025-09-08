@@ -3,48 +3,25 @@
 
 import pytest
 import tempfile
-import math
-from functools import partial
-
-import numpy as np
 import onnxruntime
 
-from aimet_common.utils import compute_psnr
 from aimet_common.defs import QuantizationDataType
 from aimet_onnx.quantsim import QuantizationSimModel
 from aimet_onnx import analyze_per_layer_sensitivity
 from aimet_onnx import int8, int16, float16
-from aimet_onnx.utils import make_dummy_input
+from aimet_onnx.utils import make_dummy_input, make_psnr_eval_fn
 from aimet_onnx.lite_mp import flip_layers_to_higher_precision
-
 from .models import models_for_tests
-
-
-def _collect_inputs_and_fp_outputs(model):
-    model_bytes = model.SerializeToString()
-    fp_session = onnxruntime.InferenceSession(
-        model_bytes, providers=["CUDAExecutionProvider"]
-    )
-
-    fp_inputs = np.random.randn(1, 3, 32, 32).astype(np.float32)
-    fp_outputs = fp_session.run(None, {"input": fp_inputs})
-
-    return fp_inputs, fp_outputs
-
-
-def _eval_accuracy(session, args):
-    fp_inputs, fp_outputs = args
-    quantized_outputs = session.run(None, {"input": fp_inputs})
-    snr = compute_psnr(fp_outputs[0], quantized_outputs[0])
-
-    return snr if not math.isnan(snr) else 0.0
 
 
 class TestLiteMp:
     @pytest.mark.parametrize("percent_flip", [30, 50, 80])
     def test_flip_to_float(self, percent_flip):
         model = models_for_tests.single_residual_model().model
-        fp_inputs, fp_outputs = _collect_inputs_and_fp_outputs(model)
+        fp_session = onnxruntime.InferenceSession(
+            model.SerializeToString(), providers=["CUDAExecutionProvider"]
+        )
+
         sim = QuantizationSimModel(model, param_type=int8, activation_type=int8)
         q_ops = [op for op in sim.qc_quantize_op_dict.values() if op.enabled]
         int8_count = sum(1 for op in q_ops if op.bitwidth == 8)
@@ -52,8 +29,10 @@ class TestLiteMp:
         assert fp_count == 0
 
         with tempfile.TemporaryDirectory() as tempdir:
+            inputs = [make_dummy_input(model)]
+            psnr_eval_fn = make_psnr_eval_fn(fp_session, inputs)
             layer_sensitivity_dict = analyze_per_layer_sensitivity(
-                sim, eval_fn=partial(_eval_accuracy, args=(fp_inputs, fp_outputs))
+                sim, eval_fn=psnr_eval_fn
             )
             flip_layers_to_higher_precision(
                 sim, layer_sensitivity_dict, percent_flip, override_precision=float16
@@ -68,7 +47,10 @@ class TestLiteMp:
     @pytest.mark.parametrize("percent_flip", [30, 50, 80])
     def test_flip_to_int16(self, percent_flip):
         model = models_for_tests.single_residual_model().model
-        fp_inputs, fp_outputs = _collect_inputs_and_fp_outputs(model)
+        fp_session = onnxruntime.InferenceSession(
+            model.SerializeToString(), providers=["CUDAExecutionProvider"]
+        )
+
         sim = QuantizationSimModel(model, param_type=int8, activation_type=int8)
         q_ops = [op for op in sim.qc_quantize_op_dict.values() if op.enabled]
         int8_count = sum(1 for op in q_ops if op.bitwidth == 8)
@@ -76,8 +58,10 @@ class TestLiteMp:
         assert fp_count == 0
 
         with tempfile.TemporaryDirectory() as tempdir:
+            inputs = [make_dummy_input(model)]
+            psnr_eval_fn = make_psnr_eval_fn(fp_session, inputs)
             layer_sensitivity_dict = analyze_per_layer_sensitivity(
-                sim, eval_fn=partial(_eval_accuracy, args=(fp_inputs, fp_outputs))
+                sim, eval_fn=psnr_eval_fn
             )
             flip_layers_to_higher_precision(
                 sim, layer_sensitivity_dict, percent_flip, override_precision=int16
