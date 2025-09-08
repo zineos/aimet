@@ -22,7 +22,6 @@ safetensors==0.5.3
 scikit-learn
 scipy
 tensorboard
-tensorflow-cpu
 torch
 torchvision
 tqdm

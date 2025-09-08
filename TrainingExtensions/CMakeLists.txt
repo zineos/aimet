@@ -42,7 +42,7 @@
 # You could also generate a DOT file with full graph by adding
 # '--graphviz=/tmp/build/graph.dot' to cmake configure:
 #       cmake -S /aimet-src/ -B /tmp/build --graphviz=/tmp/build/graph.dot \
-#           -DENABLE_CUDA=1 -DENABLE_TENSORFLOW=0 -DENABLE_TORCH=1
+#           -DENABLE_CUDA=1 -DENABLE_TORCH=1
 # A file 'CMakeGraphVizOptions.cmake' with the following content
 #       set(GRAPHVIZ_CUSTOM_TARGETS TRUE)
 #       set(GRAPHVIZ_IGNORE_TARGETS "^[^w][^h][^l].*")
@@ -103,7 +103,6 @@ macro(whl_add_whl_action_target whl_name)
             ${CMAKE_COMMAND} -E env
                 WHL_PREP_DIR=${WHL_PREP_DIR}
                 AIMET_CU_VER=$<IF:$<BOOL:${ENABLE_CUDA}>,$ENV{CUDA_VERSION},"cpu">
-                AIMET_TF_VER=$<IF:$<BOOL:${ENABLE_TENSORFLOW}>,${TF_VERSION},"">
                 AIMET_PT_VER=$<IF:$<BOOL:${ENABLE_TORCH}>,${Torch_VERSION},"">
                 AIMET_ONNX_VER=$<IF:$<BOOL:${ENABLE_ONNX}>,${Onnx_VERSION},"">
             ${Python3_EXECUTABLE} setup.py build --build-base ${WHL_PREP_DIR}/build_${whl_name} ${whl_action} ${whl_action_args_${whl_action}}
@@ -117,10 +116,6 @@ macro(whl_add_whl_action_target whl_name)
         add_dependencies(whl_${whl_action} whl_${whl_action}_${whl_name})
     endforeach()
 endmacro()
-
-if (ENABLE_TENSORFLOW)
-    add_subdirectory(tensorflow)
-endif(ENABLE_TENSORFLOW)
 
 if (ENABLE_TORCH)
     add_subdirectory(torch)

@@ -87,7 +87,7 @@ pipeline {
                 axes {
                     axis {
                         name 'ML_FMWORK'
-                        values 'torch', 'tf', 'onnx', 'tf-torch'
+                        values 'torch', 'onnx', 'onnx-torch'
                     }
                     axis {
                         name 'PROC_TYPE'
@@ -98,7 +98,7 @@ pipeline {
                     exclude {
                         axis {
                             name 'ML_FMWORK'
-                            values 'tf-torch'
+                            values 'onnx-torch'
                         }
                         axis {
                             name 'PROC_TYPE'

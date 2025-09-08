@@ -14,8 +14,6 @@ ModelOptimizations/DlEqualization/test/
 ModelOptimizations/DlQuantization/test/
 
 TrainingExtensions/common/test/
-TrainingExtensions/tensorflow/test/
-TrainingExtensions/tensorflow/src/python/aimet_tensorflow/examples/
 TrainingExtensions/torch/test/
 TrainingExtensions/torch/src/python/aimet_torch/examples/
 TrainingExtensions/onnx/test/

@@ -34,8 +34,7 @@
 #
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
-"""Utility classes and functions that are used by NightlyTests files as well as
-common to both PyTorch and TensorFlow."""
+"""Utility classes and functions that are used by NightlyTests and common"""
 
 import sys
 from contextlib import contextmanager
@@ -100,11 +99,9 @@ def deprecated(msg: str):
 
 
 class ModelApi(Enum):
-    """Enum differentiating between Pytorch or Tensorflow"""
+    """Enum differentiating between Pytorch or onnx"""
 
     pytorch = 0
-    tensorflow = 1
-    keras = 2
     onnx = 3
 
 
@@ -269,8 +266,7 @@ def round_down_to_multiplicity(multiplicity: int, num: int):
 
 # Depending on pytorch or tensorflow, the ordering of dimensions in tensor/product shapes will be different.
 # In pytorch, the number of channels is always index 1
-# In tensorflow, the number of channels is always the last dimension in the shape
-api_channel_index_dict = {ModelApi.pytorch: 1, ModelApi.tensorflow: -1}
+api_channel_index_dict = {ModelApi.pytorch: 1}
 
 
 def kill_process_with_name_and_port_number(name: str, port_number: int):

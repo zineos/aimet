@@ -52,16 +52,12 @@ endif()
 if(DEFINED ENV{AIMET_VARIANT})
   set(variant_name $ENV{AIMET_VARIANT})
 else()
-  if(ENABLE_TORCH AND ENABLE_TENSORFLOW)
-    set(variant_name "tf-torch")
-  elseif(ENABLE_ONNX)
+  if(ENABLE_ONNX)
     set(variant_name "onnx")
   elseif(ENABLE_TORCH)
     set(variant_name "torch")
-  elseif(ENABLE_TENSORFLOW)
-    set(variant_name "tf")
   else()
-    set(variant_name "tf-torch")
+    set(variant_name "onnx-torch")
   endif()
 
   if(ENABLE_CUDA)
@@ -81,26 +77,6 @@ set(package_name_list "")
 set(CUDA_OPTION "")
 if(ENABLE_CUDA)
   set(CUDA_OPTION "--gpu")
-endif()
-
-# Setup Tensorflow package dependencies if required
-if(ENABLE_TENSORFLOW)
-  # Add AIMET Tensorflow package to package array list
-  list(APPEND package_name_list tensorflow)
-
-  # Initialize TF deps list with AIMET Common dependencies
-  set(deps_name_list_tensorflow ${deps_name_list_aimet_common})
-
-  # Tensorflow dependencies that are common to CPU and GPU
-  list(APPEND deps_name_list_tensorflow "reqs_pip_tf_common.txt")
-
-  if(ENABLE_CUDA)
-    # Tensorflow GPU dependencies
-    list(APPEND deps_name_list_tensorflow "reqs_deb_tf_gpu.txt" "reqs_pip_tf_gpu.txt")
-  else()
-    # Tensorflow CPU dependencies
-    list(APPEND deps_name_list_tensorflow "reqs_pip_tf_cpu.txt")
-  endif()
 endif()
 
 # Setup Torch package dependencies if required
@@ -197,9 +173,6 @@ foreach(package ${package_name_list})
   # Linux loader would be able to resolve dependencies without LD_LIBRARY_PATH
   execute_process(
     COMMAND find ${pkg_staging_path} -name "Aimet*.so" -exec ${PATCHELF_EXE} --set-rpath $ORIGIN:$ORIGIN/../torch/lib {} \;
-  )
-  execute_process(
-    COMMAND find ${pkg_staging_path} -name "libaimet_tf_ops*.so" -exec ${PATCHELF_EXE} --set-rpath $ORIGIN:$ORIGIN/../../tensorflow:$ORIGIN/../../tensorflow/python {} \;
   )
 
   # Invoke the setup tools script to create the wheel packages.

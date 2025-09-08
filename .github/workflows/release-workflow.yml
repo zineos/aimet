@@ -115,7 +115,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
-          # Only include (torch|onnx|tf)-(cpu|gpu)-wheel; exclude onnx-cpu-win-wheel
+          # Only include (torch|onnx)-(cpu|gpu)-wheel; exclude onnx-cpu-win-wheel
           pattern: "*pu-wheel"
           path: artifacts-downloaded
 
@@ -144,7 +144,7 @@ jobs:
           export whl_file=$(\
               find assets_to_upload \
               -regextype posix-extended \
-              -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+\+(cpu|cu).+.whl" \
+              -regex ".*aimet_(torch|onnx)-[0-9]+\.[0-9]+\.[0-9]+\+(cpu|cu).+.whl" \
           )
           # Create release on public repo
           title="Version ${tag}"

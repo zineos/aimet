@@ -36,7 +36,7 @@
 #
 #  =============================================================================
 
-"""For meta-data collected on a computational graph for e.g. TensorFlow or PyTorch."""
+"""For meta-data collected on a computational graph for PyTorch."""
 
 from collections import OrderedDict
 from aimet_common.utils import AimetLogger

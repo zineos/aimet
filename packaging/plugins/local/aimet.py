@@ -88,17 +88,13 @@ def get_aimet_variant() -> str:
     """Return a variant based on CMAKE_ARGS environment variable"""
     enable_cuda = is_cmake_option_enabled("ENABLE_CUDA")
     enable_torch = is_cmake_option_enabled("ENABLE_TORCH")
-    enable_tensorflow = is_cmake_option_enabled("ENABLE_TENSORFLOW")
     enable_onnx = is_cmake_option_enabled("ENABLE_ONNX")
-
-    if enable_tensorflow:
-        raise RuntimeError("ENABLE_TENSORFLOW must be OFF.")
 
     enabled_variants = [enable_torch, enable_onnx]
     enabled_count = sum(enabled_variants)
 
     if enabled_count == 2:
-        variant = "tf-torch-"
+        variant = "onnx-torch-"
     elif enabled_count == 1:
         if enable_torch:
             variant = "torch-"
@@ -139,7 +135,7 @@ def get_aimet_dependencies() -> list[str]:
     aimet_variant = get_aimet_variant()
     base_path = pathlib.Path(_PKG_ROOT, "packaging", "dependencies")
 
-    if aimet_variant in ("torch-gpu", "onnx-cpu", "tf-torch-cpu"):
+    if aimet_variant in ("torch-gpu", "onnx-cpu", "onnx-torch-cpu"):
         deps_path = pathlib.Path(base_path, "fast-release", aimet_variant)
 
     # To publish the aimet-onnx-gpu wheel on PyPI, we have to temporarily use 'onnxruntime' as a dependency.
@@ -241,7 +237,7 @@ def optional_dependencies() -> dict[str, list[str]]:
             "sphinx-rtd-theme",
             "sphinx-tabs",
         ],
-        "v1-deps": [],  # This is empty for aimet-onnx and aimet-tensorflow
+        "v1-deps": [],  # This is empty for aimet-onnx
     }
 
     aimet_variant = get_aimet_variant()
@@ -277,7 +273,6 @@ def get_description() -> str:
     variant_map = {
         "torch": "AIMET torch package",
         "onnx": "AIMET onnx package",
-        "tf": "AIMET tensorflow package",
     }
 
     for key in variant_map:

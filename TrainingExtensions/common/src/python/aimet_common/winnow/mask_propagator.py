@@ -100,11 +100,7 @@ class MaskPropagator:
         for op in self._ops.values():
             # TODO: Only creating masks for ops that lead to conv ops was only tested for TF. See if the same can be
             # done for pytorch, where we traditionally created masks for all ops.
-            if self._model_api == ModelApi.tensorflow:
-                if op.type in get_conv_ops_for_api(self._model_api):
-                    self._create_masks_for_op_and_all_ancestors(op)
-            else:
-                self._create_masks_for_op_and_all_ancestors(op)
+            self._create_masks_for_op_and_all_ancestors(op)
 
     def _create_masks_for_op_and_all_ancestors(self, op: Op):
         """
@@ -292,9 +288,6 @@ class MaskPropagator:
                     if (
                         op.type in ("Add", "Concat", "Split", "add", "cat", CG_SPLIT)
                         and self._model_api == ModelApi.pytorch
-                    ) or (
-                        op.type in ("Add", "ConcatV2", "branch")
-                        and self._model_api == ModelApi.tensorflow
                     ):
                         ip_mask_zero_positions_list.append(ip_mask_zero_positions)
                     else:
@@ -311,9 +304,6 @@ class MaskPropagator:
                     if (
                         op.type in ("Add", "Concat", "Split", "add", "cat", CG_SPLIT)
                         and self._model_api == ModelApi.pytorch
-                    ) or (
-                        op.type in ("Add", "ConcatV2", "branch")
-                        and self._model_api == ModelApi.tensorflow
                     ):
                         op_mask_zero_positions_list.append(op_mask_zero_positions)
                     else:
@@ -351,9 +341,6 @@ class MaskPropagator:
                 "ConvTranspose",
                 "BatchNormalization",
             ):
-                check_op = True
-            elif self._model_api == ModelApi.tensorflow:
-                # marking any changed op as a modified op for tensorflow
                 check_op = True
 
             if check_op:
@@ -400,18 +387,11 @@ class MaskPropagator:
         input_op = input_product.producer
         # TODO: remove 'Add', 'Concat' when old CG is gone
         if (
-            (
-                input_op.type in ("Add", "Concat", "Split", "add", "cat", CG_SPLIT)
-                and self._model_api == ModelApi.pytorch
-            )
-            or (
-                input_op.type in ("Add", "ConcatV2", "branch", "Upsample", "Downsample")
-                and self._model_api == ModelApi.tensorflow
-            )
-            or isinstance(
-                self._op_to_mask_dict[input_op].internal_connectivity,
-                StopInternalConnectivity,
-            )
+            input_op.type in ("Add", "Concat", "Split", "add", "cat", CG_SPLIT)
+            and self._model_api == ModelApi.pytorch
+        ) or isinstance(
+            self._op_to_mask_dict[input_op].internal_connectivity,
+            StopInternalConnectivity,
         ):
             logger.debug("Op: %s, below: %s", op.dotted_name, input_op.dotted_name)
             return True
@@ -419,7 +399,7 @@ class MaskPropagator:
         if (
             input_op.type in ["Conv", "ConvTranspose"]
             and self._model_api == ModelApi.pytorch
-        ) or (input_op.type in "Conv2D" and self._model_api == ModelApi.tensorflow):
+        ):
             logger.debug("Op: %s, below: %s", op.dotted_name, input_op.dotted_name)
             return False
         return self._is_module_reshape_needed(input_op)
@@ -727,7 +707,7 @@ class MaskPropagator:
         If not, adjust the masks to default values.
 
         :param op: the Add Op for which masks are validated and adjusted.
-        :param model_api: either tensorflow or pytorch
+        :param model_api: pytorch
         """
 
         op_mask = self._op_to_mask_dict[op]
@@ -774,7 +754,7 @@ class MaskPropagator:
         Starting with the downstream_op, adjust the input and output masks for the Ops until a Conv Op is reached.
         :param downstream_op: the starting downstream op
         :param modified_mask: the mask to be set for the downstream Ops
-        :param model_api: either tensorflow or pytorch
+        :param model_api: pytorch
         """
         if downstream_op.type not in get_conv_ops_for_api(model_api):
             downstream_op_mask = self._op_to_mask_dict[downstream_op]

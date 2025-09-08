@@ -180,39 +180,6 @@ def get_reqs_pip_onnx(
     return reqs
 
 
-def get_reqs_apt_tf(
-    cuda_version: str = "cpu",
-    tf_verson: str = "",
-    torch_version: str = "",
-    onnx_version: str = "",
-) -> List[str]:
-    """Return list of packages which should be installd via APT to use aimet with tensorflow"""
-    return []
-
-
-def get_reqs_pip_tf(
-    cuda_version: str = "cpu",
-    tf_verson: str = "",
-    torch_version: str = "",
-    onnx_version: str = "",
-) -> List[str]:
-    """Return list of packages which should be installd via PIP to use aimet with tensorflow"""
-    reqs = _get_pip_reqs_for_framework(
-        cuda_version, tf_verson, torch_version, onnx_version, "tf"
-    )
-    # Delete tensorflow with pinned version
-    reqs = filter(
-        lambda r: not (
-            r.startswith("tensorflow-cpu==") or r.startswith("tensorflow-gpu==")
-        ),
-        reqs,
-    )
-    reqs = list(reqs) + [
-        f"tensorflow-{'cpu' if cuda_version == 'cpu' else 'gpu'}=={tf_verson}"
-    ]
-    return reqs
-
-
 def get_reqs_pip(
     cuda_version: str = "cpu",
     tf_verson: str = "",
@@ -279,11 +246,6 @@ def get_parser() -> argparse.ArgumentParser:
         help="Cuda version, by default will use AIMET_CU_VER environment variable or 'cpu'.",
     )
     parser.add_argument(
-        "--tensorflow",
-        default=os.environ.get("AIMET_TF_VER", ""),
-        help="Tensorflow version, by default will use AIMET_TF_VER environment variable or ''.",
-    )
-    parser.add_argument(
         "--torch",
         default=os.environ.get("AIMET_PT_VER", ""),
         help="Torch version, by default will use AIMET_PT_VER environment variable or ''.",
@@ -307,11 +269,9 @@ def get_dependencies(argv: Optional[List[str]] = None) -> None:
         f"get_reqs_{pkg_mgr}{'_dev' if args.dev else ''}",
         f"get_reqs_{pkg_mgr}",
         f"get_reqs_{pkg_mgr}{'_torch' if args.torch else ''}",
-        f"get_reqs_{pkg_mgr}{'_tf' if args.tensorflow else ''}",
     }
     fn_args = {
         "cuda_version": args.cuda,
-        "tf_verson": args.tensorflow,
         "torch_version": args.torch,
         "onnx_version": args.onnx,
     }

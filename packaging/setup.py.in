@@ -142,7 +142,7 @@ def get_package_list(aimet_package_name):
     exclusion_list = ['pyenv3*', 'build', 'dist', '*bin', '*x86*']
     # Exclude all aimet package folders MINUS the package in question
     # NOTE: aimet_common will always be included
-    exclusion_list += ['*aimet_tensorflow*', '*aimet_torch*', '*aimet_onnx*']
+    exclusion_list += ['*aimet_torch*', '*aimet_onnx*']
     # Remove package currently being created from exclusion list
     exclusion_list.remove("*" + aimet_package_name + "*")
 

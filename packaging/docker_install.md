@@ -54,7 +54,7 @@ popd
 ```
 
 ## Setup the environment
-In order to build and run AIMET code, several dependencies are required (such as python, cmake, tensorflow, pytorch, onnx, etc). [Docker files](../Jenkins) and [Docker images](https://artifacts.codelinaro.org/ui/native/codelinaro-aimet/aimet-dev) with all prerequisites and dependencies are available for each AIMET variant. Following are the available development options:
+In order to build and run AIMET code, several dependencies are required (such as python, cmake, pytorch, onnx, etc). [Docker files](../Jenkins) and [Docker images](https://artifacts.codelinaro.org/ui/native/codelinaro-aimet/aimet-dev) with all prerequisites and dependencies are available for each AIMET variant. Following are the available development options:
 - Use the appropriate [pre-built Docker image](https://artifacts.codelinaro.org/ui/native/codelinaro-aimet/aimet-dev) using the instructions [here](#docker-information). This is the *recommended* option.
 - Build the docker image locally and launch a launch container docker using the instructions [here](#docker-information).
 - Install the dependencies on your machine and setup your environment using [the appropriate Dockerfile](../Jenkins) as a guide.
@@ -75,11 +75,10 @@ mkdir build && cd build
 # Run cmake (be sure to set the flags in the below command depending on your variant)
 # To build for GPU, use -DENABLE_CUDA=ON. To build for CPU, use -DENABLE_CUDA=OFF.
 # To include torch, use -DENABLE_TORCH=ON. To exclude torch, use -DENABLE_TORCH=OFF.
-# To include tensorflow, use -DENABLE_TENSORFLOW=ON. To exclude tensorflow, use -DENABLE_TENSORFLOW=OFF.
 # To include onnx, use -DENABLE_ONNX=ON. To exclude onnx, use -DENABLE_ONNX=OFF.
 # Add a installation location -DCMAKE_INSTALL_PREFIX="<install_path>"
 # Following is an example command for the Torch GPU variant with installation within the current build path. Please modify it as appropriate.
-cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_TENSORFLOW=OFF -DENABLE_ONNX=OFF -DCMAKE_INSTALL_PREFIX="./staging/universal"
+cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DCMAKE_INSTALL_PREFIX="./staging/universal"
 
 make -j8
 ```
@@ -122,8 +121,6 @@ Code may *optionally* be developed inside a development docker container. This s
 Set the `<variant_string>` to ONE of the following depending on your desired variant
 - For the PyTorch 2.1 GPU variant, use `"torch-gpu"`
 - For the PyTorch 2.1 CPU variant, use `"torch-cpu"`
-- For the TensorFlow GPU variant, use `"tf-gpu"`
-- For the TensorFlow CPU variant, use `"tf-cpu"`
 - For the ONNX GPU variant, use `"onnx-gpu"`
 - For the ONNX CPU variant, use `"onnx-cpu"`
 ```bash
@@ -211,22 +208,22 @@ git clone https://github.com/quic/aimet.git
 cd aimet
 ```
 ## Setup the environment
-In order to build and run AIMET code, several dependencies are required. The [docker file](../Jenkins/fast-release/Dockerfile.ci) provides a docker image with all installed dependencies. To buil a docker image the regular `docker build` commnad should be used. Depends on the desired variant extda arguments should be provided to `docker build` command to specify version of python, cuda, torch, onnx, tensorflow. For example:
+In order to build and run AIMET code, several dependencies are required. The [docker file](../Jenkins/fast-release/Dockerfile.ci) provides a docker image with all installed dependencies. To buil a docker image the regular `docker build` commnad should be used. Depends on the desired variant extda arguments should be provided to `docker build` command to specify version of python, cuda, torch, onnx. For example:
 ```bash
 docker build --tag aimet --build-arg VER_PYTHON=3.10 --build-arg VER_CUDA=12.1.1 --build-arg VER_TORCH=2.1.2 --file  Jenkins/fast-release/Dockerfile.ci .
 ```
 To build AIMET:
 ```bash
-docker run --rm --gpus all -v $PWD:$PWD -w $PWD aimet bash -c '. /etc/profile.d/conda.sh ; CMAKE_ARGS='-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DENABLE_TENSORFLOW=OFF' python3 -m build --no-isolation .'
+docker run --rm --gpus all -v $PWD:$PWD -w $PWD aimet bash -c '. /etc/profile.d/conda.sh ; CMAKE_ARGS='-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF' python3 -m build --no-isolation .'
 ```
 To install AIMET:
 ```bash
-docker run --rm --gpus all -v $PWD:$PWD -w $PWD aimet bash -c '. /etc/profile.d/conda.sh ; CMAKE_ARGS='-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DENABLE_TENSORFLOW=OFF' python3 -m pip install --no-build-isolation -e .'
+docker run --rm --gpus all -v $PWD:$PWD -w $PWD aimet bash -c '. /etc/profile.d/conda.sh ; CMAKE_ARGS='-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF' python3 -m pip install --no-build-isolation -e .'
 ```
 You can also build and/or install AIMET in your own environment. You should have installed cuda and C++ compiler, libeigen3, ninja and pip-tool (to install all dependencies required to build selected AIMET variant):
 ```bash
 docker run --rm --gpus all nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04 bash -c '\
-    export CMAKE_ARGS="-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DENABLE_TENSORFLOW=OFF" ; \
+    export CMAKE_ARGS="-DENABLE_CUDA=ON -DENABLE_TORCH=ON -DENABLE_ONNX=OFF" ; \
     apt update -qq && apt install -y git g++ libeigen3-dev ninja-build python3-pip &>/dev/null && \
     python3 -m pip install pip-tools && \
     git clone https://github.com/quic/aimet.git && \

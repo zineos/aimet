@@ -60,16 +60,16 @@ Variant-specific Toggles
    * - Variant
      - CMake flags
    * - aimet-onnx
-     - -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TENSORFLOW=OFF
+     - -DENABLE_ONNX=ON -DENABLE_TORCH=OFF
    * - aimet-torch
-     - -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DENABLE_TENSORFLOW=OFF
+     - -DENABLE_TORCH=ON -DENABLE_ONNX=OFF
    * - Docs
-     - -DENABLE_TENSORFLOW=OFF -DENABLE_ONNX=ON -DENABLE_TORCH=ON -DENABLE_CUDA=OFF
+     - -DENABLE_ONNX=ON -DENABLE_TORCH=ON -DENABLE_CUDA=OFF
 
 .. code-block:: bash
 
     # Example: Build for aimet-onnx with GPU
-    export 'CMAKE_ARGS=-DENABLE_CUDA=ON -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TENSORFLOW=OFF -DENABLE_TESTS=OFF'
+    export 'CMAKE_ARGS=-DENABLE_CUDA=ON -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TESTS=OFF'
     export 'SKBUILD_BUILD_TARGETS=all'
 
 Compile and install pip package dependencies
@@ -110,25 +110,18 @@ Build AIMET documentation
     cd aimet/
 
     # Example: Build for Documentation Only
-    export 'CMAKE_ARGS=-DENABLE_TENSORFLOW=OFF -DENABLE_ONNX=ON -DENABLE_TORCH=ON -DENABLE_CUDA=OFF -DENABLE_TESTS=OFF'
+    export 'CMAKE_ARGS=-DENABLE_ONNX=ON -DENABLE_TORCH=ON -DENABLE_CUDA=OFF -DENABLE_TESTS=OFF'
     export 'SKBUILD_BUILD_TARGETS=all;doc'
 
-    # Pin torch, onnxruntime, tensorflow-cpu versions
+    # Pin torch, onnxruntime versions
     echo "onnxruntime==1.22.0" >> /tmp/constraints.txt
     echo "torch==2.1.2" >> /tmp/constraints.txt
-    echo "tensorflow-cpu==2.12.*" >> /tmp/constraints.txt
 
     # Compile requirements from pyproject.toml with constraints
     python3 -m piptools compile pyproject.toml -v --constraint=/tmp/constraints.txt --extra=dev,test,docs --output-file=/tmp/requirements.txt
 
     # Install the compiled dependencies
     python3 -m pip install -r /tmp/requirements.txt
-
-    # Force-install tensorflow 2.10.1
-    python3 -m pip install tensorflow-cpu==2.10.1 keras==2.10.0 tensorflow-model-optimization --no-deps
-
-    # Required to work around tensorflow-protobuf version mismatch
-    export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 
     # Build AIMET docs (aimet/build/Docs/index.html)
     python3 -m build --wheel --no-isolation .
@@ -151,8 +144,6 @@ Docker build argument examples for AIMET Variants.
      - VER_PYTHON=3.10 VER_ONNXRUNTIME=1.22.0 VER_CUDA=12.1.0
    * - aimet-torch
      - VER_PYTHON=3.10 VER_TORCH=2.1.2 VER_CUDA=12.1.1
-   * - aimet-tf
-     - VER_PYTHON=3.10 VER_TENSORFLOW=2.10.1 VER_CUDA=11.8.0
 
 .. code-block:: bash
 
@@ -187,16 +178,14 @@ Variant-specific Toggles
    * - Variant
      - CMake flags
    * - aimet-onnx
-     - -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TENSORFLOW=OFF
+     - -DENABLE_ONNX=ON -DENABLE_TORCH=OFF
    * - aimet-torch
-     - -DENABLE_TORCH=ON -DENABLE_ONNX=OFF -DENABLE_TENSORFLOW=OFF
-   * - aimet-tf
-     - -DENABLE_TENSORFLOW=ON -DENABLE_ONNX=OFF -DENABLE_TORCH=OFF
+     - -DENABLE_TORCH=ON -DENABLE_ONNX=OFF
 
 .. code-block:: bash
 
     # Example: Build for aimet-onnx with GPU
-    export 'CMAKE_ARGS=-DENABLE_CUDA=ON -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TENSORFLOW=OFF -DENABLE_TESTS=OFF'
+    export 'CMAKE_ARGS=-DENABLE_CUDA=ON -DENABLE_ONNX=ON -DENABLE_TORCH=OFF -DENABLE_TESTS=OFF'
     export 'SKBUILD_BUILD_TARGETS=all'
 
 Build AIMET wheel and run unit tests

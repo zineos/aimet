@@ -16,11 +16,11 @@ AIMET improves the runtime performance of deep learning models by reducing compu
 Models quantized with AIMET facilitate its deployment on edge devices like mobile phones or laptops by reducing memory footprint.
 
 AIMET employs post-training and fine-tuning techniques to minimize accuracy loss during quantization and compression.
-AIMET supports models from the ONNX, PyTorch and TensorFlow/Keras frameworks.
+AIMET supports models from the ONNX and PyTorch frameworks.
 
 ![How AIMET works](https://qaihub-public-assets.s3.us-west-2.amazonaws.com/aimet/docs/assets/images/how-it-works.png)
 
-AIMET is designed to work with [PyTorch](https://pytorch.org), [TensorFlow](https://tensorflow.org) and [ONNX](https://onnx.ai) models.
+AIMET is designed to work with [PyTorch](https://pytorch.org) and [ONNX](https://onnx.ai) models.
 
 You can find models quantized with AIMET on [Qualcomm AI Hub Models](https://github.com/quic/ai-hub-models) - a collection of optimized and quantized models.
 
@@ -30,7 +30,7 @@ You can find models quantized with AIMET on [Qualcomm AI Hub Models](https://git
 
 * **Advanced quantization techniques**: Inference using integer runtimes is significantly faster than using floating-point runtimes. For example, models run 5x-15x faster on the Qualcomm Hexagon DSP than on the Qualcomm Kyro CPU. In addition, 8-bit precision models have a 4x smaller footprint than 32-bit precision models. However, maintaining model accuracy when quantizing ML models is often challenging. AIMET solves this using novel techniques like Data-Free Quantization that provide state-of-the-art INT8 results on several popular models.
 * **Supports advanced model compression techniques** that enable models to run faster at inference-time and require less memory
-* **AIMET is designed to automate optimization** of neural networks avoiding time-consuming and tedious manual tweaking. AIMET also provides user-friendly APIs that allow users to make calls directly from their [TensorFlow](https://tensorflow.org) or [PyTorch](https://pytorch.org) pipelines.
+* **AIMET is designed to automate optimization** of neural networks avoiding time-consuming and tedious manual tweaking. AIMET also provides user-friendly APIs that allow users to make calls directly from their [PyTorch](https://pytorch.org) pipelines.
 
 Please visit the [AIMET on Github Pages](https://quic.github.io/aimet-pages/index.html) for more details.
 

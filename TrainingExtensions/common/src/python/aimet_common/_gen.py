@@ -110,7 +110,6 @@ def main(output_dir, build_dir):
         f"python_abi = '{sysconfig.get_config_var('SOABI')}'",
         "torch = " + (f"'{torch.__version__}'" if torch else "None"),
         "min_glibc = " + (f"'{min_glibc_version}'" if min_glibc_version else "None"),
-        # "tensorflow = " + (f"'{tf.__version__}'" if tf else "None"),
         # "onnx = "       + (f"'{onnx.__version__}'" if onnx else "None"),
         "",
     ]

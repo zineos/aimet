@@ -37,7 +37,7 @@
 #
 #  =============================================================================
 
-"""Contains Winnowing related utility functions are used by both PyTorch and TensorFlow Winnower."""
+"""Contains Winnowing related utility functions are used by PyTorch Winnower."""
 
 from typing import List, Set, Union
 from enum import Enum
@@ -138,86 +138,41 @@ class OpConnectivity:
         "select": ConnectivityType.skip,
     }
 
-    # Including Reshape under null for tensorflow so that input to the layer below does not get propagated
-    # to the output of the layer above.
-    # Putting Placeholder under null so an output mask is generated for it, even though it will never be changed.
-    # Output mask needed in a check in module_reducer
-    tensorflow_dict = {
-        "Conv2D": ConnectivityType.null,
-        "DepthwiseConv2dNative": ConnectivityType.null,
-        "Dense": ConnectivityType.null,
-        "Placeholder": ConnectivityType.null,
-        "PlaceholderWithDefault": ConnectivityType.null,
-        "Downsample": ConnectivityType.null,
-        "BatchNorm": ConnectivityType.direct,
-        "AvgPool": ConnectivityType.direct,
-        "FusedBatchNormV3": ConnectivityType.direct,
-        "Relu": ConnectivityType.direct,
-        "Relu6": ConnectivityType.direct,
-        "MaxPool": ConnectivityType.direct,
-        "Tanh": ConnectivityType.direct,
-        "Identity": ConnectivityType.direct,
-        "Dropout": ConnectivityType.direct,
-        "Pad": ConnectivityType.direct,
-        "PadV2": ConnectivityType.direct,
-        "MirrorPad": ConnectivityType.direct,
-        "Minimum": ConnectivityType.direct,
-        "Maximum": ConnectivityType.direct,
-        "Upsample2D": ConnectivityType.direct,
-        "LeakyRelu": ConnectivityType.direct,
-        "Add": ConnectivityType.add,
-        "AddN": ConnectivityType.add,
-        "AddV2": ConnectivityType.add,
-        "ConcatV2": ConnectivityType.concat,
-        "branch": ConnectivityType.split,
-        "Softmax": ConnectivityType.stop,
-        "Squeeze": ConnectivityType.stop,
-        "ArgMax": ConnectivityType.stop,
-        "Equal": ConnectivityType.stop,
-        "Cast": ConnectivityType.stop,
-        "Mean": ConnectivityType.stop,
-        "Reshape": ConnectivityType.stop,
-        "Shape": ConnectivityType.stop,
-        "Upsample": ConnectivityType.stop,
-        "Flatten": ConnectivityType.stop,
-        "GlobalMaxpool2D": ConnectivityType.stop,
-    }
-
     @classmethod
     def get_op_connectivity(
         cls, model_api: ModelApi, op_type: str
     ) -> Union[ConnectivityType, None]:
         """
         Get op connectivity for a module, and return None if the module is not recognized.
-        :param model_api: Represents either pytorch or tensorflow
+        :param model_api: Pytorch
         :param op_type: Type of the op, which is used to map to its connectivity
         :return: Op connectivity, or None if module is not recognized.
         """
         if model_api == ModelApi.pytorch:
             return cls.pytorch_dict.get(op_type, None)
-        return cls.tensorflow_dict.get(op_type, ConnectivityType.stop)
+        raise RuntimeError(f"Unsupported model_api provided: {model_api}")
 
 
 def get_conv_ops_for_api(model_api: ModelApi) -> Set:
     """
     Return a set of op types that represent conv ops, based on the model api
 
-    :param model_api: Enum for whether the api is pytorch or tensorflow
+    :param model_api: Pytorch
     """
     if model_api == ModelApi.pytorch:
         return {"Conv", "ConvTranspose"}
-    return {"Conv2D", "DepthwiseConv2dNative"}
+    raise RuntimeError(f"Unsupported model_api provided: {model_api}")
 
 
 def get_linear_ops_for_api(model_api: ModelApi) -> Set:
     """
     Return a set of op types that represent linear ops, based on the model api
 
-    :param model_api: Enum for whether the api is pytorch or tensorflow
+    :param model_api: Pytorch
     """
     if model_api == ModelApi.pytorch:
         return {"Gemm"}
-    return {"Dense"}
+    raise RuntimeError(f"Unsupported model_api provided: {model_api}")
 
 
 def get_indices_among_ones_of_overlapping_ones(

@@ -58,7 +58,7 @@ run_acceptance_tests=0
 
 EXIT_CODE=0
 
-variant_docs="tf-torch-cpu"
+variant_docs="onnx-torch-cpu"
 
 # Array to store python source file paths
 declare -a PYTHON_SRC_PATHS=()
@@ -297,20 +297,13 @@ if [ $run_prep -eq 1 ]; then
 
     # Array of python src file path endings
     declare -a python_src_path_endings=("TrainingExtensions/common/src/python/aimet_common")
-    # TODO: the line below causes code violation failures in TrainingExtensions/tensorflow and TrainingExtensions/torch
+    # TODO: the line below causes code violation failures in TrainingExtensions/torch
     # python_src_path_endings+=("Examples/common")
     # Array of path endings of interest for code coverage and their corresponding test folders
     declare -a pycov_dir_endings=("TrainingExtensions/common/src/python:TrainingExtensions/common/test")
 
     if [ -n "$AIMET_VARIANT" ]; then
-        # Add tensorflow and/or torch paths based on the variant
-        if [[ "$AIMET_VARIANT" == *"tf"* ]]; then
-            python_src_path_endings+=("TrainingExtensions/tensorflow/src/python/aimet_tensorflow")
-            pycov_dir_endings+=("TrainingExtensions/tensorflow/src/python:TrainingExtensions/tensorflow/test")
-            python_src_path_endings+=("Examples/tensorflow/compression")
-            python_src_path_endings+=("Examples/tensorflow/quantization")
-            python_src_path_endings+=("Examples/tensorflow/utils")
-        fi
+        # Add onnx and/or torch paths based on the variant
         if [[ "$AIMET_VARIANT" == *"torch"* ]]; then
             python_src_path_endings+=("TrainingExtensions/torch/src/python/aimet_torch")
             python_src_path_endings+=("Examples/torch/compression")
@@ -325,10 +318,7 @@ if [ $run_prep -eq 1 ]; then
             pycov_dir_endings+=("TrainingExtensions/onnx/src/python:TrainingExtensions/onnx/test")
         fi
     else
-        # For default variant, add both tensorflow and/or torch and/or onnx paths
-        python_src_path_endings+=("TrainingExtensions/tensorflow/src/python/aimet_tensorflow")
-        pycov_dir_endings+=("TrainingExtensions/tensorflow/src/python:TrainingExtensions/tensorflow/test")
-
+        # For default variant, add both torch and/or onnx paths
         python_src_path_endings+=("TrainingExtensions/torch/src/python/aimet_torch")
         pycov_dir_endings+=("TrainingExtensions/torch/src/python:TrainingExtensions/torch/test")
 
@@ -338,9 +328,6 @@ if [ $run_prep -eq 1 ]; then
         python_src_path_endings+=("Examples/torch/compression")
         python_src_path_endings+=("Examples/torch/quantization")
         python_src_path_endings+=("Examples/torch/utils")
-        python_src_path_endings+=("Examples/tensorflow/compression")
-        python_src_path_endings+=("Examples/tensorflow/quantization")
-        python_src_path_endings+=("Examples/tensorflow/utils")
         python_src_path_endings+=("Examples/onnx/quantization")
         python_src_path_endings+=("Examples/onnx/utils")
     fi
@@ -411,13 +398,11 @@ if [ $run_build -eq 1 ]; then
         fi
         if [[ "$AIMET_VARIANT" == "${variant_docs}" ]]; then
             # For doc variant, cmake "test" targets are NOT supported AND we need to enable all frameworks.
-            extra_opts+=" -DENABLE_TESTS=OFF -DENABLE_TENSORFLOW=ON -DENABLE_TORCH=ON -DENABLE_ONNX=ON"
-        elif [[ "$AIMET_VARIANT" == *"tf"* ]]; then
-            extra_opts+=" -DENABLE_TENSORFLOW=ON -DENABLE_TORCH=OFF -DENABLE_ONNX=OFF"
+            extra_opts+=" -DENABLE_TESTS=OFF -DENABLE_TORCH=ON -DENABLE_ONNX=ON"
         elif [[ "$AIMET_VARIANT" == *"torch"* ]]; then
-            extra_opts+=" -DENABLE_TENSORFLOW=OFF -DENABLE_TORCH=ON -DENABLE_ONNX=OFF"
+            extra_opts+=" -DENABLE_TORCH=ON -DENABLE_ONNX=OFF"
         elif [[ "$AIMET_VARIANT" == *"onnx"* ]]; then
-            extra_opts+=" -DENABLE_TENSORFLOW=OFF -DENABLE_TORCH=OFF -DENABLE_ONNX=ON"
+            extra_opts+=" -DENABLE_TORCH=OFF -DENABLE_ONNX=ON"
         else
             echo -e "ERROR: Invalid variant string!"
             exit 3

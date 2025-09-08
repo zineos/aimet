@@ -511,7 +511,7 @@ class Mask:
     def __init__(self, op: Op, model_api: ModelApi):
         """
         :param op: The op for which this mask corresponds to
-        :param model_api: Either pytorch or tensorflow
+        :param model_api: Pytorch
         """
 
         self._num_in_channels = op.num_in_channels
@@ -834,18 +834,9 @@ class Mask:
         elif op_connectivity == ConnectivityType.direct:
             # Necessary to switch connectivity of padding to null when adjusting channel size since staying at direct
             # connectivity will cause input and output channel sizes to become equal
-            if (
-                self._model_api == ModelApi.tensorflow
-                and self._op_type in ["Pad", "PadV2", "MirrorPad"]
-                and in_channels != out_channels
-            ):
-                self._set_default_masks_for_null_and_stop_connectivity_ops(
-                    in_channels, out_channels, is_null_connectivity=True
-                )
-            else:
-                self._set_default_masks_for_direct_connectivity_ops(
-                    in_channels, out_channels
-                )
+            self._set_default_masks_for_direct_connectivity_ops(
+                in_channels, out_channels
+            )
         elif op_connectivity == ConnectivityType.add:
             in_masks_list, out_masks_list = (
                 self._create_masks_list_for_multi_input_single_output_ops(out_channels)

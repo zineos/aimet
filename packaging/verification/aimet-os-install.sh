@@ -81,8 +81,8 @@ if [[ "$AIMET_VARIANT" == *"gpu"* ]]; then
                 && rm -rf /var/lib/apt/lists/*
     fi
 
-    # Tensorflow GPU varaint or PyTorch variant: `CUDA Toolkit 11.8.0 <https://developer.nvidia.com/cuda-11-8-0-download-archive>`_
-    if [[ ( "$AIMET_VARIANT" == *"torch"* || "$AIMET_VARIANT" == *"tf"* ) && "$AIMET_VARIANT" != *"pt113"* ]]; then
+    # PyTorch GPU variant: `CUDA Toolkit 11.8.0 <https://developer.nvidia.com/cuda-11-8-0-download-archive>`_
+    if [[ "$AIMET_VARIANT" == *"torch"* && "$AIMET_VARIANT" != *"pt113"* ]]; then
         wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
         mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
         wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda-repo-ubuntu2204-11-8-local_11.8.0-520.61.05-1_amd64.deb
@@ -116,10 +116,6 @@ if [[ "$AIMET_VARIANT" == *"torch"* ]]; then
     python3 -m pip install ${download_url}/AimetTorch-${AIMET_VARIANT}_${release_tag}-${wheel_file_suffix} -f https://download.pytorch.org/whl/torch_stable.html
 fi
 
-if [[ "$AIMET_VARIANT" == *"tf"* ]]; then
-    python3 -m pip install ${download_url}/AimetTensorflow-${AIMET_VARIANT}_${release_tag}-${wheel_file_suffix}
-fi
-
 if [[ "$AIMET_VARIANT" == *"onnx"* ]]; then
     python3 -m pip install ${download_url}/AimetOnnx-${AIMET_VARIANT}_${release_tag}-${wheel_file_suffix}
 fi
@@ -143,12 +139,6 @@ if [[ "$AIMET_VARIANT" == *"onnx"* ]]; then
     fi
 fi
 
-if [[ "$AIMET_VARIANT" == *"tf"* ]]; then
-    if [[ "$AIMET_VARIANT" == *"gpu"* ]]; then
-        cat ${PACKAGE_ROOT}/aimet_tensorflow/bin/reqs_deb_tf_gpu.txt | xargs apt-get --assume-yes --allow-change-held-packages install
-    fi
-fi
-
 python3 -m pip uninstall -y pillow
 python3 -m pip install --no-cache-dir Pillow-SIMD==9.0.0.post1
 
@@ -164,11 +154,7 @@ if [[ -f !/usr/lib/libjpeg.so ]]; then
 	ln -s /usr/lib/x86_64-linux-gnu/libjpeg.so /usr/lib
 fi
 
-if [[ "$AIMET_VARIANT" == "tf_gpu" ]]; then
-  if [[ -f !/usr/local/cuda ]]; then
-      ln -s /usr/local/cuda-11.8 /usr/local/cuda
-  fi
-elif [[ "$AIMET_VARIANT" == "torch_gpu" ]]; then
+if [[ "$AIMET_VARIANT" == "torch_gpu" ]]; then
     if [[ -f !/usr/local/cuda ]]; then
         ln -s /usr/local/cuda-11.8 /usr/local/cuda
     fi

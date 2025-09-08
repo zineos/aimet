@@ -39,14 +39,14 @@ runs:
           export whl_file=$(\
               find downloads \
               -regextype posix-extended \
-              -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
+              -regex ".*aimet_(torch|onnx)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
           )
         else
           # Github release has +cpu or +cu suffix
           export whl_file=$(\
               find downloads \
               -regextype posix-extended \
-              -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+\+(cpu|cu).+.whl" \
+              -regex ".*aimet_(torch|onnx)-[0-9]+\.[0-9]+\.[0-9]+\+(cpu|cu).+.whl" \
           )
         fi
 

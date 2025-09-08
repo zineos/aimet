@@ -43,11 +43,6 @@ if (ENABLE_TORCH AND NOT ENABLE_ONNX)
             AcceptanceTests.Torch)
 endif (ENABLE_TORCH AND NOT ENABLE_ONNX)
 
-if (ENABLE_TENSORFLOW)
-    add_dependencies(AcceptanceTests
-            AcceptanceTests.Tensorflow)
-endif (ENABLE_TENSORFLOW)
-
 if (ENABLE_ONNX)
     add_dependencies(AcceptanceTests
             AcceptanceTests.ONNX)
@@ -56,10 +51,6 @@ endif(ENABLE_ONNX)
 if (ENABLE_TORCH AND NOT ENABLE_ONNX)
     add_subdirectory(torch)
 endif (ENABLE_TORCH AND NOT ENABLE_ONNX)
-
-if (ENABLE_TENSORFLOW)
-    add_subdirectory(tensorflow)
-endif (ENABLE_TENSORFLOW)
 
 if (ENABLE_ONNX)
     add_subdirectory(onnx)

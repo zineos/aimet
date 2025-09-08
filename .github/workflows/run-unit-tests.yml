@@ -44,7 +44,7 @@ jobs:
           name: "${{ matrix.id }}-tests"
           path: "downloads"
       - name: Create python virtual environment
-        if: ${{ matrix.id  != 'tf-torch-cpu' }}
+        if: ${{ matrix.id  != 'onnx-torch-cpu' }}
         uses: ./.github/actions/setup-conda-env
         with:
           ENV_NAME: ${{ matrix.id }}
@@ -57,7 +57,7 @@ jobs:
         if: matrix.ENABLE_TESTS == 'ON'
         run: |
           CONDA_PYTHONPATH="./.conda/envs/${{ matrix.id }}/lib/python${{ matrix.VER_PYTHON }}/site-packages"
-          AIMET_PACKAGES=$(find $CONDA_PYTHONPATH -regex ".*/aimet_\(common\|torch\|tensorflow\|onnx\)" | tr "\n" " ")
+          AIMET_PACKAGES=$(find $CONDA_PYTHONPATH -regex ".*/aimet_\(common\|torch\|onnx\)" | tr "\n" " ")
 
           ./.conda/bin/conda run --live-stream --name "${{ matrix.id }}" \
               python3 -m pylint --rcfile=.pylintrc $AIMET_PACKAGES
@@ -77,10 +77,7 @@ jobs:
           PYTEST_TARGETS="./ModelOptimizations/DlQuantization/test"
           PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/common/test"
 
-          if [ "${{ matrix.VER_TENSORFLOW }}" != "" ] ; then
-              PYTEST_TARGETS="$PYTEST_TARGETS ./ModelOptimizations/DlEqualization/test"
-              PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/tensorflow/test"
-          elif [ "${{ matrix.VER_ONNXRUNTIME }}" != "" ] ; then
+          if [ "${{ matrix.VER_ONNXRUNTIME }}" != "" ] ; then
               PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/onnx/test"
           elif [ "${{ matrix.VER_TORCH }}" != "" ] ; then
               PYTEST_TARGETS="$PYTEST_TARGETS ./TrainingExtensions/torch/test"

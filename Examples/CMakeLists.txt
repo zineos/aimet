@@ -56,17 +56,6 @@ if (ENABLE_TORCH)
 
 endif(ENABLE_TORCH)
 
-if (ENABLE_TENSORFLOW)
-    #TODO Remove the OPTIONAL flag after TensorFlow Examples code gets added
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tensorflow
-    DESTINATION Examples
-    OPTIONAL
-    PATTERN "__pycache*" EXCLUDE
-    PATTERN "CMakeLists.txt" EXCLUDE
-    )
-
-endif(ENABLE_TENSORFLOW)
-
 # Create a tarball archive of the Examples code
 install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E tar cvzf ${CMAKE_INSTALL_PREFIX}/Examples.tar.gz .
                               WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})"

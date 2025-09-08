@@ -60,7 +60,6 @@ jobs:
                  "id":              "torch-gpu",
                  "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "",
                  "VER_CUDA":        "12.1.1",
@@ -75,7 +74,6 @@ jobs:
                  "id":              "onnx-gpu",
                  "runs-on":         "k8s-gpu-release",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "VER_CUDA":        "12.1.0",
@@ -111,7 +109,6 @@ jobs:
             VER_PYTHON=${{ matrix.VER_PYTHON }}
             VER_CUDA=${{ matrix.VER_CUDA }}
             VER_TORCH=${{ matrix.VER_TORCH }}
-            VER_TENSORFLOW=${{ matrix.VER_TENSORFLOW }}
             VER_ONNXRUNTIME=${{ matrix.VER_ONNXRUNTIME }}
 
   call-build-wheels:
@@ -175,7 +172,7 @@ jobs:
           export whl_file=$(\
               find downloads \
               -regextype posix-extended \
-              -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
+              -regex ".*aimet_(torch|onnx)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
           )
 
           case $DEPLOY in
@@ -193,7 +190,7 @@ jobs:
           export whl_file=$(\
               find downloads \
               -regextype posix-extended \
-              -regex ".*aimet_(torch|onnx|tf)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
+              -regex ".*aimet_(torch|onnx)-[0-9]+\.[0-9]+\.[0-9]+-.+.whl" \
           )
 
           case $DEPLOY in

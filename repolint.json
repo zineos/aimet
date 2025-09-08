@@ -154,9 +154,7 @@
               "build\/",
               "jest.config.js",
               "node_modules\/",
-              "types\/",
-              "aimet_tensorflow\/graph_editor\/",
-              "aimet_tensorflow\/quantize\/"
+              "types\/"
             ]
           },
           "lineCount": 40,

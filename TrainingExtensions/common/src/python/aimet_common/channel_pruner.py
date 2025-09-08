@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-"""Channel Pruning functions that are common to both PyTorch and TensorFlow"""
+"""Channel Pruning functions"""
 
 import numpy as np
 

@@ -83,7 +83,6 @@ jobs:
                  "id":              "torch-cpu",
                  "runs-on":         "ubuntu-latest",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "",
                  "VER_CUDA":        "",
@@ -95,7 +94,6 @@ jobs:
                  "id":              "torch-gpu",
                  "runs-on":         "k8s-gpu",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "",
                  "VER_CUDA":        "12.1.1",
@@ -114,7 +112,6 @@ jobs:
                  "id":              "onnx-cpu",
                  "runs-on":         "ubuntu-latest",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "ENABLE_TESTS":    "ON",
@@ -125,7 +122,6 @@ jobs:
                  "id":              "onnx-gpu",
                  "runs-on":         "k8s-gpu",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "VER_CUDA":        "12.1.0",
@@ -140,10 +136,9 @@ jobs:
         run: |
           VALUE=$(echo "${VALUE:-"{}"}" | jq -c '.include += [
               {
-                 "id":              "tf-torch-cpu",
+                 "id":              "onnx-torch-cpu",
                  "runs-on":         "ubuntu-latest",
                  "VER_PYTHON":      "3.10",
-                 "VER_TENSORFLOW":  "",
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "VER_CUDA":        "",

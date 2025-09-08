@@ -61,15 +61,14 @@ def str2bool(str_):
         )
 
 
-if {"AIMET_CU_VER", "AIMET_TF_VER", "AIMET_PT_VER"} > os.environ.keys():
+if {"AIMET_CU_VER", "AIMET_PT_VER"} > os.environ.keys():
     raise RuntimeError(
-        "Please specify what veriosn of cuda, tensorflow and pytorch you would like"
-        "to use using environment variables: AIMET_CU_VER, AIMET_TF_VER, AIMET_PT_VER"
+        "Please specify what veriosn of cuda and pytorch you would like"
+        "to use using environment variables: AIMET_CU_VER, AIMET_PT_VER"
     )
 
 ENABLE_CUDA = str2bool(os.environ.get("ENABLE_CUDA", "False"))
 ENABLE_TORCH = str2bool(os.environ.get("ENABLE_TORCH", "True"))
-ENABLE_TENSORFLOW = str2bool(os.environ.get("ENABLE_TENSORFLOW", "True"))
 
 PKG_FILES = [
     "dependencies/reqs_pip_common.txt",
@@ -115,7 +114,6 @@ class BuildExtensionCommand(build_ext):
                 f"-DWHL_PREP_DIR={whl_prep_dir}",
                 f"-DENABLE_CUDA={'OFF' if os.environ['AIMET_CU_VER'] == 'cpu' else 'ON'}",
                 f"-DENABLE_TORCH={'OFF' if os.environ['AIMET_PT_VER'] == '' else 'ON'}",
-                f"-DENABLE_TENSORFLOW={'OFF' if os.environ['AIMET_TF_VER'] == '' else 'ON'}",
             ]
             subprocess.run(
                 ["cmake", "-B", bld_dir, "-S", src_dir] + cmake_args,
@@ -139,14 +137,6 @@ class BuildExtensionCommand(build_ext):
                     stderr=sys.stderr,
                     encoding="utf8",
                 )
-            if os.environ["AIMET_TF_VER"]:
-                subprocess.run(
-                    ["cmake", "--build", bld_dir, "-j", "-t", tgt + "tensorflow"],
-                    check=True,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    encoding="utf8",
-                )
         # Copy C++ part into wheel package
         subprocess.run(
             shlex.split(f"cp -Prv {whl_prep_dir}/aimet_common/. {dst_dir}"),
@@ -158,14 +148,6 @@ class BuildExtensionCommand(build_ext):
         if os.environ["AIMET_PT_VER"]:
             subprocess.run(
                 shlex.split(f"cp -Prv {whl_prep_dir}/aimet_torch/. {dst_dir}"),
-                check=True,
-                stdout=sys.stdout,
-                stderr=sys.stderr,
-                encoding="utf8",
-            )
-        if os.environ["AIMET_TF_VER"]:
-            subprocess.run(
-                shlex.split(f"cp -Prv {whl_prep_dir}/aimet_tensorflow/. {dst_dir}"),
                 check=True,
                 stdout=sys.stdout,
                 stderr=sys.stderr,

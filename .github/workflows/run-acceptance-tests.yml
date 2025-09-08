@@ -39,7 +39,7 @@ jobs:
           name: "${{ matrix.id }}-wheel"
           path: "downloads"
       - name: Create python virtual environment
-        if: ${{ matrix.id  != 'tf-torch-cpu' }}
+        if: ${{ matrix.id  != 'onnx-torch-cpu' }}
         uses: ./.github/actions/setup-conda-env
         with:
           ENV_NAME: ${{ matrix.id }}
@@ -52,11 +52,7 @@ jobs:
         if: matrix.ENABLE_TESTS == 'ON'
         run: |
           set -x
-          if [ "${{ matrix.VER_TENSORFLOW }}" != "" ] ; then
-              PYTEST_TARGETS="$PYTEST_TARGETS ./NightlyTests/tensorflow"
-              ./.conda/bin/conda run --live-stream --name "${{ matrix.id }}" python3 -m pip install wget
-              ./.conda/bin/conda run --live-stream --name "${{ matrix.id }}" python3 ./NightlyTests/tensorflow/dependencies.py ./NightlyTests/tensorflow/resnet50_eval_scores.csv
-          elif [ "${{ matrix.VER_ONNXRUNTIME }}" != "" ] ; then
+          if [ "${{ matrix.VER_ONNXRUNTIME }}" != "" ] ; then
               PYTEST_TARGETS="$PYTEST_TARGETS ./NightlyTests/onnx"
           elif [ "${{ matrix.VER_TORCH }}" != "" ] ; then
               PYTEST_TARGETS="$PYTEST_TARGETS ./NightlyTests/torch"

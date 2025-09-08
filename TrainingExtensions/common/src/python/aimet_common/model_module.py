@@ -42,7 +42,7 @@ from aimet_common.utils import ModelApi
 
 
 class ModelModule(ABC):
-    """Abstract ModelModule class to represent any of the following: pytorch module, Tensorflow op, keras module or ONNX node"""
+    """Abstract ModelModule class to represent any of the following: pytorch module or ONNX node"""
 
     def __init__(self, model_module):
         self._model_module = model_module
@@ -58,22 +58,6 @@ class PytorchModelModule(ModelModule):
     def __init__(self, model_module):
         super().__init__(model_module)
         self._api = ModelApi.pytorch
-
-
-class TfModelModule(ModelModule):
-    """Tensorflow ModelModule class to represent an op inside a Tensorflow model"""
-
-    def __init__(self, model_module):
-        super().__init__(model_module)
-        self._api = ModelApi.tensorflow
-
-
-class KerasModelModule(ModelModule):
-    """Keras ModelModule class to represent an op inside a Keras model"""
-
-    def __init__(self, model_module):
-        super().__init__(model_module)
-        self._api = ModelApi.keras
 
 
 class ONNXModelModule(ModelModule):

@@ -34,7 +34,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-# Docker image file to build and test AIMET for Tensorflow in a GPU environment
+# Docker image file to build and test AIMET in a GPU environment
 
 ARG REGISTRY
 FROM ${REGISTRY}nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04

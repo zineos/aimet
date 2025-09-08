@@ -43,7 +43,6 @@ include(GNUInstallDirs)
 
 include(cmake/PreparePyTorch.cmake)
 include(cmake/PrepareONNX.cmake)
-include(cmake/PrepareTensorFlow.cmake)
 include(cmake/PreparePyBind11.cmake)
 
 # Project-global settings
@@ -64,9 +63,8 @@ set(WHL_EDITABLE_MODE OFF CACHE BOOL "Enable editable mode, wheels would have sy
 set(WHL_PREP_DIR "${CMAKE_BINARY_DIR}/whlprep" CACHE STRING "A path to store extra files which should be included in the wheels")
 set(WHL_PREP_AIMET_COMMON_DIR "${WHL_PREP_DIR}/aimet_common" CACHE STRING "A path to store extra files which should be included in the aimet_common wheel")
 set(WHL_PREP_AIMET_TORCH_DIR "${WHL_PREP_DIR}/aimet_torch" CACHE STRING "A path to store extra files which should be included in the aimet_torch wheel")
-set(WHL_PREP_AIMET_TENSORFLOW_DIR "${WHL_PREP_DIR}/aimet_tensorflow" CACHE STRING "A path to store extra files which should be included in the aimet_tensorflow wheel")
 set(WHL_PREP_AIMET_ONNX_DIR "${WHL_PREP_DIR}/aimet_onnx" CACHE STRING "A path to store extra files which should be included in the aimet_onnx wheel")
-mark_as_advanced(WHL_PREP_DIR WHL_PREP_AIMET_COMMON_DIR WHL_PREP_AIMET_TORCH_DIR WHL_PREP_AIMET_TENSORFLOW_DIR WHL_PREP_AIMET_ONNX_DIR)
+mark_as_advanced(WHL_PREP_DIR WHL_PREP_AIMET_COMMON_DIR WHL_PREP_AIMET_TORCH_DIR WHL_PREP_AIMET_ONNX_DIR)
 
 # Set the software version from version.txt file (if not already set)
 if(NOT DEFINED SW_VERSION)
@@ -80,10 +78,10 @@ endif()
 option(ENABLE_CUDA "Enable use of CUDA" ON)
 option(ENABLE_TORCH "Enable AIMET-Torch build" ON)
 option(ENABLE_ONNX "Enable AIMET-ONNX build" OFF)
-option(ENABLE_TENSORFLOW "Enable AIMET-TensorFlow build" OFF)
 option(ENABLE_TESTS "Enable building tests" ON)
-option(BUILD_PYMO_COMPRESSION "Build DlCompression C++ extension" ${ENABLE_TENSORFLOW})
-option(BUILD_PYMO_EQUALIZATION "Build DlEqualization C++ extension" ${ENABLE_TENSORFLOW})
+# TODO: #5665 Remove Compression and equalization
+option(BUILD_PYMO_COMPRESSION "Build DlCompression C++ extension" OFF)
+option(BUILD_PYMO_EQUALIZATION "Build DlEqualization C++ extension" OFF)
 
 option(ENABLE_GCC_PRE_CXX11_ABI "Compile using pre-C++11 ABI" OFF)
 option(AUTO_ENABLE_GCC_PRE_CXX11_ABI "Auto-enable pre-C++11 ABI when deemed necessary" ON)
@@ -95,10 +93,7 @@ message(STATUS "AIMET build configuration:")
 message(STATUS "** ENABLE_CUDA = ${ENABLE_CUDA}")
 message(STATUS "** ENABLE_TORCH = ${ENABLE_TORCH}")
 message(STATUS "** ENABLE_ONNX = ${ENABLE_ONNX}")
-message(STATUS "** ENABLE_TENSORFLOW = ${ENABLE_TENSORFLOW}")
 message(STATUS "** ENABLE_TESTS = ${ENABLE_TESTS}")
-message(STATUS "** BUILD_PYMO_COMPRESSION = ${BUILD_PYMO_COMPRESSION}")
-message(STATUS "** BUILD_PYMO_EQUALIZATION = ${BUILD_PYMO_EQUALIZATION}")
 message(STATUS "** ---")
 message(STATUS "** ENABLE_GCC_PRE_CXX11_ABI  = ${ENABLE_GCC_PRE_CXX11_ABI}")
 message(STATUS "** AUTO_ENABLE_GCC_PRE_CXX11_ABI  = ${AUTO_ENABLE_GCC_PRE_CXX11_ABI}")
@@ -113,11 +108,6 @@ endif()
 
 if (BUILD_PYMO_EQUALIZATION)
     add_compile_definitions(BUILD_PYMO_EQUALIZATION)
-endif()
-
-if (ENABLE_TORCH AND ENABLE_TENSORFLOW)
-    # Remove this once it's proven feasible.
-    message(WARNING "AIMET Torch and TensorFlow support currently cannot be built at the same time.")
 endif()
 
 # Find Python libraries
@@ -162,15 +152,6 @@ if (ENABLE_TORCH)
         # NB, this ABI version is set in PyTorch only when GLIBCXX_USE_CXX11_ABI==0.
         message(NOTICE "** Set GCC_ABI_VERSION = 11 (Reason: PyTorch)")
         set(GCC_ABI_VERSION "11" CACHE STRING "" FORCE)
-    endif()
-endif()
-
-if (ENABLE_TENSORFLOW)
-    set_tensorflow_version() # we already need the version right below
-    if (AUTO_ENABLE_GCC_PRE_CXX11_ABI AND TF_VERSION VERSION_LESS "2.9")
-        # michof: Keep behavior as in previous versions of this file.
-        message(NOTICE "** Set ENABLE_GCC_PRE_CXX11_ABI = ON (Reason: TensorFlow <2.9)")
-        set(ENABLE_GCC_PRE_CXX11_ABI ON CACHE BOOL "" FORCE)
     endif()
 endif()
 
@@ -224,13 +205,6 @@ if (ENABLE_ONNX)
     update_onnx_cuda_arch_list()
 endif()
 
-if (ENABLE_TENSORFLOW)
-    set_tensorflow_version()
-    set_tensorflow_library_path()
-    add_library_tensorflow(${TF_LIB_DIR})
-    add_library_pywrap_tensorflow_internal(${TF_LIB_DIR})
-endif()
-
 add_library_pybind11()
 # michof: We should consider replacing the above macro simply by:
 #find_package(pybind11 CONFIG REQUIRED)
@@ -263,11 +237,6 @@ if (ENABLE_ONNX)
   set(FMWORK_VERSION ${ONNX_VERSION})
   set(AIMET_PYTHONPATH "${AIMET_PYTHONPATH}:${CMAKE_CURRENT_SOURCE_DIR}/TrainingExtensions/onnx/src/python")
 endif (ENABLE_ONNX)
-
-if (ENABLE_TENSORFLOW)
-  set(FMWORK_VERSION ${TF_VERSION})
-  set(AIMET_PYTHONPATH "${AIMET_PYTHONPATH}:${CMAKE_CURRENT_SOURCE_DIR}/TrainingExtensions/tensorflow/src/python")
-endif (ENABLE_TENSORFLOW)
 
 
 # Export PYTHONPATH to the parent cmake scope (if present)
@@ -318,7 +287,7 @@ add_custom_target(packageaimet
   COMMAND "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}" --target install
 
   # Now run the packaging target to generate wheel files
-  COMMAND ${CMAKE_COMMAND} -DSW_VERSION=${SW_VERSION} -DCUDA_VER_STRING=${CUDA_VER_STRING} -DPIP_INDEX=${PIP_INDEX} ${remote_url_cmake_opt} -DPYTHON3_EXECUTABLE=${Python3_EXECUTABLE} -DAIMET_PACKAGE_PATH=${AIMET_PACKAGE_PATH} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DENABLE_CUDA=${ENABLE_CUDA} -DENABLE_TENSORFLOW=${ENABLE_TENSORFLOW} -DENABLE_TORCH=${ENABLE_TORCH} -DENABLE_ONNX=${ENABLE_ONNX} -DPATCHELF_EXE=${PATCHELF_EXE} -DFMWORK_VERSION=${FMWORK_VERSION} -P ${CMAKE_CURRENT_SOURCE_DIR}/packaging/package_aimet.cmake
+  COMMAND ${CMAKE_COMMAND} -DSW_VERSION=${SW_VERSION} -DCUDA_VER_STRING=${CUDA_VER_STRING} -DPIP_INDEX=${PIP_INDEX} ${remote_url_cmake_opt} -DPYTHON3_EXECUTABLE=${Python3_EXECUTABLE} -DAIMET_PACKAGE_PATH=${AIMET_PACKAGE_PATH} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DENABLE_CUDA=${ENABLE_CUDA} -DENABLE_TORCH=${ENABLE_TORCH} -DENABLE_ONNX=${ENABLE_ONNX} -DPATCHELF_EXE=${PATCHELF_EXE} -DFMWORK_VERSION=${FMWORK_VERSION} -P ${CMAKE_CURRENT_SOURCE_DIR}/packaging/package_aimet.cmake
 )
 
 

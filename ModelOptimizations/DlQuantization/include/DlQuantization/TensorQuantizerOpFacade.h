@@ -56,7 +56,7 @@ enum class TensorQuantizerOpMode
 
 /**
  * This is a facade interface for the TensorQuantizer class. This facade only exposes the interfaces that are needed
- * by a C++ custom op (for TensorFlow or PyTorch). Specifically methods that require numpy tensors are omitted
+ * by a C++ custom op (PyTorch). Specifically methods that require numpy tensors are omitted
  * as these are only intended to be invoked from Python code which has easy access to numpy variants of torch and tf
  * tensors.
  */

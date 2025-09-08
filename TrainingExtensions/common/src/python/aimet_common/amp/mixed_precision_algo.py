@@ -35,7 +35,7 @@
 #  @@-COPYRIGHT-END-@@
 # =============================================================================
 
-"""Common Algorithm between PyTorch & TensorFlow for Auto Mixed precision"""
+"""Common Algorithm for Auto Mixed precision"""
 
 import os
 import copy

@@ -19,25 +19,6 @@ pipeline {
     stages {
         stage ("Verification") {
             parallel {
-                stage("Tensorflow CPU") {
-                    steps {
-                        script {
-                            env.AIMET_VARIANT = "tf_cpu"
-                            echo "*** Running SETUP on ${env.NODE_NAME} for variant ${env.AIMET_VARIANT} with tag ${params.release_tag} in ${WORKSPACE_ROOT} ***"
-                            sh "bash -l -c \"docker run --rm -v ${WORKSPACE_ROOT}:${WORKSPACE_ROOT} -w ${WORKSPACE_ROOT}/packaging/verification -e AIMET_VARIANT=${env.AIMET_VARIANT} -e release_tag=${params.release_tag} ${ALTERNATIVE_DOCKER_REGISTRY}ubuntu:focal sh -c './aimet-os-install.sh && python3 test_aimet_tf_imports.py'\""
-                        }
-                    }
-                }
-                stage("Tensorflow GPU") {
-                    agent { label "${params.BUILD_LABEL_GPU}" }
-                    steps {
-                        script {
-                            env.AIMET_VARIANT = "tf_gpu"
-                            echo "*** Running SETUP on ${env.NODE_NAME} for variant ${env.AIMET_VARIANT} with tag ${params.release_tag} in ${WORKSPACE_ROOT} ***"
-                            sh "bash -l -c \"docker run --gpus all --rm -v ${WORKSPACE_ROOT}:${WORKSPACE_ROOT} -w ${WORKSPACE_ROOT}/packaging/verification -e AIMET_VARIANT=${env.AIMET_VARIANT} -e release_tag=${params.release_tag} ${ALTERNATIVE_DOCKER_REGISTRY}ubuntu:focal sh -c './aimet-os-install.sh && python3 test_aimet_tf_imports.py'\""
-                        }
-                    }
-                }
                 stage("Torch CPU") {
                     steps {
                         script {
