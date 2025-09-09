@@ -209,9 +209,7 @@ def optional_dependencies() -> dict[str, list[str]]:
         "test": [
             "beautifulsoup4",
             "matplotlib",
-            # Fix test-time onnx version to <1.18 as ORT doesn't support IR version 11 yet
-            # TODO: Relax this constraints asap
-            "onnx<1.18",
+            "onnx",
             "onnxruntime-extensions",
             "onnxsim",
             "peft",
