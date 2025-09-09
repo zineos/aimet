@@ -38,7 +38,6 @@ jobs:
           AIMET_COMMON_ONNX_UTILS_SRC_CODE: "TrainingExtensions/common/src/python/aimet_common/onnx/"
           AIMET_TORCH_SRC_CODE:             "TrainingExtensions/torch/"
           AIMET_ONNX_SRC_CODE:              "TrainingExtensions/onnx/"
-          AIMET_TF_SRC_CODE:                "TrainingExtensions/tensorflow/"
           DOC_SRC_CODE:                     "Docs/"
           EXAMPLES_SRC_CODE:                "Examples/"
         shell: bash
@@ -47,7 +46,6 @@ jobs:
 
           TORCH_TEST_REQUIRED='false'
           ONNX_TEST_REQUIRED='false'
-          TF_TEST_REQUIRED='false'
 
           for file in ${ALL_CHANGED_FILES}; do
             if [[ "$file" == "$AIMET_COMMON_ONNX_UTILS_SRC_CODE"* ]]; then
@@ -57,8 +55,6 @@ jobs:
               TORCH_TEST_REQUIRED='true'
             elif [[ "$file" == "$AIMET_ONNX_SRC_CODE"* ]]; then
               ONNX_TEST_REQUIRED='true'
-            elif [[ "$file" == "$AIMET_TF_SRC_CODE"* ]]; then
-              TF_TEST_REQUIRED='true'
             elif [[ "$file" == "$DOC_SRC_CODE"* ]]; then
               : # Documentation change doesn't require running unit tests; only doc rebuild is needed
             elif [[ "$file" == "$EXAMPLES_SRC_CODE"* ]]; then
@@ -66,14 +62,12 @@ jobs:
             else
               TORCH_TEST_REQUIRED='true'
               ONNX_TEST_REQUIRED='true'
-              TF_TEST_REQUIRED='true'
               break
             fi
           done
 
           echo "test_torch=$TORCH_TEST_REQUIRED" >> $GITHUB_OUTPUT
           echo "test_onnx=$ONNX_TEST_REQUIRED"   >> $GITHUB_OUTPUT
-          echo "test_tf=$TF_TEST_REQUIRED"       >> $GITHUB_OUTPUT
       - name: Torch variants
         # For the default branch, we still test all variants every time (yet)
         if: steps.select.outputs.test_torch == 'true' || github.ref_name == github.event.repository.default_branch
