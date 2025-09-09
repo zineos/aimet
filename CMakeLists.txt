@@ -79,9 +79,6 @@ option(ENABLE_CUDA "Enable use of CUDA" ON)
 option(ENABLE_TORCH "Enable AIMET-Torch build" ON)
 option(ENABLE_ONNX "Enable AIMET-ONNX build" OFF)
 option(ENABLE_TESTS "Enable building tests" ON)
-# TODO: #5665 Remove Compression and equalization
-option(BUILD_PYMO_COMPRESSION "Build DlCompression C++ extension" OFF)
-option(BUILD_PYMO_EQUALIZATION "Build DlEqualization C++ extension" OFF)
 
 option(ENABLE_GCC_PRE_CXX11_ABI "Compile using pre-C++11 ABI" OFF)
 option(AUTO_ENABLE_GCC_PRE_CXX11_ABI "Auto-enable pre-C++11 ABI when deemed necessary" ON)
@@ -101,14 +98,6 @@ message(STATUS "** ---")
 message(STATUS "** GCC_ABI_VERSION = ${GCC_ABI_VERSION}")
 message(STATUS "** AUTO_SET_GCC_ABI_VERSION = ${AUTO_SET_GCC_ABI_VERSION}")
 message(STATUS "** ---")
-
-if (BUILD_PYMO_COMPRESSION)
-    add_compile_definitions(BUILD_PYMO_COMPRESSION)
-endif()
-
-if (BUILD_PYMO_EQUALIZATION)
-    add_compile_definitions(BUILD_PYMO_EQUALIZATION)
-endif()
 
 # Find Python libraries
 execute_process(
@@ -184,9 +173,6 @@ find_package(Threads)
 
 find_package(PkgConfig)
 find_package (Eigen3 REQUIRED)
-
-#find_package(OpenCV REQUIRED)
-pkg_search_module(OPENCV opencv) # in case opencv will not be found, it would be built form source
 
 include(cmake/ThirdPartyDependencies.cmake)
 

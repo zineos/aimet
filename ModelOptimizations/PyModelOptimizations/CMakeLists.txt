@@ -44,23 +44,6 @@ target_link_libraries(PyModelOptimizations PUBLIC
         MoDlQuantization
         )
 
-if (BUILD_PYMO_EQUALIZATION)
-    target_link_libraries(PyModelOptimizations PUBLIC
-            MoDlEqualization
-            )
-endif()
-if (BUILD_PYMO_COMPRESSION)
-    target_link_libraries(PyModelOptimizations PUBLIC
-            MoDlCompression
-            )
-endif()
-if (BUILD_PYMO_EQUALIZATION OR BUILD_PYMO_COMPRESSION)
-    target_link_libraries(PyModelOptimizations PUBLIC
-            ${OPENCV_LINK_LIBRARIES}
-            z
-            )
-endif()
-
 if (ENABLE_CUDA)
     target_link_libraries(PyModelOptimizations PUBLIC
             MoDlQuantizationCuda

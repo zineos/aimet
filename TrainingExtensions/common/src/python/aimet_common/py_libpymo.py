@@ -56,24 +56,10 @@ libpymo_classes = [
     "TfEncoding",
     "Quantizer",
     "QuantizationEncodingAnalyzer",
-    "LayerAttributes",
     "EncodingAnalyzerForPython",
     "TensorQuantizationSimForPython",
     "TensorQuantizer",
-    "Svd",
-    "CrossLayerScaling",
-    "RescalingParamsVectors",
-    "EqualizationParams",
-    "BatchNormFold",
-    "BNParams",
     "TensorParams",
-    "HighBiasFold",
-    "LayerParams",
-    "BNParamsHighBiasFold",
-    "TensorParamBiasCorrection",
-    "BiasCorrection",
-    "BnBasedBiasCorrection",
-    "BnParamsBiasCorr",
     "BlockTensorQuantizer",
 ]
 
@@ -83,11 +69,6 @@ libpymo_functions = [
     "GetQuantizationInstance",
     "GetQuantizationEncodingAnalyzerInstance",
     "PtrToInt64",
-    "GetSVDInstance",
-    "scaleLayerParams",
-    "scaleDepthWiseSeparableLayer",
-    "fold",
-    "updateBias",
     "getScaleFactor",
     "getRescaledOutputAndBias",
 ]
@@ -138,16 +119,6 @@ for libpymo_function in libpymo_functions:
     globals()[libpymo_function] = create_unavailable_function(libpymo_function)
 
 
-class COMPRESS_LAYER_TYPE(enum.Enum):
-    """
-    COMPRESS_LAYER_TYPE
-    """
-
-    LAYER_TYPE_OTHER = 0
-    LAYER_TYPE_CONV = 1
-    LAYER_TYPE_FC = 2
-
-
 class ComputationMode(enum.Enum):
     """
     ComputationMode
@@ -164,15 +135,6 @@ class LayerInOut(enum.Enum):
 
     LAYER_INPUT = 0
     LAYER_OUTPUT = 1
-
-
-class NETWORK_COST_METRIC(enum.Enum):
-    """
-    NETWORK_COST_METRIC
-    """
-
-    COST_TYPE_MEMORY = 0
-    COST_TYPE_MAC = 1
 
 
 class QuantizationMode(enum.Enum):
@@ -259,16 +221,6 @@ class QnnRank(enum.Enum):
     QNN_RANK_INVALID = 7
 
 
-class ActivationType(enum.Enum):
-    """
-    ActivationType
-    """
-
-    noActivation = 0
-    relu = 1
-    relu6 = 2
-
-
 libpymo_enums = [
     QnnDatatype,
     QnnRank,
@@ -276,11 +228,7 @@ libpymo_enums = [
     QuantizationMode,
     LayerInOut,
     RoundingMode,
-    COMPRESS_LAYER_TYPE,
-    NETWORK_COST_METRIC,
-    SVD_COMPRESS_TYPE,
     TensorQuantizerOpMode,
-    ActivationType,
 ]
 
 

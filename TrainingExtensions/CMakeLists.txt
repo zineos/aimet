@@ -51,28 +51,26 @@
 # https://cmake.org/cmake/help/v3.17/module/CMakeGraphVizOptions.html
 ###############################################################################
 #
-#          +--------------------- whl_{action} ---------------------+
-#          |                           |                            |
-#          |                           |                            |
-#          v                           v                            v
-#  whl_{action}_torch          whl_{action}_common       whl_{action}_tensorflow
-#          |                           |                            |
-#          |                           v                            |
-#          +-------------------> whl_prep_(cp/ln) <-----------------+
-#                                      |
-#          +---------------------------+----------------------------+
-#          v                           v                            v
-#  whl_prep_(cp/ln)_torch   whl_prep_(cp/ln)_common  whl_prep_(cp/ln)_tensorflow
-#          |                  |                                        |
-#          |                  |                                        v
-#          v                  |                               build aimet_tf_ops
-# build AimetTensorQuantizer  |
-#                             +>whl_prep_(cp/ln)_common_DlCompression --------+
-#                             +>whl_prep_(cp/ln)_common_DlEqualization -------|
-#                             +>whl_prep_(cp/ln)_common_DlQuantization -------|
-#                             +>whl_prep_(cp/ln)_common_PyModelOptimizations -|
-#                                        |                                    |
-#                                        v                                    v
+#          +------- whl_{action}-------+
+#          |                           |
+#          |                           |
+#          v                           v
+#  whl_{action}_torch          whl_{action}_common
+#          |                           |
+#          |                           v
+#          +-----> whl_prep_(cp/ln) <--+
+#                        |
+#          +-------------+-------------+
+#          v                           v
+#  whl_prep_(cp/ln)_torch    whl_prep_(cp/ln)_common
+#          |                           |
+#          |                           |
+#          v                           |
+# build AimetTensorQuantizer           v
+#                       whl_prep_(cp/ln)_common_DlQuantization -------+
+#                       whl_prep_(cp/ln)_common_PyModelOptimizations -|
+#                                        |                            |
+#                                        v                            v
 #                                  build libpymo                 install headers
 
 

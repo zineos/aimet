@@ -9,8 +9,6 @@ NightlyTests/
 packaging/
 ThirdParty/
 
-ModelOptimizations/DlCompression/test/
-ModelOptimizations/DlEqualization/test/
 ModelOptimizations/DlQuantization/test/
 
 TrainingExtensions/common/test/

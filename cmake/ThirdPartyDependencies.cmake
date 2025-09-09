@@ -117,52 +117,6 @@ else ()
     endif ()
 endif ()
 
-########
-# OpenCV
-########
-
-if (BUILD_PYMO_COMPRESSION OR BUILD_PYMO_EQUALIZATION)
-    if (NOT OPENCV_FOUND AND NOT OpenCV_FOUND)
-      # Aimet requires opencv which might not be installed since it is not part of neither
-      # reqs_dep_*.txt nor reqs_pip_*.txt. Download and compile opencv for user only if
-      # opencv is not found.
-      set(BUILD_LIST        "core" CACHE INTERNAL "[OpenCV] ")
-      set(WITH_LAPACK       ON  CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_EXAMPLES    OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_ITT         OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_JAVA        OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_opencv_apps OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_opencv_python2  OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_opencv_python3  OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_PERF_TESTS  OFF CACHE INTERNAL "[OpenCV] ")
-      set(BUILD_TESTS       OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_CUDA         OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_FFMPEG       OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_GTK          OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_IPP          OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_JPEG         OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_OPENEXR      OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_OPENJPEG     OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_PNG          OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_TIFF         OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_V4L          OFF CACHE INTERNAL "[OpenCV] ")
-      set(WITH_WEBP         OFF CACHE INTERNAL "[OpenCV] ")
-
-      FetchContent_Declare(
-        opencv
-        GIT_REPOSITORY https://github.com/opencv/opencv.git
-        GIT_TAG        4.6.0
-        GIT_SHALLOW    TRUE
-        EXCLUDE_FROM_ALL
-      )
-      FetchContent_MakeAvailable(opencv)
-      set(OPENCV_LINK_LIBRARIES opencv_core)
-      get_target_property(OPENCV_INCLUDE_DIRS opencv_core INCLUDE_DIRECTORIES)
-      set(OPENCV_INCLUDE_DIRS ${OPENCV_INCLUDE_DIRS})
-    endif()
-endif()
-
 ######################
 # ONNX Runtime Headers
 ######################
