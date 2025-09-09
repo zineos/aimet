@@ -1937,7 +1937,7 @@ class QuantizationSimModel:
 
                 self._set_quantizer(out.name, node_input_map, input_qtzr)
 
-    def to_onnx_qdq(self) -> onnx.ModelProto:
+    def to_onnx_qdq(self, *, prequantize_constants: bool = False) -> onnx.ModelProto:
         """
         Return a copy of ModelProto with all QcQuantizeOp nodes replaced with
         QuantizeLinear and/or DequantizeLinear.
@@ -1951,11 +1951,15 @@ class QuantizationSimModel:
             0
             >>> len([dq for dq in onnx_qdq.graph.node if dq.op_type == "DequantizeLinear"])
             10
+
+        Args:
+            prequantize_constants (bool): If True, output model will contain quantized values for constant tensors.
+                If False, the model will contain floating point data and Q -> DQ nodes.
         """
         with tempfile.TemporaryDirectory() as tmp_dir:
             return self._to_onnx_qdq(
                 os.path.join(tmp_dir, "onnx.model"),
-                prequantize_constants=False,
+                prequantize_constants=prequantize_constants,
             )
 
     def _to_onnx_qdq(
