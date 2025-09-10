@@ -25,6 +25,9 @@ jobs:
         password: ${{ secrets.DOCKER_CREDENTIALS }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check if tests should be run
+        id: check_tests
+        run: echo "status=${{ matrix.RUN_UNIT_TESTS == 'ON' || matrix.RUN_ACCEPTANCE_TESTS == 'ON' }}" >> $GITHUB_OUTPUT
       - name: "Generate CMAKE_ARGS"
         run: |
           set -x
@@ -32,7 +35,7 @@ jobs:
           CMAKE_ARGS="-DENABLE_CUDA=$([ "${{ matrix.VER_CUDA }}" = "" ] && echo OFF || echo ON) $CMAKE_ARGS"
           CMAKE_ARGS="-DENABLE_TORCH=$([ "${{ matrix.VER_TORCH }}" = "" ] && echo OFF || echo ON) $CMAKE_ARGS"
           CMAKE_ARGS="-DENABLE_ONNX=$([ "${{ matrix.VER_ONNXRUNTIME }}" = "" ] && echo OFF || echo ON) $CMAKE_ARGS"
-          CMAKE_ARGS="-DENABLE_TESTS=${{ matrix.ENABLE_TESTS }} $CMAKE_ARGS"
+          CMAKE_ARGS="-DENABLE_TESTS=$([ ! ${{ steps.check_tests.outputs.status }} ] && echo OFF || echo ON) $CMAKE_ARGS"
           CMAKE_ARGS="-DPIP_INDEX=${{ matrix.PIP_INDEX }} $CMAKE_ARGS"
           echo "AIMET_CMAKE_ARGS=$CMAKE_ARGS" >> $GITHUB_ENV
 

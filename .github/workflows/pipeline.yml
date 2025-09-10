@@ -80,7 +80,8 @@ jobs:
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "",
                  "VER_CUDA":        "",
-                 "ENABLE_TESTS":    "ON",
+                 "RUN_UNIT_TESTS":    "ON",
+                 "RUN_ACCEPTANCE_TESTS":    "OFF",
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       ""
               },
@@ -91,7 +92,8 @@ jobs:
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "",
                  "VER_CUDA":        "12.1.1",
-                 "ENABLE_TESTS":    "ON",
+                 "RUN_UNIT_TESTS":    "ON",
+                 "RUN_ACCEPTANCE_TESTS":    "OFF",
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       ""
               }
@@ -108,7 +110,8 @@ jobs:
                  "VER_PYTHON":      "3.10",
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
-                 "ENABLE_TESTS":    "ON",
+                 "RUN_UNIT_TESTS":    "ON",
+                 "RUN_ACCEPTANCE_TESTS":    "OFF",
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       ""
               },
@@ -119,7 +122,8 @@ jobs:
                  "VER_TORCH":       "",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "VER_CUDA":        "12.1.0",
-                 "ENABLE_TESTS":    "ON",
+                 "RUN_UNIT_TESTS":    "ON",
+                 "RUN_ACCEPTANCE_TESTS":    "OFF",
                  "BUILD_TARGETS":   "all",
                  "PIP_INDEX":       ""
               }
@@ -136,7 +140,8 @@ jobs:
                  "VER_TORCH":       "2.1.2",
                  "VER_ONNXRUNTIME": "1.19.2",
                  "VER_CUDA":        "",
-                 "ENABLE_TESTS":    "OFF",
+                 "RUN_UNIT_TESTS":    "OFF",
+                 "RUN_ACCEPTANCE_TESTS":    "OFF",
                  "BUILD_TARGETS":   "all;doc",
                  "PIP_INDEX":       ""
               }
@@ -168,7 +173,6 @@ jobs:
             VER_PYTHON=${{ matrix.VER_PYTHON }}
             VER_CUDA=${{ matrix.VER_CUDA }}
             VER_TORCH=${{ matrix.VER_TORCH }}
-            VER_TENSORFLOW=${{ matrix.VER_TENSORFLOW }}
             VER_ONNXRUNTIME=${{ matrix.VER_ONNXRUNTIME }}
             AIMET_VARIANT=${{ matrix.id }}
 
@@ -181,16 +185,16 @@ jobs:
       image-tag: ${{ needs.docker-tag.outputs.tag }}
     secrets: inherit
 
-  call-run-unit-tests:
+  call-run-unit-acceptance-tests:
     name: Run unit tests
     needs: [ variants, call-build-wheels ]
-    uses: ./.github/workflows/run-unit-tests.yml
+    uses: ./.github/workflows/run-unit-acceptance-tests.yml
     with:
       variants: ${{ needs.variants.outputs.matrix }}
     secrets: inherit
 
   docker-push-latest:
-    needs: [docker-tag, variants, call-run-unit-tests]
+    needs: [docker-tag, variants, call-run-unit-acceptance-tests]
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJSON(needs.variants.outputs.matrix) }}
