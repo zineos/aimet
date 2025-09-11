@@ -83,7 +83,7 @@ from aimet_torch.v2.nn import (
     UnknownModuleError,
 )
 from aimet_torch.v2.nn.fake_quant import _legacy_impl
-from aimet_torch.v2.nn.true_quant import _dispatch, _dispatch_table
+from aimet_torch.v2.nn.true_quant import _dispatch, _dispatchable_torch_functions
 from aimet_torch.v2.quantization.tensor import QuantizedTensor, DequantizedTensor
 from aimet_torch.v2.utils import enable_recompute
 from aimet_torch.v2.nn import custom
@@ -798,7 +798,7 @@ def test_dispatch_sanity():
     When: Try to dispatch unsupported functions
     Then: Throw runtime error
     """
-    for func in get_ignored_functions() - _dispatch_table.keys():
+    for func in get_ignored_functions() - _dispatchable_torch_functions:
         dummy_impl = lambda *args, **kwargs: func(*args, **kwargs)
         with pytest.raises(RuntimeError):
             with _dispatch(func, dummy_impl):
@@ -822,6 +822,46 @@ def test_dispatch_sanity():
 
     expected = x + (y @ z) + 1
     assert torch.all(out == expected)
+
+    def _linear_impl(x, y):
+        _linear_impl.call_cnt += 1
+        return F.linear(x, y)
+
+    _linear_impl.call_cnt = 0
+
+    """
+    When: Dispatch _linear_impl for F.linear in a nested context manager
+    Then: _linear_impl should be called only once
+    """
+    # Dispatch F.linear in the outer context manager
+    with _dispatch(F.linear, _linear_impl):
+        with _dispatch(torch.mul, lambda x, y: x * y):
+            F.linear(x, y)
+    assert _linear_impl.call_cnt == 1
+    _linear_impl.call_cnt = 0
+
+    # Dispatch F.linear in the inner context manager
+    with _dispatch(torch.mul, lambda x, y: x * y):
+        with _dispatch(F.linear, _linear_impl):
+            F.linear(x, y)
+    assert _linear_impl.call_cnt == 1
+    _linear_impl.call_cnt = 0
+
+    """
+    When: Dispatch _linear_impl for F.linear N times in a nested context manager
+    Then: _linear_impl should be called N times
+    """
+    with _dispatch(F.linear, _linear_impl):
+        with _dispatch(F.linear, _linear_impl):
+            F.linear(x, y)
+    assert _linear_impl.call_cnt == 2
+    _linear_impl.call_cnt = 0
+
+    with _dispatch(F.linear, _linear_impl):
+        with _dispatch(F.linear, _linear_impl):
+            with _dispatch(F.linear, _linear_impl):
+                F.linear(x, y)
+    assert _linear_impl.call_cnt == 3
 
 
 def _create_legacy_fake_quantized_module(module):

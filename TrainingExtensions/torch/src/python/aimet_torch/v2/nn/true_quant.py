@@ -43,7 +43,7 @@ import itertools
 from inspect import signature
 from abc import abstractmethod, ABCMeta
 from collections import OrderedDict
-from typing import Type, Any, Optional, Callable, Dict
+from typing import Type, Any, Optional, Callable, Set, Mapping
 from weakref import WeakKeyDictionary
 import warnings
 
@@ -422,23 +422,24 @@ class QuantizationMixin(BaseQuantizationMixin, metaclass=QuantizationMixinMeta):
 # pylint: disable=too-many-ancestors
 
 
-_dispatch_table: Dict[Callable, Optional[Callable]]
-_dispatch_table = {
-    torch_fn: None
-    for torch_fn in itertools.chain(*get_overridable_functions().values())
-}
+_dispatchable_torch_functions: Set[Callable]
+_dispatchable_torch_functions = set(
+    itertools.chain(*get_overridable_functions().values())
+)
 
 # NOTE: ``torch.overrides.get_overridable_functions()`` doesn't include
 #       F.hardswish, F.hardsigmoid, or Tensor.unflatten, even though
 #       they are implemented in a perfectly dispatchable manner.
-_dispatch_table[F.hardswish] = None
-_dispatch_table[F.hardsigmoid] = None
-_dispatch_table[Tensor.unflatten] = None
+_dispatchable_torch_functions |= {F.hardswish, F.hardsigmoid, Tensor.unflatten}
 
 
 class _Dispatcher(BaseTorchFunctionMode):
+    def __init__(self, dispatch_table: Mapping[Callable, Callable]):
+        super().__init__()
+        self._dispatch_table = dict(dispatch_table)
+
     def __torch_function__(self, func, types, args=(), kwargs=None):
-        impl = _dispatch_table.get(func, None)
+        impl = self._dispatch_table.get(func, None)
 
         if impl is None:
             impl = func
@@ -448,18 +449,13 @@ class _Dispatcher(BaseTorchFunctionMode):
 
 @contextlib.contextmanager
 def _dispatch(torch_func: Callable, custom_impl: Callable):
-    try:
-        orig = _dispatch_table[torch_func]
-    except KeyError as e:
-        raise RuntimeError(f"PyTorch doesn't support overriding {torch_func}") from e
+    if torch_func not in _dispatchable_torch_functions:
+        raise RuntimeError(f"PyTorch doesn't support overriding {torch_func}")
 
-    try:
-        _dispatch_table[torch_func] = custom_impl
+    dispatch_table = {torch_func: custom_impl}
 
-        with _Dispatcher():
-            yield
-    finally:
-        _dispatch_table[torch_func] = orig
+    with _Dispatcher(dispatch_table):
+        yield
 
 
 class _DispatchMeta(QuantizationMixinMeta):
@@ -469,7 +465,7 @@ class _DispatchMeta(QuantizationMixinMeta):
         """
         if "_builtin_torch_fn" in namespace:
             torch_fn = namespace["_builtin_torch_fn"]
-            if torch_fn and torch_fn not in _dispatch_table:
+            if torch_fn and torch_fn not in _dispatchable_torch_functions:
                 raise RuntimeError(f"PyTorch doesn't support overriding {torch_fn}")
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
@@ -497,11 +493,11 @@ class _DispatchMixin(metaclass=_DispatchMeta):
 
     def _builtin_torch_fn_helper(self, fn: Callable[..., Tensor]):
         def wrapper(*args, **kwargs):
-            qtzd_args = (
+            qtzd_args = tuple(
                 _quantize_dequantize_if_applicable(x, qtzr)
                 for x, qtzr in zip(args, self.input_quantizers)
             )
-            others = (
+            others = tuple(
                 _dequantize_if_applicable(x) for x in args[len(self.input_quantizers) :]
             )
             kwargs = {
