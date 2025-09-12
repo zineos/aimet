@@ -6,6 +6,32 @@
 Release notes
 #############
 
+2.15.0
+======
+
+* Bug fixes and Improvements
+
+    * ONNX
+        * Throws an error on `bfloat16` models (`5181860`_)
+        * Added docs and examples for LiteMP (`3d5e0dd`_)
+        * Export to QDQ ONNX with pre-quantized constants (`a97354f`_)
+
+    * PyTorch
+        * Fix multiple dispatch issue when torch function is called in nested context manager (`6216ca0`_)
+
+    * Keras
+        * 2.14.0 is the last release of aimet-tf (`087e9b1`_)
+
+    * Common
+        * Added PSNR metrics (`14c8e81`_)
+
+.. _14c8e81: https://github.com/quic/aimet/commit/14c8e81a8309504d564799801cfde102618efc8a
+.. _087e9b1: https://github.com/quic/aimet/commit/087e9b1ddefea24f21580256f8b20606b931d74c
+.. _5181860: https://github.com/quic/aimet/commit/5181860434e75e67cb161e3c0e9135df10b04507
+.. _3d5e0dd: https://github.com/quic/aimet/commit/3d5e0ddd5dab7b0fec2aea5fc20bf21955e918d8
+.. _a97354f: https://github.com/quic/aimet/commit/a97354f0f6b72d790a8c03fea1338d7cb5c6aa64
+.. _6216ca0: https://github.com/quic/aimet/commit/6216ca03e0d15ce47d5c4273f59d72d6d5ad46dc
+
 2.14.0
 ======
 * New Feature
