@@ -2,7 +2,50 @@
 
 本文件夹包含了AIMET（AI Model Efficiency Toolkit）的完整设计文档，每个模块都有独立的设计文档。
 
+## 🌟 快速开始
+
+**推荐**: 首先访问 **[📱 设计文档门户 (index.html)](index.html)** 获得最佳的浏览体验！
+
+门户页面提供：
+- 🎨 精美的可视化界面
+- 🧭 个性化的学习路径指导
+- 📊 文档统计信息
+- 🔗 便捷的导航链接
+
 ## 文档结构
+
+### 🎨 精美可视化图表集合
+- **[architecture_diagrams.html](architecture_diagrams.html)** - 🌟 **交互式架构图表集合**
+  - 🏗️ 五层架构可视化图
+  - 🔗 模块依赖关系图  
+  - 📊 UML风格类层次图
+  - 🎯 QuantizationSimModel类关系图
+  - 🔧 TensorQuantizer类结构图
+  - 📈 EncodingAnalyzer类层次图
+  - 🌐 ConnectedGraph组件图
+  - 💡 悬停提示和交互功能
+  
+- **[3d_architecture.html](3d_architecture.html)** - 🚀 **3D立体架构可视化**
+  - 🎮 Three.js制作的3D立体架构
+  - 🔄 可旋转、缩放、分解视图
+  - ✨ 实时动画和光影效果
+  - 📊 数据流动态可视化
+  - 🖱️ 鼠标交互和模块选择
+  
+- **[workflow_diagrams.html](workflow_diagrams.html)** - 🔄 **工作流程可视化**
+  - 📋 完整量化工作流程图
+  - ⚙️ 编码计算详细流程
+  - ⏰ 模块交互时序图
+  - 🎨 精美的流程图设计
+  - 📱 响应式交互体验
+
+- **[data_flow_visualization.html](data_flow_visualization.html)** - 🌊 **数据流动态可视化**
+  - 📊 量化过程数据流图
+  - 🧮 编码计算数据流
+  - 🔄 模块间数据传递图
+  - ▶️ 动态流动动画效果
+  - 🎯 关键路径高亮显示
+  - 📈 实时统计信息展示
 
 ### 核心架构文档
 - [00_Overall_Architecture.md](00_Overall_Architecture.md) - 系统整体架构设计

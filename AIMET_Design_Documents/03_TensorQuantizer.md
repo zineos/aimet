@@ -18,34 +18,25 @@ TensorQuantizer是AIMET系统中负责单个张量量化操作的核心模块，
 ## 2. 架构设计
 
 ### 2.1 类层次结构
-```python
-TensorQuantizer (torch.nn.Module)
-├── QuantizerBase (抽象基类)
-├── AffineQuantizerBase (仿射量化基类)
-│   ├── QuantizeDequantize (量化-反量化器)
-│   ├── MinMaxQuantizer (最小最大值量化器)
-│   └── ScaleOffsetQuantizer (缩放偏移量化器)
-└── FloatQuantizerBase (浮点量化基类)
-    └── FloatQuantizeDequantize (浮点量化-反量化器)
-```
+**查看TensorQuantizer类层次结构图**: 在 [architecture_diagrams.html](./architecture_diagrams.html) 中的"TensorQuantizer 类层次结构"部分展示了：
 
-### 2.2 核心组件关系图
-```mermaid
-graph TD
-    A[TensorQuantizer] --> B[EncodingAnalyzer]
-    A --> C[QuantizationEncoding]
-    A --> D[QuantizationBackend]
-    
-    B --> E[MinMaxEncodingAnalyzer]
-    B --> F[TfEnhancedEncodingAnalyzer]
-    B --> G[PercentileEncodingAnalyzer]
-    
-    D --> H[TorchBuiltinsBackend]
-    D --> I[CUDABackend]
-    
-    C --> J[AffineEncoding]
-    C --> K[FloatEncoding]
-```
+- 🟣 **抽象基类**: QuantizerBase用紫色虚线框表示抽象类
+- 🔴 **主实现类**: TensorQuantizer用红色突出显示
+- 🔵 **基类分支**: AffineQuantizerBase和FloatQuantizerBase
+- 🟢 **具体实现**: 各种具体的量化器实现
+- 🟠 **组合关系**: EncodingAnalyzer的组合关系
+- 📊 **继承层次**: 清晰的继承关系可视化
+
+### 2.2 核心组件关系
+**组件交互关系**: TensorQuantizer与其他组件的交互关系在可视化图表中清晰展示：
+
+- **EncodingAnalyzer**: 负责统计信息收集和编码计算
+- **QuantizationEncoding**: 存储量化参数（scale, offset等）
+- **QuantizationBackend**: 提供具体的量化计算实现
+- **多种分析器**: MinMax、TF-Enhanced、Percentile等不同算法
+- **多种后端**: PyTorch内置、CUDA加速等实现方式
+
+图表中使用不同的颜色和线条类型来区分继承关系、组合关系和关联关系。
 
 ## 3. 详细设计
 

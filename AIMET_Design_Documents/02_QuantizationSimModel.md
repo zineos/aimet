@@ -18,32 +18,27 @@ QuantizationSimModel是AIMET系统的核心控制模块，负责：
 ## 2. 架构设计
 
 ### 2.1 类层次结构
-```python
-QuantizationSimModel
-├── _QuantizationSimModelBase (基类)
-├── ConnectedGraph (连接图)
-├── QuantSimConfigurator (配置管理器)
-├── QuantizationWrapper[] (量化包装器列表)
-├── ModelExporter (模型导出器)
-└── CacheManager (缓存管理器)
-```
+**查看QuantizationSimModel类关系图**: 在 [architecture_diagrams.html](./architecture_diagrams.html) 中的"QuantizationSimModel 类关系图"部分可以看到：
 
-### 2.2 核心组件关系图
-```mermaid
-graph TD
-    A[QuantizationSimModel] --> B[ConnectedGraph]
-    A --> C[QuantSimConfigurator]
-    A --> D[QuantizationWrapper]
-    D --> E[TensorQuantizer]
-    E --> F[EncodingAnalyzer]
-    A --> G[ModelExporter]
-    A --> H[CacheManager]
-    
-    B --> I[Operation]
-    B --> J[Product]
-    C --> K[ConfigFile]
-    D --> L[OriginalModule]
-```
+- 🎨 **UML类图风格**: 标准的类图表示方法
+- 🔴 **主类标识**: QuantizationSimModel用红色突出显示
+- 🟣 **基类关系**: 紫色虚线表示继承关系
+- 🔵 **组合关系**: 蓝色实线表示组合关系
+- 📝 **方法列表**: 每个类都显示主要方法
+- 💡 **悬停详情**: 鼠标悬停显示类的详细描述
+
+### 2.2 核心组件关系
+**详细的组件关系**: 在交互式图表中，您可以看到QuantizationSimModel如何与其他9个核心组件进行交互：
+
+- **ConnectedGraph**: 负责模型结构分析
+- **QuantSimConfigurator**: 管理量化配置
+- **QuantizationWrapper**: 封装原始模块
+- **ModelExporter**: 处理模型导出
+- **CacheManager**: 优化性能缓存
+- **TensorQuantizer**: 执行量化操作
+- **EncodingAnalyzer**: 计算编码参数
+
+每个组件都通过清晰的可视化连线展示其职责和关系。
 
 ## 3. 详细设计
 

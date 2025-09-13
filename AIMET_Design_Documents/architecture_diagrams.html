@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMET 架构图表</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .diagram-container {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .diagram-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .layer-box {
+            fill: #3498db;
+            stroke: #2980b9;
+            stroke-width: 2;
+            rx: 10;
+            ry: 10;
+        }
+        .module-box {
+            fill: #e74c3c;
+            stroke: #c0392b;
+            stroke-width: 2;
+            rx: 8;
+            ry: 8;
+        }
+        .class-box {
+            fill: #2ecc71;
+            stroke: #27ae60;
+            stroke-width: 2;
+            rx: 6;
+            ry: 6;
+        }
+        .interface-box {
+            fill: #f39c12;
+            stroke: #e67e22;
+            stroke-width: 2;
+            rx: 6;
+            ry: 6;
+            stroke-dasharray: 5,5;
+        }
+        .text-label {
+            font-size: 14px;
+            font-weight: bold;
+            fill: white;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        .connection-line {
+            stroke: #34495e;
+            stroke-width: 2;
+            marker-end: url(#arrowhead);
+        }
+        .inheritance-line {
+            stroke: #9b59b6;
+            stroke-width: 2;
+            stroke-dasharray: 3,3;
+            marker-end: url(#arrowhead);
+        }
+        .composition-line {
+            stroke: #e67e22;
+            stroke-width: 3;
+            marker-end: url(#diamond);
+        }
+        .legend {
+            font-size: 12px;
+            fill: #2c3e50;
+        }
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #2c3e50; margin-bottom: 40px;">AIMET 系统架构图表集合</h1>
+
+    <!-- 整体架构图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">AIMET 整体架构 - 五层架构设计</div>
+        <svg id="overall-architecture" width="800" height="600"></svg>
+    </div>
+
+    <!-- 模块依赖关系图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">核心模块依赖关系</div>
+        <svg id="module-dependency" width="900" height="700"></svg>
+    </div>
+
+    <!-- QuantizationSimModel 类图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">QuantizationSimModel 类关系图</div>
+        <svg id="quantsim-class" width="1000" height="800"></svg>
+    </div>
+
+    <!-- TensorQuantizer 类图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">TensorQuantizer 类层次结构</div>
+        <svg id="tensor-quantizer-class" width="900" height="600"></svg>
+    </div>
+
+    <!-- EncodingAnalyzer 类图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">EncodingAnalyzer 类层次结构</div>
+        <svg id="encoding-analyzer-class" width="800" height="700"></svg>
+    </div>
+
+    <!-- ConnectedGraph 类图 -->
+    <div class="diagram-container">
+        <div class="diagram-title">ConnectedGraph 组件关系</div>
+        <svg id="connected-graph-class" width="800" height="600"></svg>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // 工具函数
+        function createArrowMarkers(svg) {
+            const defs = svg.append("defs");
+            
+            // 箭头标记
+            defs.append("marker")
+                .attr("id", "arrowhead")
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 8)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("fill", "#34495e");
+
+            // 菱形标记（组合关系）
+            defs.append("marker")
+                .attr("id", "diamond")
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 8)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,0L5,-3L10,0L5,3Z")
+                .attr("fill", "#e67e22");
+        }
+
+        function addTooltip(element, text) {
+            element.on("mouseover", function(event) {
+                const tooltip = d3.select("#tooltip");
+                tooltip.style("opacity", 1)
+                    .html(text)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+                d3.select("#tooltip").style("opacity", 0);
+            });
+        }
+
+        // 1. 整体架构图
+        function drawOverallArchitecture() {
+            const svg = d3.select("#overall-architecture");
+            createArrowMarkers(svg);
+
+            const layers = [
+                {name: "应用接口层", y: 50, components: ["Python API", "命令行工具", "可视化界面"]},
+                {name: "框架适配层", y: 150, components: ["PyTorch支持", "ONNX支持", "通用接口层"]},
+                {name: "算法实现层", y: 250, components: ["量化算法", "压缩算法", "混合精度", "自动优化"]},
+                {name: "核心引擎层", y: 350, components: ["C++量化引擎", "张量量化器", "编码分析器", "计算优化"]},
+                {name: "基础设施层", y: 450, components: ["配置管理", "缓存系统", "测试框架", "构建系统"]}
+            ];
+
+            layers.forEach((layer, i) => {
+                // 绘制层背景
+                svg.append("rect")
+                    .attr("class", "layer-box")
+                    .attr("x", 50)
+                    .attr("y", layer.y)
+                    .attr("width", 700)
+                    .attr("height", 80)
+                    .call(addTooltip, `第${i+1}层：${layer.name}<br/>负责${layer.components.join('、')}等功能`);
+
+                // 层名称
+                svg.append("text")
+                    .attr("class", "text-label")
+                    .attr("x", 400)
+                    .attr("y", layer.y + 25)
+                    .text(layer.name)
+                    .style("font-size", "16px");
+
+                // 组件
+                layer.components.forEach((comp, j) => {
+                    svg.append("text")
+                        .attr("x", 80 + j * 150)
+                        .attr("y", layer.y + 50)
+                        .text(comp)
+                        .style("font-size", "12px")
+                        .style("fill", "white");
+                });
+
+                // 连接线
+                if (i < layers.length - 1) {
+                    svg.append("line")
+                        .attr("class", "connection-line")
+                        .attr("x1", 400)
+                        .attr("y1", layer.y + 80)
+                        .attr("x2", 400)
+                        .attr("y2", layer.y + 100);
+                }
+            });
+
+            // 添加图例
+            const legend = svg.append("g").attr("transform", "translate(50, 550)");
+            legend.append("text").text("架构说明：数据流从上到下，每层为上层提供服务").style("font-size", "12px");
+        }
+
+        // 2. 模块依赖关系图
+        function drawModuleDependency() {
+            const svg = d3.select("#module-dependency");
+            createArrowMarkers(svg);
+
+            const modules = [
+                {name: "QuantizationSimModel", x: 450, y: 100, type: "main", 
+                 desc: "主控制器，协调所有模块"},
+                {name: "ConnectedGraph", x: 200, y: 200, type: "core",
+                 desc: "模型结构分析和图表示"},
+                {name: "QuantSimConfig", x: 700, y: 200, type: "core",
+                 desc: "配置管理和参数验证"},
+                {name: "QuantizationWrapper", x: 450, y: 300, type: "core",
+                 desc: "量化包装器，封装原始模块"},
+                {name: "TensorQuantizer", x: 200, y: 400, type: "core",
+                 desc: "张量量化器，执行量化操作"},
+                {name: "EncodingAnalyzer", x: 700, y: 400, type: "core",
+                 desc: "编码分析器，计算量化参数"},
+                {name: "ModelExporter", x: 450, y: 500, type: "utility",
+                 desc: "模型导出器，生成部署文件"},
+                {name: "CacheManager", x: 150, y: 550, type: "utility",
+                 desc: "缓存管理器，优化性能"},
+                {name: "Visualization", x: 750, y: 550, type: "utility",
+                 desc: "可视化工具，分析量化效果"}
+            ];
+
+            const connections = [
+                {from: 0, to: 1}, {from: 0, to: 2}, {from: 0, to: 3}, {from: 0, to: 6},
+                {from: 3, to: 4}, {from: 4, to: 5}, {from: 0, to: 7}, {from: 0, to: 8}
+            ];
+
+            // 绘制连接线
+            connections.forEach(conn => {
+                const from = modules[conn.from];
+                const to = modules[conn.to];
+                svg.append("line")
+                    .attr("class", "composition-line")
+                    .attr("x1", from.x)
+                    .attr("y1", from.y + 30)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y);
+            });
+
+            // 绘制模块
+            modules.forEach(module => {
+                const color = module.type === "main" ? "#e74c3c" : 
+                             module.type === "core" ? "#3498db" : "#2ecc71";
+                const strokeColor = module.type === "main" ? "#c0392b" : 
+                                   module.type === "core" ? "#2980b9" : "#27ae60";
+
+                const g = svg.append("g")
+                    .call(addTooltip, `<strong>${module.name}</strong><br/>${module.desc}`);
+
+                g.append("rect")
+                    .attr("x", module.x - 60)
+                    .attr("y", module.y)
+                    .attr("width", 120)
+                    .attr("height", 60)
+                    .attr("fill", color)
+                    .attr("stroke", strokeColor)
+                    .attr("stroke-width", 2)
+                    .attr("rx", 8);
+
+                g.append("text")
+                    .attr("x", module.x)
+                    .attr("y", module.y + 30)
+                    .attr("text-anchor", "middle")
+                    .attr("dominant-baseline", "middle")
+                    .attr("fill", "white")
+                    .style("font-size", "11px")
+                    .style("font-weight", "bold")
+                    .text(module.name);
+            });
+
+            // 图例
+            const legend = svg.append("g").attr("transform", "translate(50, 650)");
+            const legendItems = [
+                {color: "#e74c3c", text: "主控制器"},
+                {color: "#3498db", text: "核心模块"},
+                {color: "#2ecc71", text: "工具模块"}
+            ];
+            legendItems.forEach((item, i) => {
+                legend.append("rect")
+                    .attr("x", i * 120)
+                    .attr("y", 0)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", item.color);
+                legend.append("text")
+                    .attr("x", i * 120 + 20)
+                    .attr("y", 12)
+                    .text(item.text)
+                    .style("font-size", "12px");
+            });
+        }
+
+        // 3. QuantizationSimModel 类图
+        function drawQuantSimClass() {
+            const svg = d3.select("#quantsim-class");
+            createArrowMarkers(svg);
+
+            const classes = [
+                {name: "QuantizationSimModel", x: 500, y: 100, type: "main", 
+                 methods: ["__init__", "compute_encodings", "export", "forward"],
+                 desc: "量化仿真主控制器"},
+                {name: "_QuantizationSimModelBase", x: 500, y: 250, type: "base",
+                 methods: ["validate_inputs", "setup_logging"],
+                 desc: "仿真模型基类"},
+                {name: "ConnectedGraph", x: 200, y: 350, type: "component",
+                 methods: ["get_all_ops", "get_ordered_ops"],
+                 desc: "连接图分析器"},
+                {name: "QuantSimConfigurator", x: 800, y: 350, type: "component",
+                 methods: ["load_config", "get_op_config"],
+                 desc: "配置管理器"},
+                {name: "QuantizationWrapper", x: 350, y: 500, type: "component",
+                 methods: ["forward", "compute_encodings"],
+                 desc: "量化包装器"},
+                {name: "ModelExporter", x: 650, y: 500, type: "component",
+                 methods: ["export", "save_encodings"],
+                 desc: "模型导出器"},
+                {name: "CacheManager", x: 200, y: 650, type: "utility",
+                 methods: ["cache_data", "get_cached"],
+                 desc: "缓存管理器"},
+                {name: "TensorQuantizer", x: 350, y: 650, type: "core",
+                 methods: ["forward", "quantize_dequantize"],
+                 desc: "张量量化器"},
+                {name: "EncodingAnalyzer", x: 500, y: 650, type: "core",
+                 methods: ["update_stats", "compute_encoding"],
+                 desc: "编码分析器"}
+            ];
+
+            const relationships = [
+                {from: 0, to: 1, type: "inheritance"},
+                {from: 0, to: 2, type: "composition"},
+                {from: 0, to: 3, type: "composition"},
+                {from: 0, to: 4, type: "composition"},
+                {from: 0, to: 5, type: "composition"},
+                {from: 0, to: 6, type: "composition"},
+                {from: 4, to: 7, type: "composition"},
+                {from: 7, to: 8, type: "composition"}
+            ];
+
+            // 绘制关系线
+            relationships.forEach(rel => {
+                const from = classes[rel.from];
+                const to = classes[rel.to];
+                const lineClass = rel.type === "inheritance" ? "inheritance-line" : "composition-line";
+                
+                svg.append("line")
+                    .attr("class", lineClass)
+                    .attr("x1", from.x)
+                    .attr("y1", from.y + 80)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y);
+            });
+
+            // 绘制类
+            classes.forEach(cls => {
+                const colors = {
+                    main: {fill: "#e74c3c", stroke: "#c0392b"},
+                    base: {fill: "#9b59b6", stroke: "#8e44ad"},
+                    component: {fill: "#3498db", stroke: "#2980b9"},
+                    core: {fill: "#2ecc71", stroke: "#27ae60"},
+                    utility: {fill: "#f39c12", stroke: "#e67e22"}
+                };
+                const color = colors[cls.type];
+
+                const g = svg.append("g")
+                    .call(addTooltip, `<strong>${cls.name}</strong><br/>${cls.desc}<br/>主要方法：${cls.methods.join(', ')}`);
+
+                // 类框
+                g.append("rect")
+                    .attr("x", cls.x - 70)
+                    .attr("y", cls.y)
+                    .attr("width", 140)
+                    .attr("height", 80)
+                    .attr("fill", color.fill)
+                    .attr("stroke", color.stroke)
+                    .attr("stroke-width", 2)
+                    .attr("rx", 6);
+
+                // 类名
+                g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 20)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-weight", "bold")
+                    .style("font-size", "12px")
+                    .text(cls.name);
+
+                // 分割线
+                g.append("line")
+                    .attr("x1", cls.x - 65)
+                    .attr("y1", cls.y + 30)
+                    .attr("x2", cls.x + 65)
+                    .attr("y2", cls.y + 30)
+                    .attr("stroke", "white")
+                    .attr("stroke-width", 1);
+
+                // 方法列表
+                cls.methods.slice(0, 3).forEach((method, i) => {
+                    g.append("text")
+                        .attr("x", cls.x)
+                        .attr("y", cls.y + 45 + i * 12)
+                        .attr("text-anchor", "middle")
+                        .attr("fill", "white")
+                        .style("font-size", "10px")
+                        .text(method + "()");
+                });
+            });
+
+            // 图例
+            const legend = svg.append("g").attr("transform", "translate(50, 750)");
+            const legendItems = [
+                {color: "#e74c3c", text: "主类", line: "composition-line"},
+                {color: "#9b59b6", text: "基类", line: "inheritance-line"},
+                {color: "#3498db", text: "组件类", line: "composition-line"}
+            ];
+            legendItems.forEach((item, i) => {
+                legend.append("rect")
+                    .attr("x", i * 150)
+                    .attr("y", 0)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", item.color);
+                legend.append("text")
+                    .attr("x", i * 150 + 20)
+                    .attr("y", 12)
+                    .text(item.text)
+                    .style("font-size", "12px");
+            });
+        }
+
+        // 4. TensorQuantizer 类图
+        function drawTensorQuantizerClass() {
+            const svg = d3.select("#tensor-quantizer-class");
+            createArrowMarkers(svg);
+
+            const classes = [
+                {name: "QuantizerBase", x: 450, y: 50, type: "abstract",
+                 methods: ["forward", "compute_encoding", "get_encoding"],
+                 desc: "量化器抽象基类"},
+                {name: "TensorQuantizer", x: 450, y: 200, type: "main",
+                 methods: ["__init__", "forward", "quantize_dequantize", "compute_encoding"],
+                 desc: "张量量化器主类"},
+                {name: "AffineQuantizerBase", x: 200, y: 350, type: "base",
+                 methods: ["_quantize_dequantize_int", "_compute_range"],
+                 desc: "仿射量化基类"},
+                {name: "FloatQuantizerBase", x: 700, y: 350, type: "base",
+                 methods: ["_quantize_dequantize_float", "_compute_float_range"],
+                 desc: "浮点量化基类"},
+                {name: "QuantizeDequantize", x: 100, y: 500, type: "concrete",
+                 methods: ["forward", "_apply_quantization"],
+                 desc: "量化-反量化器"},
+                {name: "MinMaxQuantizer", x: 300, y: 500, type: "concrete",
+                 methods: ["_compute_minmax_encoding"],
+                 desc: "最小最大值量化器"},
+                {name: "FloatQuantizeDequantize", x: 600, y: 500, type: "concrete",
+                 methods: ["forward", "_apply_float_quantization"],
+                 desc: "浮点量化-反量化器"},
+                {name: "EncodingAnalyzer", x: 750, y: 200, type: "component",
+                 methods: ["update_stats", "compute_encoding"],
+                 desc: "编码分析器"}
+            ];
+
+            const relationships = [
+                {from: 1, to: 0, type: "inheritance"},
+                {from: 2, to: 1, type: "inheritance"},
+                {from: 3, to: 1, type: "inheritance"},
+                {from: 4, to: 2, type: "inheritance"},
+                {from: 5, to: 2, type: "inheritance"},
+                {from: 6, to: 3, type: "inheritance"},
+                {from: 1, to: 7, type: "composition"}
+            ];
+
+            // 绘制关系线
+            relationships.forEach(rel => {
+                const from = classes[rel.from];
+                const to = classes[rel.to];
+                const lineClass = rel.type === "inheritance" ? "inheritance-line" : "composition-line";
+                
+                svg.append("line")
+                    .attr("class", lineClass)
+                    .attr("x1", from.x)
+                    .attr("y1", from.y)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y + 60);
+            });
+
+            // 绘制类
+            classes.forEach(cls => {
+                const colors = {
+                    abstract: {fill: "#9b59b6", stroke: "#8e44ad"},
+                    main: {fill: "#e74c3c", stroke: "#c0392b"},
+                    base: {fill: "#3498db", stroke: "#2980b9"},
+                    concrete: {fill: "#2ecc71", stroke: "#27ae60"},
+                    component: {fill: "#f39c12", stroke: "#e67e22"}
+                };
+                const color = colors[cls.type];
+
+                const g = svg.append("g")
+                    .call(addTooltip, `<strong>${cls.name}</strong><br/>${cls.desc}<br/>主要方法：${cls.methods.join(', ')}`);
+
+                // 类框
+                const rect = g.append("rect")
+                    .attr("x", cls.x - 80)
+                    .attr("y", cls.y)
+                    .attr("width", 160)
+                    .attr("height", 60)
+                    .attr("fill", color.fill)
+                    .attr("stroke", color.stroke)
+                    .attr("stroke-width", 2)
+                    .attr("rx", 6);
+
+                // 抽象类用虚线
+                if (cls.type === "abstract") {
+                    rect.attr("stroke-dasharray", "5,5");
+                }
+
+                // 类名
+                const text = g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 20)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-weight", "bold")
+                    .style("font-size", "12px")
+                    .text(cls.name);
+
+                // 抽象类斜体
+                if (cls.type === "abstract") {
+                    text.style("font-style", "italic");
+                }
+
+                // 主要方法
+                g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 40)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-size", "10px")
+                    .text(cls.methods.slice(0, 2).join(", "));
+            });
+        }
+
+        // 5. EncodingAnalyzer 类图
+        function drawEncodingAnalyzerClass() {
+            const svg = d3.select("#encoding-analyzer-class");
+            createArrowMarkers(svg);
+
+            const classes = [
+                {name: "EncodingAnalyzer", x: 400, y: 50, type: "abstract",
+                 methods: ["update_stats", "compute_encoding", "reset_stats"],
+                 desc: "编码分析器抽象基类"},
+                {name: "MinMaxEncodingAnalyzer", x: 150, y: 200, type: "concrete",
+                 methods: ["_gate_min_max", "_compute_symmetric"],
+                 desc: "最小最大值分析器"},
+                {name: "TfEnhancedEncodingAnalyzer", x: 400, y: 200, type: "concrete",
+                 methods: ["_find_optimal_range_kl", "_compute_kl_divergence"],
+                 desc: "TF增强分析器"},
+                {name: "PercentileEncodingAnalyzer", x: 650, y: 200, type: "concrete",
+                 methods: ["_compute_percentiles"],
+                 desc: "百分位分析器"},
+                {name: "StatisticsCollector", x: 200, y: 350, type: "component",
+                 methods: ["collect_stats", "get_histogram"],
+                 desc: "统计信息收集器"},
+                {name: "EncodingComputer", x: 400, y: 350, type: "component",
+                 methods: ["compute_symmetric", "compute_asymmetric"],
+                 desc: "编码计算器"},
+                {name: "QualityAssessor", x: 600, y: 350, type: "component",
+                 methods: ["evaluate_quality", "compute_snr"],
+                 desc: "质量评估器"},
+                {name: "HistogramCollector", x: 100, y: 500, type: "utility",
+                 methods: ["update_histogram", "get_bins"],
+                 desc: "直方图收集器"},
+                {name: "KLDivergenceComputer", x: 300, y: 500, type: "utility",
+                 methods: ["compute_kl_div", "find_optimal_threshold"],
+                 desc: "KL散度计算器"},
+                {name: "PercentileComputer", x: 500, y: 500, type: "utility",
+                 methods: ["compute_percentile", "handle_outliers"],
+                 desc: "百分位计算器"}
+            ];
+
+            const relationships = [
+                {from: 1, to: 0, type: "inheritance"},
+                {from: 2, to: 0, type: "inheritance"},
+                {from: 3, to: 0, type: "inheritance"},
+                {from: 1, to: 4, type: "composition"},
+                {from: 2, to: 4, type: "composition"},
+                {from: 3, to: 4, type: "composition"},
+                {from: 1, to: 5, type: "composition"},
+                {from: 2, to: 5, type: "composition"},
+                {from: 3, to: 5, type: "composition"},
+                {from: 0, to: 6, type: "composition"},
+                {from: 4, to: 7, type: "composition"},
+                {from: 2, to: 8, type: "composition"},
+                {from: 3, to: 9, type: "composition"}
+            ];
+
+            // 绘制关系线
+            relationships.forEach(rel => {
+                const from = classes[rel.from];
+                const to = classes[rel.to];
+                const lineClass = rel.type === "inheritance" ? "inheritance-line" : "composition-line";
+                
+                svg.append("line")
+                    .attr("class", lineClass)
+                    .attr("x1", from.x)
+                    .attr("y1", from.y + 30)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y);
+            });
+
+            // 绘制类
+            classes.forEach(cls => {
+                const colors = {
+                    abstract: {fill: "#9b59b6", stroke: "#8e44ad"},
+                    concrete: {fill: "#2ecc71", stroke: "#27ae60"},
+                    component: {fill: "#3498db", stroke: "#2980b9"},
+                    utility: {fill: "#f39c12", stroke: "#e67e22"}
+                };
+                const color = colors[cls.type];
+
+                const g = svg.append("g")
+                    .call(addTooltip, `<strong>${cls.name}</strong><br/>${cls.desc}<br/>主要方法：${cls.methods.join(', ')}`);
+
+                // 类框
+                const rect = g.append("rect")
+                    .attr("x", cls.x - 75)
+                    .attr("y", cls.y)
+                    .attr("width", 150)
+                    .attr("height", 60)
+                    .attr("fill", color.fill)
+                    .attr("stroke", color.stroke)
+                    .attr("stroke-width", 2)
+                    .attr("rx", 6);
+
+                // 抽象类用虚线
+                if (cls.type === "abstract") {
+                    rect.attr("stroke-dasharray", "5,5");
+                }
+
+                // 类名
+                const text = g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 20)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-weight", "bold")
+                    .style("font-size", "11px")
+                    .text(cls.name);
+
+                // 抽象类斜体
+                if (cls.type === "abstract") {
+                    text.style("font-style", "italic");
+                }
+
+                // 主要方法
+                g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 40)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-size", "9px")
+                    .text(cls.methods.slice(0, 2).join(", "));
+            });
+        }
+
+        // 6. ConnectedGraph 组件图
+        function drawConnectedGraphClass() {
+            const svg = d3.select("#connected-graph-class");
+            createArrowMarkers(svg);
+
+            const classes = [
+                {name: "ConnectedGraph", x: 400, y: 100, type: "main",
+                 methods: ["get_all_ops", "get_ordered_ops", "_build_graph"],
+                 desc: "连接图主类"},
+                {name: "Operation", x: 200, y: 250, type: "node",
+                 methods: ["add_input", "add_output", "input_ops", "output_ops"],
+                 desc: "操作节点"},
+                {name: "Product", x: 600, y: 250, type: "node",
+                 methods: ["add_consumer", "set_producer"],
+                 desc: "数据流边"},
+                {name: "OpInformation", x: 100, y: 400, type: "info",
+                 methods: ["get_groups", "get_channels"],
+                 desc: "操作信息"},
+                {name: "GraphBuilder", x: 300, y: 400, type: "builder",
+                 methods: ["create_operations", "analyze_data_flow"],
+                 desc: "图构建器"},
+                {name: "DataFlowAnalyzer", x: 500, y: 400, type: "analyzer",
+                 methods: ["trace_data_flow", "establish_connections"],
+                 desc: "数据流分析器"},
+                {name: "TopologicalSorter", x: 700, y: 400, type: "utility",
+                 methods: ["sort_ops", "detect_cycles"],
+                 desc: "拓扑排序器"}
+            ];
+
+            const relationships = [
+                {from: 0, to: 1, type: "composition"},
+                {from: 0, to: 2, type: "composition"},
+                {from: 1, to: 3, type: "composition"},
+                {from: 0, to: 4, type: "composition"},
+                {from: 0, to: 5, type: "composition"},
+                {from: 0, to: 6, type: "composition"},
+                {from: 1, to: 2, type: "association"},
+                {from: 2, to: 1, type: "association"}
+            ];
+
+            // 绘制关系线
+            relationships.forEach(rel => {
+                const from = classes[rel.from];
+                const to = classes[rel.to];
+                const lineClass = rel.type === "association" ? "connection-line" : "composition-line";
+                
+                svg.append("line")
+                    .attr("class", lineClass)
+                    .attr("x1", from.x)
+                    .attr("y1", from.y + 30)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y);
+            });
+
+            // 绘制类
+            classes.forEach(cls => {
+                const colors = {
+                    main: {fill: "#e74c3c", stroke: "#c0392b"},
+                    node: {fill: "#2ecc71", stroke: "#27ae60"},
+                    info: {fill: "#f39c12", stroke: "#e67e22"},
+                    builder: {fill: "#3498db", stroke: "#2980b9"},
+                    analyzer: {fill: "#9b59b6", stroke: "#8e44ad"},
+                    utility: {fill: "#1abc9c", stroke: "#16a085"}
+                };
+                const color = colors[cls.type];
+
+                const g = svg.append("g")
+                    .call(addTooltip, `<strong>${cls.name}</strong><br/>${cls.desc}<br/>主要方法：${cls.methods.join(', ')}`);
+
+                // 类框
+                g.append("rect")
+                    .attr("x", cls.x - 70)
+                    .attr("y", cls.y)
+                    .attr("width", 140)
+                    .attr("height", 60)
+                    .attr("fill", color.fill)
+                    .attr("stroke", color.stroke)
+                    .attr("stroke-width", 2)
+                    .attr("rx", 6);
+
+                // 类名
+                g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 20)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-weight", "bold")
+                    .style("font-size", "11px")
+                    .text(cls.name);
+
+                // 主要方法
+                g.append("text")
+                    .attr("x", cls.x)
+                    .attr("y", cls.y + 40)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .style("font-size", "9px")
+                    .text(cls.methods.slice(0, 2).join(", "));
+            });
+
+            // 图例
+            const legend = svg.append("g").attr("transform", "translate(50, 550)");
+            const legendItems = [
+                {color: "#e74c3c", text: "主类"},
+                {color: "#2ecc71", text: "节点类"},
+                {color: "#3498db", text: "构建器"},
+                {color: "#9b59b6", text: "分析器"}
+            ];
+            legendItems.forEach((item, i) => {
+                legend.append("rect")
+                    .attr("x", i * 120)
+                    .attr("y", 0)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", item.color);
+                legend.append("text")
+                    .attr("x", i * 120 + 20)
+                    .attr("y", 12)
+                    .text(item.text)
+                    .style("font-size", "12px");
+            });
+        }
+
+        // 初始化所有图表
+        drawOverallArchitecture();
+        drawModuleDependency();
+        drawQuantSimClass();
+        drawTensorQuantizerClass();
+        drawEncodingAnalyzerClass();
+        drawConnectedGraphClass();
+    </script>
+</body>
+</html>
