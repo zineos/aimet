@@ -23,22 +23,28 @@ AIMET（AI Model Efficiency Toolkit）是一个专注于深度学习模型效率
 
 ### 2.1 五层架构结构
 
-**查看精美的交互式架构图**: 请打开 [architecture_diagrams.html](./architecture_diagrams.html) 查看完整的五层架构可视化图表。
+**AIMET五层架构设计图**:
 
-该架构图包含：
-- 🎨 **精美的可视化设计**: 使用D3.js制作的交互式图表
-- 🖱️ **悬停提示功能**: 鼠标悬停显示详细的模块说明
-- 🎯 **层次清晰**: 五层架构的清晰展示和组件分布
-- 📱 **响应式设计**: 适配不同屏幕尺寸
+![AIMET五层架构](./images/overall_architecture.svg)
+
+该架构图展示了：
+- 🏗️ **应用接口层**: Python API、命令行工具、可视化界面
+- 🔗 **框架适配层**: PyTorch支持、ONNX支持、通用接口层
+- ⚙️ **算法实现层**: 量化算法、压缩算法、混合精度、自动优化
+- 🔧 **核心引擎层**: C++量化引擎、张量量化器、编码分析器
+- 🏠 **基础设施层**: 配置管理、缓存系统、测试框架、构建系统
 
 ### 2.2 模块依赖关系
 
-**查看模块依赖关系图**: 在 [architecture_diagrams.html](./architecture_diagrams.html) 中的"核心模块依赖关系"部分可以看到：
+**核心模块依赖关系图**:
 
-- 🔗 **清晰的依赖链**: 展示12个核心模块之间的依赖关系
-- 🎨 **颜色编码**: 不同类型的模块使用不同颜色区分
-- 📊 **层次结构**: 从应用层到基础设施层的完整依赖图
-- 💡 **交互说明**: 点击模块查看详细功能描述
+![模块依赖关系](./images/module_dependency.svg)
+
+该依赖图展示了：
+- 🔴 **主控制器**: QuantizationSimModel作为系统的核心控制器
+- 🔵 **核心模块**: ConnectedGraph、QuantSimConfig、QuantizationWrapper等核心组件
+- 🟢 **工具模块**: ModelExporter、CacheManager、Visualization等辅助工具
+- 🔗 **依赖关系**: 清晰的模块间依赖和调用关系
 
 ## 3. 核心模块划分
 

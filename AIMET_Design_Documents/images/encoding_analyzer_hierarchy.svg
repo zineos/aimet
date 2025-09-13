@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="abstractGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8e44ad;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="concreteGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2ecc71;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#27ae60;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="componentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="utilityGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f39c12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e67e22;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+    
+    <marker id="inheritanceArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="none" stroke="#9b59b6" stroke-width="2"/>
+    </marker>
+    
+    <marker id="compositionArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e67e22"/>
+    </marker>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="800" height="700" fill="#f8f9fa"/>
+  
+  <!-- 标题 -->
+  <text x="400" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2c3e50">
+    EncodingAnalyzer 类层次结构
+  </text>
+  
+  <!-- EncodingAnalyzer (抽象基类) -->
+  <g>
+    <rect x="320" y="70" width="160" height="60" fill="url(#abstractGradient)" rx="6" filter="url(#shadow)" stroke="#8e44ad" stroke-width="2" stroke-dasharray="5,5"/>
+    <text x="400" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" font-style="italic">
+      EncodingAnalyzer
+    </text>
+    <line x1="325" y1="105" x2="475" y2="105" stroke="white" stroke-width="1"/>
+    <text x="400" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      update_stats() [abstract]
+    </text>
+  </g>
+  
+  <!-- 具体实现类 -->
+  <!-- MinMaxEncodingAnalyzer -->
+  <g>
+    <rect x="70" y="180" width="150" height="60" fill="url(#concreteGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="145" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      MinMaxEncodingAnalyzer
+    </text>
+    <line x1="75" y1="215" x2="215" y2="215" stroke="white" stroke-width="1"/>
+    <text x="145" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      _gate_min_max()
+    </text>
+  </g>
+  
+  <!-- TfEnhancedEncodingAnalyzer -->
+  <g>
+    <rect x="320" y="180" width="160" height="60" fill="url(#concreteGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="400" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      TfEnhancedEncoding
+    </text>
+    <text x="400" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      Analyzer
+    </text>
+    <line x1="325" y1="220" x2="475" y2="220" stroke="white" stroke-width="1"/>
+    <text x="400" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      _find_optimal_range_kl()
+    </text>
+  </g>
+  
+  <!-- PercentileEncodingAnalyzer -->
+  <g>
+    <rect x="580" y="180" width="150" height="60" fill="url(#concreteGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="655" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      PercentileEncoding
+    </text>
+    <text x="655" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      Analyzer
+    </text>
+    <line x1="585" y1="220" x2="725" y2="220" stroke="white" stroke-width="1"/>
+    <text x="655" y="235" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      _compute_percentiles()
+    </text>
+  </g>
+  
+  <!-- 组件模块 -->
+  <!-- StatisticsCollector -->
+  <g>
+    <rect x="120" y="320" width="140" height="50" fill="url(#componentGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="190" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      StatisticsCollector
+    </text>
+    <text x="190" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      collect_stats()
+    </text>
+  </g>
+  
+  <!-- EncodingComputer -->
+  <g>
+    <rect x="320" y="320" width="140" height="50" fill="url(#componentGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="390" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      EncodingComputer
+    </text>
+    <text x="390" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      compute_symmetric()
+    </text>
+  </g>
+  
+  <!-- QualityAssessor -->
+  <g>
+    <rect x="520" y="320" width="140" height="50" fill="url(#componentGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="590" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      QualityAssessor
+    </text>
+    <text x="590" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      evaluate_quality()
+    </text>
+  </g>
+  
+  <!-- 工具模块 -->
+  <!-- HistogramCollector -->
+  <g>
+    <rect x="20" y="420" width="120" height="50" fill="url(#utilityGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="80" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      HistogramCollector
+    </text>
+    <text x="80" y="455" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      update_histogram()
+    </text>
+  </g>
+  
+  <!-- KLDivergenceComputer -->
+  <g>
+    <rect x="220" y="420" width="140" height="50" fill="url(#utilityGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="290" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      KLDivergenceComputer
+    </text>
+    <text x="290" y="455" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      compute_kl_div()
+    </text>
+  </g>
+  
+  <!-- PercentileComputer -->
+  <g>
+    <rect x="420" y="420" width="120" height="50" fill="url(#utilityGradient)" rx="6" filter="url(#shadow)"/>
+    <text x="480" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      PercentileComputer
+    </text>
+    <text x="480" y="455" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      compute_percentile()
+    </text>
+  </g>
+  
+  <!-- 继承关系线 -->
+  <line x1="145" y1="180" x2="380" y2="130" stroke="#9b59b6" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#inheritanceArrow)"/>
+  <line x1="400" y1="180" x2="400" y2="130" stroke="#9b59b6" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#inheritanceArrow)"/>
+  <line x1="655" y1="180" x2="420" y2="130" stroke="#9b59b6" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#inheritanceArrow)"/>
+  
+  <!-- 组合关系线 -->
+  <line x1="145" y1="240" x2="190" y2="320" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  <line x1="400" y1="240" x2="390" y2="320" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  <line x1="655" y1="240" x2="590" y2="320" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  <line x1="190" y1="370" x2="80" y2="420" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  <line x1="390" y1="370" x2="290" y2="420" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  <line x1="590" y1="370" x2="480" y2="420" stroke="#e67e22" stroke-width="2" marker-end="url(#compositionArrow)"/>
+  
+  <!-- 说明文字 -->
+  <text x="70" y="520" font-family="Arial, sans-serif" font-size="12" fill="#7f8c8d">
+    EncodingAnalyzer采用策略模式，支持多种编码算法，每种算法都有对应的工具组件支持
+  </text>
+  
+  <!-- 算法分类标注 -->
+  <rect x="50" y="540" width="700" height="120" fill="rgba(236, 240, 241, 0.3)" rx="10" stroke="#bdc3c7" stroke-dasharray="5,5"/>
+  <text x="70" y="560" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">
+    算法分类说明:
+  </text>
+  
+  <text x="70" y="580" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • MinMax算法: 使用张量的最小值和最大值计算量化范围，简单高效
+  </text>
+  <text x="70" y="600" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • TF-Enhanced算法: 基于KL散度优化量化范围，精度更高
+  </text>
+  <text x="70" y="620" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • Percentile算法: 基于百分位数确定量化范围，对异常值鲁棒
+  </text>
+  <text x="70" y="640" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • 每种算法都配备专门的统计收集器和计算组件
+  </text>
+</svg>

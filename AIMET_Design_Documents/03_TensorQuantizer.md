@@ -18,14 +18,17 @@ TensorQuantizer是AIMET系统中负责单个张量量化操作的核心模块，
 ## 2. 架构设计
 
 ### 2.1 类层次结构
-**查看TensorQuantizer类层次结构图**: 在 [architecture_diagrams.html](./architecture_diagrams.html) 中的"TensorQuantizer 类层次结构"部分展示了：
+**TensorQuantizer类层次结构图**:
 
-- 🟣 **抽象基类**: QuantizerBase用紫色虚线框表示抽象类
-- 🔴 **主实现类**: TensorQuantizer用红色突出显示
-- 🔵 **基类分支**: AffineQuantizerBase和FloatQuantizerBase
-- 🟢 **具体实现**: 各种具体的量化器实现
-- 🟠 **组合关系**: EncodingAnalyzer的组合关系
-- 📊 **继承层次**: 清晰的继承关系可视化
+![TensorQuantizer类层次](./images/tensor_quantizer_hierarchy.svg)
+
+类层次结构说明：
+- 🟣 **抽象基类**: QuantizerBase用紫色虚线框和斜体表示，定义量化器接口
+- 🔴 **主实现类**: TensorQuantizer用红色突出显示，是核心的量化实现
+- 🔵 **专用基类**: AffineQuantizerBase和FloatQuantizerBase分别处理整数和浮点量化
+- 🟢 **具体实现**: QuantizeDequantize、MinMaxQuantizer等具体的量化器
+- 🟠 **组合组件**: EncodingAnalyzer作为组合组件提供编码分析功能
+- 📊 **继承关系**: 虚线箭头表示继承，实线箭头表示组合
 
 ### 2.2 核心组件关系
 **组件交互关系**: TensorQuantizer与其他组件的交互关系在可视化图表中清晰展示：

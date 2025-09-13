@@ -18,14 +18,17 @@ QuantizationSimModel是AIMET系统的核心控制模块，负责：
 ## 2. 架构设计
 
 ### 2.1 类层次结构
-**查看QuantizationSimModel类关系图**: 在 [architecture_diagrams.html](./architecture_diagrams.html) 中的"QuantizationSimModel 类关系图"部分可以看到：
+**QuantizationSimModel类关系图**:
 
-- 🎨 **UML类图风格**: 标准的类图表示方法
-- 🔴 **主类标识**: QuantizationSimModel用红色突出显示
-- 🟣 **基类关系**: 紫色虚线表示继承关系
-- 🔵 **组合关系**: 蓝色实线表示组合关系
-- 📝 **方法列表**: 每个类都显示主要方法
-- 💡 **悬停详情**: 鼠标悬停显示类的详细描述
+![QuantizationSimModel类图](./images/quantsim_class_diagram.svg)
+
+类关系图说明：
+- 🔴 **主实现类**: QuantizationSimModel用红色突出显示，是系统的核心控制器
+- 🟣 **抽象基类**: _QuantizationSimModelBase用紫色虚线框表示，提供基础功能
+- 🔵 **组件类**: ConnectedGraph、QuantSimConfigurator等用蓝色表示
+- 🟢 **核心类**: TensorQuantizer、EncodingAnalyzer等用绿色表示
+- 🟠 **工具类**: ModelExporter、CacheManager等用橙色表示
+- 📝 **方法展示**: 每个类都显示其主要的公共方法
 
 ### 2.2 核心组件关系
 **详细的组件关系**: 在交互式图表中，您可以看到QuantizationSimModel如何与其他9个核心组件进行交互：

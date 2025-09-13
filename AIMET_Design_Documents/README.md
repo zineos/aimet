@@ -15,34 +15,36 @@
 ## 文档结构
 
 ### 🎨 精美可视化图表集合
+
+#### 📊 静态图表 (推荐 - 兼容性好)
+- **[images/](images/)** - 📁 **高质量SVG图表集合**
+  - 🏗️ [五层架构图](images/overall_architecture.svg)
+  - 🔗 [模块依赖关系图](images/module_dependency.svg)
+  - 🎯 [QuantizationSimModel类图](images/quantsim_class_diagram.svg)
+  - 🔧 [TensorQuantizer类层次图](images/tensor_quantizer_hierarchy.svg)
+  - 📈 [EncodingAnalyzer类层次图](images/encoding_analyzer_hierarchy.svg)
+  - 🌐 [ConnectedGraph组件图](images/connected_graph_components.svg)
+  - 🔄 [量化工作流程图](images/quantization_workflow.svg)
+  - 🌊 [数据流图](images/data_flow_diagram.svg)
+  - ⏰ [模块交互时序图](images/module_interaction_sequence.svg)
+
+#### 🚀 交互式图表 (需要浏览器支持)
 - **[architecture_diagrams.html](architecture_diagrams.html)** - 🌟 **交互式架构图表集合**
-  - 🏗️ 五层架构可视化图
-  - 🔗 模块依赖关系图  
-  - 📊 UML风格类层次图
-  - 🎯 QuantizationSimModel类关系图
-  - 🔧 TensorQuantizer类结构图
-  - 📈 EncodingAnalyzer类层次图
-  - 🌐 ConnectedGraph组件图
   - 💡 悬停提示和交互功能
+  - 🎨 D3.js制作的动态图表
+  - 📱 响应式设计
   
 - **[3d_architecture.html](3d_architecture.html)** - 🚀 **3D立体架构可视化**
   - 🎮 Three.js制作的3D立体架构
   - 🔄 可旋转、缩放、分解视图
   - ✨ 实时动画和光影效果
-  - 📊 数据流动态可视化
-  - 🖱️ 鼠标交互和模块选择
   
 - **[workflow_diagrams.html](workflow_diagrams.html)** - 🔄 **工作流程可视化**
   - 📋 完整量化工作流程图
   - ⚙️ 编码计算详细流程
   - ⏰ 模块交互时序图
-  - 🎨 精美的流程图设计
-  - 📱 响应式交互体验
 
 - **[data_flow_visualization.html](data_flow_visualization.html)** - 🌊 **数据流动态可视化**
-  - 📊 量化过程数据流图
-  - 🧮 编码计算数据流
-  - 🔄 模块间数据传递图
   - ▶️ 动态流动动画效果
   - 🎯 关键路径高亮显示
   - 📈 实时统计信息展示
