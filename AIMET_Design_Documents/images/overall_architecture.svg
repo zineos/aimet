@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="layerGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c0392b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="layerGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="layerGradient3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2ecc71;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#27ae60;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="layerGradient4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f39c12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e67e22;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="layerGradient5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8e44ad;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="3" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="800" height="600" fill="url(#layerGradient1)" opacity="0.1"/>
+  
+  <!-- 标题 -->
+  <text x="400" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2c3e50">
+    AIMET 五层架构设计
+  </text>
+  
+  <!-- 应用接口层 -->
+  <rect x="50" y="80" width="700" height="80" fill="url(#layerGradient1)" rx="10" filter="url(#shadow)"/>
+  <text x="400" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">
+    应用接口层 (Application Layer)
+  </text>
+  <text x="120" y="135" font-family="Arial, sans-serif" font-size="12" fill="white">Python API</text>
+  <text x="280" y="135" font-family="Arial, sans-serif" font-size="12" fill="white">命令行工具</text>
+  <text x="450" y="135" font-family="Arial, sans-serif" font-size="12" fill="white">可视化界面</text>
+  <text x="620" y="135" font-family="Arial, sans-serif" font-size="12" fill="white">Web界面</text>
+  
+  <!-- 框架适配层 -->
+  <rect x="50" y="180" width="700" height="80" fill="url(#layerGradient2)" rx="10" filter="url(#shadow)"/>
+  <text x="400" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">
+    框架适配层 (Framework Layer)
+  </text>
+  <text x="150" y="235" font-family="Arial, sans-serif" font-size="12" fill="white">PyTorch支持</text>
+  <text x="320" y="235" font-family="Arial, sans-serif" font-size="12" fill="white">ONNX支持</text>
+  <text x="490" y="235" font-family="Arial, sans-serif" font-size="12" fill="white">通用接口层</text>
+  <text x="650" y="235" font-family="Arial, sans-serif" font-size="12" fill="white">工具集成</text>
+  
+  <!-- 算法实现层 -->
+  <rect x="50" y="280" width="700" height="80" fill="url(#layerGradient3)" rx="10" filter="url(#shadow)"/>
+  <text x="400" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">
+    算法实现层 (Algorithm Layer)
+  </text>
+  <text x="130" y="335" font-family="Arial, sans-serif" font-size="12" fill="white">量化算法</text>
+  <text x="280" y="335" font-family="Arial, sans-serif" font-size="12" fill="white">压缩算法</text>
+  <text x="430" y="335" font-family="Arial, sans-serif" font-size="12" fill="white">混合精度</text>
+  <text x="580" y="335" font-family="Arial, sans-serif" font-size="12" fill="white">自动优化</text>
+  
+  <!-- 核心引擎层 -->
+  <rect x="50" y="380" width="700" height="80" fill="url(#layerGradient4)" rx="10" filter="url(#shadow)"/>
+  <text x="400" y="410" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">
+    核心引擎层 (Core Engine Layer)
+  </text>
+  <text x="130" y="435" font-family="Arial, sans-serif" font-size="12" fill="white">C++量化引擎</text>
+  <text x="300" y="435" font-family="Arial, sans-serif" font-size="12" fill="white">张量量化器</text>
+  <text x="470" y="435" font-family="Arial, sans-serif" font-size="12" fill="white">编码分析器</text>
+  <text x="620" y="435" font-family="Arial, sans-serif" font-size="12" fill="white">计算优化</text>
+  
+  <!-- 基础设施层 -->
+  <rect x="50" y="480" width="700" height="80" fill="url(#layerGradient5)" rx="10" filter="url(#shadow)"/>
+  <text x="400" y="510" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">
+    基础设施层 (Infrastructure Layer)
+  </text>
+  <text x="140" y="535" font-family="Arial, sans-serif" font-size="12" fill="white">配置管理</text>
+  <text x="280" y="535" font-family="Arial, sans-serif" font-size="12" fill="white">缓存系统</text>
+  <text x="420" y="535" font-family="Arial, sans-serif" font-size="12" fill="white">测试框架</text>
+  <text x="560" y="535" font-family="Arial, sans-serif" font-size="12" fill="white">构建系统</text>
+  
+  <!-- 连接箭头 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34495e"/>
+    </marker>
+  </defs>
+  
+  <line x1="400" y1="160" x2="400" y2="180" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="260" x2="400" y2="280" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="360" x2="400" y2="380" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="400" y1="460" x2="400" y2="480" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  
+  <!-- 数据流标识 -->
+  <text x="420" y="175" font-family="Arial, sans-serif" font-size="10" fill="#34495e">数据流向</text>
+</svg>

@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="inputGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c0392b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="processGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="outputGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2ecc71;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#27ae60;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="storageGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f39c12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e67e22;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="controlGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b59b6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8e44ad;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+    
+    <marker id="primaryArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e74c3c"/>
+    </marker>
+    
+    <marker id="secondaryArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3498db"/>
+    </marker>
+    
+    <marker id="controlArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9b59b6"/>
+    </marker>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="1200" height="700" fill="#f8f9fa"/>
+  
+  <!-- 标题 -->
+  <text x="600" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2c3e50">
+    AIMET 量化过程数据流图
+  </text>
+  
+  <!-- 输入数据节点 -->
+  <g>
+    <circle cx="100" cy="120" r="40" fill="url(#inputGradient)" filter="url(#shadow)"/>
+    <text x="100" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      输入张量
+    </text>
+    <text x="100" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      FP32
+    </text>
+  </g>
+  
+  <g>
+    <circle cx="100" cy="220" r="40" fill="url(#inputGradient)" filter="url(#shadow)"/>
+    <text x="100" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      校准数据
+    </text>
+    <text x="100" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      Dataset
+    </text>
+  </g>
+  
+  <!-- 处理节点 -->
+  <g>
+    <rect x="230" y="150" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="270" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      连接图分析
+    </text>
+    <text x="270" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      结构分析
+    </text>
+  </g>
+  
+  <g>
+    <rect x="430" y="100" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="470" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      量化包装器
+    </text>
+    <text x="470" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      模块封装
+    </text>
+  </g>
+  
+  <g>
+    <rect x="630" y="100" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="670" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      张量量化器
+    </text>
+    <text x="670" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      量化计算
+    </text>
+  </g>
+  
+  <g>
+    <rect x="430" y="200" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="470" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      编码分析器
+    </text>
+    <text x="470" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      统计分析
+    </text>
+  </g>
+  
+  <g>
+    <rect x="630" y="200" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="670" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      统计收集器
+    </text>
+    <text x="670" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      数据收集
+    </text>
+  </g>
+  
+  <g>
+    <rect x="830" y="200" width="80" height="40" fill="url(#processGradient)" rx="8" filter="url(#shadow)"/>
+    <text x="870" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      编码计算器
+    </text>
+    <text x="870" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      参数计算
+    </text>
+  </g>
+  
+  <!-- 存储节点 -->
+  <g>
+    <ellipse cx="870" cy="350" rx="40" ry="15" fill="url(#storageGradient)" filter="url(#shadow)"/>
+    <rect x="830" y="335" width="80" height="30" fill="url(#storageGradient)"/>
+    <ellipse cx="870" cy="365" rx="40" ry="15" fill="url(#storageGradient)"/>
+    <text x="870" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      编码缓存
+    </text>
+  </g>
+  
+  <g>
+    <ellipse cx="670" cy="350" rx="40" ry="15" fill="url(#storageGradient)" filter="url(#shadow)"/>
+    <rect x="630" y="335" width="80" height="30" fill="url(#storageGradient)"/>
+    <ellipse cx="670" cy="365" rx="40" ry="15" fill="url(#storageGradient)"/>
+    <text x="670" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      模型状态
+    </text>
+  </g>
+  
+  <!-- 输出节点 -->
+  <g>
+    <circle cx="1000" cy="120" r="40" fill="url(#outputGradient)" filter="url(#shadow)"/>
+    <text x="1000" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      量化张量
+    </text>
+    <text x="1000" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      INT8
+    </text>
+  </g>
+  
+  <g>
+    <circle cx="470" cy="450" r="40" fill="url(#outputGradient)" filter="url(#shadow)"/>
+    <text x="470" y="445" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      量化模型
+    </text>
+    <text x="470" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      完整模型
+    </text>
+  </g>
+  
+  <g>
+    <circle cx="270" cy="450" r="40" fill="url(#outputGradient)" filter="url(#shadow)"/>
+    <text x="270" y="445" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="white">
+      导出模型
+    </text>
+    <text x="270" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white">
+      ONNX
+    </text>
+  </g>
+  
+  <!-- 数据流连接线 -->
+  <!-- 主数据流 (红色) -->
+  <path d="M 140 120 Q 200 120 230 150" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  <path d="M 310 170 Q 370 150 430 120" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  <path d="M 510 120 Q 570 120 630 120" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  <path d="M 710 120 Q 850 120 960 120" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  <path d="M 470 140 Q 470 300 470 410" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  <path d="M 430 450 Q 350 450 310 450" stroke="#e74c3c" stroke-width="3" fill="none" marker-end="url(#primaryArrow)"/>
+  
+  <!-- 辅助数据流 (蓝色) -->
+  <path d="M 140 220 Q 300 220 430 220" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#secondaryArrow)"/>
+  <path d="M 510 220 Q 570 220 630 220" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#secondaryArrow)"/>
+  <path d="M 710 220 Q 770 220 830 220" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#secondaryArrow)"/>
+  <path d="M 870 240 Q 870 290 870 335" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#secondaryArrow)"/>
+  <path d="M 670 240 Q 670 290 670 335" stroke="#3498db" stroke-width="2" fill="none" marker-end="url(#secondaryArrow)"/>
+  
+  <!-- 控制流 (紫色虚线) -->
+  <path d="M 870 335 Q 770 280 710 140" stroke="#9b59b6" stroke-width="2" stroke-dasharray="5,5" fill="none" marker-end="url(#controlArrow)"/>
+  
+  <!-- 数据流标签 -->
+  <text x="180" y="110" font-family="Arial, sans-serif" font-size="9" fill="#e74c3c">模型结构</text>
+  <text x="370" y="110" font-family="Arial, sans-serif" font-size="9" fill="#e74c3c">包装模块</text>
+  <text x="570" y="110" font-family="Arial, sans-serif" font-size="9" fill="#e74c3c">张量数据</text>
+  <text x="800" y="110" font-family="Arial, sans-serif" font-size="9" fill="#e74c3c">量化输出</text>
+  
+  <text x="280" y="210" font-family="Arial, sans-serif" font-size="9" fill="#3498db">校准数据</text>
+  <text x="570" y="210" font-family="Arial, sans-serif" font-size="9" fill="#3498db">统计信息</text>
+  <text x="770" y="210" font-family="Arial, sans-serif" font-size="9" fill="#3498db">编码参数</text>
+  
+  <text x="790" y="290" font-family="Arial, sans-serif" font-size="9" fill="#9b59b6">参数设置</text>
+  
+  <!-- 处理阶段标注 -->
+  <rect x="50" y="520" width="1100" height="150" fill="rgba(236, 240, 241, 0.9)" rx="15" stroke="#bdc3c7"/>
+  <text x="70" y="545" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#2c3e50">
+    🌊 数据流说明
+  </text>
+  
+  <text x="70" y="570" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#e74c3c">
+    主数据流 (红色实线):
+  </text>
+  <text x="90" y="590" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • 输入张量 → 连接图分析 → 量化包装器 → 张量量化器 → 量化输出 → 导出模型
+  </text>
+  <text x="90" y="610" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • 这是量化过程的主要数据传递路径，承载核心的量化计算流程
+  </text>
+  
+  <text x="70" y="635" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#3498db">
+    辅助数据流 (蓝色实线):
+  </text>
+  <text x="90" y="655" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    • 校准数据 → 编码分析器 → 统计收集器 → 编码计算器 → 缓存存储
+  </text>
+  
+  <!-- 图例 -->
+  <rect x="650" y="520" width="500" height="100" fill="rgba(255, 255, 255, 0.9)" rx="10" stroke="#bdc3c7"/>
+  <text x="670" y="545" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">
+    🏷️ 节点类型图例
+  </text>
+  
+  <circle cx="690" cy="565" r="12" fill="#e74c3c"/>
+  <text x="710" y="570" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">输入数据</text>
+  
+  <rect x="770" y="555" width="24" height="20" fill="#3498db" rx="4"/>
+  <text x="800" y="570" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">处理过程</text>
+  
+  <circle cx="890" cy="565" r="12" fill="#2ecc71"/>
+  <text x="910" y="570" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">输出结果</text>
+  
+  <ellipse cx="1020" cy="565" rx="20" ry="8" fill="#f39c12"/>
+  <text x="1050" y="570" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">存储</text>
+  
+  <line x1="670" y1="590" x2="710" y2="590" stroke="#e74c3c" stroke-width="3" marker-end="url(#primaryArrow)"/>
+  <text x="720" y="595" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">主数据流</text>
+  
+  <line x1="810" y1="590" x2="850" y2="590" stroke="#3498db" stroke-width="2" marker-end="url(#secondaryArrow)"/>
+  <text x="860" y="595" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">辅助数据流</text>
+  
+  <line x1="950" y1="590" x2="990" y2="590" stroke="#9b59b6" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#controlArrow)"/>
+  <text x="1000" y="595" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">控制流</text>
+</svg>

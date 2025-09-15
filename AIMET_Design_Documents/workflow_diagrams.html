@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMET 工作流程图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .workflow-container {
+            background: white;
+            margin: 20px 0;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .workflow-title {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .workflow-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(90deg, #3498db, #e74c3c);
+        }
+        
+        .process-box {
+            fill: #3498db;
+            stroke: #2980b9;
+            stroke-width: 2;
+            rx: 10;
+            ry: 10;
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.1));
+        }
+        
+        .decision-box {
+            fill: #f39c12;
+            stroke: #e67e22;
+            stroke-width: 2;
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.1));
+        }
+        
+        .data-box {
+            fill: #2ecc71;
+            stroke: #27ae60;
+            stroke-width: 2;
+            rx: 15;
+            ry: 15;
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.1));
+        }
+        
+        .start-end-box {
+            fill: #e74c3c;
+            stroke: #c0392b;
+            stroke-width: 2;
+            rx: 20;
+            ry: 20;
+            filter: drop-shadow(3px 3px 6px rgba(0,0,0,0.1));
+        }
+        
+        .text-label {
+            font-size: 12px;
+            font-weight: 600;
+            fill: white;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        
+        .flow-arrow {
+            stroke: #34495e;
+            stroke-width: 3;
+            fill: none;
+            marker-end: url(#arrowhead);
+            filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.1));
+        }
+        
+        .phase-separator {
+            stroke: #bdc3c7;
+            stroke-width: 2;
+            stroke-dasharray: 10,5;
+            opacity: 0.6;
+        }
+        
+        .phase-label {
+            font-size: 16px;
+            font-weight: bold;
+            fill: #7f8c8d;
+            text-anchor: middle;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 250px;
+        }
+        
+        .interactive-element {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .interactive-element:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1) drop-shadow(5px 5px 10px rgba(0,0,0,0.2));
+        }
+        
+        .legend {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .legend-item {
+            display: inline-block;
+            margin: 5px 15px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            display: inline-block;
+            width: 20px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #2c3e50; margin-bottom: 40px; font-size: 36px;">
+        🔄 AIMET 工作流程可视化
+    </h1>
+
+    <!-- 整体量化流程 -->
+    <div class="workflow-container">
+        <div class="workflow-title">📊 完整量化工作流程</div>
+        <svg id="main-workflow" width="1200" height="800"></svg>
+        <div class="legend">
+            <div class="legend-item">
+                <span class="legend-color" style="background: #e74c3c;"></span>开始/结束
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #3498db;"></span>处理步骤
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #f39c12;"></span>决策判断
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background: #2ecc71;"></span>数据/结果
+            </div>
+        </div>
+    </div>
+
+    <!-- 编码计算详细流程 -->
+    <div class="workflow-container">
+        <div class="workflow-title">🧮 编码计算详细流程</div>
+        <svg id="encoding-workflow" width="1000" height="600"></svg>
+    </div>
+
+    <!-- 模块交互时序图 -->
+    <div class="workflow-container">
+        <div class="workflow-title">⏰ 模块交互时序图</div>
+        <svg id="sequence-diagram" width="1200" height="700"></svg>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // 工具函数
+        function createArrowMarkers(svg) {
+            const defs = svg.append("defs");
+            
+            defs.append("marker")
+                .attr("id", "arrowhead")
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 8)
+                .attr("refY", 0)
+                .attr("markerWidth", 8)
+                .attr("markerHeight", 8)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("fill", "#34495e");
+
+            // 渐变定义
+            const gradient = defs.append("linearGradient")
+                .attr("id", "boxGradient")
+                .attr("x1", "0%").attr("y1", "0%")
+                .attr("x2", "100%").attr("y2", "100%");
+            
+            gradient.append("stop")
+                .attr("offset", "0%")
+                .attr("stop-color", "#74b9ff")
+                .attr("stop-opacity", 1);
+            
+            gradient.append("stop")
+                .attr("offset", "100%")
+                .attr("stop-color", "#0984e3")
+                .attr("stop-opacity", 1);
+        }
+
+        function addTooltip(element, text) {
+            element.on("mouseover", function(event) {
+                const tooltip = d3.select("#tooltip");
+                tooltip.style("opacity", 1)
+                    .html(text)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+                d3.select("#tooltip").style("opacity", 0);
+            });
+        }
+
+        // 1. 主工作流程图
+        function drawMainWorkflow() {
+            const svg = d3.select("#main-workflow");
+            createArrowMarkers(svg);
+
+            const steps = [
+                {id: 'start', text: '开始', x: 100, y: 100, type: 'start', 
+                 desc: '开始AIMET量化流程'},
+                {id: 'load_model', text: '加载原始模型', x: 300, y: 100, type: 'process',
+                 desc: '加载PyTorch或ONNX模型'},
+                {id: 'create_sim', text: '创建量化仿真模型', x: 500, y: 100, type: 'process',
+                 desc: '使用QuantizationSimModel包装原始模型'},
+                {id: 'prepare_data', text: '准备校准数据', x: 700, y: 100, type: 'data',
+                 desc: '准备用于统计信息收集的校准数据集'},
+                {id: 'collect_stats', text: '收集统计信息', x: 900, y: 100, type: 'process',
+                 desc: '执行前向传播收集张量统计信息'},
+                {id: 'compute_encodings', text: '计算量化编码', x: 1100, y: 100, type: 'process',
+                 desc: '根据统计信息计算量化参数'},
+                
+                {id: 'check_quality', text: '检查量化质量', x: 1100, y: 250, type: 'decision',
+                 desc: '评估量化后的模型精度'},
+                {id: 'adjust_params', text: '调整量化参数', x: 900, y: 250, type: 'process',
+                 desc: '根据质量评估结果调整参数'},
+                {id: 'fine_tune', text: '精细调优', x: 700, y: 250, type: 'process',
+                 desc: '使用高级技术如AdaRound进行优化'},
+                
+                {id: 'evaluate', text: '评估量化效果', x: 500, y: 400, type: 'process',
+                 desc: '在测试集上评估量化模型性能'},
+                {id: 'export_model', text: '导出量化模型', x: 300, y: 400, type: 'process',
+                 desc: '导出为ONNX或其他部署格式'},
+                {id: 'end', text: '完成', x: 100, y: 400, type: 'start',
+                 desc: '量化流程完成'}
+            ];
+
+            const connections = [
+                {from: 'start', to: 'load_model'},
+                {from: 'load_model', to: 'create_sim'},
+                {from: 'create_sim', to: 'prepare_data'},
+                {from: 'prepare_data', to: 'collect_stats'},
+                {from: 'collect_stats', to: 'compute_encodings'},
+                {from: 'compute_encodings', to: 'check_quality'},
+                {from: 'check_quality', to: 'adjust_params', label: '质量不佳'},
+                {from: 'adjust_params', to: 'fine_tune'},
+                {from: 'fine_tune', to: 'collect_stats'},
+                {from: 'check_quality', to: 'evaluate', label: '质量满足要求'},
+                {from: 'evaluate', to: 'export_model'},
+                {from: 'export_model', to: 'end'}
+            ];
+
+            // 绘制阶段分割线
+            const phases = [
+                {name: '初始化阶段', x: 400, y: 50},
+                {name: '编码计算阶段', x: 1000, y: 50},
+                {name: '优化调整阶段', x: 800, y: 200},
+                {name: '评估导出阶段', x: 300, y: 350}
+            ];
+
+            phases.forEach(phase => {
+                svg.append("text")
+                    .attr("class", "phase-label")
+                    .attr("x", phase.x)
+                    .attr("y", phase.y)
+                    .text(phase.name);
+            });
+
+            // 绘制连接线
+            connections.forEach(conn => {
+                const fromStep = steps.find(s => s.id === conn.from);
+                const toStep = steps.find(s => s.id === conn.to);
+                
+                // 创建路径
+                let path;
+                if (fromStep.y === toStep.y) {
+                    // 水平连接
+                    path = `M ${fromStep.x + 60} ${fromStep.y} L ${toStep.x - 60} ${toStep.y}`;
+                } else {
+                    // 弯曲连接
+                    const midX = (fromStep.x + toStep.x) / 2;
+                    path = `M ${fromStep.x} ${fromStep.y + 30} Q ${midX} ${fromStep.y + 80} ${toStep.x} ${toStep.y - 30}`;
+                }
+                
+                svg.append("path")
+                    .attr("class", "flow-arrow")
+                    .attr("d", path);
+                
+                // 添加标签
+                if (conn.label) {
+                    const labelX = (fromStep.x + toStep.x) / 2;
+                    const labelY = (fromStep.y + toStep.y) / 2;
+                    svg.append("text")
+                        .attr("x", labelX)
+                        .attr("y", labelY)
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "10px")
+                        .attr("fill", "#7f8c8d")
+                        .text(conn.label);
+                }
+            });
+
+            // 绘制步骤
+            steps.forEach(step => {
+                const g = svg.append("g")
+                    .attr("class", "interactive-element");
+
+                let boxClass = 'process-box';
+                if (step.type === 'start') boxClass = 'start-end-box';
+                else if (step.type === 'decision') boxClass = 'decision-box';
+                else if (step.type === 'data') boxClass = 'data-box';
+
+                if (step.type === 'decision') {
+                    // 菱形
+                    g.append("polygon")
+                        .attr("class", boxClass)
+                        .attr("points", `${step.x-60},${step.y} ${step.x},${step.y-30} ${step.x+60},${step.y} ${step.x},${step.y+30}`);
+                } else {
+                    // 矩形
+                    g.append("rect")
+                        .attr("class", boxClass)
+                        .attr("x", step.x - 60)
+                        .attr("y", step.y - 30)
+                        .attr("width", 120)
+                        .attr("height", 60);
+                }
+
+                g.append("text")
+                    .attr("class", "text-label")
+                    .attr("x", step.x)
+                    .attr("y", step.y)
+                    .text(step.text)
+                    .call(d3.selection.prototype.selectAll, "tspan")
+                    .data(step.text.split(/\s+/))
+                    .enter()
+                    .append("tspan")
+                    .attr("x", step.x)
+                    .attr("dy", function(d, i) { return i ? "1.2em" : 0; })
+                    .text(function(d) { return d; });
+
+                addTooltip(g, step.desc);
+            });
+        }
+
+        // 2. 编码计算流程图
+        function drawEncodingWorkflow() {
+            const svg = d3.select("#encoding-workflow");
+            createArrowMarkers(svg);
+
+            const encodingSteps = [
+                {text: '开始编码计算', x: 100, y: 100, type: 'start'},
+                {text: '设置统计收集模式', x: 300, y: 100, type: 'process'},
+                {text: '执行前向传播', x: 500, y: 100, type: 'process'},
+                {text: '更新统计信息', x: 700, y: 100, type: 'process'},
+                {text: '选择编码算法', x: 500, y: 200, type: 'decision'},
+                {text: 'MinMax算法', x: 200, y: 300, type: 'process'},
+                {text: 'TF-Enhanced算法', x: 500, y: 300, type: 'process'},
+                {text: 'Percentile算法', x: 800, y: 300, type: 'process'},
+                {text: '计算编码参数', x: 500, y: 400, type: 'process'},
+                {text: '验证编码质量', x: 500, y: 500, type: 'decision'},
+                {text: '完成编码计算', x: 300, y: 500, type: 'start'}
+            ];
+
+            // 简化的连接逻辑
+            const encodingConnections = [
+                {from: 0, to: 1}, {from: 1, to: 2}, {from: 2, to: 3}, {from: 3, to: 4},
+                {from: 4, to: 5}, {from: 4, to: 6}, {from: 4, to: 7},
+                {from: 5, to: 8}, {from: 6, to: 8}, {from: 7, to: 8},
+                {from: 8, to: 9}, {from: 9, to: 10}
+            ];
+
+            // 绘制连接线
+            encodingConnections.forEach(conn => {
+                const from = encodingSteps[conn.from];
+                const to = encodingSteps[conn.to];
+                
+                svg.append("line")
+                    .attr("class", "flow-arrow")
+                    .attr("x1", from.x)
+                    .attr("y1", from.y + 30)
+                    .attr("x2", to.x)
+                    .attr("y2", to.y - 30);
+            });
+
+            // 绘制步骤
+            encodingSteps.forEach((step, index) => {
+                const g = svg.append("g")
+                    .attr("class", "interactive-element");
+
+                let boxClass = 'process-box';
+                if (step.type === 'start') boxClass = 'start-end-box';
+                else if (step.type === 'decision') boxClass = 'decision-box';
+
+                if (step.type === 'decision') {
+                    g.append("polygon")
+                        .attr("class", boxClass)
+                        .attr("points", `${step.x-50},${step.y} ${step.x},${step.y-25} ${step.x+50},${step.y} ${step.x},${step.y+25}`);
+                } else {
+                    g.append("rect")
+                        .attr("class", boxClass)
+                        .attr("x", step.x - 50)
+                        .attr("y", step.y - 25)
+                        .attr("width", 100)
+                        .attr("height", 50);
+                }
+
+                g.append("text")
+                    .attr("class", "text-label")
+                    .attr("x", step.x)
+                    .attr("y", step.y)
+                    .style("font-size", "11px")
+                    .text(step.text);
+            });
+        }
+
+        // 3. 时序图
+        function drawSequenceDiagram() {
+            const svg = d3.select("#sequence-diagram");
+            
+            const actors = [
+                {name: 'User', x: 100},
+                {name: 'QuantSim', x: 300},
+                {name: 'Wrapper', x: 500},
+                {name: 'Quantizer', x: 700},
+                {name: 'Analyzer', x: 900}
+            ];
+
+            const messages = [
+                {from: 0, to: 1, text: 'create_sim(model)', y: 100},
+                {from: 1, to: 2, text: 'create_wrapper()', y: 120},
+                {from: 2, to: 3, text: 'create_quantizer()', y: 140},
+                {from: 3, to: 4, text: 'create_analyzer()', y: 160},
+                {from: 0, to: 1, text: 'compute_encodings()', y: 200},
+                {from: 1, to: 2, text: 'set_stats_mode(true)', y: 220},
+                {from: 2, to: 3, text: 'enable_stats()', y: 240},
+                {from: 0, to: 1, text: 'forward_pass(data)', y: 280},
+                {from: 1, to: 2, text: 'forward()', y: 300},
+                {from: 2, to: 3, text: 'quantize()', y: 320},
+                {from: 3, to: 4, text: 'update_stats()', y: 340},
+                {from: 1, to: 2, text: 'compute_encoding()', y: 380},
+                {from: 2, to: 3, text: 'compute_encoding()', y: 400},
+                {from: 3, to: 4, text: 'compute_encoding()', y: 420},
+                {from: 4, to: 3, text: 'return encoding', y: 440},
+                {from: 3, to: 2, text: 'encoding ready', y: 460},
+                {from: 2, to: 1, text: 'all encodings ready', y: 480}
+            ];
+
+            // 绘制参与者
+            actors.forEach(actor => {
+                // 参与者框
+                svg.append("rect")
+                    .attr("x", actor.x - 40)
+                    .attr("y", 30)
+                    .attr("width", 80)
+                    .attr("height", 40)
+                    .attr("fill", "#3498db")
+                    .attr("stroke", "#2980b9")
+                    .attr("stroke-width", 2)
+                    .attr("rx", 5);
+
+                svg.append("text")
+                    .attr("x", actor.x)
+                    .attr("y", 55)
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "white")
+                    .attr("font-weight", "bold")
+                    .text(actor.name);
+
+                // 生命线
+                svg.append("line")
+                    .attr("x1", actor.x)
+                    .attr("y1", 70)
+                    .attr("x2", actor.x)
+                    .attr("y2", 520)
+                    .attr("stroke", "#bdc3c7")
+                    .attr("stroke-width", 2)
+                    .attr("stroke-dasharray", "5,5");
+            });
+
+            // 绘制消息
+            messages.forEach(msg => {
+                const fromX = actors[msg.from].x;
+                const toX = actors[msg.to].x;
+                
+                // 消息箭头
+                svg.append("line")
+                    .attr("x1", fromX)
+                    .attr("y1", msg.y)
+                    .attr("x2", toX)
+                    .attr("y2", msg.y)
+                    .attr("stroke", "#34495e")
+                    .attr("stroke-width", 2)
+                    .attr("marker-end", "url(#arrowhead)");
+
+                // 消息文本
+                svg.append("text")
+                    .attr("x", (fromX + toX) / 2)
+                    .attr("y", msg.y - 5)
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "10px")
+                    .attr("fill", "#2c3e50")
+                    .text(msg.text);
+            });
+        }
+
+        // 初始化所有图表
+        drawMainWorkflow();
+        drawEncodingWorkflow();
+        drawSequenceDiagram();
+    </script>
+</body>
+</html>

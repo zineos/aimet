@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMET 3D 架构可视化</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 100;
+        }
+        
+        .layer-info {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-left: 3px solid;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        
+        .layer-app { border-color: #e74c3c; }
+        .layer-framework { border-color: #3498db; }
+        .layer-algorithm { border-color: #2ecc71; }
+        .layer-core { border-color: #f39c12; }
+        .layer-infra { border-color: #9b59b6; }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            margin: 0;
+            z-index: 100;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .control-button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .control-button:hover {
+            background: #2980b9;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">正在加载3D架构图...</div>
+    <h1>AIMET 3D 架构可视化</h1>
+    
+    <div id="container"></div>
+    
+    <div id="info-panel">
+        <h3 style="margin-top: 0; color: #3498db;">AIMET 架构层次</h3>
+        <div class="layer-info layer-app">
+            <strong>应用接口层</strong><br>
+            Python API、命令行工具、可视化界面
+        </div>
+        <div class="layer-info layer-framework">
+            <strong>框架适配层</strong><br>
+            PyTorch支持、ONNX支持、通用接口
+        </div>
+        <div class="layer-info layer-algorithm">
+            <strong>算法实现层</strong><br>
+            量化算法、压缩算法、混合精度
+        </div>
+        <div class="layer-info layer-core">
+            <strong>核心引擎层</strong><br>
+            C++引擎、张量量化器、编码分析器
+        </div>
+        <div class="layer-info layer-infra">
+            <strong>基础设施层</strong><br>
+            配置管理、缓存系统、测试框架
+        </div>
+    </div>
+    
+    <div id="controls">
+        <h4 style="margin-top: 0; color: #3498db;">控制面板</h4>
+        <button class="control-button" onclick="resetView()">重置视角</button>
+        <button class="control-button" onclick="toggleAnimation()">切换动画</button>
+        <button class="control-button" onclick="explodeView()">分解视图</button>
+        <button class="control-button" onclick="showDataFlow()">数据流</button>
+        <div style="margin-top: 10px; font-size: 12px;">
+            🖱️ 鼠标拖拽旋转<br>
+            🔄 滚轮缩放<br>
+            💡 点击模块查看详情
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let scene, camera, renderer, controls;
+        let layers = [];
+        let modules = [];
+        let isAnimating = true;
+        let isExploded = false;
+        let dataFlowLines = [];
+        
+        // 层次配置
+        const layerConfig = [
+            {
+                name: '应用接口层',
+                color: 0xe74c3c,
+                y: 4,
+                modules: ['Python API', '命令行工具', '可视化界面', 'Web界面']
+            },
+            {
+                name: '框架适配层',
+                color: 0x3498db,
+                y: 3,
+                modules: ['aimet_torch', 'aimet_onnx', 'aimet_common', 'utils']
+            },
+            {
+                name: '算法实现层',
+                color: 0x2ecc71,
+                y: 2,
+                modules: ['量化算法', '压缩算法', '混合精度', '自动优化']
+            },
+            {
+                name: '核心引擎层',
+                color: 0xf39c12,
+                y: 1,
+                modules: ['C++引擎', '张量量化器', '编码分析器', '计算优化']
+            },
+            {
+                name: '基础设施层',
+                color: 0x9b59b6,
+                y: 0,
+                modules: ['配置管理', '缓存系统', '测试框架', '构建系统']
+            }
+        ];
+
+        // 初始化场景
+        function init() {
+            // 创建场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            
+            // 创建相机
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(10, 8, 10);
+            
+            // 创建渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // 创建控制器
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            
+            // 添加灯光
+            addLights();
+            
+            // 创建架构层
+            createLayers();
+            
+            // 添加粒子效果
+            addParticles();
+            
+            // 隐藏加载提示
+            document.getElementById('loading').style.display = 'none';
+            
+            // 开始渲染循环
+            animate();
+        }
+
+        // 添加灯光
+        function addLights() {
+            // 环境光
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            // 主光源
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            
+            // 点光源
+            const pointLight = new THREE.PointLight(0x3498db, 0.8, 50);
+            pointLight.position.set(-10, 5, -10);
+            scene.add(pointLight);
+            
+            const pointLight2 = new THREE.PointLight(0xe74c3c, 0.6, 30);
+            pointLight2.position.set(10, -5, 10);
+            scene.add(pointLight2);
+        }
+
+        // 创建架构层
+        function createLayers() {
+            layerConfig.forEach((layerInfo, layerIndex) => {
+                const layerGroup = new THREE.Group();
+                layerGroup.name = layerInfo.name;
+                
+                // 创建层基座
+                const baseGeometry = new THREE.BoxGeometry(12, 0.5, 12);
+                const baseMaterial = new THREE.MeshLambertMaterial({
+                    color: layerInfo.color,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const base = new THREE.Mesh(baseGeometry, baseMaterial);
+                base.position.y = layerInfo.y * 2;
+                base.receiveShadow = true;
+                layerGroup.add(base);
+                
+                // 创建层标签
+                const loader = new THREE.FontLoader();
+                // 由于字体加载的复杂性，我们使用简单的几何体来表示模块
+                
+                // 创建模块
+                layerInfo.modules.forEach((moduleName, moduleIndex) => {
+                    const moduleGroup = createModule(moduleName, layerInfo.color, moduleIndex, layerInfo.modules.length);
+                    moduleGroup.position.y = layerInfo.y * 2 + 1;
+                    layerGroup.add(moduleGroup);
+                    modules.push({
+                        mesh: moduleGroup,
+                        layer: layerIndex,
+                        name: moduleName,
+                        originalPosition: moduleGroup.position.clone()
+                    });
+                });
+                
+                layers.push(layerGroup);
+                scene.add(layerGroup);
+            });
+        }
+
+        // 创建模块
+        function createModule(name, baseColor, index, total) {
+            const group = new THREE.Group();
+            
+            // 模块主体
+            const geometry = new THREE.BoxGeometry(2, 1.5, 2);
+            const material = new THREE.MeshPhongMaterial({
+                color: baseColor,
+                transparent: true,
+                opacity: 0.8
+            });
+            const cube = new THREE.Mesh(geometry, material);
+            cube.castShadow = true;
+            cube.receiveShadow = true;
+            
+            // 添加发光边框
+            const edges = new THREE.EdgesGeometry(geometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+            const wireframe = new THREE.LineSegments(edges, lineMaterial);
+            cube.add(wireframe);
+            
+            group.add(cube);
+            
+            // 位置计算
+            const radius = 4;
+            const angle = (index / total) * Math.PI * 2;
+            group.position.x = Math.cos(angle) * radius;
+            group.position.z = Math.sin(angle) * radius;
+            
+            // 添加点击事件
+            cube.userData = { name: name, type: 'module' };
+            
+            return group;
+        }
+
+        // 添加粒子效果
+        function addParticles() {
+            const particleCount = 1000;
+            const particles = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 100;
+                positions[i + 1] = (Math.random() - 0.5) * 100;
+                positions[i + 2] = (Math.random() - 0.5) * 100;
+            }
+            
+            particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x888888,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const particleSystem = new THREE.Points(particles, particleMaterial);
+            scene.add(particleSystem);
+        }
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (isAnimating) {
+                // 旋转效果
+                modules.forEach((module, index) => {
+                    module.mesh.rotation.y += 0.01;
+                    module.mesh.position.y += Math.sin(Date.now() * 0.001 + index) * 0.02;
+                });
+                
+                // 层的微妙浮动
+                layers.forEach((layer, index) => {
+                    layer.rotation.y += 0.002 * (index + 1);
+                });
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // 控制函数
+        function resetView() {
+            camera.position.set(10, 8, 10);
+            controls.target.set(0, 2, 0);
+            controls.update();
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+        }
+
+        function explodeView() {
+            isExploded = !isExploded;
+            
+            modules.forEach((module) => {
+                if (isExploded) {
+                    // 分解视图
+                    const explodeDistance = 3;
+                    module.mesh.position.x = module.originalPosition.x * explodeDistance;
+                    module.mesh.position.z = module.originalPosition.z * explodeDistance;
+                    module.mesh.position.y = module.originalPosition.y + module.layer * 2;
+                } else {
+                    // 恢复视图
+                    module.mesh.position.copy(module.originalPosition);
+                }
+            });
+        }
+
+        function showDataFlow() {
+            // 清除现有的数据流线
+            dataFlowLines.forEach(line => scene.remove(line));
+            dataFlowLines = [];
+            
+            // 创建数据流动画线条
+            for (let i = 0; i < layers.length - 1; i++) {
+                const points = [];
+                points.push(new THREE.Vector3(0, i * 2 + 2, 0));
+                points.push(new THREE.Vector3(0, (i + 1) * 2, 0));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x00ff00,
+                    linewidth: 3
+                });
+                const line = new THREE.Line(geometry, material);
+                
+                scene.add(line);
+                dataFlowLines.push(line);
+            }
+            
+            // 3秒后移除数据流线
+            setTimeout(() => {
+                dataFlowLines.forEach(line => scene.remove(line));
+                dataFlowLines = [];
+            }, 3000);
+        }
+
+        // 鼠标交互
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            
+            const allObjects = [];
+            modules.forEach(module => {
+                module.mesh.traverse(child => {
+                    if (child.isMesh) allObjects.push(child);
+                });
+            });
+            
+            const intersects = raycaster.intersectObjects(allObjects);
+
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                if (object.userData.name) {
+                    alert(`模块: ${object.userData.name}\n\n点击查看详细信息...`);
+                }
+            }
+        }
+
+        // 窗口大小调整
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 事件监听
+        window.addEventListener('resize', onWindowResize, false);
+        window.addEventListener('click', onMouseClick, false);
+
+        // 启动应用
+        init();
+    </script>
+</body>
+</html>

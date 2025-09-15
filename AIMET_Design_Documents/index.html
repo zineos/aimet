@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMET 设计文档门户</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 20px;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .section {
+            margin-bottom: 60px;
+        }
+        
+        .section-title {
+            font-size: 32px;
+            color: white;
+            text-align: center;
+            margin-bottom: 40px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+        }
+        
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .card-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .card-description {
+            color: #7f8c8d;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .card-features {
+            list-style: none;
+            margin-bottom: 25px;
+        }
+        
+        .card-features li {
+            padding: 5px 0;
+            color: #34495e;
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .card-features li:before {
+            content: '✨';
+            position: absolute;
+            left: 0;
+        }
+        
+        .card-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .card-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .docs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .doc-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+        
+        .doc-card:hover {
+            transform: translateX(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .doc-card.architecture { border-color: #e74c3c; }
+        .doc-card.module { border-color: #3498db; }
+        .doc-card.implementation { border-color: #2ecc71; }
+        
+        .doc-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .doc-description {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        
+        .doc-link {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        
+        .doc-link:hover {
+            color: #2980b9;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255,255,255,0.8);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 60px;
+        }
+        
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 40px 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-item {
+            text-align: center;
+            color: white;
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 AIMET 设计文档门户</h1>
+        <p>AI Model Efficiency Toolkit 的完整架构设计与实现指南<br/>
+        包含精美的可视化图表、详细的模块设计和完整的实现指导</p>
+    </div>
+
+    <div class="container">
+        <!-- 统计信息 -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-number">12</span>
+                <span class="stat-label">核心模块</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">5</span>
+                <span class="stat-label">架构层次</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">4</span>
+                <span class="stat-label">可视化图表</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">16</span>
+                <span class="stat-label">设计文档</span>
+            </div>
+        </div>
+
+        <!-- 可视化图表集合 -->
+        <div class="section">
+            <h2 class="section-title">🎨 精美可视化图表</h2>
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon">🏗️</div>
+                    <div class="card-title">架构图表集合</div>
+                    <div class="card-description">
+                        使用D3.js制作的交互式架构图表，包含五层架构、模块依赖关系和UML类图
+                    </div>
+                    <ul class="card-features">
+                        <li>五层架构可视化</li>
+                        <li>12个模块依赖关系</li>
+                        <li>UML风格类图</li>
+                        <li>悬停提示功能</li>
+                    </ul>
+                    <a href="architecture_diagrams.html" class="card-button">查看架构图表</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">🚀</div>
+                    <div class="card-title">3D立体架构</div>
+                    <div class="card-description">
+                        创新的Three.js 3D可视化，展示AIMET的立体架构结构和动态效果
+                    </div>
+                    <ul class="card-features">
+                        <li>3D立体展示</li>
+                        <li>实时动画效果</li>
+                        <li>分解视图功能</li>
+                        <li>数据流可视化</li>
+                    </ul>
+                    <a href="3d_architecture.html" class="card-button">体验3D架构</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">🔄</div>
+                    <div class="card-title">工作流程图</div>
+                    <div class="card-description">
+                        详细的工作流程可视化，包含完整的量化流程和模块交互时序
+                    </div>
+                    <ul class="card-features">
+                        <li>完整量化工作流</li>
+                        <li>编码计算流程</li>
+                        <li>时序交互图</li>
+                        <li>决策点标注</li>
+                    </ul>
+                    <a href="workflow_diagrams.html" class="card-button">查看工作流程</a>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">🌊</div>
+                    <div class="card-title">数据流可视化</div>
+                    <div class="card-description">
+                        动态的数据流可视化，展示量化过程中的数据传递和处理流程
+                    </div>
+                    <ul class="card-features">
+                        <li>量化数据流图</li>
+                        <li>编码计算流程</li>
+                        <li>动态流动效果</li>
+                        <li>关键路径高亮</li>
+                    </ul>
+                    <a href="data_flow_visualization.html" class="card-button">查看数据流</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设计文档 -->
+        <div class="section">
+            <h2 class="section-title">📚 详细设计文档</h2>
+            <div class="docs-grid">
+                <div class="doc-card architecture">
+                    <div class="doc-title">🏗️ 整体架构设计</div>
+                    <div class="doc-description">系统的五层架构设计、模块划分和技术选型</div>
+                    <a href="00_Overall_Architecture.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card architecture">
+                    <div class="doc-title">🔗 模块交互机制</div>
+                    <div class="doc-description">详细的模块间交互方式、数据流向和控制流程</div>
+                    <a href="01_Module_Interaction.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card module">
+                    <div class="doc-title">🎯 量化仿真模型</div>
+                    <div class="doc-description">QuantizationSimModel的详细设计和实现</div>
+                    <a href="02_QuantizationSimModel.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card module">
+                    <div class="doc-title">🔧 张量量化器</div>
+                    <div class="doc-description">TensorQuantizer的核心量化算法和接口设计</div>
+                    <a href="03_TensorQuantizer.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card module">
+                    <div class="doc-title">📈 编码分析器</div>
+                    <div class="doc-description">EncodingAnalyzer的多种算法实现和质量评估</div>
+                    <a href="04_EncodingAnalyzer.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card implementation">
+                    <div class="doc-title">🛠️ 实现指南</div>
+                    <div class="doc-description">14周详细开发计划，从零构建AIMET系统</div>
+                    <a href="14_Implementation_Guide.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card implementation">
+                    <div class="doc-title">📖 API参考</div>
+                    <div class="doc-description">完整的API接口文档和使用示例</div>
+                    <a href="15_API_Reference.md" class="doc-link">查看文档 →</a>
+                </div>
+
+                <div class="doc-card implementation">
+                    <div class="doc-title">🧪 测试策略</div>
+                    <div class="doc-description">全面的测试策略和质量保证方案</div>
+                    <a href="16_Testing_Strategy.md" class="doc-link">查看文档 →</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快速导航 -->
+        <div class="section">
+            <h2 class="section-title">🧭 快速导航</h2>
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon">👨‍💻</div>
+                    <div class="card-title">开发者路径</div>
+                    <div class="card-description">
+                        适合想要从零开发AIMET的工程师
+                    </div>
+                    <ul class="card-features">
+                        <li>先看实现指南</li>
+                        <li>参考API文档</li>
+                        <li>查看测试策略</li>
+                        <li>使用可视化图表理解架构</li>
+                    </ul>
+                    <button class="card-button" onclick="showDeveloperPath()">查看开发路径</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">🏗️</div>
+                    <div class="card-title">架构师路径</div>
+                    <div class="card-description">
+                        适合想要理解AIMET整体设计的架构师
+                    </div>
+                    <ul class="card-features">
+                        <li>先看整体架构</li>
+                        <li>理解模块交互</li>
+                        <li>深入核心模块设计</li>
+                        <li>查看3D架构可视化</li>
+                    </ul>
+                    <button class="card-button" onclick="showArchitectPath()">查看架构路径</button>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon">📚</div>
+                    <div class="card-title">学习者路径</div>
+                    <div class="card-description">
+                        适合想要学习量化技术的初学者
+                    </div>
+                    <ul class="card-features">
+                        <li>从可视化图表开始</li>
+                        <li>理解工作流程</li>
+                        <li>学习核心概念</li>
+                        <li>动手实践开发</li>
+                    </ul>
+                    <button class="card-button" onclick="showLearnerPath()">查看学习路径</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>🔬 AIMET 设计文档 v1.0 | 基于开源代码分析生成 | 包含完整的实现指导</p>
+        <p style="margin-top: 10px; opacity: 0.7;">
+            💡 提示：所有可视化图表都支持交互操作，建议使用现代浏览器获得最佳体验
+        </p>
+    </div>
+
+    <!-- 路径指导模态框 -->
+    <div id="pathModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px; border-radius: 20px; max-width: 600px; color: #333;">
+            <div id="pathContent"></div>
+            <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">关闭</button>
+        </div>
+    </div>
+
+    <script>
+        function showDeveloperPath() {
+            const content = `
+                <h3>👨‍💻 开发者学习路径</h3>
+                <ol style="line-height: 2; margin: 20px 0;">
+                    <li><strong>第1步</strong>: 阅读 <a href="14_Implementation_Guide.md">实现指南</a> 了解开发计划</li>
+                    <li><strong>第2步</strong>: 查看 <a href="architecture_diagrams.html">架构图表</a> 理解系统结构</li>
+                    <li><strong>第3步</strong>: 深入 <a href="02_QuantizationSimModel.md">量化仿真模型</a> 设计</li>
+                    <li><strong>第4步</strong>: 学习 <a href="03_TensorQuantizer.md">张量量化器</a> 实现</li>
+                    <li><strong>第5步</strong>: 参考 <a href="15_API_Reference.md">API文档</a> 进行开发</li>
+                    <li><strong>第6步</strong>: 按照 <a href="16_Testing_Strategy.md">测试策略</a> 保证质量</li>
+                </ol>
+                <p style="color: #7f8c8d; margin-top: 20px;">
+                    💡 建议边看文档边动手实践，每完成一个模块就进行测试验证。
+                </p>
+            `;
+            showModal(content);
+        }
+
+        function showArchitectPath() {
+            const content = `
+                <h3>🏗️ 架构师学习路径</h3>
+                <ol style="line-height: 2; margin: 20px 0;">
+                    <li><strong>第1步</strong>: 查看 <a href="3d_architecture.html">3D架构可视化</a> 获得整体印象</li>
+                    <li><strong>第2步</strong>: 阅读 <a href="00_Overall_Architecture.md">整体架构设计</a> 理解设计理念</li>
+                    <li><strong>第3步</strong>: 深入 <a href="01_Module_Interaction.md">模块交互机制</a> 了解协作方式</li>
+                    <li><strong>第4步</strong>: 研究 <a href="workflow_diagrams.html">工作流程图</a> 掌握业务流程</li>
+                    <li><strong>第5步</strong>: 分析核心模块设计文档理解技术细节</li>
+                    <li><strong>第6步</strong>: 查看 <a href="data_flow_visualization.html">数据流可视化</a> 理解数据传递</li>
+                </ol>
+                <p style="color: #7f8c8d; margin-top: 20px;">
+                    🎯 重点关注架构的可扩展性、性能优化和模块化设计原则。
+                </p>
+            `;
+            showModal(content);
+        }
+
+        function showLearnerPath() {
+            const content = `
+                <h3>📚 学习者路径</h3>
+                <ol style="line-height: 2; margin: 20px 0;">
+                    <li><strong>第1步</strong>: 从 <a href="workflow_diagrams.html">工作流程图</a> 开始了解AIMET做什么</li>
+                    <li><strong>第2步</strong>: 查看 <a href="architecture_diagrams.html">架构图表</a> 理解系统组成</li>
+                    <li><strong>第3步</strong>: 阅读 <a href="00_Overall_Architecture.md">整体架构</a> 学习设计思想</li>
+                    <li><strong>第4步</strong>: 学习 <a href="03_TensorQuantizer.md">张量量化器</a> 理解量化原理</li>
+                    <li><strong>第5步</strong>: 研究 <a href="04_EncodingAnalyzer.md">编码分析器</a> 掌握算法细节</li>
+                    <li><strong>第6步</strong>: 跟随 <a href="14_Implementation_Guide.md">实现指南</a> 动手实践</li>
+                </ol>
+                <p style="color: #7f8c8d; margin-top: 20px;">
+                    🌟 建议结合可视化图表学习，有助于更好地理解复杂的技术概念。
+                </p>
+            `;
+            showModal(content);
+        }
+
+        function showModal(content) {
+            document.getElementById('pathContent').innerHTML = content;
+            document.getElementById('pathModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('pathModal').style.display = 'none';
+        }
+
+        // 添加页面加载动画
+        window.addEventListener('load', function() {
+            const cards = document.querySelectorAll('.card, .doc-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(30px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+
+        // 添加滚动效果
+        window.addEventListener('scroll', function() {
+            const scrolled = window.pageYOffset;
+            const parallax = document.querySelector('.header');
+            const speed = scrolled * 0.5;
+            parallax.style.transform = `translateY(${speed}px)`;
+        });
+    </script>
+</body>
+</html>

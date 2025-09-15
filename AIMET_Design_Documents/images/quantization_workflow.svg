@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="startGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c0392b;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="processGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="decisionGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f39c12;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e67e22;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="dataGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2ecc71;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#27ae60;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="3" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+    
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34495e"/>
+    </marker>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="1200" height="800" fill="#f8f9fa"/>
+  
+  <!-- 标题 -->
+  <text x="600" y="30" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2c3e50">
+    AIMET 完整量化工作流程
+  </text>
+  
+  <!-- 阶段分割线和标签 -->
+  <line x1="0" y1="60" x2="1200" y2="60" stroke="#bdc3c7" stroke-width="1" stroke-dasharray="5,5"/>
+  <text x="200" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7f8c8d">
+    初始化阶段
+  </text>
+  <text x="600" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7f8c8d">
+    编码计算阶段
+  </text>
+  <text x="1000" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#7f8c8d">
+    优化导出阶段
+  </text>
+  
+  <!-- 开始 -->
+  <g>
+    <ellipse cx="100" cy="130" rx="50" ry="25" fill="url(#startGradient)" filter="url(#shadow)"/>
+    <text x="100" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">
+      开始
+    </text>
+  </g>
+  
+  <!-- 加载模型 -->
+  <g>
+    <rect x="230" y="105" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="290" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      加载原始模型
+    </text>
+    <text x="290" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      PyTorch/ONNX
+    </text>
+  </g>
+  
+  <!-- 创建仿真模型 -->
+  <g>
+    <rect x="430" y="105" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="490" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      创建量化仿真模型
+    </text>
+    <text x="490" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      QuantizationSimModel
+    </text>
+    <text x="490" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      包装原始模块
+    </text>
+  </g>
+  
+  <!-- 准备校准数据 -->
+  <g>
+    <rect x="630" y="105" width="120" height="50" fill="url(#dataGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="690" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      准备校准数据
+    </text>
+    <text x="690" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      代表性数据集
+    </text>
+  </g>
+  
+  <!-- 收集统计信息 -->
+  <g>
+    <rect x="830" y="105" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="890" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      收集统计信息
+    </text>
+    <text x="890" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      前向传播
+    </text>
+    <text x="890" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      张量统计
+    </text>
+  </g>
+  
+  <!-- 计算编码 -->
+  <g>
+    <rect x="1030" y="105" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="1090" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      计算量化编码
+    </text>
+    <text x="1090" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      scale, offset
+    </text>
+  </g>
+  
+  <!-- 检查质量 -->
+  <g>
+    <polygon points="1030,220 1090,190 1150,220 1090,250" fill="url(#decisionGradient)" filter="url(#shadow)"/>
+    <text x="1090" y="220" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      检查质量
+    </text>
+  </g>
+  
+  <!-- 调整参数 -->
+  <g>
+    <rect x="830" y="195" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="890" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      调整量化参数
+    </text>
+    <text x="890" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      优化配置
+    </text>
+  </g>
+  
+  <!-- 精细调优 -->
+  <g>
+    <rect x="630" y="195" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="690" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      精细调优
+    </text>
+    <text x="690" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      AdaRound等
+    </text>
+  </g>
+  
+  <!-- 评估效果 -->
+  <g>
+    <rect x="430" y="350" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="490" y="370" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      评估量化效果
+    </text>
+    <text x="490" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      精度测试
+    </text>
+  </g>
+  
+  <!-- 导出模型 -->
+  <g>
+    <rect x="230" y="350" width="120" height="50" fill="url(#processGradient)" rx="10" filter="url(#shadow)"/>
+    <text x="290" y="370" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">
+      导出量化模型
+    </text>
+    <text x="290" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="white">
+      ONNX/部署格式
+    </text>
+  </g>
+  
+  <!-- 完成 -->
+  <g>
+    <ellipse cx="100" cy="375" rx="50" ry="25" fill="url(#startGradient)" filter="url(#shadow)"/>
+    <text x="100" y="380" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">
+      完成
+    </text>
+  </g>
+  
+  <!-- 主流程连接线 -->
+  <line x1="150" y1="130" x2="230" y2="130" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="350" y1="130" x2="430" y2="130" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="550" y1="130" x2="630" y2="130" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="750" y1="130" x2="830" y2="130" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="950" y1="130" x2="1030" y2="130" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="1090" y1="155" x2="1090" y2="190" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  
+  <!-- 质量检查分支 -->
+  <path d="M 1030 220 Q 950 220 890 220" stroke="#e74c3c" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+  <text x="960" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#e74c3c">
+    质量不佳
+  </text>
+  
+  <line x1="830" y1="220" x2="750" y2="220" stroke="#34495e" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 回环线 -->
+  <path d="M 690 195 Q 690 100 830 120" stroke="#34495e" stroke-width="2" fill="none" marker-end="url(#arrowhead)" stroke-dasharray="3,3"/>
+  
+  <!-- 质量满足分支 -->
+  <path d="M 1090 250 Q 1090 300 490 350" stroke="#2ecc71" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+  <text x="800" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#2ecc71">
+    质量满足要求
+  </text>
+  
+  <!-- 最终流程 -->
+  <line x1="430" y1="375" x2="350" y2="375" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <line x1="230" y1="375" x2="150" y2="375" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  
+  <!-- 详细说明框 -->
+  <rect x="50" y="500" width="1100" height="280" fill="rgba(236, 240, 241, 0.9)" rx="15" stroke="#bdc3c7"/>
+  <text x="70" y="530" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#2c3e50">
+    🔍 详细流程说明
+  </text>
+  
+  <!-- 初始化阶段说明 -->
+  <text x="70" y="560" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#e74c3c">
+    第一阶段: 初始化 (1-3步)
+  </text>
+  <text x="90" y="580" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    1. 加载原始模型: 支持PyTorch和ONNX格式的深度学习模型
+  </text>
+  <text x="90" y="600" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    2. 创建仿真模型: 使用QuantizationSimModel包装原始模型，添加量化功能
+  </text>
+  <text x="90" y="620" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    3. 分析模型结构: 通过ConnectedGraph分析模型的计算图结构
+  </text>
+  
+  <!-- 编码计算阶段说明 -->
+  <text x="70" y="650" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#3498db">
+    第二阶段: 编码计算 (4-6步)
+  </text>
+  <text x="90" y="670" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    4. 准备校准数据: 选择代表性的数据集用于统计信息收集
+  </text>
+  <text x="90" y="690" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    5. 收集统计信息: 执行前向传播，收集每个张量的最小值、最大值等统计信息
+  </text>
+  <text x="90" y="710" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    6. 计算量化编码: 根据统计信息和选择的算法计算scale和offset参数
+  </text>
+  
+  <!-- 优化导出阶段说明 -->
+  <text x="70" y="740" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2ecc71">
+    第三阶段: 优化导出 (7-9步)
+  </text>
+  <text x="90" y="760" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">
+    7. 质量检查和优化: 评估量化效果，必要时使用AdaRound等高级技术优化
+  </text>
+  
+  <!-- 图例 -->
+  <rect x="650" y="500" width="500" height="120" fill="rgba(255, 255, 255, 0.9)" rx="10" stroke="#bdc3c7"/>
+  <text x="670" y="525" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">
+    📋 流程图例
+  </text>
+  
+  <ellipse cx="690" cy="545" rx="20" ry="10" fill="#e74c3c"/>
+  <text x="720" y="550" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">开始/结束节点</text>
+  
+  <rect x="670" y="565" width="40" height="20" fill="#3498db" rx="5"/>
+  <text x="720" y="580" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">处理步骤</text>
+  
+  <polygon points="670,600 690,590 710,600 690,610" fill="#f39c12"/>
+  <text x="720" y="605" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">决策判断</text>
+  
+  <rect x="850" y="545" width="40" height="20" fill="#2ecc71" rx="10"/>
+  <text x="900" y="560" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">数据/结果</text>
+  
+  <line x1="850" y1="580" x2="890" y2="580" stroke="#34495e" stroke-width="3" marker-end="url(#arrowhead)"/>
+  <text x="900" y="585" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">数据流向</text>
+  
+  <line x1="850" y1="600" x2="890" y2="600" stroke="#e74c3c" stroke-width="2" stroke-dasharray="3,3"/>
+  <text x="900" y="605" font-family="Arial, sans-serif" font-size="12" fill="#2c3e50">条件分支</text>
+</svg>
